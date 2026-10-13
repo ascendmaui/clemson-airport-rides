@@ -1,0 +1,385 @@
+/* Liquid glass layer for the marketing site.
+   The stadium photo stays. Cards, bars, and buttons pick up a frosted
+   off-white field, orange #F56600 and purple #522D80, and a soft highlight.
+   luxury.css keeps the locked base rules; this file only refines them. */
+
+body .mkt-home::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  left: 0;
+  right: 0;
+  top: 100svh;
+  bottom: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(80% 36% at 0% 0%, rgba(245, 102, 0, 0.16), transparent 52%),
+    radial-gradient(70% 32% at 100% 0%, rgba(82, 45, 128, 0.14), transparent 48%),
+    #f6f3f8;
+}
+
+body .mkt-info::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(246, 243, 248, 0.82) 0%, #f6f3f8 280px),
+    radial-gradient(90% 42% at 0% 0%, rgba(245, 102, 0, 0.28), transparent 46%),
+    radial-gradient(80% 38% at 100% 0%, rgba(82, 45, 128, 0.24), transparent 44%);
+}
+
+body .mkt-home .mkt-stage-copy {
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.48),
+    0 18px 40px rgba(20, 8, 32, 0.28);
+  backdrop-filter: blur(18px) saturate(1.35);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+}
+
+body .mkt-home .mkt-stage-copy::before {
+  inset: 0;
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 46%),
+    linear-gradient(155deg, rgba(82, 45, 128, 0.5), rgba(20, 8, 32, 0.58));
+}
+
+body .mkt-hero-brand .mkt-brand-mark {
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 0;
+  border-radius: 22%;
+  background: transparent;
+  box-shadow: 0 12px 24px rgba(20, 8, 32, 0.28);
+  object-fit: cover;
+}
+
+.mkt-brand-icon,
+.mkt-app-icon {
+  display: block;
+  flex: none;
+  object-fit: cover;
+  border-radius: 22%;
+  box-shadow: 0 8px 16px rgba(82, 45, 128, 0.22);
+}
+
+.mkt-brand-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.mkt-app-icon {
+  width: 72px;
+  height: 72px;
+  margin-bottom: 12px;
+}
+
+.mkt-glass-glyph {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 0 12px;
+  border-radius: 14px;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  background:
+    radial-gradient(120% 80% at 18% 0%, rgba(255, 255, 255, 0.9), transparent 42%),
+    linear-gradient(145deg, #ffe0c2 0%, #ff7a1a 34%, #f56600 62%, #522d80 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 8px 16px rgba(82, 45, 128, 0.18);
+}
+
+.mkt-glass-glyph--purple {
+  background:
+    radial-gradient(120% 80% at 18% 0%, rgba(255, 255, 255, 0.88), transparent 42%),
+    linear-gradient(145deg, #f4ebff 0%, #7a4eae 36%, #522d80 68%, #f56600 140%);
+}
+
+.dp-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  background:
+    radial-gradient(120% 80% at 18% 0%, rgba(255, 255, 255, 0.9), transparent 42%),
+    linear-gradient(145deg, #ffe0c2 0%, #ff7a1a 34%, #f56600 62%, #522d80 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 8px 16px rgba(82, 45, 128, 0.18);
+}
+
+.dp-grid .dp-card:nth-child(even) .dp-icon-wrap {
+  background:
+    radial-gradient(120% 80% at 18% 0%, rgba(255, 255, 255, 0.88), transparent 42%),
+    linear-gradient(145deg, #f4ebff 0%, #7a4eae 36%, #522d80 68%, #f56600 140%);
+}
+
+body .mkt-home .mkt-card,
+body .mkt-info .mkt-card,
+body .mkt .dp-card,
+body .mkt .dp-offer,
+body .mkt .dp-legend,
+body .mkt .dp-compare,
+body .mkt .dp-rental {
+  background: linear-gradient(180deg, rgba(255, 252, 248, 0.86), rgba(255, 255, 255, 0.7));
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  color: #1a1028;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 16px 28px rgba(255, 255, 255, 0.28),
+    0 12px 28px rgba(82, 45, 128, 0.1);
+  backdrop-filter: blur(16px) saturate(1.45);
+  -webkit-backdrop-filter: blur(16px) saturate(1.45);
+}
+
+body .mkt-home .mkt-feature-section .mkt-section-head,
+body .mkt-info .mkt-section-head,
+body .mkt-note,
+body .mkt-release {
+  background: rgba(255, 252, 248, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.84);
+  color: #1a1028;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 10px 24px rgba(82, 45, 128, 0.08);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+}
+
+body .mkt-home .mkt-feature h3,
+body .mkt-info .mkt-feature h3,
+body .mkt-info h1,
+body .mkt-info .mkt-section-head h2,
+body .mkt-home .mkt-feature-section .mkt-section-head h2,
+body .mkt-info .mkt-section-head p,
+body .mkt-home .mkt-feature p,
+body .mkt-info .mkt-feature p,
+body .mkt-home .mkt-guide,
+body .mkt-info .mkt-guide,
+body .mkt-note,
+body .dp-hero h1,
+body .dp-group > h2,
+body .dp-card h3,
+body .dp-legend h3,
+body .dp-rental h2,
+body .dp-offer-top strong {
+  color: #1a1028;
+  text-shadow: none;
+}
+
+body .dp-lede,
+body .dp-sub,
+body .dp-card p,
+body .dp-fine,
+body .dp-offer-meta,
+body .dp-rental p,
+body .dp-tier-range,
+body .dp-tier-note,
+body .dp-compare-head,
+body .mkt-home .mkt-feature .mkt-part .mkt-kicker,
+body .mkt-info .mkt-feature .mkt-part .mkt-kicker,
+body .mkt-how summary {
+  color: #3a3148;
+  text-shadow: none;
+}
+
+body .mkt-home .mkt-feature .mkt-part .mkt-kicker,
+body .mkt-info .mkt-feature .mkt-part .mkt-kicker,
+body .mkt-how summary,
+body .mkt-how summary::after {
+  color: #ba4700;
+}
+
+body .mkt-night-title {
+  color: #1a1028;
+  text-shadow: none;
+}
+
+body .mkt-home .mkt-nav.mkt-nav--scrolled,
+body .mkt-info .mkt-nav,
+body .mkt-info .mkt-nav.mkt-nav--scrolled,
+body .mkt-info .mkt-menu-bar,
+body .mkt-home .mkt-footer {
+  background: rgba(246, 243, 248, 0.82);
+  color: #1a1028;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: 0 8px 24px rgba(82, 45, 128, 0.08);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+
+body .mkt-home .mkt-nav.mkt-nav--scrolled .mkt-brand,
+body .mkt-home .mkt-nav.mkt-nav--scrolled .mkt-nav-links button,
+body .mkt-info .mkt-brand,
+body .mkt-info .mkt-nav-links button,
+body .mkt-info .mkt-menu button,
+body .mkt-home .mkt-footer button {
+  color: #522d80;
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(82, 45, 128, 0.16);
+}
+
+body .mkt-nav-links .mkt-nav-cta,
+body .mkt-home .mkt-nav.mkt-nav--scrolled .mkt-nav-links .mkt-nav-cta,
+body .mkt-info .mkt-nav-links .mkt-nav-cta {
+  background: rgba(245, 102, 0, 0.92) !important;
+  color: #141414 !important;
+  border: 1px solid rgba(255, 255, 255, 0.55) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 8px 18px rgba(245, 102, 0, 0.24) !important;
+}
+
+body .mkt-menu button[aria-current="page"] {
+  background: rgba(245, 102, 0, 0.92);
+  color: #141414;
+}
+
+body .mkt-reach .mkt-text,
+body .mkt-close .mkt-choice,
+body .mkt-section-end .mkt-choice,
+body .mkt-info .mkt-card .mkt-text {
+  background: rgba(82, 45, 128, 0.92);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 8px 18px rgba(82, 45, 128, 0.18);
+}
+
+body .dp-btn-primary {
+  background: #f56600;
+  color: #141414;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 8px 18px rgba(245, 102, 0, 0.24);
+}
+
+body .dp-btn-ghost {
+  background: rgba(82, 45, 128, 0.92);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+body .dp-card-highlight {
+  background: linear-gradient(160deg, rgba(245, 102, 0, 0.16), rgba(255, 252, 248, 0.9) 58%);
+  border-color: rgba(245, 102, 0, 0.4);
+}
+
+body .dp-compare-row {
+  border-top-color: rgba(82, 45, 128, 0.1);
+}
+
+body .dp-yes {
+  color: #156938;
+}
+
+body .dp-mini-arc path {
+  stroke: rgba(82, 45, 128, 0.18);
+}
+
+body .dp-path {
+  background: rgba(255, 255, 255, 0.45) !important;
+}
+
+body .lux-legal {
+  background:
+    radial-gradient(80% 40% at 0% 0%, rgba(245, 102, 0, 0.18), transparent 52%),
+    radial-gradient(70% 36% at 100% 0%, rgba(82, 45, 128, 0.16), transparent 48%),
+    #f6f3f8 !important;
+  color: #1a1028;
+}
+
+body .lux-legal h1,
+body .lux-legal-section h2 {
+  color: #1a1028;
+}
+
+body .lux-legal-body,
+body .lux-legal-section p,
+body .lux-legal-section li {
+  color: #2c2438;
+}
+
+body .lux-legal-meta,
+body .lux-legal .lux-kicker {
+  color: #ba4700;
+}
+
+body .lux-legal-back {
+  color: #522d80;
+}
+
+body .lux-legal-section {
+  background: rgba(255, 252, 248, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.84);
+  border-radius: 20px;
+  padding: 16px 18px 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 10px 24px rgba(82, 45, 128, 0.08);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+}
+
+body .lux-legal-bar {
+  background: linear-gradient(180deg, rgba(246, 243, 248, 0), #f6f3f8 32%);
+}
+
+body .lux-agree {
+  background: #f56600;
+  color: #141414;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 10px 24px rgba(245, 102, 0, 0.24);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  body .mkt-home .mkt-card,
+  body .mkt-info .mkt-card,
+  body .mkt .dp-card,
+  body .mkt .dp-offer,
+  body .mkt .dp-legend,
+  body .mkt .dp-compare,
+  body .mkt .dp-rental,
+  body .mkt-home .mkt-feature-section .mkt-section-head,
+  body .mkt-info .mkt-section-head,
+  body .mkt-note,
+  body .lux-legal-section,
+  body .mkt-home .mkt-nav.mkt-nav--scrolled,
+  body .mkt-info .mkt-nav,
+  body .mkt-info .mkt-menu-bar,
+  body .mkt-home .mkt-footer {
+    background: #f7f4f2;
+  }
+
+  body .mkt-home .mkt-stage-copy,
+  body .mkt-home .mkt-stage-copy::before {
+    background: #2a1840;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body .mkt.fade-in,
+  body .mkt-home .mkt-card,
+  body .mkt-info .mkt-card,
+  body .dp-card,
+  body .dp-btn,
+  body .mkt-glass-glyph,
+  body .dp-icon-wrap {
+    animation: none !important;
+    transition: none !important;
+  }
+}

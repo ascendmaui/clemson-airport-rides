@@ -83,6 +83,7 @@ export function MarketingChrome({ current = '', home = false, children }) {
       <div className="mkt-stage-shade" aria-hidden="true" />
       <header className={overPage ? 'mkt-nav mkt-nav--scrolled' : 'mkt-nav'}>
         <button type="button" className="mkt-brand pressable" onClick={() => navigate('landing')}>
+          <img className="mkt-brand-icon" src="/brand/rider-icon.svg" alt="" width="28" height="28" />
           <span>Clemson RIDES</span>
         </button>
         <nav className="mkt-nav-links" aria-label="Marketing">

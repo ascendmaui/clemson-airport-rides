@@ -11,11 +11,30 @@ import {
 import { nextStatuses } from '../../shared/rentalStateMachine.js'
 
 const wrap = { maxWidth: 880, margin: '0 auto', padding: '24px 16px 64px' }
-const card = { background: '#fff', border: '1px solid #e6e1ee', borderRadius: 14, padding: 18, marginBottom: 16 }
+const card = {
+  background: 'rgba(255, 252, 248, 0.82)',
+  border: '1px solid rgba(255, 255, 255, 0.85)',
+  borderRadius: 20,
+  padding: 18,
+  marginBottom: 16,
+  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 10px 28px rgba(82, 45, 128, 0.10)',
+  backdropFilter: 'blur(16px)',
+  WebkitBackdropFilter: 'blur(16px)',
+}
 const label = { display: 'block', fontSize: 13, fontWeight: 600, margin: '10px 0 4px', color: '#2b1d40' }
-const input = { width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid #cfc6dc', fontSize: 15, boxSizing: 'border-box' }
-const btn = { background: '#F56600', color: '#fff', border: 0, borderRadius: 10, padding: '11px 18px', fontWeight: 700, cursor: 'pointer', minHeight: 44 }
-const btn2 = { ...btn, background: '#fff', color: '#522D80', border: '1px solid #522D80' }
+const input = { width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid #cfc6dc', fontSize: 15, boxSizing: 'border-box', background: 'rgba(255,255,255,0.9)' }
+const btn = {
+  background: '#F56600',
+  color: '#141414',
+  border: '1px solid rgba(255,255,255,0.55)',
+  borderRadius: 999,
+  padding: '11px 18px',
+  fontWeight: 700,
+  cursor: 'pointer',
+  minHeight: 44,
+  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 18px rgba(245,102,0,0.24)',
+}
+const btn2 = { ...btn, background: 'rgba(255,252,248,0.86)', color: '#522D80', border: '1px solid rgba(82,45,128,0.35)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.85)' }
 const errStyle = { color: '#b00020', fontSize: 13, margin: '4px 0 0' }
 const pill = (bg, fg) => ({ display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700, background: bg, color: fg })
 const REVIEW_PILL = {
@@ -79,7 +98,7 @@ export function PartnerJoin({ onDone }) {
 
   return (
     <main style={wrap} data-testid="partner-join">
-      <p style={{ color: '#F56600', fontWeight: 700, margin: 0 }}>Rental Partners</p>
+      <p style={{ color: '#BA4700', fontWeight: 700, margin: 0 }}>Rental Partners</p>
       <h1 style={{ margin: '4px 0 8px' }}>Rent your vehicles to cleared Clemson RIDES drivers</h1>
       <p style={{ color: '#4b3f5c', marginTop: 0 }}>List cars for weekly rental. Only drivers whose license and background check passed can see your listings. New partners are reviewed by our team before listings go live.</p>
       <PaymentNote />
@@ -359,7 +378,7 @@ export function DriverRentals() {
 
   return (
     <main style={wrap} data-testid="driver-rentals">
-      <p style={{ color: '#F56600', fontWeight: 700, margin: 0 }}>No car? Rent one</p>
+      <p style={{ color: '#BA4700', fontWeight: 700, margin: 0 }}>No car? Rent one</p>
       <h1 style={{ margin: '4px 0 8px' }}>Weekly rentals from local partners</h1>
       <PaymentNote />
       {error && <p role="alert" style={errStyle}>{error}</p>}

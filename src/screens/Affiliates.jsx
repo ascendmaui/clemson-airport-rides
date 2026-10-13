@@ -14,8 +14,13 @@ import { describeAffiliatePlan, normalizeAffiliateCode, referralStatusLabel } fr
 export const ORANGE = '#F56600'
 export const PURPLE = '#522D80'
 export const card = {
-  background: '#fff', borderRadius: 16, padding: 20,
-  boxShadow: '0 1px 2px rgba(17,12,34,0.06), 0 8px 24px rgba(82,45,128,0.06)',
+  background: 'rgba(255, 252, 248, 0.82)',
+  borderRadius: 20,
+  padding: 20,
+  border: '1px solid rgba(255,255,255,0.85)',
+  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 10px 28px rgba(82,45,128,0.10)',
+  backdropFilter: 'blur(16px)',
+  WebkitBackdropFilter: 'blur(16px)',
   transition: 'box-shadow .2s ease, transform .2s ease',
 }
 const page = { minHeight: '100%', background: 'var(--surface, #f6f4f8)', padding: '20px 16px 64px' }
