@@ -28,6 +28,7 @@ import {
 } from '../../shared/driverOnboarding.js'
 import { vehicleAccountErrors, withVehicleYear, writeVehicleWithYearFallback } from '../../shared/vehicleYear.js'
 import { titleStatusError, withTitleStatus, writeVehicleWithTitleFallback } from '../../shared/vehicleTitle.js'
+import { isInspectionDocType, isInspectionSource } from './vehicleInspection.js'
 import { resolveSignupApplicantEmail, submittedApplicantEmail, writeDriverApplication } from '../../shared/applicantEmail.js'
 import {
   BACKGROUND_CONSENT_VERSION,
@@ -121,11 +122,21 @@ export async function fetchMyDriverDocuments(supabase, userId) {
   if (!supabase || !userId) return []
   const rich = await supabase
     .from('driver_documents')
-    .select('id, doc_type, storage_path, created_at, review_status, review_note, match_status')
+    .select('id, doc_type, storage_path, created_at, review_status, review_note, match_status, inspection_source')
     .eq('profile_id', userId)
   if (!rich.error) return rich.data || []
-  if (!/review_status|match_status|review_note|schema cache/i.test(rich.error.message || '')) {
-    throw new Error(rich.error.message)
+  const richMessage = rich.error.message || ''
+  if (/inspection_source/i.test(richMessage)) {
+    const withoutSource = await supabase
+      .from('driver_documents')
+      .select('id, doc_type, storage_path, created_at, review_status, review_note, match_status')
+      .eq('profile_id', userId)
+    if (!withoutSource.error) return withoutSource.data || []
+    if (!/review_status|match_status|review_note|schema cache/i.test(withoutSource.error.message || '')) {
+      throw new Error(withoutSource.error.message)
+    }
+  } else if (!/review_status|match_status|review_note|schema cache/i.test(richMessage)) {
+    throw new Error(richMessage)
   }
   const basic = await supabase
     .from('driver_documents')
@@ -133,6 +144,20 @@ export async function fetchMyDriverDocuments(supabase, userId) {
     .eq('profile_id', userId)
   if (basic.error) throw new Error(basic.error.message)
   return basic.data || []
+}
+
+export async function fetchInspectionDeadline(supabase, userId) {
+  if (!supabase || !userId) return null
+  const { data, error } = await supabase
+    .from('driver_inspection_deadlines')
+    .select('first_approved_at, inspection_due_at')
+    .eq('profile_id', userId)
+    .maybeSingle()
+  if (error) {
+    if (/driver_inspection_deadlines|schema cache|relation|does not exist/i.test(error.message || '')) return null
+    throw new Error(error.message)
+  }
+  return data
 }
 
 export async function fetchMyTaxProfile(supabase, userId) {
@@ -195,7 +220,7 @@ export async function loadOnboarding(supabase, userId) {
 async function upsertDriverDocument(supabase, row) {
   const first = await supabase.from('driver_documents').upsert(row, { onConflict: 'profile_id,doc_type' })
   if (!first.error) return
-  if (!/review_status|match_status|review_note|schema cache/i.test(first.error.message || '')) {
+  if (!/review_status|match_status|review_note|inspection_source|schema cache/i.test(first.error.message || '')) {
     throw new Error(first.error.message)
   }
   const basic = {
@@ -211,7 +236,7 @@ async function upsertDriverDocument(supabase, row) {
 export async function uploadDriverDocument(supabase, userId, docType, file, meta = {}) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!userId) throw new Error('Sign in required')
-  if (!isRequiredDocType(docType)) throw new Error('Unknown document type')
+  if (!isRequiredDocType(docType) && !isInspectionDocType(docType)) throw new Error('Unknown document type')
   if (!file?.uri) throw new Error('Choose a file')
   if (file.size > MAX_BYTES) throw new Error('Each file must be 8MB or smaller')
   const mime = file.mimeType || ''
@@ -246,6 +271,7 @@ export async function uploadDriverDocument(supabase, userId, docType, file, meta
     review_status: meta.reviewStatus || null,
     review_note: meta.reviewNote || null,
     match_status: meta.matchStatus || null,
+    inspection_source: isInspectionSource(meta.inspectionSource) ? String(meta.inspectionSource).trim() : null,
   })
 
   if (previous?.storage_path && previous.storage_path !== path) {

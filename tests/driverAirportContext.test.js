@@ -19,7 +19,7 @@ test('offer, queue and trip screens show the airport line', () => {
 })
 
 test('rider booking has an optional flight field on native and web', () => {
-  const native = read('apps/rider/app/schedule.tsx')
+  const native = read('apps/rider/app/(tabs)/schedule.tsx')
   assert.match(native, /Flight \(optional\)/)
   assert.match(native, /flight: \{ number: flightNumber\.trim\(\), time: flightTime\.trim\(\) \}/)
   const web = read('src/screens/ScheduleAirport.jsx')
