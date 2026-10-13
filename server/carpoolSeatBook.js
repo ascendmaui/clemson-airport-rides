@@ -1,6 +1,8 @@
 /**
  * Persist a filled ride-tier carpool: one trip, a seat hold per rider, and
- * the driver push plus in-app notice. Missing queue tables are a no-op.
+ * the driver notice. The notice is an in-app record on the trip and a remote
+ * Expo push, the same sender ride offers use, so a closed or backgrounded
+ * driver app still gets the system toast. Missing queue tables are a no-op.
  */
 import { planCarpoolFill } from '../shared/carpoolSeatMatch.js'
 import { readDriverPushToken } from './driverPushToken.js'
@@ -113,11 +115,19 @@ export async function enrollCarpoolSeat(sb, input = {}, deps = {}) {
       token = null
     }
   }
-  const sendPush = deps.sendPush || sendExpoPush
+  const sendPush = deps.sendPush
+    || ((message) => sendExpoPush(message, { fetch: deps.fetch, env: deps.env }))
   let sent = null
   if (token) {
     try {
-      sent = await sendPush({ to: token, title: plan.push.title, body: plan.push.body, data: plan.push.data })
+      sent = await sendPush({
+        to: token,
+        title: plan.push.title,
+        body: plan.push.body,
+        sound: 'default',
+        channelId: 'ride-requests',
+        data: plan.push.data,
+      })
     } catch (error) {
       sent = { sent: false, reason: error?.message || 'push_failed' }
     }

@@ -13,6 +13,8 @@ export const CARPOOL_MATCH_RADIUS_MILES = 0.5
 export const CARPOOL_MATCH_WINDOW_MS = 20 * 60 * 1000
 export const CARPOOL_GROUP_MIN = 3
 export const CARPOOL_GROUP_MAX = 4
+/** Driver app scheme. A tap on the remote push opens this trip. */
+export const DRIVER_TRIP_SCHEME = 'clemsonrides-driver'
 const METERS_PER_MILE = 1609.344
 
 export function carpoolMatchRadiusMiles() {
@@ -27,6 +29,12 @@ export function isDemoCarId(id) {
   if (key.startsWith('sim-busy-')) return true
   if (key.startsWith('demo-')) return true
   return isDemoDriverId(key)
+}
+
+export function carpoolTripDeepLink(tripId) {
+  const id = String(tripId || '').trim()
+  if (!id) return null
+  return `${DRIVER_TRIP_SCHEME}://trip?id=${encodeURIComponent(id)}`
 }
 
 export function carpoolReadyNotice(count) {
@@ -215,6 +223,8 @@ export function planCarpoolFill(requests, {
       kind: 'carpool_ready',
       riderCount: notice.riderCount,
       tripId: anchorId,
+      tier: 'carpool',
+      url: carpoolTripDeepLink(anchorId),
     },
   }
   return {

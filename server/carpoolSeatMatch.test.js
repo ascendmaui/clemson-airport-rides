@@ -17,6 +17,7 @@ import {
   riderRequestsMatch,
 } from '../shared/carpoolSeatMatch.js'
 import { enrollCarpoolSeat } from './carpoolSeatBook.js'
+import { EXPO_PUSH_URL } from './expoPush.js'
 
 const QUIET = new Date('2026-09-23T15:00:00.000Z')
 const HOME = { label: 'Sikes Hall', lat: 34.6795, lng: -82.8374 }
@@ -124,6 +125,9 @@ test('a filled group merges into one trip and notifies the driver with the real 
   assert.equal(filled.push.body, filled.notice.body)
   assert.equal(filled.push.data.kind, 'carpool_ready')
   assert.equal(filled.push.data.riderCount, 3)
+  assert.equal(filled.push.data.tripId, 'trip-1')
+  assert.equal(filled.push.data.tier, 'carpool')
+  assert.equal(filled.push.data.url, 'clemsonrides-driver://trip?id=trip-1')
 
   const fourth = rider('r4', shiftNorth(HOME, 0.15), shiftNorth(LIBRARY, 0.15), '2026-10-13T18:09:00.000Z')
   const four = planCarpoolFill([...people, fourth], { perSeatFareCents: 900, drivers: [{ id: 'driver-real' }] })
@@ -183,6 +187,48 @@ test('a filled group merges into one trip and notifies the driver with the real 
   assert.equal(pushes[0].body, 'Three people found, going from same or similar location to same or similar drop-off.')
   assert.equal(pushes[0].data.riderCount, 3)
   assert.equal(pushes[0].to, 'ExponentPushToken[driver-real]')
+})
+
+test('a filled carpool sends a remote Expo push to the driver token', async () => {
+  const near = shiftNorth(HOME, 0.2)
+  const drop = shiftNorth(LIBRARY, 0.2)
+  const sb = memoryQueue()
+  sb.tables.driver_push_tokens[0].token = 'ExponentPushToken[stored-driver]'
+  sb.tables.carpool_requests.push(
+    { id: 'q1', rider_id: 'r1', pickup: HOME, dropoff: LIBRARY, depart_at: WHEN, status: 'open', trip_id: 'trip-1' },
+    { id: 'q2', rider_id: 'r2', pickup: near, dropoff: drop, depart_at: '2026-10-13T18:05:00.000Z', status: 'open', trip_id: 'trip-2' },
+  )
+  const posts = []
+  const booked = await enrollCarpoolSeat(sb, {
+    riderId: 'r3',
+    pickup: shiftNorth(HOME, 0.1),
+    dropoff: shiftNorth(LIBRARY, 0.1),
+    departAt: '2026-10-13T18:08:00.000Z',
+    tripId: 'trip-3',
+    perSeatFareCents: 900,
+    drivers: [{ id: 'demo-carlos' }, { id: 'driver-real' }],
+  }, {
+    env: {},
+    fetch: async (url, init) => {
+      posts.push({ url, body: JSON.parse(init.body) })
+      return { ok: true, status: 200, json: async () => ({ data: [{ status: 'ok', id: 'ticket-carpool' }] }) }
+    },
+  })
+  assert.equal(booked.booked, true)
+  assert.equal(booked.pushSent.sent, true)
+  assert.equal(booked.pushSent.reason, 'sent')
+  assert.equal(posts.length, 1)
+  assert.equal(posts[0].url, EXPO_PUSH_URL)
+  assert.equal(posts[0].body.to, 'ExponentPushToken[stored-driver]')
+  assert.equal(posts[0].body.title, 'Carpool ready')
+  assert.equal(posts[0].body.body, 'Three people found, going from same or similar location to same or similar drop-off.')
+  assert.equal(posts[0].body.priority, 'high')
+  assert.equal(posts[0].body.channelId, 'ride-requests')
+  assert.equal(posts[0].body.sound, 'default')
+  assert.equal(posts[0].body.data.kind, 'carpool_ready')
+  assert.equal(posts[0].body.data.tier, 'carpool')
+  assert.equal(posts[0].body.data.tripId, 'trip-3')
+  assert.equal(posts[0].body.data.url, 'clemsonrides-driver://trip?id=trip-3')
 })
 
 test('carpool queue migration only adds columns', () => {
