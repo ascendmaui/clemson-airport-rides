@@ -70,3 +70,7 @@ export function messageApplicant({ profileId, body }) {
 export function requestApplicantInfo({ profileId, prompt }) {
   return adminRequest('info-request', { method: 'POST', body: { profileId, prompt } })
 }
+
+export function fetchAgentDrafts() {
+  return adminRequest('agent-drafts')
+}

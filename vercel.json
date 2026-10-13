@@ -141,6 +141,18 @@
       "destination": "/api/admin-drivers?action=ticket"
     },
     {
+      "source": "/api/agents/marketing",
+      "destination": "/api/agents?kind=marketing"
+    },
+    {
+      "source": "/api/agents/affiliate",
+      "destination": "/api/agents?kind=affiliate"
+    },
+    {
+      "source": "/api/agents/outreach",
+      "destination": "/api/agents?kind=outreach"
+    },
+    {
       "source": "/api/inbound-mail/hostinger",
       "destination": "/api/inbound-mail"
     },

@@ -17,7 +17,7 @@ const staff = await import('../tests/fixtures/admin-support/adminDeskStaffAccess
 const mail = await import('../tests/fixtures/admin-support/adminDeskApplicantMail.js')
 const { createFakeSb, hasFilter } = await import('../tests/fixtures/admin-support/adminDeskSb.js')
 
-const GET_ACTIONS = ['overview', 'notifications', 'people', 'trips', 'tickets', 'applicant-thread']
+const GET_ACTIONS = ['overview', 'notifications', 'people', 'trips', 'tickets', 'applicant-thread', 'agent-drafts']
 const POST_ACTIONS = ['mark-notification', 'ticket-reply', 'applicant-message', 'info-request']
 
 const ADMIN_USER = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'ops@clemsonrides.test' }
@@ -696,6 +696,39 @@ test('info-request records the request and the thread note without sending email
   assert.equal(mail.state.calls[0].subject, 'Clemson RIDES needs more information')
   assert.match(mail.state.calls[0].text, /Need a photo of the insurance card/)
   assert.equal(networkHits, 0)
+})
+
+test('agent-drafts lists approval rows for an admin and does not write or send', async () => {
+  const sb = createFakeSb()
+  sb.when((ctx) => ctx.table === 'agent_drafts', () => ({
+    data: [{
+      id: 'draft-1',
+      kind: 'marketing',
+      status: 'draft_ready',
+      subject: 'Campus week',
+      body: 'A draft for approval',
+      source: 'schedule',
+      mailbox: null,
+      message_id: null,
+      slot: 'content',
+      created_at: '2026-10-13T00:00:00Z',
+    }],
+    error: null,
+  }))
+  const res = await invoke({ url: '/api/admin?action=agent-drafts', client: sb })
+  assert.equal(res.status, 200)
+  assert.equal(res.json.send, false)
+  assert.equal(res.json.drafts[0].kind, 'marketing')
+  assert.equal(res.json.migrationRequired, false)
+  assert.equal(sb.calls.some((ctx) => ctx.op === 'insert' || ctx.op === 'update' || ctx.op === 'delete'), false)
+  assert.equal(networkHits, 0)
+
+  const denied = await invoke({
+    url: '/api/admin?action=agent-drafts',
+    access: { admin: false, support: true, profile: { id: ADMIN_USER.id, role: 'support' } },
+  })
+  assert.equal(denied.status, 403)
+  assert.equal(denied.json.error, 'Admin only')
 })
 
 test('info-request 404s when the applicant is missing and does not email', async () => {

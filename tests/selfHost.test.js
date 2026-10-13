@@ -133,6 +133,12 @@ test('vercel.json rewrites resolve to the same destinations Vercel uses', () => 
   const inboundMail = applyRewrites('/api/inbound-mail/hostinger', '', rules)
   assert.equal(inboundMail.pathname, '/api/inbound-mail')
   assert.equal(inboundMail.search, '')
+
+  for (const kind of ['marketing', 'affiliate', 'outreach']) {
+    const agent = applyRewrites(`/api/agents/${kind}`, '', rules)
+    assert.equal(agent.pathname, '/api/agents')
+    assert.match(agent.search, new RegExp(`kind=${kind}`))
+  }
 })
 
 test('route discovery mounts every api handler file', async () => {

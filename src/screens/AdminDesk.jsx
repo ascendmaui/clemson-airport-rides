@@ -6,6 +6,7 @@ import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { AdminAccessDenied } from '../components/AdminAccessDenied'
 import { AdminEventsPanel } from '../components/AdminEventsPanel'
+import { AgentDraftsPanel } from '../components/AgentDraftsPanel'
 import { isAdminIdentity } from '../lib/driverOnboarding'
 import { rideOptionLabel } from '../../shared/rideOptions.js'
 import {
@@ -20,6 +21,7 @@ import {
 } from '../lib/adminDesk'
 
 const TABS = [
+  ['drafts', 'Drafts'],
   ['notifications', 'Notifications'],
   ['applications', 'Applicants'],
   ['people', 'People'],
@@ -124,6 +126,7 @@ export function AdminDesk() {
           )
         })}
       </div>
+      {tab === 'drafts' && <AgentDraftsPanel />}
       {tab === 'notifications' && <NotificationsPanel onChanged={() => fetchAdminOverview().then(setOverview).catch(() => {})} />}
       {tab === 'applications' && <AdminDrivers embedded />}
       {tab === 'people' && <PeoplePanel />}

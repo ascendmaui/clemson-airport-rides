@@ -9,13 +9,19 @@
  * Human mailboxes (support, drivers, riders, press, info) store a reply
  * draft and set status draft_ready. agents@ stores a summary only.
  * noreply@ is send-only and is never processed.
+ * press@, info@, and marketing-tagged mail also store a marketing agent draft.
+ * Affiliate-tagged and onboarding mail store affiliate or outreach drafts.
  * AGENT_INBOX_NOTIFY_URL, when set, receives a JSON copy for n8n.
  * This module does not send email and does not reply.
  */
-import { createHash, timingSafeEqual } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { mailboxUserPrompt, routeInboundBody } from '../shared/copy/inboundMail.js'
+import { draftInboundAgents } from './agentDrafts.js'
 import { generateInboxText } from './inboundDraft.js'
 import { adminClient } from './supabaseAdmin.js'
+import { bearerToken, expectedWebhookSecret, headerValue, webhookSecretMatches } from './webhookSecret.js'
+
+export { bearerToken, expectedWebhookSecret, webhookSecretMatches } from './webhookSecret.js'
 
 const SNIPPET_LIMIT = 500
 const ADDRESS_LIMIT = 2000
@@ -25,72 +31,6 @@ const NOTIFY_TIMEOUT_MS = 1500
 
 function clip(text, max) {
   return text.length <= max ? text : text.slice(0, max)
-}
-
-function headerValue(headers, name) {
-  if (!headers || typeof headers !== 'object') return ''
-  const want = name.toLowerCase()
-  const direct = headers[name] ?? headers[want]
-  if (Array.isArray(direct)) return direct[0] == null ? '' : String(direct[0])
-  if (direct != null) return String(direct)
-  for (const key of Object.keys(headers)) {
-    if (key.toLowerCase() !== want) continue
-    const raw = headers[key]
-    const value = Array.isArray(raw) ? raw[0] : raw
-    return value == null ? '' : String(value)
-  }
-  return ''
-}
-
-export function bearerToken(header) {
-  const match = /^Bearer\s+(\S.*?)\s*$/i.exec(String(header || '').trim())
-  if (!match) return ''
-  return match[1].replace(/^["']|["']$/g, '').trim()
-}
-
-export function webhookSecretMatches(expected, supplied) {
-  const secret = String(expected || '').trim()
-  const token = String(supplied || '').trim()
-  if (!secret || /placeholder/i.test(secret)) return false
-  const left = Buffer.from(secret)
-  const right = Buffer.from(token)
-  if (left.length === 0 || left.length !== right.length) return false
-  return timingSafeEqual(left, right)
-}
-
-function rememberSecret(map, key, value) {
-  const secret = String(value || '').trim()
-  const name = String(key || '').trim().toLowerCase()
-  if (!secret || !name) return
-  map.set(name, secret)
-  const at = name.lastIndexOf('@')
-  if (at > 0) map.set(name.slice(0, at), secret)
-}
-
-export function mailboxSecretMap(env) {
-  const map = new Map()
-  const raw = env?.HOSTINGER_MAIL_WEBHOOK_SECRETS
-  let parsed = raw
-  if (typeof raw === 'string' && raw.trim()) {
-    try {
-      parsed = JSON.parse(raw)
-    } catch {
-      parsed = null
-    }
-  }
-  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-    for (const [key, value] of Object.entries(parsed)) rememberSecret(map, key, value)
-  }
-  return map
-}
-
-export function expectedWebhookSecret(env, route) {
-  const map = mailboxSecretMap(env)
-  if (route) {
-    const specific = map.get(route.address) || map.get(route.local)
-    if (specific) return specific
-  }
-  return env?.HOSTINGER_MAIL_WEBHOOK_SECRET || ''
 }
 
 function formatParty(value, max) {
@@ -390,6 +330,28 @@ export default async function handler(req, res, deps = {}) {
       processed = await completeMailbox(sb, stored, route, env, deps)
     } catch {
       console.error('[inbound-mail] draft failed', { message_id: row.message_id })
+      processed = { fresh: false, failed: true }
+    }
+  }
+  if (!processed.failed && route && route.kind !== 'skip') {
+    try {
+      const agents = await draftInboundAgents({
+        sb,
+        route,
+        body: req.body,
+        messageId: stored.row?.message_id || row.message_id,
+        mailbox: stored.row?.mailbox ?? row.mailbox,
+        from: row.from,
+        to: row.to,
+        subject: row.subject,
+        snippet: row.snippet,
+        env,
+        deps,
+      })
+      if (agents.fresh) processed = { fresh: true, failed: false }
+      if (agents.failed) processed = { fresh: false, failed: true }
+    } catch {
+      console.error('[inbound-mail] agent draft failed', { message_id: row.message_id })
       processed = { fresh: false, failed: true }
     }
   }
