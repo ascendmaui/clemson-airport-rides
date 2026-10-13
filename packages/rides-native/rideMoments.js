@@ -88,20 +88,19 @@ export function paymentFailedMoment(prevHold, row, role = 'rider') {
 
 /**
  * Live ride screen copy for a failed hold. A null payment row is expected and
- * must not throw. The prompt is the same Billing link as the match sheet.
+ * must not throw. Only `no_payment_method` asks for a new card. Any other
+ * failed hold means the saved card did not authorize.
  */
 export function failedHoldPrompt(trip) {
   const auth = trip?.metadata?.fare_authorization
   if (!auth || typeof auth !== 'object' || auth.status !== 'failed') return null
-  const paymentStatus = trip.payment_status ?? null
-  const payment = trip.payment ?? null
   const code = auth.code || trip.metadata?.outstanding_balance?.code || null
-  const needsMethod = code === 'no_payment_method' || paymentStatus == null || payment == null
+  const needsMethod = code === 'no_payment_method'
   return {
-    title: 'Add a payment method',
+    title: needsMethod ? 'Add a payment method' : 'Payment hold failed',
     body: needsMethod
       ? 'Add a card or Apple Pay in Billing. This ride stays matched.'
-      : 'The fare hold did not go through. Add a payment method in Billing.',
+      : 'The fare hold did not go through. Update your payment method in Billing.',
     pathname: '/billing',
   }
 }
