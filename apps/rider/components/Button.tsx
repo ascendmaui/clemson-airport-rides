@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { pressStyle } from '@/components/enter'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
@@ -110,7 +111,7 @@ function makeStyles(colors: Palette) {
       backgroundColor: colors.chip,
     },
     pillOn: { borderColor: colors.orange, backgroundColor: colors.orangeSoft },
-    pillLabel: { color: colors.link, fontWeight: '700' as const, fontSize: 13, letterSpacing: -0.1 },
+    pillLabel: { color: colors.link, fontWeight: '700' as const, fontSize: typeScale.meta.fontSize, letterSpacing: typeScale.meta.letterSpacing },
     pillLabelOn: { color: colors.orange },
     handle: {
       alignSelf: 'center' as const,
@@ -125,6 +126,10 @@ function makeStyles(colors: Palette) {
 }
 
 const styles = StyleSheet.create({
-  btn: { borderRadius: 18, paddingVertical: 16, alignItems: 'center', paddingHorizontal: 16 },
-  label: { fontWeight: '700', fontSize: 16, letterSpacing: -0.2 },
+  btn: { borderRadius: radius.lg, paddingVertical: 16, alignItems: 'center', paddingHorizontal: 16 },
+  label: {
+    fontWeight: typeScale.button.fontWeight,
+    fontSize: typeScale.button.fontSize,
+    letterSpacing: typeScale.button.letterSpacing,
+  },
 })

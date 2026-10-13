@@ -36,6 +36,7 @@ import {
   type QueueFilter,
 } from 'rides-native/tripTags'
 import { formatHourlyRate, ladderOfferNet, offerHourly } from 'rides-native/offerLadder.js'
+import { WorthItLegend } from 'rides-native/WorthItLegend'
 import { ScheduledRidesExplainer, ScheduledRidesHint } from 'rides-native/ScheduledRidesInfo'
 import { driverBoostOfferLine } from '../../../shared/copy/boost.js'
 import { compareBoostedFirst, formatBoostBadge } from '../../../shared/scheduledBoost.js'
@@ -111,7 +112,8 @@ function QueueCard({
   const styles = useQueueStyles()
   const { colors } = useTheme()
   const ladder = ladderOfferNet(card)
-  const hourly = formatHourlyRate(offerHourly(card).hourlyCents)
+  const hourlyQuote = offerHourly(card)
+  const hourly = formatHourlyRate(hourlyQuote.hourlyCents)
   const riderFirst = riderDriverFirstName(card.firstName, 'Rider') || 'Rider'
   return (
     <Card>
@@ -144,6 +146,7 @@ function QueueCard({
       ) : null}
       <Text style={styles.note}>{ladder?.subtext || 'You net 80%'}</Text>
       <Text style={styles.copy}>{hourly}</Text>
+      <WorthItLegend hourlyCents={hourlyQuote.hourlyCents} colors={colors} />
       <Text style={styles.copy}>Pickup · {card.pickupLabel}</Text>
       <Text style={styles.copy}>Drop-off · {card.dropoffLabel}</Text>
       {card.airportContext ? <Text style={styles.note} accessibilityLabel={`Airport: ${card.airportContext.line}`}>{card.airportContext.line}</Text> : null}
@@ -508,7 +511,7 @@ function queueStyles(colors: Palette) {
     screen: { flex: 1, backgroundColor: colors.background },
     list: { padding: 16, gap: 12, paddingBottom: 40 },
     kicker: { color: colors.orange, fontWeight: '800', letterSpacing: 1.1, fontSize: 12, marginTop: 8 },
-    title: { fontSize: 28, fontWeight: '800', color: colors.title },
+    title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.4, color: colors.title },
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     note: { color: colors.orange, fontSize: 13, lineHeight: 18, fontWeight: '700' },
     filters: { gap: 8 },
@@ -522,11 +525,11 @@ function queueStyles(colors: Palette) {
     filterText: { color: colors.title, fontWeight: '800' },
     filterTextOn: { color: colors.onAccent },
     section: { color: colors.title, fontWeight: '800', marginTop: 4 },
-    cardTitle: { color: colors.title, fontWeight: '800', fontSize: 18 },
-    decline: { alignItems: 'center', paddingVertical: 4 },
-    declineText: { color: colors.inkSecondary, fontWeight: '700' },
+    cardTitle: { color: colors.title, fontWeight: '800', fontSize: 18, letterSpacing: -0.2 },
+    decline: { alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingVertical: 8 },
+    declineText: { color: colors.inkSecondary, fontWeight: '700', letterSpacing: -0.1 },
     declineCancel: { color: colors.orange },
-    fare: { color: colors.ink, fontWeight: '800', fontSize: 22 },
+    fare: { color: colors.ink, fontWeight: '800', fontSize: 22, letterSpacing: -0.3 },
     boostBadge: {
       alignSelf: 'flex-start',
       backgroundColor: '#F56600',

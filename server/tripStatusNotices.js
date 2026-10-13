@@ -29,6 +29,8 @@ export const NOTICE_KINDS = Object.freeze({
   driver_canceled: Object.freeze({ role: 'rider', statuses: Object.freeze([]), released: 'live' }),
   wait_canceled: Object.freeze({ role: 'rider', statuses: Object.freeze(['cancelled_wait']) }),
   search_timeout: Object.freeze({ role: 'rider', statuses: Object.freeze(['canceled']) }),
+  stale_abandoned: Object.freeze({ role: 'rider', statuses: Object.freeze(['canceled']) }),
+  driver_ended: Object.freeze({ role: 'rider', statuses: Object.freeze(['canceled']) }),
   driver_tipped: Object.freeze({ role: 'driver', statuses: Object.freeze(['completed']) }),
 })
 
@@ -105,6 +107,10 @@ export function tripStatusNoticeCopy(kind, {
       return { title: 'Your driver canceled', body: `We're finding you another driver for ${pickup}.` }
     case 'search_timeout':
       return { title: 'Ride canceled', body: "No drivers were available. You weren't charged." }
+    case 'stale_abandoned':
+      return { title: 'Ride canceled', body: "This ride timed out with no one still on it. You weren't charged." }
+    case 'driver_ended':
+      return { title: 'Trip ended', body: `Your driver ended this ride and reported a problem. You weren't charged.` }
     case 'wait_canceled':
       return {
         title: 'Ride canceled',
@@ -117,7 +123,7 @@ export function tripStatusNoticeCopy(kind, {
       if (amount <= 0) return null
       const dollars = amount % 100 === 0 ? `$${amount / 100}` : money(amount)
       const who = rider === 'The rider' ? 'Your rider' : rider
-      return { title: `${who} tipped you ${dollars}`, body: 'It shows in Other on your Earnings tab.' }
+      return { title: `${who} tipped you ${dollars}`, body: 'It shows in the tips breakdown on your Earnings tab.' }
     }
     default:
       return null

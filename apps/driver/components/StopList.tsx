@@ -26,7 +26,7 @@ export function StopList({ stops, busy, onAction }: {
   const current = nextStopIndex(stops)
   return (
     <Card>
-      <Text accessibilityRole="header" style={{ color: colors.title, fontWeight: '900', fontSize: 18 }}>
+      <Text accessibilityRole="header" style={{ color: colors.title, fontWeight: '800', fontSize: 18, letterSpacing: -0.2 }}>
         Carpool stops · {stops.length}
       </Text>
       {stops.map((stop) => {

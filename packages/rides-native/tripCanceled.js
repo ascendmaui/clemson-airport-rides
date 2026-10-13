@@ -5,7 +5,7 @@ import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
  * when the rider cancels, switches away, ends early, or no-shows.
  */
 
-export const CANCELED_STATUSES = Object.freeze(['canceled', 'canceled_midride', 'cancelled_wait'])
+export const CANCELED_STATUSES = Object.freeze(['canceled', 'canceled_midride', 'cancelled_wait', 'expired'])
 
 /**
  * A trip the driver held that is no longer readable (rider switched driver or ride type)
@@ -57,6 +57,13 @@ export function driverCanceledView(card) {
         body: 'The ride was canceled after the wait. Your wait pay is below.',
         action: 'Back to queue',
         announcement: 'Rider no-show. The ride is canceled.',
+      }
+    case 'expired':
+      return {
+        title: 'Trip expired',
+        body: 'This ride timed out with no one still on it. You were not charged.',
+        action: 'Back to queue',
+        announcement: 'Trip expired. You were not charged.',
       }
     default:
       return null

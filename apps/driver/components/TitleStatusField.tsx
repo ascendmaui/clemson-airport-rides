@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
   option: {
     flex: 1,
     minHeight: 64,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1.5,
     paddingHorizontal: 8,
     paddingTop: 14,
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(245, 102, 0, 0.10)',
     borderColor: 'rgba(245, 102, 0, 0.35)',
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 18,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 13,

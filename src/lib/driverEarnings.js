@@ -713,6 +713,7 @@ export async function fetchDriverEarningsReport(driverId, { now = new Date(), ti
   })
   const standby = await standbyEarningRows(driverId, new Set(trips.map((trip) => trip.id)))
   const mileage = await loadMileageSide(driverId)
+  const bonuses = await loadBonusLedger(driverId)
 
   return {
     trips: [...trips, ...standby],
@@ -720,6 +721,21 @@ export async function fetchDriverEarningsReport(driverId, { now = new Date(), ti
     paymentsLoaded: Boolean(extras),
     mileageLogs: mileage.logs,
     mileageRates: mileage.rates,
+    bonuses,
+  }
+}
+
+async function loadBonusLedger(driverId) {
+  if (!supabase || !driverId) return []
+  try {
+    const listed = await supabase
+      .from('driver_bonus_ledger')
+      .select('amount_cents, status, created_at, paid_at, kind')
+      .eq('driver_id', driverId)
+    if (listed.error) return []
+    return listed.data || []
+  } catch {
+    return []
   }
 }
 
