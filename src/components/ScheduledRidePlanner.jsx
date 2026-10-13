@@ -36,6 +36,9 @@ import { BOOK_BACKUP_COPY, LOOKING_FOR_BACKUP_LABEL } from '../../shared/backupD
 import { ScheduledRidesExplainer, ScheduledRidesHint } from './ScheduledRidesInfo'
 import { lookupCatalogPlace, placeFromStop } from '../lib/placeCatalog'
 import { NearTermSlots } from './NearTermSlots'
+import { displayedPassengers, passengerCountLabel } from '../lib/schedulePartyCopy'
+import { PassengerStepper, WeekendWindowHelper } from './SchedulePartyFields'
+
 import {
   GAME_DAY_PICKUP_HINT,
   GAME_DAY_PICKUP_POINTS,
@@ -79,6 +82,7 @@ export function ScheduledRidePlanner() {
   const [date, setDate] = useState('')
   const [time, setTime] = useState('21:00')
   const [fleet, setFleet] = useState('standard')
+  const [passengers, setPassengers] = useState(1)
   const [seats, setSeats] = useState(1)
   const pickupAt = pickupAtFromLocal(date, time)
   const rideOptions = useRideOptions({ scheduledFor: pickupAt ? pickupAt.toISOString() : null })
@@ -242,7 +246,7 @@ export function ScheduledRidePlanner() {
         pickupAt: check.pickupAt,
         purpose,
         tier: fleet,
-        passengers: fleet === 'carpool' ? seats : null,
+        passengers: fleet === 'carpool' ? seats : displayedPassengers(passengers),
         billingChoice: billingOffer ? billingChoice : null,
         backupBonusCents: backupBonusCents || null,
         boostCents,
@@ -396,9 +400,7 @@ export function ScheduledRidePlanner() {
 
       {purpose === 'party_weekend' && (
         <div style={{ marginBottom: 14 }}>
-          <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 0 }}>
-            Friday night through Sunday. Use a campus spot or GSP, CLT, or ATL.
-          </p>
+          <WeekendWindowHelper date={date} time={time} showOverview showNote={false} />
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
               type="button"
@@ -455,6 +457,7 @@ export function ScheduledRidePlanner() {
         min={minDate}
         value={date}
         onChange={(e) => setDate(e.target.value)}
+        aria-describedby="weekend-window-note"
         style={{ width: '100%', marginTop: 6, marginBottom: 14, padding: '12px 14px', borderRadius: 12 }}
       />
       <label htmlFor="scheduled-time" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>Pickup time (Eastern)</label>
@@ -464,8 +467,10 @@ export function ScheduledRidePlanner() {
         className="glass-input"
         value={time}
         onChange={(e) => setTime(e.target.value)}
-        style={{ width: '100%', marginTop: 6, marginBottom: 14, padding: '12px 14px', borderRadius: 12 }}
+        aria-describedby="weekend-window-note"
+        style={{ width: '100%', marginTop: 6, marginBottom: 8, padding: '12px 14px', borderRadius: 12 }}
       />
+      <WeekendWindowHelper date={date} time={time} showNote />
 
       <PlacePicker label="Pickup" mode="pickup" value={pickup} onChange={setPickup} presets={pickupPresets} showCoordinates={false} />
       <PlacePicker label="Drop-off" mode="dropoff" value={dropoff} onChange={setDropoff} presets={PLACES} showCoordinates={false} />
@@ -507,6 +512,9 @@ export function ScheduledRidePlanner() {
             )
           })}
         </div>
+      )}
+      {fleet === 'carpool' ? null : (
+        <PassengerStepper passengers={passengers} onChange={setPassengers} />
       )}
       {fleet === 'carpool' ? (
         <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
@@ -606,6 +614,9 @@ export function ScheduledRidePlanner() {
           {date && time ? `${date} · ${time}` : 'Choose a date and time.'}
           {pickup?.label && dropoff?.label ? ` · ${pickup.label} → ${dropoff.label}` : ''}
           {fleet ? ` · ${tierChoices.find((row) => row.id === fleet)?.name || TIER_LABELS[fleet] || 'Standard'}` : ''}
+          {fleet === 'carpool'
+            ? ` · ${seats === 1 ? '1 seat' : `${seats} seats`}`
+            : ` · ${passengerCountLabel(displayedPassengers(passengers))}`}
         </div>
       </div>
 
@@ -666,7 +677,9 @@ export function ScheduledRidePlanner() {
       {saved && (
         <p style={{ marginTop: 12, color: '#522D80', fontSize: 13, fontWeight: 700, lineHeight: 1.45 }}>
           Confirmed for {formatPickupAt(saved.pickup_at)}.
-           No card was charged. Matching starts about 45 minutes before pickup; a driver is not guaranteed. The final fare is charged when the trip ends.
+          {saved.partyCapacityMessage ? ` ${saved.partyCapacityMessage}` : saved.passengerLabel ? ` ${saved.passengerLabel}.` : ''}
+          {saved.weekendWindowNote ? ` ${saved.weekendWindowNote}` : ''}
+          {' '}No card was charged. Matching starts about 45 minutes before pickup; a driver is not guaranteed. The final fare is charged when the trip ends.
         </p>
       )}
 
@@ -747,6 +760,7 @@ function RideRow({ ride, onCancel, onBackupAction, onBump }) {
       <div style={{ fontSize: 13, marginTop: 4 }}>{ride.pickupLabel} → {ride.dropoffLabel}</div>
       <div style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 4 }}>
         {ride.purpose ? `${ride.purpose} · ` : ''}
+        {ride.passengerLabel ? `${ride.passengerLabel} · ` : ''}
         {formatUsdFromCents(ride.fareCents)}
         {ride.boostCents > 0 ? ` · ${formatBoostBadge(ride.boostCents)}` : ''}
         {ride.estimate ? ' estimate' : ''}

@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { api, createServerScheduledTrip } from './payments'
 import { fetchRideQuote } from './rideBilling'
+import { partyCapacityMessage, passengerCount, passengerCountLabel } from './schedulePartyCopy.js'
 import {
   DRIVER_QUEUE_SELECT,
   formatPickupAt,
@@ -61,7 +62,7 @@ export async function createScheduledTrip({
   pickupAt,
   purpose = 'planned',
   tier = 'standard',
-  passengers = null,
+  passengers = 1,
   billingChoice = null,
   nearTerm = false,
   backupBonusCents = null,
@@ -72,14 +73,15 @@ export async function createScheduledTrip({
   if (!pickupAt) throw new Error('Choose a pickup time')
 
   const when = pickupAt instanceof Date ? pickupAt.toISOString() : new Date(pickupAt).toISOString()
+  const party = passengerCount({ passengers })
   const data = await createServerScheduledTrip({
     pickup,
     dropoff,
     pickupAt: when,
     purpose,
     tier,
-    ...(passengers ? { passengers } : {}),
     weekdays: [],
+    passengers: party,
     ...(billingChoice ? { billingChoice } : {}),
     ...(nearTerm ? { nearTerm: true } : {}),
     ...(backupBonusCents ? { backupBonusCents } : {}),
@@ -90,6 +92,10 @@ export async function createScheduledTrip({
     fare_cents: data.trip?.fare_cents ?? data.fareCents,
     deposit_cents: data.trip?.deposit_cents ?? data.depositCents,
     discountCents: data.discountCents,
+    passengers: data.passengers ?? party,
+    passengerLabel: data.passengerLabel || passengerCountLabel(party),
+    partyCapacityMessage: data.partyCapacityMessage || partyCapacityMessage(party),
+    weekendWindowNote: data.weekendWindowNote || null,
   }
 }
 
@@ -97,7 +103,7 @@ export async function listMyScheduledTrips(riderId) {
   if (!supabase || !riderId) return []
   const { data, error } = await supabase
     .from('trips')
-    .select('id, status, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, fare_cents, deposit_cents, pickup_at, scheduled_for, rider_note, metadata, driver_id')
+    .select('id, status, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, fare_cents, deposit_cents, passengers, pickup_at, scheduled_for, rider_note, metadata, driver_id')
     .eq('rider_id', riderId)
     .in('status', ['scheduled', 'searching', 'offered', 'accepted', 'arriving', 'arrived', 'in_progress'])
     .or('pickup_at.not.is.null,metadata->>scheduled_pickup_at.not.is.null')
