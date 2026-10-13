@@ -7,6 +7,7 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 - **What was wrong:** The friction branch still used the old eligibility form and a Continue button that ignored a salvage title. Current main records a three-step background attestation and does not treat consent as a completed check.
 - **What changed:** Account Continue stays disabled until the quiz and vehicle fields are valid, and also while the title is salvage. Document, W-9, agreement, and submit buttons still use `forwardCtaDisabled`. The employment step stays the attestation wizard, and Sign stays disabled until that attestation, eligibility, and the earlier gap are done. The authorization label stays “Background attestation (consent is not a completed check).”
 - **Files touched:** `src/screens/DriverOnboarding.jsx`, `apps/driver/app/onboarding.tsx`, `shared/driverOnboarding.js`, `tests/onboardingFriction.test.js`, `package.json`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test tests/onboardingFriction.test.js tests/driverOnboarding.test.js tests/backgroundCheck.test.js tests/vehicleTitle.test.js` and `npm test` (3584 pass, 0 fail).
 
 ## 2026-10-07 — [agy] GA97: GA audit & tests - expire-unpaid holds timestamp safety, client guards, and Stripe webhook retryable resilience
 
