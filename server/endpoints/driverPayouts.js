@@ -270,7 +270,7 @@ export default async function handler(req, res, deps = {}) {
       return json(res, 500, { error: listed.error.message })
     }
     const results = await runDuePayouts(sb, listed.data || [], null, { ...deps, dryRun })
-    // Streak, referral and surge bonuses ride the same daily sweep. Injected
+    // Streak, first-ride, referral and surge bonuses ride the same daily sweep. Injected
     // test databases skip it unless the test passes payBonusLedger.
     const payBonuses = deps.payBonusLedger || (deps.sb === undefined ? payBonusLedger : null)
     if (!dryRun && payBonuses) {
