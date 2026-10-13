@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { EarningsAreaMap } from '../components/EarningsAreaMap'
 import { useAuth } from '../lib/auth'
 import {
-  annualTaxCsvFilename,
-  buildAnnualTaxCsv,
   buildAnnualTaxSummary,
   earningsProgressCopy,
   fetchDriverEarningsReport,
@@ -12,8 +10,19 @@ import {
   formatTripWhen,
   localTimeZone,
   taxYears,
-  TAX_DISCLAIMER,
 } from '../lib/driverEarnings'
+import {
+  buildYearEndCsv,
+  buildYearEndPacket,
+  buildYearEndPdf,
+  FORM_1099_INFO_URL,
+  STRIPE_1099_NOTE,
+  STRIPE_CONNECT_1099_URL,
+  STRIPE_TAX_REPORTING_URL,
+  TAX_NOT_ADVICE,
+  yearEndCsvFilename,
+  yearEndPdfFilename,
+} from '../../shared/driverTaxMileage.js'
 import { navigate, getHashRoute } from '../lib/navigation'
 import { formatUsdFromCents } from '../lib/pricing'
 
@@ -46,17 +55,23 @@ function trackedMoney(cents) {
   return money(cents)
 }
 
-function downloadCsv(summary) {
-  const csv = buildAnnualTaxCsv(summary)
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+function downloadBlob(filename, blob) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = annualTaxCsvFilename(summary.year)
+  link.download = filename
   document.body.appendChild(link)
   link.click()
   link.remove()
   URL.revokeObjectURL(url)
+}
+
+function downloadCsv(packet) {
+  downloadBlob(yearEndCsvFilename(packet.year), new Blob([buildYearEndCsv(packet)], { type: 'text/csv;charset=utf-8' }))
+}
+
+function downloadPdf(packet) {
+  downloadBlob(yearEndPdfFilename(packet.year), new Blob([buildYearEndPdf(packet)], { type: 'application/pdf' }))
 }
 
 function TripDetail({ trip }) {
@@ -104,12 +119,26 @@ export function DriverEarningsView({
   loading,
   error,
   timeZone,
+  mileageLogs,
+  mileageRates,
 }) {
   const [openId, setOpenId] = useState(null)
   const tax = useMemo(
     () => buildAnnualTaxSummary(trips, { year, timeZone }),
     [trips, year, timeZone],
   )
+  const yearEnd = useMemo(() => buildYearEndPacket({
+    year,
+    timeZone,
+    trips,
+    logs: mileageLogs,
+    rates: mileageRates,
+    grossEarningsCents: tax.grossCents,
+    tipsCents: tax.tipsCents,
+    platformFeeCents: tax.platformFeeCents,
+    driverNetCents: tax.driverNetCents,
+    earningsTripCount: tax.tripCount,
+  }), [trips, year, timeZone, tax, mileageLogs, mileageRates])
   const maxDay = Math.max(...summary.days.map((day) => day.earningsCents), 1)
   const progress = earningsProgressCopy(summary)
 
@@ -236,24 +265,32 @@ export function DriverEarningsView({
 
         <TaxSummary
           tax={{ ...tax, capped: trips.length >= 1000 }}
+          yearEnd={yearEnd}
           years={years}
           year={year}
           onYear={onYear}
-          onDownload={() => downloadCsv(tax)}
+          onDownload={() => downloadCsv(yearEnd)}
+          onPdf={() => downloadPdf(yearEnd)}
         />
       </div>
-      <TaxPrintSheet tax={tax} timeZone={timeZone} />
+      <TaxPrintSheet tax={tax} yearEnd={yearEnd} timeZone={timeZone} />
     </div>
   )
 }
 
-function TaxSummary({ tax, years, year, onYear, onDownload }) {
+function milesText(value) {
+  if (value == null) return '—'
+  return `${Number(value).toFixed(2)} mi`
+}
+
+function TaxSummary({ tax, yearEnd, years, year, onYear, onDownload, onPdf }) {
+  const deduction = yearEnd.estimatedDeductionCents == null ? 'Rate not configured' : money(yearEnd.estimatedDeductionCents)
   return (
     <section id="tax-summary" className="glass-panel glass-panel--purple" style={{ marginTop: 22, padding: 16, borderRadius: 22 }} data-testid="tax-summary">
       <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.4, textTransform: 'uppercase', color: 'var(--orange)' }}>Year-end</div>
       <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--purple)', marginTop: 4 }}>Tax summary</h2>
       <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4, lineHeight: 1.45 }}>
-        A yearly snapshot of your net, tips, and the 20% platform fee.
+        Gross earnings, tips, platform fees, payouts, and deductible miles for the year. The mileage deduction is an estimate.
       </p>
       <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
         {years.map((item) => (
@@ -285,10 +322,23 @@ function TaxSummary({ tax, years, year, onYear, onDownload }) {
         <Line label="Platform fees" value={`−${money(tax.platformFeeCents)}`} hint="20% of fares, wait, and cancel fees. Tips are not cut." />
         {tax.boostCents > 0 ? <Line label="Boost" value={money(tax.boostCents)} hint="100% to you · not in the platform fee" /> : null}
         <Line label="Driver net" value={money(tax.driverNetCents)} hint={tax.boostCents > 0 ? 'Fare share plus boost' : '80%'} strong />
+        <Line label="Payouts" value={money(yearEnd.payoutsCents)} hint="Paid transfers for this year's trips" />
+        <Line label="On-trip miles" value={milesText(yearEnd.onTripMiles)} />
+        <Line label="En route to pickup" value={milesText(yearEnd.enrouteMiles)} hint={yearEnd.enrouteUntrackedTrips ? `Not tracked on ${yearEnd.enrouteUntrackedTrips} completed ${yearEnd.enrouteUntrackedTrips === 1 ? 'trip' : 'trips'}` : 'When accept location or a pickup route was saved'} />
+        <Line label="Deductible miles" value={milesText(yearEnd.deductibleMiles)} />
+        <Line label="Estimated deduction" value={deduction} hint={yearEnd.rateLabel} strong />
         <Line label="Trips" value={String(tax.tripCount)} />
       </div>
       <p style={{ marginTop: 12, fontSize: 12, color: 'var(--ink-secondary)', lineHeight: 1.45 }} data-testid="tax-disclaimer">
-        {TAX_DISCLAIMER}
+        {TAX_NOT_ADVICE} {yearEnd.mileageEstimateNote}
+      </p>
+      <p style={{ marginTop: 8, fontSize: 12, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
+        {STRIPE_1099_NOTE}{' '}
+        <a href={STRIPE_CONNECT_1099_URL} target="_blank" rel="noreferrer" style={{ color: 'var(--purple)', fontWeight: 800 }}>Open 1099 forms in Stripe</a>
+        {' · '}
+        <a href={FORM_1099_INFO_URL} target="_blank" rel="noreferrer" style={{ color: 'var(--purple)', fontWeight: 800 }}>1099 info</a>
+        {' · '}
+        <a href={STRIPE_TAX_REPORTING_URL} target="_blank" rel="noreferrer" style={{ color: 'var(--purple)', fontWeight: 800 }}>How Stripe files them</a>
       </p>
       {tax.capped ? (
         <p style={{ marginTop: 6, fontSize: 12, color: 'var(--ink-tertiary)' }}>
@@ -307,20 +357,24 @@ function TaxSummary({ tax, years, year, onYear, onDownload }) {
         <button
           type="button"
           className="pressable"
-          onClick={() => window.print()}
+          onClick={onPdf}
           style={{ flex: 1, padding: 12, borderRadius: 14, fontWeight: 800, color: 'var(--purple)', background: 'rgba(255,255,255,0.72)', border: '1.5px solid rgba(82,45,128,0.25)' }}
         >
-          Print
+          Download PDF
         </button>
       </div>
     </section>
   )
 }
 
-function TaxPrintSheet({ tax, timeZone }) {
+function TaxPrintSheet({ tax, yearEnd, timeZone }) {
   return (
     <article className="tax-print-sheet" aria-hidden="true">
-      <h1>Clemson RIDES · {tax.year} driver earnings summary</h1>
+      <h1>Clemson RIDES · {tax.year} driver earnings and mileage summary</h1>
+      <p>{TAX_NOT_ADVICE}</p>
+      <p>{yearEnd.mileageEstimateNote} {yearEnd.rateLabel}</p>
+      <p>{STRIPE_1099_NOTE} {STRIPE_CONNECT_1099_URL}</p>
+      <p>1099 info: {FORM_1099_INFO_URL}</p>
       <p>{tax.disclaimer}</p>
       <p>Timezone: {timeZone}. Platform fee is 20% of fares, wait fees, and cancel fees. Driver net is the remaining 80%, plus 100% of tips.</p>
       <table>
@@ -334,6 +388,11 @@ function TaxPrintSheet({ tax, timeZone }) {
           <tr><th>Gross</th><td>{money(tax.grossCents)}</td></tr>
           <tr><th>Platform fees (20%)</th><td>{money(tax.platformFeeCents)}</td></tr>
           <tr><th>Driver net (80%)</th><td>{money(tax.driverNetCents)}</td></tr>
+          <tr><th>Payouts</th><td>{money(yearEnd.payoutsCents)}</td></tr>
+          <tr><th>On-trip miles</th><td>{milesText(yearEnd.onTripMiles)}</td></tr>
+          <tr><th>En route to pickup</th><td>{milesText(yearEnd.enrouteMiles)}</td></tr>
+          <tr><th>Deductible miles</th><td>{milesText(yearEnd.deductibleMiles)}</td></tr>
+          <tr><th>Estimated mileage deduction</th><td>{yearEnd.estimatedDeductionCents == null ? 'Not estimated' : money(yearEnd.estimatedDeductionCents)}</td></tr>
           <tr><th>Trip count</th><td>{tax.tripCount}</td></tr>
         </tbody>
       </table>
@@ -436,6 +495,8 @@ export function DriverEarnings() {
       loading={loading || authLoading}
       error={error}
       timeZone={timeZone}
+      mileageLogs={report?.mileageLogs || []}
+      mileageRates={report?.mileageRates || null}
     />
   )
 }
