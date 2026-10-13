@@ -61,7 +61,7 @@ function TextInput({ id, value, onChange, error, ...rest }) {
 
 export function VehicleRules({ compact = false }) {
   return (
-    <section style={{ ...card, background: '#faf7fd' }} aria-labelledby="vehicle-rules-h">
+    <section className="rider-card" style={{ ...card, background: '#faf7fd' }} aria-labelledby="vehicle-rules-h">
       <h2 id="vehicle-rules-h" style={{ fontSize: 17, margin: '0 0 8px' }}>Clemson RIDES vehicle standards</h2>
       <ul style={{ margin: 0, paddingLeft: 20, fontSize: compact ? 13 : 14, lineHeight: 1.55 }}>
         {VEHICLE_RULES_COPY.map((r) => <li key={r}>{r}</li>)}
@@ -71,7 +71,7 @@ export function VehicleRules({ compact = false }) {
 }
 
 function PaymentNote() {
-  return <p role="note" style={{ ...card, background: '#fff8f0', fontSize: 14, margin: '0 0 16px' }}><strong>Payments are off-platform.</strong> {OFF_PLATFORM_PAYMENT_NOTE}</p>
+  return <p role="note" className="rider-card" style={{ ...card, background: '#fff8f0', fontSize: 14, margin: '0 0 16px' }}><strong>Payments are off-platform.</strong> {OFF_PLATFORM_PAYMENT_NOTE}</p>
 }
 
 /* ---------------- Partner sign-up ---------------- */
@@ -103,7 +103,7 @@ export function PartnerJoin({ onDone }) {
       <p style={{ color: '#4b3f5c', marginTop: 0 }}>List cars for weekly rental. Only drivers whose license and background check passed can see your listings. New partners are reviewed by our team before listings go live.</p>
       <PaymentNote />
       <VehicleRules />
-      <form onSubmit={submit} noValidate style={card} aria-label="Partner sign-up">
+      <form onSubmit={submit} noValidate className="rider-card" style={card} aria-label="Partner sign-up">
         <h2 style={{ fontSize: 17, margin: 0 }}>Your business</h2>
         <Field id="businessName" text="Business name" error={errors.businessName}><TextInput id="businessName" value={f.businessName} onChange={set('businessName')} error={errors.businessName} /></Field>
         <Field id="contactName" text="Contact name" error={errors.contactName}><TextInput id="contactName" value={f.contactName} onChange={set('contactName')} error={errors.contactName} autoComplete="name" /></Field>
@@ -121,7 +121,7 @@ export function PartnerJoin({ onDone }) {
         </label>
         {errors.agreeTerms && <p role="alert" style={errStyle}>{errors.agreeTerms}</p>}
         {serverErr && <p role="alert" style={errStyle}>{serverErr}</p>}
-        <div style={{ marginTop: 16 }}><button type="submit" style={btn} disabled={busy}>{user ? (busy ? 'Submitting…' : 'Apply as a partner') : 'Create account to apply'}</button></div>
+        <div style={{ marginTop: 16 }}><button type="submit" className="mkt-glass-primary" style={btn} disabled={busy}>{user ? (busy ? 'Submitting…' : 'Apply as a partner') : 'Create account to apply'}</button></div>
       </form>
     </main>
   )
@@ -157,7 +157,7 @@ function UploadButton({ id, text, onFile, accept = 'image/*', bucket, prefix }) 
   const [err, setErr] = useState(null)
   return (
     <span>
-      <label htmlFor={id} style={{ ...btn2, display: 'inline-block', padding: '7px 12px', fontSize: 13 }}>{busy ? 'Uploading…' : text}</label>
+      <label htmlFor={id} className="mkt-glass-quiet" style={{ ...btn2, display: 'inline-block', padding: '7px 12px', fontSize: 13 }}>{busy ? 'Uploading…' : text}</label>
       <input id={id} type="file" accept={accept} style={{ display: 'none' }} onChange={async (e) => {
         const file = e.target.files?.[0]; if (!file) return
         setBusy(true); setErr(null)
@@ -191,7 +191,7 @@ export function ListingForm({ initial, onSaved, onCancel }) {
   return (
     <form onSubmit={save} noValidate aria-label="Vehicle listing" data-testid="listing-form">
       <VehicleRules compact />
-      <div style={card}>
+      <div className="rider-card" style={card}>
         <h2 style={{ fontSize: 17, margin: 0 }}>Vehicle</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0 14px' }}>
           <Field id="make" text="Make" error={show('make')}><TextInput id="make" value={f.make} onChange={set('make')} error={show('make')} /></Field>
@@ -210,7 +210,7 @@ export function ListingForm({ initial, onSaved, onCancel }) {
           <Field id="insuranceExpires" text="Insurance expires" error={show('insuranceExpires')}><TextInput id="insuranceExpires" type="date" value={f.insuranceExpires} onChange={set('insuranceExpires')} error={show('insuranceExpires')} /></Field>
         </div>
         {preFloor && (
-          <div role="status" style={{ ...card, background: '#fff4e0', marginTop: 14 }}>
+          <div role="status" className="rider-card" style={{ ...card, background: '#fff4e0', marginTop: 14 }}>
             <strong>Older than {VEHICLE_STANDARD_MIN_YEAR}.</strong> This vehicle can only be listed as a Luxury exception and stays "pending admin review" until an admin decides.
             <label style={{ display: 'flex', gap: 8, marginTop: 8 }}><input type="checkbox" checked={f.luxuryException} onChange={(e) => set('luxuryException')(e.target.checked)} /> Request a Luxury exception</label>
             {f.luxuryException && (<>
@@ -223,7 +223,7 @@ export function ListingForm({ initial, onSaved, onCancel }) {
         )}
       </div>
 
-      <div style={card}>
+      <div className="rider-card" style={card}>
         <h2 style={{ fontSize: 17, margin: 0 }}>Condition and inspection</h2>
         <Field id="condition" text="Overall condition" error={show('condition')} hint='"Poor" is auto-rejected regardless of year.'>
           <select id="condition" style={input} value={f.condition} onChange={(e) => set('condition')(e.target.value)}>{CONDITION_LEVELS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select>
@@ -254,7 +254,7 @@ export function ListingForm({ initial, onSaved, onCancel }) {
         </fieldset>
       </div>
 
-      <div style={card}>
+      <div className="rider-card" style={card}>
         <h2 style={{ fontSize: 17, margin: 0 }}>Rental terms</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0 14px' }}>
           <Field id="weeklyPrice" text="Weekly price ($)" error={show('weeklyPrice')}><TextInput id="weeklyPrice" value={f.weeklyPrice} onChange={set('weeklyPrice')} error={show('weeklyPrice')} inputMode="decimal" /></Field>
@@ -281,8 +281,8 @@ export function ListingForm({ initial, onSaved, onCancel }) {
       {submitted && Object.keys(result.errors).length > 0 && <p role="alert" style={errStyle}>Fix the {Object.keys(result.errors).length} highlighted field(s).</p>}
       {serverErr && <p role="alert" style={errStyle}>{serverErr}</p>}
       <div style={{ display: 'flex', gap: 10 }}>
-        <button type="submit" style={btn} disabled={busy}>{busy ? 'Saving…' : f.id ? 'Save changes' : 'Create listing'}</button>
-        {onCancel && <button type="button" style={btn2} onClick={onCancel}>Cancel</button>}
+        <button type="submit" className="mkt-glass-primary" style={btn} disabled={busy}>{busy ? 'Saving…' : f.id ? 'Save changes' : 'Create listing'}</button>
+        {onCancel && <button type="button" className="mkt-glass-quiet" style={btn2} onClick={onCancel}>Cancel</button>}
       </div>
     </form>
   )
@@ -311,11 +311,11 @@ export function PartnerDashboard() {
       <p style={{ margin: '0 0 14px', color: '#4b3f5c' }}>{partner.city} · {partner.service_area} · <span style={partner.status === 'approved' ? pill('#e3f5e8', '#1d6b34') : pill('#fff4e0', '#8a5300')}>{partner.status === 'approved' ? 'Approved' : partner.status === 'pending' ? 'Pending admin approval' : partner.status}</span></p>
       <PaymentNote />
       {msg && <p role="alert" style={errStyle}>{msg}</p>}
-      {partner.status !== 'approved' && <p style={card}>Thanks for applying. You can add vehicles once an admin approves your account. We will email {partner.email}.</p>}
+      {partner.status !== 'approved' && <p className="rider-card" style={card}>Thanks for applying. You can add vehicles once an admin approves your account. We will email {partner.email}.</p>}
       {partner.status === 'approved' && (editing ? (
         <ListingForm initial={editing === 'new' ? null : listingToForm(editing)} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />
       ) : (<>
-        <section style={card}>
+        <section className="rider-card" style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ fontSize: 17, margin: 0 }}>Interested drivers</h2>
           </div>
@@ -330,7 +330,7 @@ export function PartnerDashboard() {
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 {nextStatuses(r.status, 'partner').map((to) => (
-                  <button key={to} type="button" style={to === 'declined' || to === 'canceled' ? btn2 : btn}
+                  <button key={to} type="button" className={to === 'declined' || to === 'canceled' ? 'mkt-glass-quiet' : 'mkt-glass-primary'} style={to === 'declined' || to === 'canceled' ? btn2 : btn}
                     onClick={() => act(() => partnersApi('transition', { requestId: r.id, to }))}>
                     {{ accepted: 'Accept', declined: 'Decline', active: 'Mark active', ended: 'End rental', canceled: 'Cancel' }[to]}
                   </button>
@@ -339,10 +339,10 @@ export function PartnerDashboard() {
             </div>
           ))}
         </section>
-        <section style={card}>
+        <section className="rider-card" style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ fontSize: 17, margin: 0 }}>Your listings</h2>
-            <button type="button" style={btn} onClick={() => setEditing('new')}>Add vehicle</button>
+            <button type="button" className="mkt-glass-primary" style={btn} onClick={() => setEditing('new')}>Add vehicle</button>
           </div>
           {!listings.length && <p style={{ color: '#6b5f7a' }}>No vehicles yet.</p>}
           {listings.map((l) => {
@@ -354,8 +354,8 @@ export function PartnerDashboard() {
                   <strong>{l.year} {l.make} {l.model}</strong> · {usd(l.weekly_price_cents)}/wk
                   <div style={{ fontSize: 13 }}><span style={pill(bg, fg)}>{txt}</span> <span style={pill(l.status === 'active' ? '#e3f5e8' : '#eee', '#333')}>{l.status === 'active' ? 'Active' : 'Paused'}</span>{l.review_note ? ` · ${l.review_note}` : ''}</div>
                 </div>
-                <button type="button" style={btn2} onClick={() => setEditing(l)}>Edit</button>
-                <button type="button" style={btn2} onClick={() => act(() => partnersApi('listing-status', { id: l.id, status: l.status === 'active' ? 'paused' : 'active' }))}>{l.status === 'active' ? 'Pause' : 'Unpause'}</button>
+                <button type="button" className="mkt-glass-quiet" style={btn2} onClick={() => setEditing(l)}>Edit</button>
+                <button type="button" className="mkt-glass-quiet" style={btn2} onClick={() => act(() => partnersApi('listing-status', { id: l.id, status: l.status === 'active' ? 'paused' : 'active' }))}>{l.status === 'active' ? 'Pause' : 'Unpause'}</button>
               </div>
             )
           })}
@@ -384,11 +384,11 @@ export function DriverRentals() {
       {error && <p role="alert" style={errStyle}>{error}</p>}
       {!data && !error && <p>Loading…</p>}
       {data && !data.eligible && (
-        <section style={card}><p style={{ margin: 0 }}>{data.reason}</p>
-          <button type="button" style={{ ...btn, marginTop: 12 }} onClick={() => navigate('driver-onboarding')}>Finish onboarding</button></section>
+        <section className="rider-card" style={card}><p style={{ margin: 0 }}>{data.reason}</p>
+          <button type="button" className="mkt-glass-primary" style={{ ...btn, marginTop: 12 }} onClick={() => navigate('driver-onboarding')}>Finish onboarding</button></section>
       )}
       {data?.eligible && (<>
-        <section style={{ ...card, display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' }} aria-label="Filters">
+        <section className="rider-card" style={{ ...card, display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' }} aria-label="Filters">
           <div><label htmlFor="maxWeekly" style={label}>Max $/week</label><input id="maxWeekly" style={{ ...input, width: 120 }} inputMode="numeric" value={flt.maxWeekly} onChange={(e) => setFlt({ ...flt, maxWeekly: e.target.value })} /></div>
           <div><label htmlFor="minSeats" style={label}>Min seats</label><input id="minSeats" style={{ ...input, width: 90 }} inputMode="numeric" value={flt.minSeats} onChange={(e) => setFlt({ ...flt, minSeats: e.target.value })} /></div>
           {[['insurance', 'Insurance included'], ['maintenance', 'Maintenance included'], ['basics', 'Basics included']].map(([k, t]) => (
@@ -401,7 +401,7 @@ export function DriverRentals() {
           {rows.map((l) => {
             const open = reqFor(l.id)
             return (
-              <article key={l.id} style={{ ...card, marginBottom: 0 }}>
+              <article key={l.id} className="rider-card" style={{ ...card, marginBottom: 0 }}>
                 {l.photos?.[0] && <img src={l.photos[0]} alt={`${l.year} ${l.make} ${l.model}`} style={{ width: '100%', height: 150, objectFit: 'cover', borderRadius: 10 }} />}
                 <h3 style={{ margin: '10px 0 2px' }}>{l.year} {l.make} {l.model}</h3>
                 <p style={{ margin: 0, fontSize: 13, color: '#4b3f5c' }}>{l.rental_partners?.business_name} · {l.pickup_location}</p>
@@ -409,7 +409,7 @@ export function DriverRentals() {
                 <p style={{ margin: 0, fontSize: 13 }}>{l.mileage_limit_weekly ? `${l.mileage_limit_weekly} mi/wk` : 'Unlimited miles'} · Age {l.min_driver_age}+ · from {l.available_from}</p>
                 <p style={{ margin: '6px 0', fontSize: 13 }}>{[l.insurance_included && 'Insurance', l.maintenance_included && 'Maintenance', l.basics_included && 'Basics'].filter(Boolean).join(' · ') || 'No extras included'}</p>
                 {open ? <p style={pill('#eef', '#335')}>Request {open.status}</p> : (
-                  <button type="button" style={btn} onClick={async () => {
+                  <button type="button" className="mkt-glass-primary" style={btn} onClick={async () => {
                     setMsg(null)
                     try { await partnersApi('interest', { listingId: l.id }); setMsg('Sent. The partner will review your request and contact you if they accept.'); load() } catch (e) { setMsg(e.message) }
                   }}>I'm interested</button>
@@ -440,18 +440,18 @@ export function AdminRentalPartners() {
       <h2 style={{ fontSize: 18 }}>Rental partners</h2>
       {!data.partners.length && <p>No partner applications.</p>}
       {data.partners.map((p) => (
-        <div key={p.id} style={{ ...card, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <div key={p.id} className="rider-card" style={{ ...card, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <div><strong>{p.business_name}</strong> · {p.contact_name} · {p.phone} · {p.email}<div style={{ fontSize: 13 }}>{p.city} · {p.service_area} · <b>{p.status}</b></div></div>
           <div style={{ display: 'flex', gap: 6 }}>
-            {p.status !== 'approved' && <button type="button" style={btn} onClick={() => decide('admin-partner', p.id, 'approve')}>Approve</button>}
-            {p.status === 'pending' && <button type="button" style={btn2} onClick={() => decide('admin-partner', p.id, 'reject')}>Reject</button>}
-            {p.status === 'approved' && <button type="button" style={btn2} onClick={() => decide('admin-partner', p.id, 'suspend')}>Suspend</button>}
+            {p.status !== 'approved' && <button type="button" className="mkt-glass-primary" style={btn} onClick={() => decide('admin-partner', p.id, 'approve')}>Approve</button>}
+            {p.status === 'pending' && <button type="button" className="mkt-glass-quiet" style={btn2} onClick={() => decide('admin-partner', p.id, 'reject')}>Reject</button>}
+            {p.status === 'approved' && <button type="button" className="mkt-glass-quiet" style={btn2} onClick={() => decide('admin-partner', p.id, 'suspend')}>Suspend</button>}
           </div>
         </div>
       ))}
       <h2 style={{ fontSize: 18 }}>Listings</h2>
       {data.listings.map((l) => (
-        <div key={l.id} style={{ ...card, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <div key={l.id} className="rider-card" style={{ ...card, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <div>
             <strong>{l.year} {l.make} {l.model}</strong> · {l.rental_partners?.business_name} · VIN {l.vin} · {l.title_status} title · {l.mileage} mi · condition {l.condition}
             <div style={{ fontSize: 13 }}>{(REVIEW_PILL[l.review_status] || [])[2]}{l.luxury_exception ? ` · Luxury exception: ${l.luxury_note}` : ''}{l.review_note ? ` · ${l.review_note}` : ''}</div>
@@ -460,8 +460,8 @@ export function AdminRentalPartners() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            {l.review_status !== 'approved' && l.condition !== 'poor' && l.title_status !== 'salvage' && <button type="button" style={btn} onClick={() => decide('admin-listing', l.id, 'approve')}>Approve</button>}
-            {l.review_status !== 'rejected' && <button type="button" style={btn2} onClick={() => decide('admin-listing', l.id, 'reject')}>Reject</button>}
+            {l.review_status !== 'approved' && l.condition !== 'poor' && l.title_status !== 'salvage' && <button type="button" className="mkt-glass-primary" style={btn} onClick={() => decide('admin-listing', l.id, 'approve')}>Approve</button>}
+            {l.review_status !== 'rejected' && <button type="button" className="mkt-glass-quiet" style={btn2} onClick={() => decide('admin-listing', l.id, 'reject')}>Reject</button>}
           </div>
         </div>
       ))}

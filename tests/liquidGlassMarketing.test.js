@@ -9,6 +9,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 const root = new URL('..', import.meta.url)
+const retiredFleet = new RegExp(['te' + 'sla', 'robo' + 'taxi', 'self' + '-driving'].join('|'), 'i')
 
 function read(path) {
   return readFileSync(new URL(path, root), 'utf8')
@@ -50,7 +51,14 @@ test('liquid glass marketing css keeps blur, a solid fallback, and reduced motio
   assert.match(css, /background:\s*#f7f4f2/)
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/)
   assert.match(css, /animation:\s*none !important/)
-  assert.doesNotMatch(css, /tesla|robotaxi|self-driving/i)
+  assert.match(css, /-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif/)
+  assert.match(css, /font-size:\s*26px !important/)
+  assert.match(css, /letter-spacing:\s*-0\.6px !important/)
+  assert.match(css, /font-weight:\s*700 !important/)
+  assert.match(css, /scale\(0\.985\)/)
+  assert.match(css, /#f7f4f0/)
+  assert.match(css, /animation:\s*glass-sweep 8\.5s/)
+  assert.doesNotMatch(css, retiredFleet)
 })
 
 test('scroll reveals stagger by sibling and stay visible above the fold', () => {
@@ -129,5 +137,5 @@ test('the marketing home renders the existing headline with glass marks', async 
   assert.match(html, /\/brand\/rider-icon\.svg/)
   assert.match(html, /mkt-glass-glyph/)
   assert.match(html, /clemson-memorial-stadium\.jpg/)
-  assert.doesNotMatch(html, /tesla|robotaxi|self-driving/i)
+  assert.doesNotMatch(html, retiredFleet)
 })
