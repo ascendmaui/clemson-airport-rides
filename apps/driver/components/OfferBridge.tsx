@@ -23,6 +23,7 @@ import { isSyntheticOffer } from 'rides-native/syntheticOffers'
 import { formatCents, type DriverCard } from 'rides-native/tripTags'
 import { formatBoostBadge } from '../../../shared/scheduledBoost.js'
 import { offerHourly, pickupMiles, EXCLUSIVE_SECONDS } from 'rides-native/offerLadder.js'
+import { WorthItLegend } from 'rides-native/WorthItLegend'
 import { shouldAutoAccept } from 'rides-native/autoAccept.js'
 
 type Banner = {
@@ -31,6 +32,7 @@ type Banner = {
   body: string
   tier: string
   shownAt: number
+  hourlyCents: number | null
 }
 
 export function OfferBridge() {
@@ -53,12 +55,13 @@ export function OfferBridge() {
     pulseStop.current = setTimeout(() => stopRequestPulse(), EXCLUSIVE_SECONDS * 1000)
   }
 
-  function showBanner(card: DriverCard) {
+  function showBanner(card: DriverCard, driver?: { lat?: number | null; lng?: number | null } | null) {
     const promo = card.promoRide ? clemsonMiamiDriverNotification() : null
     const title = promo?.title || 'New ride request'
     const boostBit = (card.boostDriverCents || 0) > 0 ? ` · ${formatBoostBadge(card.boostDriverCents || 0)}` : ''
     const body = promo?.body || `${formatCents(card.driverNetCents)}${boostBit} · ${card.pickupLabel} → ${card.dropoffLabel}`
-    setBanner({ id: card.id, title, body, tier: card.tier || 'standard', shownAt: Date.now() })
+    const hourlyCents = offerHourly(card, driver && driver.lat != null && driver.lng != null ? { lat: driver.lat, lng: driver.lng } : undefined).hourlyCents
+    setBanner({ id: card.id, title, body, tier: card.tier || 'standard', shownAt: Date.now(), hourlyCents })
     AccessibilityInfo.announceForAccessibility(`${title}. ${body}`)
   }
 
@@ -137,6 +140,8 @@ export function OfferBridge() {
           }
         }
         if (inAppRideAlert()) {
+          showBanner(next, driver)
+          armPulse(next.tier || 'standard')
           showBanner(next)
           // Quiet hours / DND: the banner still shows, silently.
           if (alertOk) armPulse(next.tier || 'standard')
@@ -168,6 +173,7 @@ export function OfferBridge() {
         body: content.body || 'Open the queue to respond.',
         tier,
         shownAt: Date.now(),
+        hourlyCents: null,
       })
       if (newRideAlertAllowed({ online: true, prefs })) armPulse(tier)
     })
@@ -186,6 +192,23 @@ export function OfferBridge() {
   if (left === 0 && now - banner.shownAt > EXCLUSIVE_SECONDS * 1000 + 400) return null
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { top: insets.top + 8 }]}>
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.orange }]}>
+        <Pressable
+          onPress={() => {
+            setBanner(null)
+            router.push('/queue')
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`${banner.title}. ${banner.body}. ${left} seconds to accept.`}
+          style={{ gap: 4 }}
+        >
+          <Text style={[styles.kicker, { color: colors.purple }]}>RIDE REQUEST</Text>
+          <Text style={[styles.title, { color: colors.title }]}>{banner.title}</Text>
+          <Text style={{ color: colors.ink }}>{banner.body}</Text>
+          <Text style={[styles.count, { color: colors.orange }]}>{left}s to accept</Text>
+        </Pressable>
+        <WorthItLegend hourlyCents={banner.hourlyCents} colors={colors} />
+      </View>
       <Pressable
         onPress={() => {
           // The driver has seen it: stop the 1.5 s buzz/chime loop right away.
