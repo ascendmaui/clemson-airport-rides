@@ -2,11 +2,20 @@
  * Driver desk: availability, PickDriver requests, scheduled queue, live status.
  * Payments go through the existing /api/driver and /api/stripe-payment-methods routers.
  */
-import { offerVisibleToDriver, visibleOfferQuery, unchangedOfferQuery } from '../../shared/driverOrder.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
+import { bindRealtimeChannel } from './realtimeReconnect.js'
+import { offerVisibleToDriver, visibleOfferQuery } from '../../shared/driverOrder.js'
+import { filterVisibleTrips, pairAllowedByRpc, visibleTripIdSet, WOMEN_ONLY_ACCEPT_ERROR } from './comfortPreference.js'
 import { isStaleLiveOffer } from '../../shared/staleLiveOffer.js'
+import { lockedOfferEconomics } from './offerLadder.js'
+import { compareBoostedFirst } from '../../shared/scheduledBoost.js'
 import { missingVehicleYearColumn } from '../../shared/vehicleYear.js'
+import { missingTitleStatusColumn } from '../../shared/vehicleTitle.js'
+import { missingLuxuryExceptionColumn } from '../../shared/ownedVehicle.js'
 import { vehicleServesComfort } from '../../shared/rideOptions.js'
+import { headingOrNull, isLiveLocationStatus, speedOrNull } from './liveFix.js'
 import { authedJson } from './apiClient.js'
+import { driverBackupPresentation, isBackupQueueRide } from '../../shared/backupDriverQueue.js'
 import { approvalGateMessage } from './syntheticOffers.js'
 import {
   acceptNeedsDriverOnline,
@@ -42,20 +51,29 @@ const TRIP_COLUMNS = [
   'metadata',
   'accepted_at',
   'arrived_at',
+  'wait_fee_cents',
+  'cancel_fee_cents',
+  'driver_wait_earnings_cents',
+  'boost_cents',
+  'backup_bonus_cents',
+  'tip_cents',
+  'canceled_at',
   'completed_at',
   'created_at',
   'requested_at',
   'offer_expires_at',
+  'stops',
+  'flight',
 ].join(', ')
 
-const EARNINGS_COLUMNS = 'id, status, fare_cents, deposit_cents, dropoff_label, completed_at, pickup_label, metadata'
+const EARNINGS_COLUMNS = 'id, status, canceled_at, wait_fee_cents, cancel_fee_cents, driver_wait_earnings_cents, fare_cents, deposit_cents, dropoff_label, completed_at, pickup_label, metadata'
 
 async function listTrips(supabase, finish) {
   const run = async (columns) => finish(supabase.from('trips').select(columns))
   let columns = TRIP_COLUMNS
   let res = await run(columns)
-  if (res.error && /offer_expires_at|requested_at|created_at/i.test(res.error.message || '')) {
-    columns = columns.replace(/, created_at|, requested_at|, offer_expires_at/g, '')
+  if (res.error && /offer_expires_at|requested_at|created_at|boost_cents|backup_bonus_cents|tip_cents|stops|flight/i.test(res.error.message || '')) {
+    columns = columns.replace(/, created_at|, requested_at|, offer_expires_at|, boost_cents|, backup_bonus_cents|, tip_cents|, stops|, flight/g, '')
     res = await run(columns)
   }
   if (res.error && /deposit_cents|column|schema cache/i.test(res.error.message || '')) {
@@ -91,9 +109,17 @@ export async function loadGameDay(supabase) {
 
 export async function loadVehicle(supabase, driverId) {
   if (!supabase || !driverId) return null
+  const withLuxury = 'id, year, title_status, make, model, color, plate, seats, service_class, autonomous_capable, tier, luxury_exception'
+  const withTitle = 'id, year, title_status, make, model, color, plate, seats, service_class, autonomous_capable, tier'
   const withYear = 'id, year, make, model, color, plate, seats, service_class, autonomous_capable, tier'
   const base = 'id, make, model, color, plate, seats, service_class, autonomous_capable, tier'
-  let res = await supabase.from('vehicles').select(withYear).eq('driver_id', driverId).limit(1)
+  let res = await supabase.from('vehicles').select(withLuxury).eq('driver_id', driverId).limit(1)
+  if (res.error && missingLuxuryExceptionColumn(res.error)) {
+    res = await supabase.from('vehicles').select(withTitle).eq('driver_id', driverId).limit(1)
+  }
+  if (res.error && missingTitleStatusColumn(res.error)) {
+    res = await supabase.from('vehicles').select(withYear).eq('driver_id', driverId).limit(1)
+  }
   if (res.error && missingVehicleYearColumn(res.error)) {
     res = await supabase.from('vehicles').select(base).eq('driver_id', driverId).limit(1)
   }
@@ -118,8 +144,7 @@ export async function loadDriverProfile(supabase, driverId) {
 export function riderFacingCard({ profile, vehicle, online }) {
   const vehicleLabel = [vehicle?.color, vehicle?.make, vehicle?.model].filter(Boolean).join(' ') || 'Vehicle TBD'
   return {
-    name: profile?.full_name || 'Driver',
-    phone: profile?.phone || null,
+    name: riderDriverFirstName(profile?.full_name, 'Driver') || 'Driver',
     ratingAvg: profile?.rating_avg != null ? Number(profile.rating_avg) : null,
     ratingCount: Number(profile?.rating_count) || 0,
     studentVerified: Boolean(profile?.student_verified_at),
@@ -142,25 +167,78 @@ export async function setPriorityMode(supabase, driverId, on) {
   if (error) throw new Error(error.message)
 }
 
-export async function publishDriverLocation(supabase, driverId, { lat, lng, heading = null, online = true }) {
+export async function publishDriverLocation(supabase, driverId, {
+  lat,
+  lng,
+  heading = null,
+  online,
+  onlineSource = null,
+  speed = null,
+  tripId = null,
+  tripStatus = null,
+} = {}) {
   if (!supabase || !driverId) return
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
-  const { error } = await supabase.from('driver_status').upsert({
+  const now = new Date().toISOString()
+  const row = {
     driver_id: driverId,
     lat,
     lng,
     heading: Number.isFinite(Number(heading)) ? Number(heading) : null,
-    online: Boolean(online),
-    updated_at: new Date().toISOString(),
-    location_updated_at: new Date().toISOString(),
-  })
+    updated_at: now,
+    location_updated_at: now,
+  }
+  // Presence is only written when asked for. Location-only (trip) writes leave online alone.
+  if (typeof online === 'boolean') {
+    row.online = online
+    if (onlineSource) row.online_source = onlineSource
+  }
+  let { error } = await supabase.from('driver_status').upsert(row)
+  if (error && row.online_source && /online_source/i.test(error.message || '')) {
+    delete row.online_source
+    ;({ error } = await supabase.from('driver_status').upsert(row))
+  }
   if (error) throw new Error(error.message)
+
+  let liveTripId = tripId || null
+  let liveStatus = tripStatus || null
+  if (!liveTripId) {
+    const active = await supabase
+      .from('trips')
+      .select('id, status')
+      .eq('driver_id', driverId)
+      .in('status', ['accepted', 'arriving', 'arrived', 'in_progress'])
+      .order('accepted_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (!active.error && active.data?.id) {
+      liveTripId = active.data.id
+      liveStatus = active.data.status || null
+    }
+  }
+  if (!liveTripId || !isLiveLocationStatus(liveStatus)) return
+  const tripWrite = await supabase.from('trip_driver_locations').upsert({
+    trip_id: liveTripId,
+    driver_id: driverId,
+    lat,
+    lng,
+    heading: headingOrNull(heading),
+    speed: speedOrNull(speed),
+    updated_at: now,
+  })
+  if (tripWrite.error) throw new Error(tripWrite.error.message)
+}
+
+function serviceClassFromInput(serviceClass) {
+  if (serviceClass === 'comfort') return 'comfort'
+  if (serviceClass && typeof serviceClass === 'object' && serviceClass.enabled === true) return 'comfort'
+  return 'standard'
 }
 
 export async function setServiceClass(supabase, driverId, serviceClass) {
   const vehicle = await loadVehicle(supabase, driverId)
   if (!vehicle?.id) throw new Error('Add your vehicle in driver onboarding before choosing a service class.')
-  const service_class = serviceClass === 'comfort' ? 'comfort' : 'standard'
+  const service_class = serviceClassFromInput(serviceClass)
   const { data, error } = await supabase.from('vehicles').update({ service_class, tier: service_class }).eq('id', vehicle.id).select('*').single()
   if (error) throw new Error(error.message)
   return data
@@ -172,8 +250,8 @@ export async function setServiceClass(supabase, driverId, serviceClass) {
  */
 const OPEN_OFFER_STATUSES = ['searching', 'offered']
 
-function cards(rows, gameDayLive) {
-  return rows.map((row) => toDriverCard(row, { gameDayLive })).filter(Boolean)
+function cards(rows, gameDayLive, driverId) {
+  return rows.map((row) => toDriverCard(row, { gameDayLive, driverId })).filter(Boolean)
 }
 
 export async function loadDriverDesk(supabase, driverId) {
@@ -230,7 +308,20 @@ export async function loadDriverDesk(supabase, driverId) {
   const claimableScheduled = approvedForOffers
     ? scheduledRows.filter((row) => !isUnpaidAirportDepositTrip(row))
     : []
-  const offers = cards(claimableOpen, gameDayLive).filter((card) => {
+  const comfortIds = await visibleTripIdSet(supabase, [...claimableOpen, ...claimableScheduled].map((row) => row.id))
+  const comfortOpen = filterVisibleTrips(claimableOpen, comfortIds)
+  const comfortScheduled = filterVisibleTrips(claimableScheduled, comfortIds)
+  const backupSeat = (row) => driverBackupPresentation(row, driverId)
+  const scheduledPool = comfortScheduled.filter((row) => {
+    const seat = backupSeat(row)
+    if (!seat) return true
+    return seat.role === 'open_primary' || seat.role === 'open_backup'
+  })
+  const myBackupSeats = comfortScheduled.filter((row) => {
+    const seat = backupSeat(row)
+    return seat?.role === 'primary' || seat?.role === 'backup'
+  })
+  const offers = cards(comfortOpen, gameDayLive).filter((card) => {
     if (card.status !== 'requested' && passedIds.has(card.id)) return false
     if (card.status === 'requested') return card.driverId === driverId
     if ((card.status === 'searching' || card.status === 'offered') && !isDueNow(card)) return false
@@ -240,8 +331,8 @@ export async function loadDriverDesk(supabase, driverId) {
   const upcoming = cards(mineRows, gameDayLive).filter((card) => !isDueNow(card))
   return {
     offers,
-    scheduledOpen: cards(claimableScheduled, gameDayLive),
-    upcoming,
+    scheduledOpen: cards(scheduledPool, gameDayLive, driverId).sort(compareBoostedFirst),
+    upcoming: [...upcoming, ...cards(myBackupSeats, gameDayLive, driverId)],
     active,
     online: Boolean(statusRes.data?.online),
     priority: Boolean(statusRes.data?.priority_mode),
@@ -258,13 +349,10 @@ export async function loadDriverDesk(supabase, driverId) {
 
 export function subscribeTrips(supabase, onChange) {
   if (!supabase) return () => {}
-  const channel = supabase
-    .channel(`driver-trips-${Date.now()}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, () => onChange())
-    .subscribe()
-  return () => {
-    supabase.removeChannel(channel)
-  }
+  return bindRealtimeChannel(supabase, {
+    topic: 'driver-trips',
+    onChange: () => onChange?.(),
+  })
 }
 
 export async function listPassedTripIds(supabase, driverId) {
@@ -292,6 +380,43 @@ async function rememberPass(supabase, tripId, driverId) {
   return true
 }
 
+async function lockAcceptedShare(supabase, fresh, driverId) {
+  const economics = lockedOfferEconomics(fresh)
+  if (!economics || !supabase || !fresh?.id) return
+  try {
+    await supabase.from('trips').update({
+      driver_earnings_cents: economics.netCents,
+      platform_fee_cents: economics.platformFeeCents,
+      metadata: {
+        ...(fresh.metadata || {}),
+        driver_share_bps: economics.shareBps,
+        driver_payout_cents: economics.netCents,
+        accepted_offer_phase: economics.phase,
+      },
+    }).eq('id', fresh.id).eq('driver_id', driverId)
+  } catch {
+    /* The accept already committed. Earnings stay on the classic split until a retry. */
+  }
+}
+
+export async function confirmBackupQueueTrip(supabase, tripId, { navigate = false } = {}) {
+  if (!tripId) throw new Error('Missing ride')
+  return authedJson(supabase, '/api/driver?action=backup-queue', {
+    method: 'POST',
+    body: { op: navigate ? 'navigate' : 'confirm', tripId, navigate },
+  })
+}
+
+/** Primary cancel promotes the backup. A backup who leaves reopens that seat. */
+export async function releaseBackupQueueSeat(supabase, tripId, { role = 'primary' } = {}) {
+  if (!tripId) throw new Error('Missing ride')
+  const op = role === 'backup' ? 'release' : 'cancel'
+  return authedJson(supabase, '/api/driver?action=backup-queue', {
+    method: 'POST',
+    body: { op, tripId },
+  })
+}
+
 export async function acceptTrip(supabase, trip, driverId) {
   if (!trip?.id) throw new Error('Missing ride')
   if (trip.isSynthetic === true || String(trip.id).startsWith('synthetic-')) {
@@ -303,6 +428,8 @@ export async function acceptTrip(supabase, trip, driverId) {
   if (fresh.status && !['requested', 'searching', 'offered', 'scheduled'].includes(fresh.status)) {
     throw new Error('That ride is no longer available')
   }
+  const comfortAllowed = await pairAllowedByRpc(supabase, fresh.rider_id, driverId)
+  if (comfortAllowed === false) throw new Error(WOMEN_ONLY_ACCEPT_ERROR)
   // trips.update and accept_scheduled_trip both hit
   // trips_block_unpaid_airport_deposit_accept. This is the desk copy of that error.
   if (isUnpaidAirportDepositTrip(fresh)) {
@@ -325,29 +452,27 @@ export async function acceptTrip(supabase, trip, driverId) {
     if (presence.error) throw new Error(presence.error.message)
     if (!presence.data?.online) throw new Error('Go online before accepting a ride.')
   }
+  if (fresh.status === 'scheduled' && isBackupQueueRide(fresh)) {
+    const data = await authedJson(supabase, '/api/driver?action=backup-queue', {
+      method: 'POST',
+      body: { op: 'accept', tripId: trip.id },
+    })
+    if (data?.useScheduledRpc) {
+      const accepted = await supabase.rpc('accept_scheduled_trip', { p_trip_id: trip.id })
+      if (accepted.error) throw new Error(accepted.error.message || 'Could not accept scheduled ride')
+      await lockAcceptedShare(supabase, fresh, driverId)
+      return accepted.data
+    }
+    return data
+  }
   if (fresh.status === 'scheduled') {
     const { data, error } = await supabase.rpc('accept_scheduled_trip', { p_trip_id: trip.id })
     if (error) throw new Error(error.message || 'Could not accept scheduled ride')
+    await lockAcceptedShare(supabase, fresh, driverId)
     return data
   }
-  const acceptedAt = new Date().toISOString()
-  const { data, error } = await unchangedOfferQuery(supabase
-    .from('trips')
-    .update({ status: 'accepted', driver_id: driverId, accepted_at: acceptedAt }), fresh)
-    .is('driver_id', null)
-    .eq('id', trip.id)
-    .in('status', OPEN_OFFER_STATUSES)
-    .select('id, status, driver_id, accepted_at')
-    .maybeSingle()
-  if (error) throw new Error(error.message)
-  if (!data) throw new Error('That ride is no longer available')
-  try {
-    await writeTripEvent(supabase, trip.id, 'accepted', { driver_id: driverId, source: 'driver_app', accepted_at: acceptedAt })
-  } catch (error) {
-    // The conditional claim already committed. Keep both screens on the accepted trip.
-    return { ...data, eventWarning: error.message }
-  }
-  return data
+  const result = await driverTripAction(supabase, trip.id, 'accept')
+  return result.trip
 }
 
 export async function publishDriverCapacity(supabase, driverId, seats) {
@@ -359,6 +484,52 @@ export async function publishDriverCapacity(supabase, driverId, seats) {
   if (!first.error) return { seats: count, stored: true }
   if (/seats|column|schema cache/i.test(first.error.message || '')) return { seats: count, stored: false }
   throw new Error(first.error.message)
+}
+
+const markedSearchingOffers = new Set()
+
+/** Promote visible searching rows to offered. The client update fails RLS. */
+export async function markSearchingOffers(supabase, offers) {
+  if (!supabase) return
+  const pending = []
+  for (const card of offers || []) {
+    if (!card?.id || card.status !== 'searching' || card.driverId) continue
+    if (markedSearchingOffers.has(card.id)) continue
+    markedSearchingOffers.add(card.id)
+    pending.push(
+      authedJson(supabase, '/api/driver?action=mark-offered', {
+        method: 'POST',
+        body: { tripId: card.id },
+      }).catch(() => {
+        markedSearchingOffers.delete(card.id)
+      }),
+    )
+  }
+  await Promise.all(pending)
+}
+
+export async function passOffer(supabase, tripId) {
+  if (!supabase || !tripId) throw new Error('Missing ride')
+  return authedJson(supabase, '/api/driver?action=pass-offer', {
+    method: 'POST',
+    body: { tripId },
+  })
+}
+
+/**
+ * Live matching declines go through pass-offer so the next driver is notified.
+ * If that call fails, the local pass still records the decline.
+ */
+export async function declineDriverOffer(supabase, trip, driverId = null) {
+  if (trip?.matchingOffer && trip?.id) {
+    try {
+      const result = await passOffer(supabase, trip.id)
+      return { disposition: 'release', passed: true, via: 'api', result }
+    } catch {
+      /* The offer API is down. Record the pass on this phone. */
+    }
+  }
+  return declineTrip(supabase, trip, driverId)
 }
 
 export async function declineTrip(supabase, tripOrId, driverId = null) {
@@ -439,55 +610,85 @@ export async function loadRiderFix(supabase, tripId) {
   }
 }
 
-export async function advanceTrip(supabase, trip, driverId) {
-  const next = nextTripStatus(trip?.status)
-  if (!next || !trip?.id) throw new Error('This trip cannot be advanced')
-  if (next === 'arrived') {
-    try {
-      await authedJson(supabase, '/api/driver?action=wait', {
-        method: 'POST',
-        body: { action: 'arrive', tripId: trip.id },
-      })
-    } catch (err) {
-      if (!err.network && !err.unavailable) throw err
-      const { error } = await supabase.from('trips').update({ status: 'arrived' }).eq('id', trip.id).eq('driver_id', driverId)
-      if (error) throw new Error(error.message)
-    }
-    await writeTripEvent(supabase, trip.id, 'arrived', { driver_id: driverId, source: 'driver_app' })
-    return { status: 'arrived' }
-  }
-  let settle = null
-  if (next === 'completed') {
-    settle = await authedJson(supabase, '/api/stripe-payment-methods?action=settle', {
-      method: 'POST',
-      body: { tripId: trip.id, action: 'complete' },
+export async function tripWaitTick(supabase, tripId) {
+  if (!tripId) throw new Error('Missing ride')
+  return authedJson(supabase, '/api/driver?action=wait', {
+    method: 'POST', body: { action: 'tick', tripId },
+  })
+}
+
+export async function driverTripAction(supabase, tripId, op, { idempotencyKey, signal } = {}) {
+  if (!tripId) throw new Error('Missing ride')
+  try {
+    return await authedJson(supabase, '/api/driver?action=trip-status', {
+      method: 'POST', body: { tripId, op, ...(idempotencyKey ? { idempotencyKey } : {}) }, signal,
     })
-  }
-  const patch = { status: next }
-  if (next === 'completed') patch.completed_at = new Date().toISOString()
-  const { data, error } = await supabase
-    .from('trips')
-    .update(patch)
-    .eq('id', trip.id)
-    .eq('driver_id', driverId)
-    .select('id, status, completed_at')
-    .maybeSingle()
-  if (error) {
-    if (next === 'completed' && /payment_required/i.test(error.message || '')) {
-      throw new Error('Payment is still required before this trip can complete.')
+  } catch (err) {
+    if (op === 'complete' && (err.status === 402 || /payment_required/i.test(err.message || ''))) {
+      err.message = 'Payment is still required before this trip can complete.'
     }
-    throw new Error(error.message)
+    throw err
   }
-  if (!data || data.status !== next) {
-    if (next === 'completed') {
-      const again = await supabase.from('trips').select('id, status, completed_at').eq('id', trip.id).maybeSingle()
-      if (again.data?.status === 'completed') return again.data
-      throw new Error('Payment is still required before this trip can complete.')
-    }
-    throw new Error('Trip status did not update.')
+}
+
+/** Carpool stop action: arrive / start (rider in car) / drop at one ordered stop. */
+export async function driverStopAction(supabase, tripId, stopIndex, op, { idempotencyKey, signal } = {}) {
+  if (!tripId) throw new Error('Missing ride')
+  return authedJson(supabase, '/api/driver?action=trip-stop', {
+    method: 'POST', body: { tripId, stopIndex, op, ...(idempotencyKey ? { idempotencyKey } : {}) }, signal,
+  })
+}
+
+/** Trip-status op for the driver's main action button, or null. */
+export function advanceOpFor(status) {
+  const next = nextTripStatus(status)
+  return { arriving: 'arriving', arrived: 'arrive', in_progress: 'start', completed: 'complete' }[next] || null
+}
+
+export const QUEUED_ACTION_TIMEOUT_MS = 12000
+
+/**
+ * Sends one queued tap (offline action queue). The queue's id is the idempotency
+ * key. A weak signal times out instead of hanging; the tap stays queued and the
+ * retry carries the same key, so a request that did land is not applied twice.
+ */
+export async function sendQueuedDriverAction(supabase, action, { timeoutMs = QUEUED_ACTION_TIMEOUT_MS } = {}) {
+  const controller = typeof AbortController === 'function' ? new AbortController() : null
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null
+  const options = { idempotencyKey: action?.id, signal: controller?.signal }
+  try {
+    if (action?.kind === 'stop') return await driverStopAction(supabase, action.tripId, action.stopIndex, action.op, options)
+    return await driverTripAction(supabase, action?.tripId, action?.op, options)
+  } finally {
+    if (timer) clearTimeout(timer)
   }
-  await writeTripEvent(supabase, trip.id, next, { driver_id: driverId, from: trip.status, source: 'driver_app' })
-  return settle ? { ...data, settle } : data
+}
+
+/** Flattens a trip-status response the way advanceTrip does. */
+export function advanceResultTrip(result) {
+  if (!result?.trip) return null
+  return { ...result.trip, ...(result.settle ? { settle: result.settle } : {}), ...(result.wait ? { wait: result.wait } : {}), ...(result.idempotent ? { idempotent: true } : {}) }
+}
+
+export async function driverEndTrip(supabase, tripId, reason, note) {
+  if (!tripId) throw new Error('Missing ride')
+  return authedJson(supabase, '/api/driver?action=trip-status', {
+    method: 'POST', body: { tripId, op: 'end-trip', reason, ...(note ? { note } : {}) },
+  })
+}
+
+export async function driverCancelTrip(supabase, tripId, reason, note) {
+  if (!tripId) throw new Error('Missing ride')
+  return authedJson(supabase, '/api/driver?action=trip-status', {
+    method: 'POST', body: { tripId, op: 'driver-cancel', reason, ...(note ? { note } : {}) },
+  })
+}
+
+export async function advanceTrip(supabase, trip, driverId) {
+  const op = advanceOpFor(trip?.status)
+  if (!op || !trip?.id) throw new Error('This trip cannot be advanced')
+  const result = await driverTripAction(supabase, trip.id, op)
+  return advanceResultTrip(result)
 }
 
 export async function loadTrip(supabase, tripId, driverId) {
@@ -496,9 +697,9 @@ export async function loadTrip(supabase, tripId, driverId) {
   const row = rows[0]
   if (!row) return null
   if (driverId && row.driver_id && row.driver_id !== driverId && !isActiveStatus(row.status) && row.status !== 'requested') {
-    return toDriverCard(row)
+    return toDriverCard(row, { driverId })
   }
-  return toDriverCard(row)
+  return toDriverCard(row, { driverId })
 }
 
 export async function loadEarnings(supabase, driverId) {
@@ -509,15 +710,15 @@ export async function loadEarnings(supabase, driverId) {
     .from('trips')
     .select(EARNINGS_COLUMNS)
     .eq('driver_id', driverId)
-    .in('status', ['completed', 'canceled'])
+    .in('status', ['completed', 'canceled', 'cancelled_wait'])
     .order('completed_at', { ascending: false })
     .limit(40)
   if (tripRes.error && /deposit_cents|column|schema cache/i.test(tripRes.error.message || '')) {
     tripRes = await supabase
       .from('trips')
-      .select('id, status, fare_cents, dropoff_label, completed_at, pickup_label, metadata')
+      .select('id, status, fare_cents, canceled_at, wait_fee_cents, cancel_fee_cents, driver_wait_earnings_cents, dropoff_label, completed_at, pickup_label, metadata')
       .eq('driver_id', driverId)
-      .in('status', ['completed', 'canceled'])
+      .in('status', ['completed', 'canceled', 'cancelled_wait'])
       .order('completed_at', { ascending: false })
       .limit(40)
   }
@@ -549,3 +750,36 @@ export async function loadEarnings(supabase, driverId) {
 }
 
 export { formatCents }
+
+/** Driver perks summary (streaks, first ride of the day, bonus ledger). */
+export async function loadDriverPerks(supabase) {
+  return authedJson(supabase, '/api/driver?action=perks')
+}
+
+export { firstRideChipCopy } from '../../shared/perks/firstRide.js'
+
+export async function claimDriverReferral(supabase, code) {
+  return authedJson(supabase, '/api/driver?action=perks', { method: 'POST', body: { op: 'claim-referral', code } })
+}
+
+export async function setLeaderboardOptOut(supabase, optOut) {
+  return authedJson(supabase, '/api/driver?action=perks', { method: 'POST', body: { op: 'leaderboard-opt-out', optOut: Boolean(optOut) } })
+}
+
+export async function setPartyQueueOptIn(supabase, optIn) {
+  return authedJson(supabase, '/api/driver?action=perks', { method: 'POST', body: { op: 'party-queue', optIn: Boolean(optIn) } })
+}
+
+export async function setMapMarker(supabase, marker) {
+  return authedJson(supabase, '/api/driver?action=perks', { method: 'POST', body: { op: 'map-marker', marker } })
+}
+
+/** Instant cash-out quote: { state, method, grossCents, feeCents, netCents }. */
+export async function loadCashoutQuote(supabase) {
+  return authedJson(supabase, '/api/driver?action=cashout')
+}
+
+/** Execute after the driver confirmed the quoted fee. */
+export async function instantCashout(supabase, feeCents) {
+  return authedJson(supabase, '/api/driver?action=cashout', { method: 'POST', body: { confirm: true, feeCents } })
+}

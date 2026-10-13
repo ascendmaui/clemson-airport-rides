@@ -3,17 +3,64 @@ import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { clemsonMiamiDriverNotification } from '../../../packages/rides-native/clemsonMiamiPromo.js'
+import { formatEasternWhen } from '../../../shared/nearTermSlots.js'
+
+let appActive = true
+let driverOnline = false
+
+/** In-app sound and vibration replace the system toast while the driver is online and the app is open. */
+export function setRideAlertSurface(patch: { active?: boolean; online?: boolean }) {
+  if (patch.active != null) appActive = patch.active
+  if (patch.online != null) driverOnline = patch.online
+}
+
+export function inAppRideAlert() {
+  return appActive && driverOnline
+}
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    const data = notification?.request?.content?.data
+    if (isTripStatusPush(data)) {
+      // The offer banner ignores status pushes, so they show as normal alerts even in the app.
+      // The trip screen already shows its own Arrived? card, so that one stays quiet in the foreground.
+      const quiet = (data as { kind?: string }).kind === 'arrive_prompt'
+      return { shouldShowBanner: !quiet, shouldShowList: true, shouldPlaySound: !quiet, shouldSetBadge: false }
+    }
+    const inApp = inAppRideAlert()
+    return {
+      shouldShowBanner: !inApp,
+      shouldShowList: true,
+      shouldPlaySound: !inApp,
+      shouldSetBadge: false,
+    }
+  },
 })
 
 export const RIDE_CHANNEL_ID = 'ride-requests'
+
+/** Must match DRIVER_STATUS_PUSH_FEATURE in server/tripStatusNotices.js. */
+export const TRIP_STATUS_PUSH_FEATURE = 'trip_status_v1'
+/** Server status pushes; these are not ride offers, so the offer banner ignores them. */
+export const TRIP_STATUS_PUSH_KINDS = ['arrive_prompt', 'rider_canceled', 'rider_ended_early', 'rider_no_show']
+
+export function isTripStatusPush(data: unknown): boolean {
+  const kind = data && typeof data === 'object' ? (data as { kind?: unknown }).kind : null
+  return typeof kind === 'string' && TRIP_STATUS_PUSH_KINDS.includes(kind)
+}
+
+/** Trip id from a remote push. Offer pushes and Carpool ready both set tripId; the url is the scheme deep link. */
+export function tripIdFromNotificationData(data: unknown): string {
+  if (!data || typeof data !== 'object') return ''
+  const row = data as { tripId?: unknown; url?: unknown }
+  if (typeof row.tripId === 'string' && row.tripId.trim()) return row.tripId.trim()
+  if (typeof row.url !== 'string' || !row.url.trim()) return ''
+  try {
+    return new URL(row.url).searchParams.get('id')?.trim() || ''
+  } catch {
+    return ''
+  }
+}
 
 /** Android 8+ plays a custom sound only when that sound is set on a channel. */
 export function rideChannelRequest() {
@@ -104,13 +151,13 @@ async function storeToken(supabase: SupabaseClient | null, driverId: string, tok
   })
   if (!status.error) return true
   if (!/expo_push_token|column|schema cache/i.test(status.error.message || '')) return false
-  const table = await supabase.from('driver_push_tokens').upsert({
-    driver_id: driverId,
-    token,
-    platform: Platform.OS,
-    updated_at: updatedAt,
-  })
-  return !table.error
+  const row = { driver_id: driverId, token, platform: Platform.OS, updated_at: updatedAt }
+  // features tells the server this build handles trip status pushes (Arrived?, rider canceled).
+  const table = await supabase.from('driver_push_tokens').upsert({ ...row, features: [TRIP_STATUS_PUSH_FEATURE] })
+  if (!table.error) return true
+  if (!/features|schema cache/i.test(table.error.message || '')) return false
+  const plain = await supabase.from('driver_push_tokens').upsert(row)
+  return !plain.error
 }
 
 export async function notifyAcceptedRide(card: {
@@ -119,11 +166,41 @@ export async function notifyAcceptedRide(card: {
   dropoffLabel: string
 }) {
   await ensureRideChannel()
+  const content = {
+    title: 'Ride accepted',
+    body: `${card.pickupLabel} → ${card.dropoffLabel}`,
+    data: { tripId: card.id },
+    sound: 'accept.wav',
+    ...androidChannelFields(),
+  }
+  try {
+    await Notifications.scheduleNotificationAsync({ content, trigger: null })
+  } catch {
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: { ...content, sound: 'default' },
+        trigger: null,
+      })
+    } catch {
+      /* a missing custom sound must not reject the ride-accepted alert */
+    }
+  }
+}
+
+export async function notifyScheduledBoard(card: {
+  id: string
+  pickupLabel: string
+  dropoffLabel: string
+  pickupAt?: string | null
+}) {
+  const whenLabel = card.pickupAt ? formatEasternWhen(card.pickupAt) : null
+  const when = whenLabel ? ` · ${whenLabel}` : ''
+  await ensureRideChannel()
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: 'Ride accepted',
-      body: `${card.pickupLabel} → ${card.dropoffLabel}`,
-      data: { tripId: card.id },
+      title: 'Scheduled ride on the board',
+      body: `${card.pickupLabel} → ${card.dropoffLabel}${when}`,
+      data: { tripId: card.id, kind: 'scheduled_board' },
       sound: 'request.wav',
       ...androidChannelFields(),
     },

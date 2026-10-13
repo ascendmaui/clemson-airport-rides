@@ -12,7 +12,7 @@ Vite + React rider/driver shell · Clemson orange `#F56600` · purple `#522D80`.
 | Layer | Wiring |
 |-------|--------|
 | Auth | **Supabase Auth only** · `AuthProvider` · `#/sign-in` `#/sign-up` · protected rider/driver routes |
-| Payments | Vercel `/api/create-checkout-session` + `/api/stripe-webhook` · 25% deposit · writes `payments` when service role + trip metadata present |
+| Payments | Card hold for the estimated fare plus a buffer at ride request · final fare captured at trip end · legacy webhook still records an already-paid Checkout into `payments` |
 | Data | Real Supabase queries · online drivers from `driver_status` · trips Realtime · **no demo fleet** |
 | UI | Lyft-style soft shadows, spring sheets, Clemson brand |
 | Rider promos | Account → Refer friends · signup `?ref=` code · rewards after first completed ride (`supabase/rider_social_promo.sql`, type `rider_social`) |
@@ -42,6 +42,8 @@ Set **one** of these on Vercel:
 | `SUPABASE_SERVICE_ROLE_KEY` | Already required for other `/api` routes. Help and Support use it to read the signed-in user's profile, trips, billing flags, and vehicle. The browser sends the Supabase access token as `Authorization: Bearer`. |
 
 If neither AI key is set, both chats still answer from the curated knowledge base and whatever account context loaded. They do not call a model.
+
+Driver profile photos (`#/driver` and the driver app Profile photo screen) are reviewed with the AI Gateway when `AI_GATEWAY_API_KEY` is set, and otherwise with `OPENAI_API_KEY`. If neither key is set, the photo goes to the admin queue. The driver app reads `review_status` and shows Approved when that status is `approved`. Admins approve or reject a photo that was not auto-approved at `#/admin?tab=applications`.
 
 Peer riders and drivers are shown by first name only (`displayFirstName` from `src/lib/privacyDisplay.js` when that file is present). Last names are removed from chat replies and from support tickets.
 
@@ -79,6 +81,8 @@ Two native apps, version **1.1.0**. They do not replace TestFlight **1.0.0 (1)**
 |-----|------|-----------|
 | Rider | `apps/rider` | `com.ascendmaui.clemsonrides.rider` |
 | Driver | `apps/driver` | `com.ascendmaui.clemsonrides.driver` |
+
+Android package ids, the marketing QR path, and the Play Console checklist (do not submit) are in [docs/android-play-readiness.md](docs/android-play-readiness.md).
 
 Email and password use Supabase `signInWithPassword` / `signUp`, including forgot-password. Social sign-in uses Supabase-native Apple (`signInWithIdToken` + nonce) and Google (`signInWithOAuth` + the `auth/callback` deep link) in both apps. The session is stored in the iOS keychain / Android keystore through `expo-secure-store` (chunked, because a Supabase session is larger than one SecureStore item).
 

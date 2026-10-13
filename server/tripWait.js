@@ -14,8 +14,10 @@
  *   are stored as pending. The fee is owed; nothing is marked succeeded.
  */
 import { ensureStripeCustomer, stripeClient, stripeOk } from './friendRideLib.js'
+import { releaseOpenFareHold } from './fareAuthorization.js'
+import { enqueueWaitCancelPayout } from './payouts.js'
 import { quoteWait } from '../src/lib/waitFee.js'
-import { reuseStoredIntent, waitChargeKey } from './chargeIdempotency.js'
+import { reuseStoredIntent, waitChargeKey, waitFeeBilledCents } from './chargeIdempotency.js'
 
 const ACTIONS = new Set(['arrive', 'tick', 'cancel', 'start', 'complete'])
 
@@ -45,9 +47,9 @@ export function assertAction(action, tripId) {
 async function loadPayments(sb, tripId) {
   const { data, error } = await sb
     .from('payments')
-    .select('id, kind, status, amount_cents, stripe_payment_intent_id')
+    .select('id, kind, status, amount_cents, stripe_payment_intent_id, metadata')
     .eq('trip_id', tripId)
-    .in('kind', ['wait_fee', 'cancel_fee'])
+    .in('kind', ['wait_fee', 'cancel_fee', 'balance'])
   if (error) throw httpError(error.message, 500)
   return data || []
 }
@@ -99,7 +101,11 @@ export async function chargeWaitFees(sb, trip) {
   }
 
   const prior = await loadPayments(sb, trip.id)
-  const paid = prior
+  if (trip.status === 'completed' && waitFeeBilledCents(trip, prior.filter((p) => p.kind === 'balance')) >= waitFee) {
+    return { status: 'succeeded', reason: 'already_billed', amountCents: waitFee }
+  }
+  const feePayments = prior.filter((p) => ['wait_fee', 'cancel_fee'].includes(p.kind))
+  const paid = feePayments
     .filter((p) => p.status === 'succeeded')
     .reduce((sum, p) => sum + (Number(p.amount_cents) || 0), 0)
   if (paid >= amount) {
@@ -153,7 +159,7 @@ export async function chargeWaitFees(sb, trip) {
   }
 
   const reason = trip.wait_cancel_reason || (trip.status === 'completed' ? 'complete' : 'wait')
-  const inflightId = [...prior].reverse().find((row) => (
+  const inflightId = [...feePayments].reverse().find((row) => (
     row.status !== 'succeeded'
     && row.stripe_payment_intent_id
     && String(row.stripe_payment_intent_id).startsWith('pi_')
@@ -278,7 +284,7 @@ export async function chargeWaitFees(sb, trip) {
   }
 }
 
-export async function applyTripWait(sb, { action, tripId, actorId }) {
+export async function applyTripWait(sb, { action, tripId, actorId }, deps = {}) {
   assertAction(action, tripId)
   if (!actorId || typeof actorId !== 'string' || !actorId.trim()) throw httpError('Sign in required', 401)
 
@@ -292,13 +298,21 @@ export async function applyTripWait(sb, { action, tripId, actorId }) {
   if (!trip?.id) throw httpError('Wait update returned no trip', 500)
 
   let charge = null
-  if (data.should_charge) {
-    charge = await chargeWaitFees(sb, trip)
+  let payout = null
+  try {
+    if (data.should_charge) charge = await (deps.chargeWaitFees || chargeWaitFees)(sb, trip)
+    if (trip.status === 'cancelled_wait' && charge?.status === 'succeeded') {
+      payout = await (deps.enqueueWaitCancelPayout || enqueueWaitCancelPayout)({ sb, trip, stripe: deps.stripe })
+    }
+  } finally {
+    if (trip.status === 'cancelled_wait') {
+      await releaseOpenFareHold({ sb, stripe: deps.stripe, trip, reason: 'wait_cancel' })
+    }
   }
 
   const serverNow = data?.server_now || new Date().toISOString()
   const parsedServerMs = new Date(serverNow).getTime()
   const serverMs = Number.isFinite(parsedServerMs) ? parsedServerMs : Date.now()
   const quote = quoteWait(trip.arrived_at, serverMs)
-  return { trip, serverNow, quote, charge }
+  return { trip, serverNow, quote, charge, payout, should_charge: Boolean(data.should_charge) }
 }

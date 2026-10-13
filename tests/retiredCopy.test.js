@@ -6,7 +6,19 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const NEEDLE = new RegExp(
-  ['te' + 'sla', 'model' + ' 3', 'self' + '-driving', 'robo' + 'taxi', 'cy' + 'ber'].join('|'),
+  [
+    'te' + 'sla',
+    'model' + ' 3',
+    'self' + '-driving',
+    'robo' + 'taxi',
+    'cy' + 'ber',
+    'at the ' + 'wheel',
+    'driver-' + 'operated',
+    'driver ' + 'operated',
+    'autonomy ' + 'session',
+    'a driver still ' + 'drives',
+    'clemson ' + 'fleet',
+  ].join('|'),
   'i',
 )
 const CONTENT_ALLOW = new Set([
@@ -20,7 +32,7 @@ const NAME_ALLOW = new Set([
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
-    if (name === 'node_modules' || name === '.git') continue
+    if (name === 'node_modules' || name === '.git' || name === 'dist' || name === '.expo' || name === '.vercel' || name === 'build') continue
     const abs = path.join(dir, name)
     const rel = path.relative(root, abs)
     if (statSync(abs).isDirectory()) walk(abs, out)

@@ -87,7 +87,3 @@ export function modelsForMake(make) {
   if (!make) return []
   return MODELS[make] ? [...MODELS[make]] : ['Other']
 }
-
-export function comfortClassMakeModel(make, model) {
-  return String(make || '').toLowerCase() === 'comfort' && /model\s*3/i.test(String(model || ''))
-}

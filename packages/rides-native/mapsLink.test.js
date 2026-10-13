@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { navigationLinks } from './mapsLink.js'
+import { navigationLinks, preferredNavigationUrl } from './mapsLink.js'
 
 test('directions urls use coordinates when the stop has them', () => {
   const links = navigationLinks({ latitude: 34.6788, longitude: -82.843, label: 'Memorial Stadium' })
@@ -142,4 +142,32 @@ test('documented quirks and potential bugs in current implementation', () => {
   // BUG?: Apple Maps URL uses insecure http:// protocol instead of https://
   const sample = navigationLinks({ label: 'Campus' })
   assert.match(sample.apple, /^http:\/\/maps\.apple\.com\//)
+})
+
+test('one-tap navigate prefers Apple Maps on iPhone and Google Maps elsewhere', () => {
+  const stop = { latitude: 34.6788, longitude: -82.843, label: 'Memorial Stadium' }
+  assert.match(preferredNavigationUrl(stop, 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)'), /^http:\/\/maps\.apple\.com\//)
+  assert.match(preferredNavigationUrl(stop, 'Mozilla/5.0 (Linux; Android 14)'), /^https:\/\/www\.google\.com\/maps\/dir\//)
+  assert.match(preferredNavigationUrl(stop, ''), /google\.com\/maps/)
+})
+
+test('waze links navigate to coordinates, or search a label-only stop', () => {
+  const links = navigationLinks({ latitude: 34.6788, longitude: -82.843, label: 'Memorial Stadium' })
+  assert.equal(links.waze, 'https://waze.com/ul?ll=34.6788,-82.843&navigate=yes')
+  assert.equal(navigationLinks({ label: 'Sikes Hall' }).waze, 'https://waze.com/ul?q=Sikes%20Hall&navigate=yes')
+})
+
+test('navigationUrl picks the chosen app and falls back to Apple Maps', async () => {
+  const { navigationUrl, navAppOrder, navAppLabel, isNavApp } = await import('./mapsLink.js')
+  const stop = { latitude: 34.6788, longitude: -82.843, label: 'Pickup' }
+  assert.match(navigationUrl('apple', stop), /^http:\/\/maps\.apple\.com\/\?daddr=34\.6788,-82\.843/)
+  assert.match(navigationUrl('google', stop), /google\.com\/maps\/dir\/\?api=1&destination=34\.6788,-82\.843/)
+  assert.equal(navigationUrl('waze', stop), 'https://waze.com/ul?ll=34.6788,-82.843&navigate=yes')
+  assert.match(navigationUrl('bogus', stop), /maps\.apple\.com/)
+  assert.deepEqual(navAppOrder('waze'), ['waze', 'apple', 'google'])
+  assert.deepEqual(navAppOrder('google'), ['google', 'apple', 'waze'])
+  assert.deepEqual(navAppOrder(undefined), ['apple', 'google', 'waze'])
+  assert.equal(navAppLabel('waze'), 'Waze')
+  assert.equal(isNavApp('waze'), true)
+  assert.equal(isNavApp('carplay'), false)
 })

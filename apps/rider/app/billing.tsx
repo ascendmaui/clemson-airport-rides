@@ -1,11 +1,12 @@
+import { GlassBadge, Glyph } from 'rides-native/icons'
+import { MainTabs } from '@/components/MainTabs'
 import { useFocusEffect, useRouter } from 'expo-router'
 import * as Linking from 'expo-linking'
 import * as WebBrowser from 'expo-web-browser'
 import { useCallback, useState } from 'react'
-import { Modal, ScrollView, Text, View } from 'react-native'
+import { Modal, Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
-import { StackHeader } from '@/components/StackHeader'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { parseCheckoutSessionId } from 'rides-native/checkoutReturn.js'
@@ -15,12 +16,18 @@ import {
   RIDE_PAYMENT_METHODS,
   buyPrepaidCredits,
   depositSurfaceCopy,
+  listSavedPaymentMethods,
   loadPrepaidCredits,
   loadRiderBilling,
   prepaidPurchaseSummary,
   saveCheckoutPaymentMethod,
+  saveSetupPaymentMethod,
+  savedPaymentMethodLabel,
   startPaymentMethodSetup,
+  updateSavedPaymentMethod,
 } from 'rides-native/riderMoney.js'
+import { nativePaymentSheetAvailable, presentNativeSetupSheet } from '@/lib/nativePaymentSheet'
+import type { NativeSetupResult } from '@/lib/nativePaymentSheetTypes'
 import { formatCents } from 'rides-native/tripTags.js'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
@@ -30,6 +37,14 @@ import { RequireAuth } from '@/components/RequireAuth'
 
 type PrepaidTier = { id: string; label?: string; priceCents: number; creditCents: number }
 type Card = { brand: string; last4: string | null; billingActivatedAt: string | null }
+type SavedMethod = { id: string; brand: string; last4: string | null; type?: string; cashtag?: string | null; email?: string | null }
+
+function setupSheetNote(presented: NativeSetupResult) {
+  if (presented.ok || ('unavailable' in presented && presented.unavailable)) return null
+  if ('canceled' in presented && presented.canceled) return 'Payment setup canceled. No charge was made.'
+  if ('error' in presented) return presented.error
+  return 'Could not add that payment method. No charge was made.'
+}
 type Deposit = { id: string; amount_cents: number | null; status: string | null; created_at: string | null; trip_id: string | null }
 type Ride = {
   id: string
@@ -41,11 +56,26 @@ type Ride = {
   created_at: string | null
 }
 
+const MONEY_SHORTCUTS: { href: '/promo' | '/tiger-pass' | '/student' | '/history'; label: string; icon: string; tone: 'orange' | 'purple' }[] = [
+  { href: '/promo', label: 'Promos', icon: 'promo', tone: 'orange' },
+  { href: '/tiger-pass', label: 'Tiger Pass', icon: 'pass', tone: 'purple' },
+  { href: '/student', label: 'Student', icon: 'student', tone: 'purple' },
+  { href: '/history', label: 'Tips', icon: 'tip', tone: 'orange' },
+]
+
+function paymentGlyph(type: string): string {
+  if (type.includes('apple')) return 'applePay'
+  if (type.includes('cash') || type.includes('link')) return 'wallet'
+  return 'card'
+}
+
 function BillingScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
   const [card, setCard] = useState<Card | null>(null)
+  const [methods, setMethods] = useState<SavedMethod[]>([])
+  const [defaultPmId, setDefaultPmId] = useState<string | null>(null)
   const [deposits, setDeposits] = useState<Deposit[]>([])
   const [rides, setRides] = useState<Ride[]>([])
   const [note, setNote] = useState<string | null>(null)
@@ -57,7 +87,7 @@ function BillingScreen() {
   const [tiers, setTiers] = useState<PrepaidTier[]>([])
   const [pending, setPending] = useState<PrepaidTier | null>(null)
   const [busy, setBusy] = useState(false)
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
 
   const load = useCallback(() => {
@@ -86,6 +116,13 @@ function BillingScreen() {
       setCreditsError(result.error)
       setTiers((result.tiers || []) as PrepaidTier[])
     })
+    listSavedPaymentMethods(supabase).then((result) => {
+      if (!alive || result?.error) return
+      setMethods(result.methods || [])
+      setDefaultPmId(result.defaultPmId || null)
+    }).catch(() => {
+      /* The profile card still shows when the saved-method list is down. */
+    })
     return () => {
       alive = false
     }
@@ -93,32 +130,98 @@ function BillingScreen() {
 
   useFocusEffect(load)
 
+  async function finishCheckout(methodId: string, returnUrl: string) {
+    if (!supabase) return
+    const session = await startPaymentMethodSetup(supabase, { paymentMethod: methodId, returnUrl })
+    if (!session?.url) {
+      setNote(session?.error || 'Could not open payment setup. No charge was made.')
+      return
+    }
+    const result = await WebBrowser.openAuthSessionAsync(session.url, returnUrl)
+    if (result.type !== 'success') {
+      setNote('Payment setup canceled. No charge was made.')
+      return
+    }
+    const sessionId = parseCheckoutSessionId(result.url)
+    if (!sessionId) {
+      setNote('Stripe did not return a setup session. No charge was made.')
+      return
+    }
+    await saveCheckoutPaymentMethod(supabase, sessionId)
+    setNote('Payment method saved.')
+    load()
+  }
+
   async function onPickMethod(methodId: string) {
     if (!supabase || busy) return
     setBusy(true)
     setNote(null)
     try {
       const returnUrl = Linking.createURL('billing')
-      const session = await startPaymentMethodSetup(supabase, { paymentMethod: methodId, returnUrl })
-      if (!session?.url) {
-        setNote(session?.error || 'Could not open payment setup. No charge was made.')
-        return
+      if (nativePaymentSheetAvailable()) {
+        const setup = await startPaymentMethodSetup(supabase, { paymentMethod: methodId, returnUrl, native: true })
+        if (setup?.clientSecret && setup.publishableKey) {
+          const presented = await presentNativeSetupSheet({
+            methodId,
+            clientSecret: setup.clientSecret,
+            publishableKey: setup.publishableKey,
+            merchantIdentifier: setup.merchantIdentifier,
+            returnURL: returnUrl,
+          })
+          if (presented.ok) {
+            if (!setup.setupIntentId) {
+              setNote('Stripe did not return a setup session. No charge was made.')
+              return
+            }
+            await saveSetupPaymentMethod(supabase, setup.setupIntentId)
+            setNote('Payment method saved.')
+            load()
+            return
+          }
+          const sheetNote = setupSheetNote(presented)
+          if (sheetNote) {
+            setNote(sheetNote)
+            return
+          }
+        }
       }
-      const result = await WebBrowser.openAuthSessionAsync(session.url, returnUrl)
-      if (result.type !== 'success') {
-        setNote('Payment setup canceled. No charge was made.')
-        return
-      }
-      const sessionId = parseCheckoutSessionId(result.url)
-      if (!sessionId) {
-        setNote('Stripe did not return a setup session. No charge was made.')
-        return
-      }
-      await saveCheckoutPaymentMethod(supabase, sessionId)
-      setNote('Payment method saved.')
-      load()
+      await finishCheckout(methodId, returnUrl)
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'Could not add that payment method. No charge was made.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function onUseMethod(paymentMethodId: string) {
+    if (!supabase || busy) return
+    setBusy(true)
+    setNote(null)
+    try {
+      const saved = await updateSavedPaymentMethod(supabase, { action: 'default', paymentMethodId })
+      setDefaultPmId(saved.defaultPmId || paymentMethodId)
+      if (saved.methods) setMethods(saved.methods)
+      setNote('This method will be used for the fare hold.')
+      load()
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : 'Could not select that payment method. No charge was made.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function onRemoveMethod(paymentMethodId: string) {
+    if (!supabase || busy) return
+    setBusy(true)
+    setNote(null)
+    try {
+      const saved = await updateSavedPaymentMethod(supabase, { action: 'detach', paymentMethodId })
+      setMethods(saved.methods || [])
+      setDefaultPmId(saved.defaultPmId || null)
+      setNote(saved.methods?.length ? 'Payment method removed.' : 'No payment method on file.')
+      load()
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : 'Could not remove that payment method. No charge was made.')
     } finally {
       setBusy(false)
     }
@@ -144,9 +247,22 @@ function BillingScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <StackHeader title="Billing" onBack={() => router.back()} />
+      <View style={styles.moneyHead}>
+        <Text style={styles.moneyTitle} accessibilityRole="header">Money</Text>
+      </View>
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.creditsLabel} accessibilityRole="header">credits</Text>
+        <View style={styles.shortcuts}>
+          {MONEY_SHORTCUTS.map((item) => (
+            <Pressable key={item.href} accessibilityRole="button" accessibilityLabel={item.label} onPress={() => router.push(item.href)} style={styles.shortcut}>
+              <GlassBadge name={item.icon} size={48} tone={item.tone} scheme={scheme} />
+              <Text style={styles.shortcutLabel}>{item.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <View style={styles.labelLine}>
+          <Glyph name="wallet" size={18} color={colors.purple} />
+          <Text style={styles.creditsLabel} accessibilityRole="header">credits</Text>
+        </View>
         <View style={[styles.card, lift(colors, 'rest')]} accessibilityLabel="credits">
           <Text style={styles.cardLast}>
             {!creditsLoaded
@@ -159,6 +275,31 @@ function BillingScreen() {
         </View>
 
         <Text style={styles.kicker}>PAYMENT METHODS</Text>
+        {methods.map((method) => {
+          const inUse = method.id === defaultPmId
+          return (
+            <View key={method.id} style={[styles.card, lift(colors, 'rest')]}>
+              <View style={styles.labelLine}>
+                <Glyph name={paymentGlyph(String((method as { type?: string }).type || 'card'))} size={22} color={colors.purple} active={inUse} knockout={colors.card} />
+                <Text style={styles.rowTitle}>{savedPaymentMethodLabel(method)}</Text>
+              </View>
+              <Text style={styles.copy}>{inUse ? 'Used for the fare hold' : 'Saved on this account'}</Text>
+              {inUse ? null : (
+                <PrimaryButton
+                  label="Use this method"
+                  disabled={busy || !user}
+                  onPress={() => onUseMethod(method.id)}
+                />
+              )}
+              <PrimaryButton
+                label="Remove"
+                tone="outline"
+                disabled={busy || !user}
+                onPress={() => onRemoveMethod(method.id)}
+              />
+            </View>
+          )
+        })}
         <View>
           {RIDE_PAYMENT_METHODS.map((method) => (
             <View key={method.id} style={{ marginBottom: 8 }}>
@@ -176,7 +317,7 @@ function BillingScreen() {
             onPress={() => onPickMethod(ADD_ANOTHER_PAYMENT_METHOD_ID)}
           />
           <Text style={styles.copy}>
-            Apple Pay and Google Pay open Stripe Checkout in setup mode, which does not charge the card. Apple Pay on the website still needs this domain registered under Stripe Payment method domains.
+            Card, Cash App Pay, Apple Pay, Google Pay, and Link save with Stripe PaymentSheet on this phone. Saving a method does not charge it. Requesting a ride still places a hold for the estimated fare.
           </Text>
         </View>
 
@@ -193,11 +334,11 @@ function BillingScreen() {
 
         {!user ? (
           <>
-            <Text style={styles.copy}>Sign in to see the card, deposits, and ride history on this account.</Text>
+            <Text style={styles.copy}>Sign in to see the card and ride history on this account.</Text>
             <PrimaryButton label="Sign in" onPress={() => router.push('/sign-in')} />
           </>
         ) : null}
-        <Text style={styles.kicker}>CARD</Text>
+        <View style={styles.labelLine}><Glyph name="card" size={16} color={colors.orange} /><Text style={styles.kicker}>CARD</Text></View>
         <View style={[styles.card, lift(colors, 'rest')]}>
           {card ? (
             <>
@@ -209,13 +350,13 @@ function BillingScreen() {
             </>
           ) : (
             <Text style={styles.copy}>
-              {loading ? 'Loading card…' : 'No card on file yet. Airport deposits use Stripe Checkout. This screen never asks for the full card number.'}
+              {loading ? 'Loading card…' : 'No payment method on file yet. Add a card, Cash App Pay, Apple Pay, Google Pay, or Link for the fare hold. This screen never asks for the full card number.'}
             </Text>
           )}
         </View>
 
         <Text style={styles.kicker}>DEPOSITS</Text>
-        {deposits.length === 0 ? <Text style={styles.copy}>{loading ? 'Loading deposits…' : 'No deposit payments on this account.'}</Text> : null}
+        {deposits.length === 0 ? <Text style={styles.copy}>{loading ? 'Loading payments…' : 'No fare payments on this account.'}</Text> : null}
         {deposits.map((row: Deposit) => (
           <View key={row.id} style={[styles.card, lift(colors, 'rest')]}>
             <Text style={styles.rowTitle}>{formatCents(row.amount_cents || 0)}</Text>
@@ -223,7 +364,7 @@ function BillingScreen() {
           </View>
         ))}
 
-        <Text style={styles.kicker}>HISTORY</Text>
+        <View style={styles.labelLine}><Glyph name="receipt" size={16} color={colors.orange} /><Text style={styles.kicker}>RECEIPTS</Text></View>
         {rides.length === 0 ? <Text style={styles.copy}>{loading ? 'Loading rides…' : 'No rides yet.'}</Text> : null}
         {rides.map((row: Ride) => (
           <View key={row.id} style={[styles.card, lift(colors, 'rest')]}>
@@ -241,6 +382,7 @@ function BillingScreen() {
         ))}
         {note ? <Text style={styles.error}>{note}</Text> : null}
       </ScrollView>
+      <MainTabs active="money" />
       <Modal visible={Boolean(pendingSummary)} transparent animationType="slide" onRequestClose={() => { if (!busy) setPending(null) }} accessibilityViewIsModal>
         <View style={styles.modalBackdrop}>
           <View style={[styles.card, lift(colors, 'float')]}>
@@ -287,6 +429,12 @@ function makeStyles(colors: Palette) {
     cardBrand: { color: colors.link, fontWeight: '800' as const, letterSpacing: 0.6 },
     cardLast: { color: colors.ink, fontSize: 22, fontWeight: '800' as const },
     rowTitle: { color: colors.ink, fontWeight: '800' as const, fontSize: 16 },
+    moneyHead: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 },
+    moneyTitle: { fontSize: 28, fontWeight: '800' as const, color: colors.title, letterSpacing: -0.4 },
+    shortcuts: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, paddingVertical: 4 },
+    shortcut: { alignItems: 'center' as const, gap: 6, flex: 1 },
+    shortcutLabel: { color: colors.ink, fontSize: 12, fontWeight: '700' as const },
+    labelLine: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     error: { color: colors.danger, fontSize: 13, lineHeight: 18 },
   }

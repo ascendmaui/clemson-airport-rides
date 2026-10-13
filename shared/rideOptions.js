@@ -1,19 +1,44 @@
 /**
- * Ride options offered to riders: Standard, Wait & Save, Extra Comfort.
+ * Ride options offered to riders: Standard, Wait & Save, Extra Comfort, Carpool.
  * Pricing helpers here never read a client fare. Schedule-ahead 10% is
  * applied only when the caller marks a pickup as scheduled and the pickup
  * is at least the scheduling lead time ahead.
+ *
+ * Wait & Save, Extra Comfort, and Carpool per-seat prices are scales of the
+ * Standard fare inside quoteFare (src/lib/fareRates.js). Carpool groups of
+ * 3–4 nearby riders share one trip; each seat is half of Standard.
  */
 import { MIN_LEAD_MS } from '../src/lib/scheduledRideModel.js'
 import { cardDepositCents, percentOffCents, splitPlatformFee } from '../src/lib/fareRates.js'
 
-export const OFFERED_RIDE_TIERS = ['standard', 'wait', 'comfort']
+export const OFFERED_RIDE_TIERS = ['standard', 'wait', 'comfort', 'carpool']
+
+/** Seats one rider can request. A matched carpool is 3 to 4 riders, each on their own seat. */
+export const CARPOOL_MAX_SEATS = 2
+
+/** Approximate pickup wait shown on the ride-type cards. Trip time comes from the quote. */
+export const APPROX_ETA_MINUTES = Object.freeze({
+  standard: 4,
+  wait: 12,
+  comfort: 6,
+  carpool: 8,
+})
 
 export const RIDE_OPTION_CATALOG = [
   { id: 'standard', name: 'Standard', icon: '🚗', eta: '4 min', meta: '4 seats', price: 18.5 },
   { id: 'wait', name: 'Wait & Save', icon: '⏱️', eta: '12 min', meta: 'Save ~20%', price: 14.2 },
-  { id: 'comfort', name: 'Extra Comfort', icon: '✨', eta: '6 min', meta: 'Newer cars', price: 23 },
+  { id: 'comfort', name: 'Extra Comfort', icon: '🚙', eta: '6 min', meta: 'Nicer cars', price: 23 },
+  { id: 'carpool', name: 'Carpool', icon: '👥', eta: '8 min', meta: '50% of Standard per seat', price: 15.73 },
 ]
+
+/** Bottom line on the Standard card: approximate pickup ETA and trip time. */
+export function standardCardTiming({ etaMinutes, tripMinutes } = {}) {
+  const eta = Math.round(Number(etaMinutes))
+  const trip = Math.round(Number(tripMinutes))
+  const away = Number.isFinite(eta) && eta > 0 ? `About ${eta} min away` : ''
+  const ride = Number.isFinite(trip) && trip > 0 ? `${trip} min trip` : ''
+  return [away, ride].filter(Boolean).join(' · ')
+}
 
 export const SCHEDULE_AHEAD_DISCOUNT_PCT = 10
 export const SCHEDULE_AHEAD_DISCOUNT_BPS = SCHEDULE_AHEAD_DISCOUNT_PCT * 100
@@ -72,14 +97,24 @@ export function rideOptionLabel(raw) {
   if (tier === 'standard') return 'Standard'
   if (tier === 'wait') return 'Wait & Save'
   if (tier === 'comfort') return 'Extra Comfort'
+  if (tier === 'carpool') return 'Carpool'
   return 'Retired option'
 }
 
-/** Extra Comfort needs an explicit vehicle class. Make and model are not a signal. */
+/**
+ * Carpool prices one or two seats. Any other tier prices a single passenger
+ * here; callers that already store a larger party keep their own count.
+ */
+export function carpoolSeatCount(tier, raw) {
+  if (String(tier ?? '').trim().toLowerCase() !== 'carpool') return 1
+  const n = Math.round(Number(raw))
+  if (!Number.isFinite(n) || n < 1) return 1
+  return Math.min(CARPOOL_MAX_SEATS, n)
+}
+
+/** Extra Comfort matches only a vehicle with service_class comfort. Tier and make are not a signal. */
 export function vehicleServesComfort(vehicle) {
-  const service = String(vehicle?.service_class || '').trim().toLowerCase()
-  if (service === 'comfort') return true
-  return String(vehicle?.tier || '').trim().toLowerCase() === 'comfort'
+  return String(vehicle?.service_class || '').trim().toLowerCase() === 'comfort'
 }
 
 export function serviceClassFromBody(body) {
@@ -88,7 +123,11 @@ export function serviceClassFromBody(body) {
 }
 
 export function driverQualifiesForTier(driver, tier) {
-  if (tier === 'standard' || tier === 'wait') return Boolean(driver?.approved) && !driver?.suspended
+  // Carpool uses the same drivers as Standard. Seat matching groups nearby
+  // riders; demo cars are not candidates.
+  if (tier === 'standard' || tier === 'wait' || tier === 'carpool') {
+    return Boolean(driver?.approved) && !driver?.suspended
+  }
   if (tier === 'comfort') return Boolean(driver?.approved) && !driver?.suspended && Boolean(driver?.comfort)
   return false
 }
@@ -129,8 +168,7 @@ export function scheduleAheadApplies(at, now = new Date()) {
 
 /**
  * 10% off a server fare that is already the tier price (surge and student
- * included). Tips are not an input. Airport deposit is 25% of the discounted
- * fare; a zero campus deposit stays zero.
+ * included). Tips are not an input. Scheduling does not add an upfront charge.
  */
 export function applyScheduleAheadDiscount(priced, { at, now = new Date(), enabled = false } = {}) {
   const before = Math.max(0, Math.round(Number(priced?.fareCents) || 0))

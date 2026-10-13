@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { FarePanel } from '@/components/FarePanel'
+import { DisputeSummaryCard } from '@/components/DisputeSummaryCard'
 import { Card, ErrorText, Primary } from '@/components/chrome'
 import { StackPage } from '@/components/shell'
 import { useAuth } from '@/lib/auth'
@@ -12,13 +13,15 @@ import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { loadEarnings, loadTrip } from 'rides-native/driverDesk'
-import { formatCents, formatPickupAt, comfortFleetNotice, type DriverCard } from 'rides-native/tripTags'
+import { formatCents, formatPickupAt, comfortFleetNotice, incentiveLabel, type DriverCard } from 'rides-native/tripTags'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { TripThread } from 'rides-native/TripThread.jsx'
 
 export default function TripDetailsScreen() {
   const router = useRouter()
-  const params = useLocalSearchParams<{ id?: string }>()
+  const params = useLocalSearchParams<{ id?: string; lost?: string }>()
   const id = oneParam(params.id)
+  const lost = oneParam(params.lost) === '1'
   const { user } = useAuth()
   const { colors, scheme, earningsPrivate } = useTheme()
   const [trip, setTrip] = useState<DriverCard | null>(null)
@@ -66,10 +69,10 @@ export default function TripDetailsScreen() {
         <>
           <Text style={{ color: colors.inkSecondary }}>Clemson RIDES · {when}</Text>
           <Text style={{ color: colors.ink, fontSize: 40, fontWeight: '800' }}>{shownCents(trip.driverNetCents, earningsPrivate)}</Text>
-          <Text style={{ color: colors.inkSecondary }}>Upfront fare {shownCents(trip.fareCents, earningsPrivate)}</Text>
-          {trip.carpoolIncentiveId ? (
+          <Text style={{ color: colors.inkSecondary }}>{trip.status === 'cancelled_wait' ? `No-show fee · Rider charged ${shownCents(trip.waitFeeCents + trip.cancelFeeCents, earningsPrivate)}` : `Upfront fare ${shownCents(trip.fareCents, earningsPrivate)}`}</Text>
+          {trip.status !== 'cancelled_wait' && trip.carpoolIncentiveId ? (
             <Text style={{ color: colors.inkSecondary }}>
-              Base net {shownCents(trip.baseNetCents || 0, earningsPrivate)} · {trip.carpoolIncentiveId} {shownCents(trip.carpoolBonusCents || 0, earningsPrivate)} · total {shownCents(trip.driverPayoutCents || trip.driverNetCents, earningsPrivate)}
+              Base net {shownCents(trip.baseNetCents || 0, earningsPrivate)} · {incentiveLabel(trip.carpoolIncentiveId)} {shownCents(trip.carpoolBonusCents || 0, earningsPrivate)} · total {shownCents(trip.driverPayoutCents || trip.driverNetCents, earningsPrivate)}
             </Text>
           ) : null}
           {tip != null && tip > 0 ? (
@@ -112,7 +115,11 @@ export default function TripDetailsScreen() {
             <Text style={{ color: colors.inkSecondary }}>No tip payment is on this trip.</Text>
           )}
           <Text style={{ color: colors.inkSecondary }}>Thanks notes are not sent from the driver app yet.</Text>
-          <FarePanel card={trip} />
+          {trip.status !== 'cancelled_wait' ? <FarePanel card={trip} /> : null}
+          <DisputeSummaryCard tripId={trip.id} />
+          {user ? (
+            <TripThread supabase={supabase} tripId={trip.id} userId={user.id} colors={colors} promptLostItem={lost} />
+          ) : null}
           <Primary label="Open live trip" onPress={() => router.push({ pathname: '/trip', params: { id: trip.id } })} tone="purple" />
           {trip.status === 'completed' ? (
             <Primary label="Rate your rider" onPress={() => router.push({ pathname: '/rate', params: { trip: trip.id } })} />

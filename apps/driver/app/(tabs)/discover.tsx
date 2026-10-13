@@ -3,12 +3,16 @@ import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Card, Primary } from '@/components/chrome'
+import { CampusEventsCard } from '@/components/CampusEventsCard'
 import { useTheme } from '@/lib/theme'
+import { FlightsLandingCard } from '@/components/FlightsLandingCard'
 import { supabase } from '@/lib/supabase'
 import { loadGameDay } from 'rides-native/driverDesk'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { HEAT_WINDOWS } from 'rides-native/places.js'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
+import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
+import type { TigerHeatZone } from 'rides-native/tigerHeat.js'
 
 function demandWord(intensity: number): string {
   if (intensity >= 0.75) return 'Busy'
@@ -27,6 +31,7 @@ export default function DiscoverScreen() {
   const [caption, setCaption] = useState('Typical campus patterns for College Ave, the stadium, and the dorms.')
   const [blended, setBlended] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [tigerZones, setTigerZones] = useState<TigerHeatZone[]>([])
 
   useEffect(() => {
     let alive = true
@@ -47,6 +52,18 @@ export default function DiscoverScreen() {
       .finally(() => {
         if (alive) setLoading(false)
       })
+    return () => {
+      alive = false
+    }
+  }, [windowId])
+
+  useEffect(() => {
+    let alive = true
+    fetchTigerHeatMap(windowId).then((result) => {
+      if (alive) setTigerZones(result.zones || [])
+    }).catch(() => {
+      if (alive) setTigerZones([])
+    })
     return () => {
       alive = false
     }
@@ -80,7 +97,14 @@ export default function DiscoverScreen() {
           {HEAT_WINDOWS.map((item: { id: string; label: string }) => {
             const on = item.id === windowId
             return (
-              <Pressable key={item.id} onPress={() => setWindowId(item.id)} style={[styles.chip, { backgroundColor: on ? colors.fill : colors.card }]}>
+              <Pressable
+                key={item.id}
+                onPress={() => setWindowId(item.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.label} demand`}
+                accessibilityState={{ selected: on }}
+                style={[styles.chip, { backgroundColor: on ? colors.fill : colors.card }]}
+              >
                 <Text style={{ color: on ? colors.onAccent : colors.title, fontWeight: '800' }}>{item.label}</Text>
               </Pressable>
             )
@@ -95,7 +119,24 @@ export default function DiscoverScreen() {
           </Text>
           {game?.detail ? <Text style={{ color: colors.orange, fontWeight: '800' }}>{game.detail}</Text> : null}
           {game ? <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{game.body}</Text> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open game-day prep, hot times, and the fare multiplier"
+            onPress={() => router.push('/game-day')}
+            style={{ marginTop: 8 }}
+          >
+            <Text style={{ color: '#F56600', fontWeight: '800' }}>Prep, hot times, and the fare →</Text>
+          </Pressable>
         </Card>
+        <CampusEventsCard />
+        {tigerZones.map((zone: TigerHeatZone) => (
+          <Card key={`tiger-${zone.id}`}>
+            <View style={styles.spotHead}>
+              <Text style={[styles.cardTitle, { color: colors.title }]}>{zone.name}</Text>
+              <Text style={{ color: zone.preview ? colors.purple : colors.orange, fontWeight: '800' }}>{zone.bonusLabel}</Text>
+            </View>
+          </Card>
+        ))}
         {!loading && spots.length === 0 ? (
           <Text style={{ color: colors.inkSecondary }}>Campus demand is quiet in this window.</Text>
         ) : null}
@@ -110,6 +151,7 @@ export default function DiscoverScreen() {
             </View>
           </Card>
         ))}
+        <FlightsLandingCard airport="GSP" />
         <Primary label="Open the ride queue" onPress={() => router.push('/queue')} />
       </ScrollView>
     </View>
@@ -120,7 +162,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   list: { padding: 16, gap: 12, paddingBottom: 32 },
   kicker: { fontWeight: '800', letterSpacing: 1.1, fontSize: 12 },
-  title: { fontSize: 28, fontWeight: '800' },
+  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.4 },
   chips: { gap: 8 },
   chip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
   cardTitle: { fontWeight: '800', fontSize: 16 },

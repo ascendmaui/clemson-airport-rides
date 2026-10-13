@@ -1,4 +1,5 @@
 /** Vehicle year collected on the driver application. Display and writes only. */
+import { missingTitleStatusColumn } from './vehicleTitle.js'
 
 export const VEHICLE_YEAR_MIN = 1980
 
@@ -104,9 +105,15 @@ export async function loadLatestVehicle(sb, driverId) {
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
+  const withTitle = 'make, model, year, title_status, color, plate, seats, service_class, tier'
   const withYear = 'make, model, year, color, plate, seats, service_class, tier'
   const base = 'make, model, color, plate, seats, service_class, tier'
-  const first = await run(withYear)
+  const first = await run(withTitle)
+  if (first?.error && missingTitleStatusColumn(first.error)) {
+    const second = await run(withYear)
+    if (second?.error && missingVehicleYearColumn(second.error)) return run(base)
+    return second
+  }
   if (first?.error && missingVehicleYearColumn(first.error)) return run(base)
   return first
 }

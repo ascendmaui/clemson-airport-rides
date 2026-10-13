@@ -1,3 +1,4 @@
+import { uniqueChannelTopic } from '../../packages/rides-native/realtimeChannel.js'
 import { supabase } from './supabase'
 import { SOS_CHANNELS } from './sosAlert'
 
@@ -63,7 +64,7 @@ export async function fetchRecentSosEvents(tripId) {
 export function subscribeSosEvents(tripId, onInsert) {
   if (!supabase || !tripId) return () => {}
   const channel = supabase
-    .channel(`sos-events-${tripId}`)
+    .channel(uniqueChannelTopic(`sos-events-${tripId}`))
     .on(
       'postgres_changes',
       {

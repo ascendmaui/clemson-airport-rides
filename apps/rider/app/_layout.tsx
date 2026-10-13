@@ -1,30 +1,63 @@
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Stack, useRouter } from 'expo-router'
 import * as Linking from 'expo-linking'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { ApproachAlert } from '@/components/ApproachAlert'
+import { LostItemBanner } from 'rides-native/LostItemBanner.jsx'
+import { ToastHost } from 'rides-native/ToastHost.jsx'
+import { RiderMatchPopup } from '@/components/RiderMatchPopup'
+import { RiderMoments } from '@/components/RiderMoments'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
 import { ThemeProvider, useTheme } from '@/lib/theme'
 import { useApproachingTrip } from '@/lib/useRiderTrip'
+import { useRiderPickupStream } from '@/lib/useRiderPickupStream'
 import { BootScreen } from '@/components/BootScreen'
 import { clearAmbassadorCode, loadAmbassadorCode, saveAmbassadorCode } from '@/lib/ambassadorCode'
 import { supabase } from '@/lib/supabase'
 import { ambassadorCodeFromLocation } from 'rides-native/shared/ambassadorAttribution.js'
 import { claimAmbassadorAttribution } from 'rides-native/shared/carpoolApi.js'
-import { parseCheckoutReturn } from 'rides-native/checkoutReturn.js'
+import { isTigerPassReturn, parseCheckoutReturn, parseCheckoutSessionId } from 'rides-native/checkoutReturn.js'
 import { reconcileCheckout } from 'rides-native/riderMoney.js'
 import { ProfileRequiredGate } from 'rides-native/PartyScreens'
 import { resolveApiBase } from 'rides-native/apiOrigin.js'
 import { setCarpoolApiBase } from 'rides-native/shared/carpoolApi.js'
+import * as Notifications from 'expo-notifications'
+import { registerRiderPush, tripIdFromPush } from '@/lib/push'
 
 setCarpoolApiBase(resolveApiBase())
+
+/** Shared glass toast (packages/rides-native/ToastHost). */
+function ToastMount() {
+  const { scheme } = useTheme()
+  return <ToastHost scheme={scheme} />
+}
+
+function LostItemHost() {
+  const { user } = useAuth()
+  const { colors } = useTheme()
+  const router = useRouter()
+  if (!user?.id) return null
+  return (
+    <View pointerEvents="box-none" style={{ position: 'absolute', top: 52, left: 0, right: 0, zIndex: 30 }}>
+      <LostItemBanner
+        supabase={supabase}
+        userId={user.id}
+        colors={colors}
+        role="rider"
+        onOpen={(tripId: string) => router.push({ pathname: '/requested', params: { trip: tripId } })}
+      />
+    </View>
+  )
+}
 
 function ApproachHost() {
   const { user } = useAuth()
   const trip = useApproachingTrip(user?.id || null)
-  return <ApproachAlert status={trip?.status ?? null} driverId={trip?.driver_id ?? null} />
+  useRiderPickupStream(user?.id || null)
+  return <ApproachAlert status={trip?.status ?? null} driverId={trip?.driver_id ?? null} tripId={trip?.id ?? null} />
 }
 
 function Gate({ children }: { children: ReactNode }) {
@@ -34,6 +67,7 @@ function Gate({ children }: { children: ReactNode }) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ProfileRequiredGate user={user} supabase={supabase} />
+      <LostItemHost />
       {children}
     </View>
   )
@@ -44,7 +78,22 @@ function ThemedStack() {
   return (
     <>
       <StatusBar style={colors.statusBar} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.background },
+          // Native-stack push with the iOS full-width back swipe.
+          animation: 'default',
+          gestureEnabled: true,
+          fullScreenGestureEnabled: true,
+          animationMatchesGesture: true,
+        }}
+      >
+        {/* Tab roots slide in the pager. History and billing fade in over them. */}
+        <Stack.Screen name="(tabs)" options={{ animation: 'fade', animationDuration: 180 }} />
+        <Stack.Screen name="history" options={{ animation: 'fade', animationDuration: 180 }} />
+        <Stack.Screen name="billing" options={{ animation: 'fade', animationDuration: 180 }} />
+      </Stack>
     </>
   )
 }
@@ -60,6 +109,29 @@ function AmbassadorDeepLink() {
     const sub = Linking.addEventListener('url', (event: { url: string }) => open(event.url))
     return () => sub.remove()
   }, [router])
+  return null
+}
+
+const handledPushes = new Set<string>()
+
+/** Refreshes the rider push token and opens the trip when a ride-status push is tapped. */
+function RiderPushBridge() {
+  const { user } = useAuth()
+  const router = useRouter()
+  useEffect(() => {
+    if (!user?.id) return undefined
+    registerRiderPush(supabase, user.id).catch(() => {})
+    const open = (response: Notifications.NotificationResponse | null) => {
+      const id = response?.notification.request.identifier
+      if (!response || (id && handledPushes.has(id))) return
+      if (id) handledPushes.add(id)
+      const tripId = tripIdFromPush(response.notification.request.content.data)
+      if (tripId) router.push({ pathname: '/requested', params: { trip: tripId } })
+    }
+    Notifications.getLastNotificationResponseAsync().then(open).catch(() => {})
+    const sub = Notifications.addNotificationResponseReceivedListener(open)
+    return () => sub.remove()
+  }, [router, user?.id])
   return null
 }
 
@@ -96,6 +168,13 @@ function CheckoutDeepLink() {
     function handleUrl(url: string | null) {
       if (!url) return
       if (/[?&]setup=1(?:&|$)/.test(url)) return
+      if (isTigerPassReturn(url)) {
+        const sessionId = parseCheckoutSessionId(url)
+        if (!sessionId || handled.has(sessionId)) return
+        handled.add(sessionId)
+        router.push({ pathname: '/tiger-pass', params: { session_id: sessionId } })
+        return
+      }
       const ret = parseCheckoutReturn(url)
       if (!ret.sessionId || handled.has(ret.sessionId)) return
       handled.add(ret.sessionId)
@@ -121,17 +200,23 @@ function CheckoutDeepLink() {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <PasswordRecoveryListener />
-        <AmbassadorDeepLink />
-        <AmbassadorClaim />
-        <CheckoutDeepLink />
-        <Gate>
-          <ThemedStack />
-          <ApproachHost />
-        </Gate>
-      </AuthProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <AuthProvider>
+          <PasswordRecoveryListener />
+          <AmbassadorDeepLink />
+          <AmbassadorClaim />
+          <RiderPushBridge />
+          <CheckoutDeepLink />
+          <Gate>
+            <ThemedStack />
+            <ApproachHost />
+            <RiderMatchPopup />
+            <ToastMount />
+            <RiderMoments />
+          </Gate>
+        </AuthProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   )
 }

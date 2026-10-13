@@ -12,12 +12,13 @@ function table(rows) {
   }
 }
 
-function client({ applications, vehicles, status, trips }) {
+function client({ applications, vehicles, status, trips, profiles = applications.map(row => ({ id: row.profile_id, email: `${row.profile_id}@example.com` })) }) {
   const tables = {
     driver_applications: table(applications),
     vehicles: table(vehicles),
     driver_status: table(status),
     trips: table(trips),
+    profiles: table(profiles),
   }
   return {
     from(name) {
@@ -41,8 +42,9 @@ test('now mode hides comfort when the only online driver is a standard vehicle',
   const snapshot = await loadRideAvailability(sb, { now: NOW })
   assert.equal(snapshot.mode, 'now')
   assert.equal(snapshot.basis, 'online_available')
-  assert.deepEqual(snapshot.availableTierIds, ['standard', 'wait'])
+  assert.deepEqual(snapshot.availableTierIds, ['standard', 'wait', 'carpool'])
   assert.equal(snapshot.tiers.some((row) => row.id === 'comfort'), false)
+  assert.equal(snapshot.tiers.some((row) => row.id === 'carpool'), true)
   assert.equal(snapshot.empty, false)
   assert.equal(snapshot.pollSeconds, 10)
 })
@@ -98,7 +100,7 @@ test('scheduled mode keeps comfort for an offline approved vehicle and drops a b
   assert.equal(snapshot.mode, 'scheduled')
   assert.equal(snapshot.futureAvailabilitySignal, false)
   assert.match(snapshot.limitation, /no driver shift plan/i)
-  assert.deepEqual(snapshot.availableTierIds, ['standard', 'wait'])
+  assert.deepEqual(snapshot.availableTierIds, ['standard', 'wait', 'carpool'])
   await assert.rejects(
     () => assertTierAvailable(sb, 'comfort', { scheduledFor: LATER, now: NOW }),
     /not available for this pickup time/,
@@ -107,7 +109,7 @@ test('scheduled mode keeps comfort for an offline approved vehicle and drops a b
   assert.equal(ok.availableTierIds.includes('wait'), true)
 })
 
-test('missing service class column still reads tier', async () => {
+test('missing service class column does not treat tier comfort as Extra Comfort', async () => {
   const vehicles = {
     data: [{ driver_id: 'a', tier: 'comfort' }],
     error: null,
@@ -125,6 +127,7 @@ test('missing service class column still reads tier', async () => {
   }
   const sb = {
     from(name) {
+      if (name === 'profiles') return table([{ id: 'a', email: 'a@example.com' }])
       if (name === 'vehicles') return vehicles
       if (name === 'driver_applications') {
         return table([{ profile_id: 'a', onboarding_status: 'approved' }])
@@ -135,5 +138,5 @@ test('missing service class column still reads tier', async () => {
     },
   }
   const snapshot = await loadRideAvailability(sb, { now: NOW })
-  assert.deepEqual(snapshot.availableTierIds, ['standard', 'wait', 'comfort'])
+  assert.deepEqual(snapshot.availableTierIds, ['standard', 'wait', 'carpool'])
 })

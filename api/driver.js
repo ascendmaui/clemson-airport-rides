@@ -1,6 +1,7 @@
 /**
- * POST /api/driver?action=signup|submit-review|offer-preview|tip|tip-choice|wait|cancel-midride|payouts|cards
- * GET  /api/driver?action=earnings|payouts
+ * POST /api/driver?action=signup|submit-review|offer-preview|tip|tip-choice|wait|trip-status|trip-stop|cancel-midride|payouts|cards
+ * GET  /api/driver?action=earnings|tax-summary|w9|payouts|app-config
+ * GET  /api/driver?action=earnings|payouts|app-config|forecast
  * Legacy paths are rewritten in vercel.json.
  * trip-wait body.action (arrive|tick|cancel|start|complete) is a sub-action, not the route.
  */
@@ -12,30 +13,56 @@ import handleOfferPreview from '../server/endpoints/tripOfferPreview.js'
 import handleTripTip from '../server/endpoints/tripTip.js'
 import handleRiderTipChoice from '../server/endpoints/riderTipChoice.js'
 import handleTripWait from '../server/endpoints/tripWait.js'
+import handleTripStatus from '../server/endpoints/tripStatus.js'
+import handleTripStop from '../server/endpoints/tripStop.js'
 import handleCancelMidride from '../server/endpoints/tripCancelMidride.js'
 import handleDriverPayouts from '../server/endpoints/driverPayouts.js'
 import handleApplicantInbox from '../server/endpoints/applicantInbox.js'
 import handleDriverCards from '../server/endpoints/driverCards.js'
+import handleTripSweeps from '../server/endpoints/tripSweeps.js'
 import handleMatchingRebroadcast from '../server/endpoints/matchingRebroadcast.js'
 import { handleMarkOffered, handlePassOffer } from '../server/endpoints/driverOfferDesk.js'
 import { handleSignAgreement } from '../server/agreementHttp.js'
+import { handleDriverClickwrap } from '../server/driverClickwrap.js'
+import handleAppConfig from '../server/endpoints/appConfig.js'
+import handleTaxSummary from '../server/endpoints/driverTaxSummary.js'
+import handleDriverW9 from '../server/endpoints/driverW9.js'
+import handleBackupQueue from '../server/endpoints/backupQueue.js'
+import handleDriverPerks from '../server/endpoints/driverPerks.js'
+import handleDriverCashout from '../server/endpoints/driverCashout.js'
+import handleDriverPayoutMethods from '../server/endpoints/driverPayoutMethods.js'
+import handleEarningsForecast from '../server/endpoints/earningsForecast.js'
+import handleProfilePhoto from '../server/endpoints/profilePhoto.js'
 
 const HANDLERS = {
+  'app-config': handleAppConfig,
   signup: handleDriverSignup,
   'submit-review': handleDriverSubmitReview,
   earnings: handleDriverEarnings,
+  'tax-summary': handleTaxSummary,
+  w9: handleDriverW9,
   'offer-preview': handleOfferPreview,
   tip: handleTripTip,
   'tip-choice': handleRiderTipChoice,
   wait: handleTripWait,
+  'trip-status': handleTripStatus,
+  'trip-stop': handleTripStop,
   'cancel-midride': handleCancelMidride,
   payouts: handleDriverPayouts,
   inbox: handleApplicantInbox,
   cards: handleDriverCards,
   'rebroadcast-offers': handleMatchingRebroadcast,
+  'trip-sweeps': handleTripSweeps,
   'mark-offered': handleMarkOffered,
   'pass-offer': handlePassOffer,
   'sign-agreement': handleSignAgreementRoute,
+  clickwrap: handleClickwrapRoute,
+  'backup-queue': handleBackupQueue,
+  perks: handleDriverPerks,
+  cashout: handleDriverCashout,
+  'payout-methods': handleDriverPayoutMethods,
+  forecast: handleEarningsForecast,
+  'profile-photo': handleProfilePhoto,
 }
 
 const LEGACY = {
@@ -55,10 +82,18 @@ export default async function handler(req, res, ...rest) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown driver action. Use action=signup, submit-review, earnings, offer-preview, tip, tip-choice, wait, cancel-midride, payouts, inbox, cards, mark-offered, pass-offer, or sign-agreement.',
+      error: 'Unknown driver action. Use action=signup, submit-review, earnings, tax-summary, w9, offer-preview, tip, tip-choice, wait, trip-status, trip-stop, cancel-midride, payouts, payout-methods, inbox, cards, mark-offered, pass-offer, sign-agreement, clickwrap, backup-queue, trip-sweeps, perks, cashout, forecast, profile-photo, or app-config.',
     })
   }
   return handle(req, res, ...rest)
+}
+
+async function handleClickwrapRoute(req, res) {
+  const sb = admin()
+  if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
+  const user = await userFromAuth(req)
+  if (!user) return json(res, 401, { error: 'Sign in required' })
+  return handleDriverClickwrap(req, res, { sb, user })
 }
 
 async function handleSignAgreementRoute(req, res) {

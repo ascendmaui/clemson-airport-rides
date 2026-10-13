@@ -1,8 +1,11 @@
 /**
  * Unassigned `offered` trips stop being a Live offer once their dispatch
  * deadline has passed, or after STALE_LIVE_OFFER_TTL_MS with no deadline.
- * Targeted driver_request rows still belong to matching rebroadcast.
+ * A driver_request ladder card stays through the exclusive window and the
+ * two-minute pool that follows. That deadline retargets the offer; it does
+ * not take the card off the driver's screen.
  */
+import { ladderCardVisibleUntilMs } from '../packages/rides-native/offerLadder.js'
 
 export const STALE_LIVE_OFFER_TTL_MS = 15 * 60 * 1000
 
@@ -40,6 +43,8 @@ export function liveOfferAnchorMs(trip) {
 export function isStaleLiveOffer(trip, now = Date.now(), ttlMs = STALE_LIVE_OFFER_TTL_MS) {
   if (!trip || trip.status !== 'offered' || trip.driver_id) return false
   const nowMs = resolveNow(now)
+  const ladderUntil = ladderCardVisibleUntilMs(trip)
+  if (ladderUntil != null) return nowMs >= ladderUntil
   const expires = parsedMs(trip.offer_expires_at)
   if (expires != null) return nowMs >= expires
   const anchor = liveOfferAnchorMs(trip)

@@ -3,7 +3,14 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { studentDiscountGranted } from '../src/lib/studentDomain.js'
-import { cardDepositCents, STUDENT_DISCOUNT_BPS } from '../src/lib/fareRates.js'
+import {
+  CARPOOL_SEAT_FRACTION_BPS,
+  COMFORT_FARE_MULTIPLIER_BPS,
+  cardDepositCents,
+  scaleCents,
+  STUDENT_DISCOUNT_BPS,
+  WAIT_SAVE_MULTIPLIER_BPS,
+} from '../src/lib/fareRates.js'
 import { ATL_FLOOR_CENTS } from '../src/lib/scheduledRideModel.js'
 import {
   amountDueIgnoringClient,
@@ -51,13 +58,13 @@ test('spoofed checkout fare and student flag cannot lower the deposit', () => {
   assert.equal(priced.spoofedStudent, true)
   assert.equal(priced.clientUnderpaid, true)
   assert.equal(priced.fareCents, full.fareCents)
-  assert.equal(priced.unitAmount, full.depositCents)
+  assert.equal(priced.unitAmount, 0)
   assert.equal(priced.depositCents, cardDepositCents(full.fareCents))
-  assert.ok(priced.unitAmount > 25)
+  assert.equal(priced.depositCents, 0)
   assert.ok(priced.fareCents > 100)
 })
 
-test('confirmed clemson email keeps 10% off Standard and 25% of that fare', () => {
+test('confirmed clemson email keeps 10% off Standard and no upfront deposit', () => {
   const full = quoteAirportCheckout({ airport: 'GSP', at: QUIET, isStudent: false })
   const student = quoteAirportCheckout({ airport: 'CLT', at: QUIET, isStudent: true })
   const gspStudent = quoteAirportCheckout({ airport: 'GSP', at: QUIET, isStudent: true })
@@ -73,8 +80,8 @@ test('confirmed clemson email keeps 10% off Standard and 25% of that fare', () =
   })
   assert.equal(priced.isStudent, true)
   assert.equal(priced.fareCents, gspStudent.fareCents)
-  assert.equal(priced.unitAmount, gspStudent.depositCents)
-  assert.ok(priced.unitAmount > 25)
+  assert.equal(priced.unitAmount, 0)
+  assert.equal(gspStudent.depositCents, 0)
 })
 
 test('spoofed campus fare and student flag do not set the recorded fare', () => {
@@ -112,7 +119,8 @@ test('spoofed campus fare and student flag do not set the recorded fare', () => 
     isStudent: true,
     tier: 'comfort',
   })
-  assert.equal(comfort.fareCents, full.fareCents)
+  assert.equal(comfort.fareCents, scaleCents(full.fareCents, COMFORT_FARE_MULTIPLIER_BPS))
+  assert.ok(comfort.fareCents > full.fareCents)
   assert.equal(comfort.isStudent, false)
 })
 
@@ -161,8 +169,8 @@ test('collect and settle ignore a spoofed low amount', () => {
     payments: [],
     clientAmountCents: 25,
   })
-  assert.equal(deposit.amountCents, cardDepositCents(10000))
-  assert.ok(deposit.amountCents > 100)
+  assert.equal(deposit.amountCents, 0)
+  assert.equal(deposit.source, 'deposit_retired')
   const settle = amountDueIgnoringClient({
     action: 'complete',
     trip,
@@ -218,11 +226,14 @@ test('checkout and trip create do not price from client money or isStudent', () 
 
 test('a null fare is not $0 due on collect or settle', () => {
   const trip = { fare_cents: null, deposit_cents: null, metadata: { isStudent: true } }
-  for (const kind of ['balance', 'deposit', 'friend_ride_share']) {
+  for (const kind of ['balance', 'friend_ride_share']) {
     const owed = serverCollectCents({ kind, trip, payments: [], clientAmountCents: 0 })
     assert.equal(owed.code, 'fare_not_set', kind)
     assert.equal(owed.amountCents, undefined, kind)
   }
+  const retired = serverCollectCents({ kind: 'deposit', trip, payments: [], clientAmountCents: 0 })
+  assert.equal(retired.amountCents, 0)
+  assert.equal(retired.source, 'deposit_retired')
   const settle = amountDueIgnoringClient({
     action: 'complete',
     trip,
@@ -240,7 +251,7 @@ test('a null fare is not $0 due on collect or settle', () => {
   assert.equal(free.code, undefined)
 })
 
-test('driver-request airport pricing ignores a short pin and keeps the 25% deposit', () => {
+test('driver-request airport pricing ignores a short pin and takes no upfront deposit', () => {
   const places = resolveDriverRequestPlaces({
     pickupLabel: 'Memorial Stadium',
     pickupLat: 34.6788,
@@ -260,7 +271,7 @@ test('driver-request airport pricing ignores a short pin and keeps the 25% depos
   assert.equal(student.depositCents, cardDepositCents(student.fareCents))
   const comfort = priceDriverRequest(places, { isStudent: true, at: QUIET, tier: 'comfort' })
   assert.equal(comfort.isStudent, false)
-  assert.equal(comfort.fareCents, full.fareCents)
+  assert.equal(comfort.fareCents, scaleCents(full.fareCents, COMFORT_FARE_MULTIPLIER_BPS))
   assert.equal(comfort.depositCents, cardDepositCents(comfort.fareCents))
 })
 
@@ -468,18 +479,31 @@ test('parseRideAt zoneless ISO follows process TZ; Z does not', () => {
   assert.equal(et.utc, '2026-10-02T14:00:00.000Z')
 })
 
-test('Wait and Extra Comfort use the same server fare as Standard', () => {
+test('Wait & Save is under Standard, Extra Comfort is above, and Carpool is half per seat', () => {
   const places = { pickup: { label: 'A', lat: 34.68, lng: -82.84 }, dropoff: { label: 'B', lat: 34.69, lng: -82.85 } }
   const options = { at: QUIET, distanceM: 8000, durationS: 900, isStudent: false }
   const standard = priceDriverRequest(places, options)
-  for (const tier of ['wait', 'comfort']) {
-    const priced = priceDriverRequest(places, { ...options, tier })
-    assert.equal(priced.fareCents, standard.fareCents)
-    assert.equal(priced.tier, tier)
-    assert.equal(priced.breakdown.vehicle_multiplier, 1)
-  }
+  const wait = priceDriverRequest(places, { ...options, tier: 'wait' })
   const comfort = priceDriverRequest(places, { ...options, tier: 'comfort', isStudent: true })
-  assert.equal(comfort.fareCents, standard.fareCents)
+  assert.equal(wait.tier, 'wait')
+  assert.equal(comfort.tier, 'comfort')
+  assert.equal(wait.fareCents, scaleCents(standard.fareCents, WAIT_SAVE_MULTIPLIER_BPS))
+  assert.equal(comfort.fareCents, scaleCents(standard.fareCents, COMFORT_FARE_MULTIPLIER_BPS))
+  assert.ok(wait.fareCents < standard.fareCents)
+  assert.ok(standard.fareCents < comfort.fareCents)
   assert.equal(comfort.isStudent, false)
   assert.equal(comfort.discountCents, 0)
+  assert.equal(wait.breakdown.tier_scale_bps, WAIT_SAVE_MULTIPLIER_BPS)
+  assert.equal(comfort.breakdown.tier_scale_bps, COMFORT_FARE_MULTIPLIER_BPS)
+  const carpool = priceDriverRequest(places, { ...options, tier: 'carpool', isStudent: true })
+  assert.equal(carpool.tier, 'carpool')
+  assert.equal(carpool.isStudent, false)
+  assert.equal(carpool.fareCents, scaleCents(standard.fareCents, CARPOOL_SEAT_FRACTION_BPS))
+  assert.equal(carpool.perSeatFareCents, carpool.fareCents)
+  assert.equal(carpool.breakdown.tier_scale_bps, CARPOOL_SEAT_FRACTION_BPS)
+  assert.equal(carpool.seatCount, 1)
+  const two = priceDriverRequest(places, { ...options, tier: 'carpool', seatCount: 2 })
+  assert.equal(two.fareCents, carpool.fareCents * 2)
+  assert.equal(two.perSeatFareCents, carpool.fareCents)
+  assert.equal(priceDriverRequest(places, { ...options, tier: 'standard', seatCount: 2 }).fareCents, standard.fareCents)
 })

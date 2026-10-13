@@ -1,5 +1,5 @@
 /**
- * Rider safety helpers shared by the native rider app.
+ * Safety helpers shared by the native rider and driver apps.
  * Live location uses public.location_shares / location_points (same as src/lib/locationShare.js).
  * SOS uses public.sos_events (same channels as src/lib/sosAlert.js).
  * Emergency contacts use public.emergency_contacts.
@@ -13,8 +13,8 @@ export const CUPD_PHONE_E164 = '+18646562222'
 export const CUPD_PHONE_DISPLAY = '(864) 656-2222'
 export const CUPD_EMAIL = 'police@clemson.edu'
 
-export const SHAREABLE_TRIP_STATUSES = ['searching', 'offered', 'accepted', 'arriving', 'in_progress']
-export const ACTIVE_RIDE_STATUSES = ['accepted', 'arriving', 'in_progress']
+export const SHAREABLE_TRIP_STATUSES = ['searching', 'offered', 'accepted', 'arriving', 'arrived', 'in_progress']
+export const ACTIVE_RIDE_STATUSES = ['accepted', 'arriving', 'arrived', 'in_progress']
 export const SOS_CHANNELS = ['tel_911', 'tel_cupd', 'sms', 'mailto', 'web_share', 'banner']
 export const ALERT_CHANNELS = ['tel_911', 'tel_cupd', 'sms', 'mailto', 'web_share']
 export const MAX_EMERGENCY_CONTACTS = 5
@@ -249,13 +249,17 @@ export async function logSosEvent(supabase, { tripId, userId, lat, lng, channel 
     lng: Number.isFinite(lng) ? lng : null,
     channel,
   }
-  const { data, error } = await supabase
-    .from('sos_events')
-    .insert(row)
-    .select('id, user_id, trip_id, lat, lng, channel, created_at')
-    .single()
-  if (error) return { ok: false, error: error.message }
-  return { ok: true, event: data }
+  try {
+    const { data, error } = await supabase
+      .from('sos_events')
+      .insert(row)
+      .select('id, user_id, trip_id, lat, lng, channel, created_at')
+      .single()
+    if (error) return { ok: false, error: error.message }
+    return { ok: true, event: data }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not save this SOS' }
+  }
 }
 
 export async function fetchRecentSosEvents(supabase, tripId) {

@@ -4,6 +4,7 @@
 import { json, parseBody } from './friendRideLib.js'
 import { IC_AGREEMENT_VERSION } from '../shared/icAgreement.js'
 import { particularUpdates } from '../shared/agreementSign.js'
+import { missingApplicantEmailColumn, submittedApplicantEmail } from '../shared/applicantEmail.js'
 import { attachUnsignedPacket, applyParticularCorrections } from './agreementPacket.js'
 import {
   previewSignLink,
@@ -45,11 +46,19 @@ export async function handleEmailAgreement(sb, res, adminUser, body) {
   const { data: profile, error } = await sb.from('profiles').select('email').eq('id', profileId).maybeSingle()
   if (error) return json(res, 500, { error: error.message, emailed: false })
 
+  let storedEmail = ''
+  const appRes = await sb.from('driver_applications').select('applicant_email').eq('profile_id', profileId).maybeSingle()
+  if (appRes.error && !missingApplicantEmailColumn(appRes.error)) {
+    return json(res, 500, { error: appRes.error.message, emailed: false })
+  }
+  if (!appRes.error) storedEmail = appRes.data?.applicant_email || ''
+  const to = submittedApplicantEmail({ applicant_email: storedEmail }, { email: profile?.email }) || null
+
   const result = await sendAgreementForSignature({
     isAdmin: true,
     profileId,
     adminId: adminUser.id,
-    to: profile?.email || null,
+    to,
     packet,
     store: supabaseAgreementStore(sb),
   })
