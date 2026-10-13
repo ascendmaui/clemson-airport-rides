@@ -1,34 +1,42 @@
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native'
+import { GlassButton } from './glass/GlassButton.jsx'
+import { GlassSheet } from './glass/GlassSheet.jsx'
 
 const ORANGE = '#F56600'
 const PURPLE = '#522D80'
 
+function schemeFor(tone) {
+  return tone.statusBar === 'light' ? 'dark' : 'light'
+}
+
 export function InfoButton({ label, onPress, colors }) {
   const tone = colors || {}
+  const scheme = schemeFor(tone)
   return (
-    <Pressable
-      accessibilityRole="button"
+    <GlassButton
       accessibilityLabel={label}
       onPress={onPress}
       hitSlop={8}
+      app="rider"
+      scheme={scheme}
+      variant="fab"
       style={{
         width: 44,
         height: 44,
         borderRadius: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
+        padding: 0,
         borderColor: tone.border || 'rgba(82,45,128,0.2)',
         backgroundColor: tone.elevated || tone.card || '#FFFFFF',
       }}
     >
       <Text style={{ color: tone.title || tone.purple || PURPLE, fontWeight: '800', fontSize: 16 }}>i</Text>
-    </Pressable>
+    </GlassButton>
   )
 }
 
 export function InfoSheet({ open, onClose, colors, title, closeLabel, children }) {
   const tone = colors || {}
+  const scheme = schemeFor(tone)
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
@@ -45,11 +53,13 @@ export function InfoSheet({ open, onClose, colors, title, closeLabel, children }
             backgroundColor: tone.scrim || 'rgba(20,16,28,0.45)',
           }}
         />
-        <View
+        <GlassSheet
+          app="rider"
+          scheme={scheme}
           style={{
             backgroundColor: tone.card || '#FFFFFF',
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
             paddingHorizontal: 20,
             paddingTop: 12,
             paddingBottom: 28,
@@ -60,22 +70,21 @@ export function InfoSheet({ open, onClose, colors, title, closeLabel, children }
           <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ paddingBottom: 4 }}>
             {children}
           </ScrollView>
-          <Pressable
-            accessibilityRole="button"
+          <GlassButton
             accessibilityLabel="Got it"
             onPress={onClose}
+            app="rider"
+            scheme={scheme}
+            variant="primary"
+            label="Got it"
             style={{
               marginTop: 18,
               minHeight: 48,
-              borderRadius: 14,
+              borderRadius: 18,
               backgroundColor: tone.orange || ORANGE,
-              alignItems: 'center',
-              justifyContent: 'center',
             }}
-          >
-            <Text style={{ color: tone.onAccent || '#FFFFFF', fontWeight: '800' }}>Got it</Text>
-          </Pressable>
-        </View>
+          />
+        </GlassSheet>
       </View>
     </Modal>
   )

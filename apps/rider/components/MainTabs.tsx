@@ -35,6 +35,7 @@ export function MainTabs({ active }: { active: RiderTab | LegacyTab }) {
       tabs={RIDER_TABS.map((tab) => ({ id: tab.id, label: tab.label, icon: tab.icon }))}
       activeIndex={index}
       scheme={scheme}
+      app="rider"
       bottomInset={insets.bottom}
       onSelect={(tab: { id: string }) => {
         const target = RIDER_TABS.find((item) => item.id === tab.id)

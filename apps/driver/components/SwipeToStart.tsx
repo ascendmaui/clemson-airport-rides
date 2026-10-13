@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as Haptics from 'expo-haptics'
 import { useNavigation } from 'expo-router'
 import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+import { GlassSheen, glassFill, glassRecipe, glassTextColor } from 'rides-native/glass'
 import { Gesture, GestureDetector, type GestureType } from 'react-native-gesture-handler'
 import Animated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
 import {
@@ -55,7 +56,10 @@ export function SwipeToStart({
   /** Parent native scroll gesture this pan blocks while it is recognizing. */
   blockGesture?: GestureType
 }) {
-  const { colors } = useTheme()
+  const { scheme } = useTheme()
+  const trackRecipe = glassRecipe({ app: 'driver', scheme, variant: 'chip' })
+  const knobRecipe = glassRecipe({ app: 'driver', scheme, variant: 'fab', accent: 'orange' })
+  const labelColor = glassTextColor({ app: 'driver', scheme, variant: 'chip' })
   const navigation = useNavigation()
   const x = useSharedValue(0)
   const trackWidthSv = useSharedValue(0)
@@ -180,7 +184,7 @@ export function SwipeToStart({
       <View
         collapsable={false}
         onLayout={onLayout}
-        style={[styles.track, { backgroundColor: colors.track, opacity: disabled ? 0.6 : 1 }]}
+        style={[styles.track, { backgroundColor: glassFill(trackRecipe), opacity: disabled ? 0.6 : 1 }]}
         accessible
         accessibilityRole="adjustable"
         accessibilityLabel={a11yLabel}
@@ -191,10 +195,12 @@ export function SwipeToStart({
           if (event.nativeEvent.actionName === 'activate' && !disabled) onConfirm()
         }}
       >
-        <Animated.View style={[styles.fill, { backgroundColor: colors.fill }, fillStyle]} />
-        <Text style={[styles.label, { color: colors.title }]} numberOfLines={1}>{label}</Text>
-        <Animated.View style={[styles.knob, { backgroundColor: colors.orange }, knobStyle]}>
-          <Text style={[styles.arrow, { color: colors.onAccent }]}>→</Text>
+        <GlassSheen scheme={scheme} radius={(KNOB + 8) / 2} tint="#522D80" />
+        <Animated.View style={[styles.fill, { backgroundColor: glassFill(knobRecipe) }, fillStyle]} />
+        <Text style={[styles.label, { color: labelColor }]} numberOfLines={1}>{label}</Text>
+        <Animated.View style={[styles.knob, { backgroundColor: glassFill(knobRecipe) }, knobStyle]}>
+          <GlassSheen scheme={scheme} radius={KNOB / 2} tint="#F56600" />
+          <Text style={[styles.arrow, { color: knobRecipe.text }]}>→</Text>
         </Animated.View>
       </View>
     </GestureDetector>
@@ -205,6 +211,6 @@ const styles = StyleSheet.create({
   track: { height: KNOB + 8, borderRadius: (KNOB + 8) / 2, justifyContent: 'center', padding: 4, overflow: 'hidden' },
   fill: { position: 'absolute', left: 4, top: 4, bottom: 4, borderRadius: KNOB / 2 },
   label: { position: 'absolute', left: 0, right: 0, textAlign: 'center', fontWeight: '800', fontSize: 16 },
-  knob: { width: KNOB, height: KNOB, borderRadius: KNOB / 2, alignItems: 'center', justifyContent: 'center' },
+  knob: { width: KNOB, height: KNOB, borderRadius: KNOB / 2, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   arrow: { fontSize: 24, fontWeight: '900' },
 })

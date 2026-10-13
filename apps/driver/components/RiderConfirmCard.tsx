@@ -1,4 +1,5 @@
 import { Image, StyleSheet, Text, View } from 'react-native'
+import { GlassCard } from 'rides-native/glass'
 import type { GestureType } from 'react-native-gesture-handler'
 import { riderConfirmCopy } from 'rides-native/swipeConfirm'
 import { useTheme } from '@/lib/theme'
@@ -21,11 +22,11 @@ export function RiderConfirmCard({
   onSwipeActive?: (active: boolean) => void
   blockGesture?: GestureType
 }) {
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const copy = riderConfirmCopy({ firstName, photoUrl })
   const initial = (firstName || 'R').trim().slice(0, 1).toUpperCase()
   return (
-    <View style={[styles.card, { borderColor: colors.orange, backgroundColor: colors.card }]} accessibilityLabel="Confirm your rider">
+    <GlassCard app="driver" scheme={scheme} selected style={[styles.card, { borderColor: colors.orange, backgroundColor: colors.card }]} accessibilityLabel="Confirm your rider">
       <View style={styles.row}>
         {photoUrl ? (
           <Image source={{ uri: photoUrl }} style={styles.photo} accessibilityLabel={`Photo of ${firstName}`} accessibilityIgnoresInvertColors />
@@ -40,7 +41,7 @@ export function RiderConfirmCard({
         </View>
       </View>
       <SwipeToStart label={busy ? 'Starting…' : copy.swipeLabel} a11yLabel={copy.a11yAction} disabled={busy} onConfirm={onStart} onSwipeActive={onSwipeActive} blockGesture={blockGesture} />
-    </View>
+    </GlassCard>
   )
 }
 

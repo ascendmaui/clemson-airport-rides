@@ -40,6 +40,7 @@ export declare const GlassTabBar: ComponentType<{
   activeIndex: number
   onSelect: (tab: GlassTab, index: number) => void
   scheme?: IconScheme
+  app?: 'rider' | 'driver'
   bottomInset?: number
   accent?: string
 }>

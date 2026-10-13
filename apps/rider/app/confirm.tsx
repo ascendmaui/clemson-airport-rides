@@ -1,3 +1,4 @@
+import { GlassSheet } from 'rides-native/glass'
 import { Glyph } from 'rides-native/icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Location from 'expo-location'
@@ -54,7 +55,7 @@ export default function ConfirmPickup() {
   const [locateNote, setLocateNote] = useState<string | null>(null)
   const mapRef = useRef<CampusMapHandle>(null)
   const [promptOpen, setPromptOpen] = useState(false)
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const sheetMotion = useEnterMotion(18)
 
@@ -158,6 +159,7 @@ export default function ConfirmPickup() {
       </View>
       <Animated.View style={[styles.sheetWrap, lift(colors, 'float'), sheetMotion]}>
       <View style={styles.sheet}>
+      <GlassSheet app="rider" scheme={scheme} pointerEvents="none" style={styles.sheetGlass} />
       <ScrollView
         style={styles.sheetScroll}
         contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}
@@ -264,12 +266,13 @@ function makeStyles(colors: Palette) {
     sheet: {
       flex: 1,
       overflow: 'hidden' as const,
-      backgroundColor: colors.elevated,
+      backgroundColor: 'transparent',
       borderTopLeftRadius: 28,
       borderTopRightRadius: 28,
       paddingHorizontal: 20,
       paddingTop: 6,
     },
+    sheetGlass: { position: 'absolute' as const, top: 0, right: 0, bottom: 0, left: 0 },
     sheetScroll: { flex: 1 },
     fieldLabel: { fontSize: 13, fontWeight: '700' as const, color: colors.title, marginBottom: 8, letterSpacing: 0.1 },
     input: {

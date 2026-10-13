@@ -1,8 +1,9 @@
-import { Glyph, PressScale } from 'rides-native/icons'
+import { GlassButton, GlassCard, GlassSurface, glassTextColor } from 'rides-native/glass'
+import { Glyph } from 'rides-native/icons'
 import type { ReactNode } from 'react'
 import { useMemo } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native'
-import { motion, radius, shadowStyle, type as typeScale, type ElevationLevel } from 'rides-native/shared/theme.js'
+import { StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native'
+import { radius, shadowStyle, type as typeScale, type ElevationLevel } from 'rides-native/shared/theme.js'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
 
@@ -19,19 +20,21 @@ export function useCardShadow() {
 }
 
 export function BackButton({ onPress }: { onPress: () => void }) {
-  const { colors } = useTheme()
-  const shadow = useCardShadow()
+  const { scheme } = useTheme()
+  const ink = glassTextColor({ app: 'driver', scheme, variant: 'fab' })
   return (
-    <Pressable
+    <GlassButton
+      app="driver"
+      scheme={scheme}
+      variant="fab"
       onPress={onPress}
-      style={[styles.back, shadow, { backgroundColor: colors.card }]}
-      accessibilityRole="button"
       accessibilityLabel="Back"
       accessibilityHint="Navigates to previous screen"
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      style={styles.back}
     >
-      <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
-    </Pressable>
+      <Glyph name="back" size={20} color={ink} accessibilityLabel="Back" />
+    </GlassButton>
   )
 }
 
@@ -52,37 +55,37 @@ export function Primary({
   accessibilityLabel?: string
   accessibilityRole?: 'button' | 'link'
 }) {
-  const { colors } = useTheme()
-  const shadow = useCardShadow()
-  const background = tone === 'orange' ? colors.orange : tone === 'purple' ? colors.fill : colors.card
-  const color = tone === 'ghost' ? colors.title : colors.onAccent
+  const { scheme } = useTheme()
+  const accent = tone === 'orange' ? 'orange' : 'purple'
+  const variant = tone === 'ghost' ? 'ghost' : 'primary'
+  const color = glassTextColor({ app: 'driver', scheme, variant, accent })
   return (
-    <PressScale
+    <GlassButton
+      app="driver"
+      scheme={scheme}
+      variant={variant}
+      accent={accent}
       onPress={onPress}
       disabled={disabled}
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel || label}
       accessibilityState={{ disabled: Boolean(disabled) }}
-      scaleTo={disabled ? 1 : motion.pressScale}
-      style={[
-        styles.primary,
-        tone === 'ghost' ? null : shadow,
-        { backgroundColor: background, opacity: disabled ? motion.disabledOpacity : 1, flexDirection: 'row', gap: 8 },
-      ]}
+      style={[styles.primary, { flexDirection: 'row', gap: 8 }]}
     >
       {icon ? <Glyph name={icon} size={20} color={color} /> : null}
       <Text style={[styles.primaryLabel, { color }]}>{label}</Text>
-    </PressScale>
+    </GlassButton>
   )
 }
 
 export function Tag({ label, tone = 'purple' }: { label: string; tone?: 'purple' | 'orange'; key?: string | number }) {
-  const { colors } = useTheme()
-  const on = tone === 'orange'
+  const { scheme } = useTheme()
+  const accent = tone === 'orange' ? 'orange' : 'purple'
+  const color = glassTextColor({ app: 'driver', scheme, variant: 'chip', accent })
   return (
-    <View style={[styles.tag, { backgroundColor: on ? colors.orangeSoft : colors.purpleSoft }]}>
-      <Text style={[styles.tagLabel, { color: on ? colors.orange : colors.title }]}>{label}</Text>
-    </View>
+    <GlassSurface app="driver" scheme={scheme} variant="chip" accent={accent} selected={tone === 'orange'} style={styles.tag}>
+      <Text style={[styles.tagLabel, { color }]}>{label}</Text>
+    </GlassSurface>
   )
 }
 
@@ -144,25 +147,17 @@ export function Card({
   accessibilityLabel?: string
   key?: string | number
 }) {
-  const { colors } = useTheme()
-  const shadow = useCardShadow()
+  const { scheme } = useTheme()
   return (
-    <View
+    <GlassCard
+      app="driver"
+      scheme={scheme}
       accessibilityRole={accessibilityRole as any}
       accessibilityLabel={accessibilityLabel}
-      style={[
-        styles.card,
-        shadow,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-          borderWidth: StyleSheet.hairlineWidth,
-        },
-        style,
-      ]}
+      style={[styles.card, style]}
     >
       {children}
-    </View>
+    </GlassCard>
   )
 }
 
@@ -185,6 +180,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: radius.control,
+    padding: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
