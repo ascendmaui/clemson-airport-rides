@@ -339,6 +339,12 @@ test('terms limit liability and privacy states the platform data limits', () => 
     assert.match(body, /before, during, or after any Ride/i)
   }
   assert.match(termsText, /Accident claims shall be directed to the applicable Driver/)
+  assert.match(termsText, /the Driver and the Driver’s automobile insurance carrier\(s\) are solely responsible for any accidents and all resulting liability, including injuries, death, and property damage/)
+  const driverAgreement = TERMS_SECTIONS.find((section) => section.heading === 'Article 10. Driver Agreement')
+  const driverAgreementText = (driverAgreement?.paragraphs || []).join('\n')
+  assert.match(driverAgreementText, /automobile insurance carrier\(s\) are solely responsible for any accidents/)
+  assert.match(driverAgreementText, /fifty thousand dollars for death and bodily injury per person/)
+  assert.match(driverAgreementText, /one million dollars for death, bodily injury, and property damage/)
   assert.match(termsText, /statutorily required TNC insurance coverage, not to the Company/)
   assert.match(termsText, /report an accident promptly through the app/)
   assert.match(privacyText, /under 18/)

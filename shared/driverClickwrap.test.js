@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   CLICKWRAP_STORAGE_KEY,
+  DRIVER_CLICKWRAP_SUMMARY,
   DRIVER_CLICKWRAP_VERSION,
   acceptClickwrap,
   agreeButtonDisabled,
@@ -90,6 +91,15 @@ test('a failed status check keeps the driver on the agreement', async () => {
     fetchStatus: async () => { throw new Error('offline') },
   })
   assert.equal(phase, 'required')
+})
+
+test('the clickwrap fine print acknowledges accident responsibility and the TNC limits', () => {
+  assert.match(DRIVER_CLICKWRAP_SUMMARY, /you and your automobile insurance carrier\(s\) are solely responsible for any accidents and all resulting liability, including injuries, death, and property damage/i)
+  assert.match(DRIVER_CLICKWRAP_SUMMARY, /\$50,000 per person/)
+  assert.match(DRIVER_CLICKWRAP_SUMMARY, /\$100,000 per incident/)
+  assert.match(DRIVER_CLICKWRAP_SUMMARY, /\$50,000 for property damage/)
+  assert.match(DRIVER_CLICKWRAP_SUMMARY, /\$1,000,000/)
+  assert.match(DRIVER_CLICKWRAP_SUMMARY, /uninsured-motorist coverage/)
 })
 
 test('the clickwrap links open the Driver Agreement, Terms, and Privacy', () => {
