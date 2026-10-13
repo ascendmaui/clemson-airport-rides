@@ -74,7 +74,7 @@ test('the migration is private and reversible', () => {
 
 test('tip push copy names the rider and the amount', () => {
   assert.deepEqual(tripStatusNoticeCopy('driver_tipped', { riderName: 'Riley Jones', tipCents: 300 }), {
-    title: 'Riley tipped you $3', body: 'It shows in Other on your Earnings tab.',
+    title: 'Riley tipped you $3', body: 'It shows in the tips breakdown on your Earnings tab.',
   })
   assert.equal(tripStatusNoticeCopy('driver_tipped', { riderName: '', tipCents: 450 }).title, 'Your rider tipped you $4.50')
   assert.equal(tripStatusNoticeCopy('driver_tipped', { riderName: 'Riley', tipCents: 0 }), null)
