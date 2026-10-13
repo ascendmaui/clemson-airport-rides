@@ -6,6 +6,7 @@ import { reconcileCheckout } from 'rides-native/riderMoney.js'
 import { AppState, AccessibilityInfo, Animated, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { MidrideCancelSheet } from '@/components/MidrideCancelSheet'
 import { useEnterMotion } from '@/components/enter'
 import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
 import { CampusMap } from '@/components/CampusMap'
@@ -39,6 +40,7 @@ import { registerRiderPush } from '@/lib/push'
 import { riderFlightView } from 'rides-native/flightStatus'
 import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
 import { canDriverEnd } from '../../../shared/driverEndTrip.js'
+import { loadMidrideStarted, riderMayCancelMidride } from '../../../shared/riderMidrideCancel.js'
 
 const CHECKOUT_RETURN_COPY = 'You\'re back from checkout. This ride is in the open pool. The final fare is charged when the trip ends.'
 
@@ -116,6 +118,9 @@ export default function Requested() {
   const [refreshing, setRefreshing] = useState(false)
   const [sosOpen, setSosOpen] = useState(false)
   const [switchOpen, setSwitchOpen] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [midrideStarted, setMidrideStarted] = useState(false)
+  const [endedTripId, setEndedTripId] = useState<string | null>(null)
   const [contacts, setContacts] = useState<EmergencyContact[]>([])
   const [person, setPerson] = useState<CounterpartView | null>(null)
   const { colors } = useTheme()
@@ -185,7 +190,7 @@ export default function Requested() {
       clearInterval(id)
     }
   }, [tripId, live?.driver_id])
-  const shown = (trip && live ? { ...trip, status: live.status } : trip) || (tripId
+  const loadedShown = (trip && live ? { ...trip, status: live.status } : trip) || (tripId
     ? {
         id: tripId,
         status: live?.status ?? null,
@@ -194,6 +199,19 @@ export default function Requested() {
         rider_id: user?.id || null,
       }
     : null)
+  const endedAs = endedTripId && endedTripId === (loadedShown?.id || tripId) ? 'canceled' : null
+  const serverStatus = loadedShown?.status ?? null
+  const shown = loadedShown && endedAs && serverStatus !== 'canceled' && serverStatus !== 'canceled_midride' && serverStatus !== 'cancelled_wait' && serverStatus !== 'completed'
+    ? { ...loadedShown, status: endedAs }
+    : loadedShown
+  useEffect(() => {
+    let alive = true
+    loadMidrideStarted(supabase, { id: shown?.id || tripId, status: shown?.status }).then((started) => {
+      if (alive) setMidrideStarted(started)
+    })
+    return () => { alive = false }
+  }, [shown?.id, shown?.status, tripId])
+  const canCancelMidride = riderMayCancelMidride(shown?.status, midrideStarted)
   const seenDriverCancels = useRef(new Map<string, string>())
   const [cancelNotice, setCancelNotice] = useState<{ tripId: string; at: string; message: string } | null>(null)
   useEffect(() => {
@@ -422,6 +440,11 @@ export default function Requested() {
             {(shown?.status === 'accepted' || shown?.status === 'arriving') && (shown?.driver_id || live?.driver_id) ? (
               <PrimaryButton label="Change driver" tone="purple" onPress={() => setSwitchOpen(true)} />
             ) : null}
+            {canCancelMidride && tripId ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="Cancel this ride" onPress={() => setCancelOpen(true)} hitSlop={8}>
+                <Text style={styles.cancelRide}>Cancel this ride</Text>
+              </Pressable>
+            ) : null}
             {shown?.status === 'completed' ? (
               <PrimaryButton label="Rate your driver" onPress={() => router.push({ pathname: '/rate', params: { trip: tripId } })} />
             ) : null}
@@ -529,6 +552,17 @@ export default function Requested() {
           }}
         />
       ) : null}
+      {tripId ? (
+        <MidrideCancelSheet
+          tripId={tripId}
+          open={cancelOpen}
+          onClose={() => setCancelOpen(false)}
+          onCanceled={() => {
+            setCancelOpen(false)
+            setEndedTripId(tripId)
+          }}
+        />
+      ) : null}
       <SosSheet
         open={sosOpen}
         onClose={() => setSosOpen(false)}
@@ -567,5 +601,6 @@ function makeStyles(colors: Palette) {
     sosCard: { backgroundColor: colors.card, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: colors.border, gap: 4 },
     cardTitle: { color: colors.title, fontSize: 20, fontWeight: '700' as const, letterSpacing: -0.3, marginTop: 2, marginBottom: 6 },
     link: { color: colors.link, fontWeight: '700' as const, fontSize: 15 },
+    cancelRide: { color: colors.danger, fontWeight: '700' as const, paddingVertical: 4 },
   }
 }
