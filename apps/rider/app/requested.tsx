@@ -36,6 +36,8 @@ import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { registerRiderPush } from '@/lib/push'
 import { riderFlightView } from 'rides-native/flightStatus'
+import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
+import { canDriverEnd } from '../../../shared/driverEndTrip.js'
 
 const CHECKOUT_RETURN_COPY = 'You\'re back from checkout. This ride is in the open pool. The final fare is charged when the trip ends.'
 
@@ -107,6 +109,8 @@ export default function Requested() {
   const [trackingNow, setTrackingNow] = useState(Date.now())
   useEffect(() => { const timer = setInterval(() => setTrackingNow(Date.now()), 5000); return () => clearInterval(timer) }, [])
   const [live, setLive] = useState<LiveTrip | null>(null)
+  const liveStatusRef = useRef<string | null>(null)
+  liveStatusRef.current = live?.status || null
   const [mapError, setMapError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [sosOpen, setSosOpen] = useState(false)
@@ -170,6 +174,9 @@ export default function Requested() {
     })
     const id = setInterval(() => {
       void reloadMap()
+      if (supabase && tripId && canDriverEnd(liveStatusRef.current)) {
+        void sendTripHeartbeat(supabase, tripId)
+      }
     }, 5000)
     return () => {
       listener.remove()
@@ -431,7 +438,7 @@ export default function Requested() {
               {preview
                 ? RIDER_SEARCH_MOTION_COPY
                 : located
-                  ? 'The orange pin is your driver’s live location. While they are on the way, a live distance in feet stays on screen and the screen pulses orange as they get closer.'
+                  ? 'The orange pin is your driver’s live location. While they are on the way, a live distance in feet stays on screen, with a soft glow around that card as they get closer.'
                   : 'Driver coordinates show up here after someone accepts and shares a location. The line follows the saved road when the trip has one.'}
             </Text>
           </View>

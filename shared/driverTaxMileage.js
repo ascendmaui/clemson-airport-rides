@@ -407,11 +407,32 @@ export function buildYearEndCsv(packet) {
     ['Payouts for this year\'s trips (USD)', csvMoney(packet.payoutsCents)],
     ['Pending payouts (USD)', csvMoney(packet.pendingPayoutCents)],
     ['Driver net (USD)', csvMoney(packet.driverNetCents)],
+    ...(packet.grossFareCents == null ? [] : [['Gross fares (USD)', csvMoney(packet.grossFareCents)]]),
+    ...(packet.bonusPerkCents == null ? [] : [['Bonuses and perks (USD)', csvMoney(packet.bonusPerkCents)]]),
+    ...(packet.netPayoutCents == null ? [] : [['Net payouts (USD)', csvMoney(packet.netPayoutCents)]]),
+    ...(packet.taxEstimate ? [
+      ['Tax estimate', packet.taxEstimate.note],
+      ['Taxable earnings after mileage (USD)', csvMoney(packet.taxEstimate.taxableEarningsCents)],
+      ['Estimated self-employment tax (USD)', csvMoney(packet.taxEstimate.selfEmploymentTaxCents)],
+      ['Quarterly set-aside (USD)', csvMoney(packet.taxEstimate.quarterlySetAsideCents)],
+    ] : []),
     ['On-trip miles', csvMiles(packet.onTripMiles)],
     ['En-route-to-pickup miles', csvMiles(packet.enrouteMiles)],
     ['Deductible miles', csvMiles(packet.deductibleMiles)],
     ['Estimated mileage deduction (USD)', deduction],
     ['Estimate', 'yes'],
+    ...(Array.isArray(packet.months) && packet.months.length ? [
+      [],
+      ['Month', 'Gross fares (USD)', 'Tips (USD)', 'Platform fees (USD)', 'Bonuses and perks (USD)', 'Net (USD)'],
+      ...packet.months.map((month) => [
+        month.label,
+        csvMoney(month.grossFareCents),
+        csvMoney(month.tipsCents),
+        csvMoney(month.platformFeeCents),
+        csvMoney(month.bonusPerkCents),
+        csvMoney(month.netCents),
+      ]),
+    ] : []),
     [],
     ['Completed at', 'Pickup', 'Dropoff', 'On-trip miles', 'On-trip source', 'En-route miles', 'En-route source', 'Deductible miles', 'Rate cents per mile', 'Estimated deduction (USD)'],
     ...(packet.trips || []).map((trip) => [
@@ -503,6 +524,17 @@ export function buildYearEndPdf(packet) {
     { text: `Payouts ${money(packet.payoutsCents)}`, size: 12, font: 'F1', color: '0 0 0' },
     { text: `Deductible miles ${Number(packet.deductibleMiles || 0).toFixed(2)}  (on-trip ${Number(packet.onTripMiles || 0).toFixed(2)}, en route ${Number(packet.enrouteMiles || 0).toFixed(2)})`, size: 12, font: 'F2', color: '0.322 0.176 0.502' },
     { text: `Estimated mileage deduction ${packet.estimatedDeductionCents == null ? 'not estimated' : money(packet.estimatedDeductionCents)} (estimate)`, size: 12, font: 'F2', color: '0.961 0.400 0.000' },
+    ...(packet.bonusPerkCents == null ? [] : [{ text: `Bonuses and perks ${money(packet.bonusPerkCents)}`, size: 12, font: 'F1', color: '0 0 0' }]),
+    ...(packet.taxEstimate ? [
+      { text: `Estimated self-employment tax ${money(packet.taxEstimate.selfEmploymentTaxCents)}`, size: 12, font: 'F2', color: '0.961 0.400 0.000' },
+      { text: packet.taxEstimate.note, size: 9, font: 'F1', color: '0.15 0.15 0.18' },
+    ] : []),
+    ...(Array.isArray(packet.months) ? packet.months.map((month) => ({
+      text: `${month.label}: fares ${money(month.grossFareCents)}, tips ${money(month.tipsCents)}, fees ${money(month.platformFeeCents)}, bonuses ${money(month.bonusPerkCents)}, net ${money(month.netCents)}`,
+      size: 8,
+      font: 'F1',
+      color: '0.1 0.1 0.12',
+    })) : []),
     { text: 'Mileage log', size: 13, font: 'F2', color: '0.322 0.176 0.502' },
   ]
   for (const trip of packet.trips || []) {
