@@ -129,6 +129,10 @@ test('vercel.json rewrites resolve to the same destinations Vercel uses', () => 
 
   const unknown = applyRewrites('/api/does-not-exist', '', rules)
   assert.equal(unknown.pathname, '/api/does-not-exist')
+
+  const inboundMail = applyRewrites('/api/inbound-mail/hostinger', '', rules)
+  assert.equal(inboundMail.pathname, '/api/inbound-mail')
+  assert.equal(inboundMail.search, '')
 })
 
 test('route discovery mounts every api handler file', async () => {

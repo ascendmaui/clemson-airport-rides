@@ -141,6 +141,10 @@
       "destination": "/api/admin-drivers?action=ticket"
     },
     {
+      "source": "/api/inbound-mail/hostinger",
+      "destination": "/api/inbound-mail"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },
