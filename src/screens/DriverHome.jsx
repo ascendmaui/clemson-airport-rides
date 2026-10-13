@@ -62,6 +62,7 @@ import { acceptTrip, declineTrip, listPassedTripIds } from '../../packages/rides
 import {
   acceptActionLabel,
   declineActionLabel,
+  declineDisposition,
   PREFERRED_REQUEST_NOTE,
   driverStatusDetail,
   statusActionLabel,
@@ -70,6 +71,11 @@ import {
   comfortFleetNotice,
   tripTags,
 } from '../../packages/rides-native/tripTags.js'
+import {
+  declinePassMessage,
+  offlineWhileOfferedMessage,
+  searchingCancelOfferMessage,
+} from '../../server/matchingEdge.js'
 import { DRIVER_TRACK_STEPS, etaHoldLine } from '../../packages/rides-native/liveTrip.js'
 import { directionsEtaLine, followEtaLine, followRouteLine, legNounForStatus, storedRoadSuffix } from '../../packages/rides-native/roadFollow.js'
 import { navigationLinks, preferredNavigationUrl } from '../../packages/rides-native/mapsLink.js'
@@ -551,8 +557,15 @@ function DriverShell({ driverId }) {
         setActiveTrip(null)
         loadEarnings()
       }
-      if (row.status === 'canceled' && offer?.id === row.id) {
+      const cancelMessage = searchingCancelOfferMessage(row)
+      if (cancelMessage && offer?.id === row.id) {
         setOffer(null)
+        pushToast({
+          kind: 'system',
+          force: true,
+          title: 'Ride unavailable',
+          body: cancelMessage,
+        })
       }
       if (CANCEL_NOTICES[row.status] && activeTripRef.current?.id === row.id) {
         clearCanceledTrip(row)
@@ -648,6 +661,10 @@ function DriverShell({ driverId }) {
     const change = next ? startShift() : stopShift({ trip: activeTrip })
     const previous = onShiftRef.current
     const nextOnline = Boolean(change.presence.online)
+    const offlineMessage = offlineWhileOfferedMessage({
+      online: nextOnline,
+      card: visibleOffer({ onShift: previous, offer, activeTrip }),
+    })
     onShiftRef.current = nextOnline
     setShiftBusy(true)
     try {
@@ -656,6 +673,14 @@ function DriverShell({ driverId }) {
       if (!nextOnline) {
         setOffer(null)
         setScheduledOpen([])
+        if (offlineMessage) {
+          pushToast({
+            kind: 'system',
+            force: true,
+            title: 'You are offline',
+            body: offlineMessage,
+          })
+        }
       } else {
         loadScheduled()
       }
@@ -764,12 +789,23 @@ function DriverShell({ driverId }) {
     const current = offer
     dismissedOffers.current.add(current.id)
     try {
-      await api('/api/driver?action=pass-offer', { tripId: current.id })
+      const passed = await api('/api/driver?action=pass-offer', { tripId: current.id })
       const matching = current.metadata?.kind === 'driver_request' && !current.pickup_at
         && !current.scheduled_for && !Number(current.deposit_cents || 0)
       if (!matching) await declineTrip(supabase, current, driverId)
       if (current.status !== 'requested') passedOffers.current.add(current.id)
       setOffer(null)
+      if (declineDisposition(current.status) === 'release') {
+        const message = declinePassMessage(passed)
+        if (message) {
+          pushToast({
+            kind: 'system',
+            force: true,
+            title: 'Offer passed',
+            body: message,
+          })
+        }
+      }
     } catch (err) {
       dismissedOffers.current.delete(current.id)
       pushToast({ kind: 'system', title: 'Could not decline',
@@ -1282,6 +1318,11 @@ function DriverShell({ driverId }) {
           {offer.status === 'requested' && (
             <p style={{ color: 'var(--orange)', fontWeight: 700, fontSize: 13, lineHeight: 1.4, marginTop: 10 }}>
               {PREFERRED_REQUEST_NOTE}
+            </p>
+          )}
+          {(offer.status === 'searching' || offer.status === 'offered') && (
+            <p style={{ color: 'var(--ink-secondary)', fontSize: 13, lineHeight: 1.4, marginTop: 10 }}>
+              {driverStatusDetail(offer.status)}
             </p>
           )}
           <ComfortNotice row={offer} />
