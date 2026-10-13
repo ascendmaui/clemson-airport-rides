@@ -16,20 +16,20 @@ for (const key of Object.keys(process.env)) {
   }
 }
 
-const { default: handler } = await import('./stripe-webhook.js')
+const { default: handler } = await import('../api/stripe-webhook.js')
 
 // recordTip / recordCreditPurchase close over the service key captured at
 // import. This second instance is evaluated with a fake key so the
 // missing_metadata branch can run. Its @supabase/supabase-js import is
 // tests/fixtures/webhook-validation/fakeSupabase.js. These tests never pass
 // metadata that would construct a client.
-register(new URL('../tests/fixtures/webhook-validation/hooks.js', import.meta.url).href, {
+register(new URL('./fixtures/webhook-validation/hooks.js', import.meta.url).href, {
   parentURL: import.meta.url,
 })
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'service_role_fake_not_real'
 let handlerWithServiceKey
 try {
-  ;({ default: handlerWithServiceKey } = await import('./stripe-webhook.js?instance=routing'))
+  ;({ default: handlerWithServiceKey } = await import('../api/stripe-webhook.js?instance=routing'))
 } finally {
   delete process.env.SUPABASE_SERVICE_ROLE_KEY
 }
