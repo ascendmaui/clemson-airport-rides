@@ -92,6 +92,34 @@ test('the spring config is a clamped UI-thread spring', () => {
   assert.equal(HOME_SHEET_SPRING.overshootClamping, true)
 })
 
+test('worklet helpers are declared before the worklets that call them', () => {
+  // The worklets plugin captures callees by value at initialization. Node's
+  // test runner loads the TypeScript as-is, so a later helper still works
+  // here. The declaration order is what Hermes actually executes.
+  const source = read('apps/rider/lib/homeSheetSnap.ts')
+  const at = (name) => {
+    const index = source.search(new RegExp(`function ${name}\\b`))
+    assert.notEqual(index, -1, `${name} is declared`)
+    return index
+  }
+  const before = (helper, caller) => {
+    assert.ok(at(helper) < at(caller), `${helper} is declared before ${caller}`)
+  }
+
+  before('sortAscending', 'expandedSheetHeights')
+  before('sortAscending', 'homeSheetSnapPoints')
+  before('sortAscending', 'finiteSorted')
+  before('pushUnique', 'homeSheetSnapPoints')
+  before('pushUnique', 'finiteSorted')
+  before('nearestSnap', 'snapHomeSheet')
+  before('finiteSorted', 'snapHomeSheet')
+  before('collapsedSheetHeight', 'homeSheetSnapPoints')
+  before('collapsedSheetHeight', 'buildHomeSheetSnapPoints')
+  before('collapsedSheetPadding', 'buildHomeSheetSnapPoints')
+  before('expandedSheetHeights', 'buildHomeSheetSnapPoints')
+  before('homeSheetSnapPoints', 'buildHomeSheetSnapPoints')
+})
+
 test('rider home wires the snap helper through gesture-handler and does not touch the driver swipe', () => {
   const home = read('apps/rider/app/(tabs)/index.tsx')
   const hook = read('apps/rider/lib/useHomeSheetSnap.ts')
