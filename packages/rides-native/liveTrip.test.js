@@ -17,6 +17,8 @@ import {
   etaHoldLine,
   liveDriverTitle,
   etaLineFor,
+  liveRideDistanceLine,
+  pickupToDropoffRouteLine,
   mapRouteCoordinates,
   riderLiveStepIndex,
   roadEtaLine,
@@ -67,6 +69,26 @@ test('preferred matching copy cancels instead of falling back to the open pool',
   assert.equal(riderLiveView('arriving').kicker, 'ARRIVING')
   assert.equal(riderLiveView('in_progress').title, 'You are on the way')
   assert.equal(riderLiveView('completed').kicker, 'COMPLETED')
+})
+
+test('the full pickup to drop-off route is labeled only once the trip is in progress', () => {
+  const from = { lat: 34.6788, lng: -82.843 }
+  const places = {
+    pickup_lat: 34.6836,
+    pickup_lng: -82.8364,
+    dropoff_lat: 34.69,
+    dropoff_lng: -82.82,
+    metadata: { route_duration_s: 3439, route_distance_m: 59033 },
+  }
+  const route = pickupToDropoffRouteLine(places)
+  assert.match(route, /Pickup to drop-off/)
+  assert.match(route, /57 min/)
+  assert.match(route, /36\.7 mi/)
+  assert.match(liveRideDistanceLine('accepted', from, places), /to pickup/)
+  assert.match(liveRideDistanceLine('arriving', from, places), /to pickup/)
+  assert.equal(liveRideDistanceLine('in_progress', from, places), route)
+  assert.equal(liveRideDistanceLine('searching', from, places), null)
+  assert.match(liveRideDistanceLine('in_progress', from, { dropoff_lat: 34.69, dropoff_lng: -82.82 }), /to drop-off/)
 })
 
 test('straight-line ETA uses existing coordinates and names the pickup or drop-off', () => {

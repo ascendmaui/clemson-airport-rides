@@ -1,5 +1,10 @@
 export const LOCATION_STALE_MS: number
-export function trackingIssue(status: string | null | undefined, timestamp: string | null | undefined, now?: number): string | null
+export function trackingIssue(
+  status: string | null | undefined,
+  timestamp: string | null | undefined,
+  now?: number,
+  heartbeatAt?: string | null,
+): string | null
 export function staleEtaLine(
   issue: string | null | undefined,
   etaLine: string | null | undefined,

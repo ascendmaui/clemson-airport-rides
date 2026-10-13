@@ -1,13 +1,14 @@
 import { GlassBadge, Glyph } from 'rides-native/icons'
 import { MainTabs } from '@/components/MainTabs'
-import { useFocusEffect, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import * as Linking from 'expo-linking'
 import * as WebBrowser from 'expo-web-browser'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { useAuth } from '@/lib/auth'
+import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
 import { parseCheckoutSessionId } from 'rides-native/checkoutReturn.js'
 import {
@@ -71,6 +72,24 @@ function paymentGlyph(type: string): string {
 
 function BillingScreen() {
   const router = useRouter()
+  const params = useLocalSearchParams<{
+    returnTo?: string
+    add?: string
+    dest?: string
+    pickup?: string
+    tier?: string
+    note?: string
+    pickupLat?: string
+    pickupLng?: string
+    destLat?: string
+    destLng?: string
+    passengers?: string
+    tip?: string
+    driver?: string
+  }>()
+  const returnTo = oneParam(params.returnTo)
+  const addCard = oneParam(params.add) === '1'
+  const autoOpened = useRef(false)
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
   const [card, setCard] = useState<Card | null>(null)
@@ -130,6 +149,32 @@ function BillingScreen() {
 
   useFocusEffect(load)
 
+  function returnToRequest(message: string) {
+    setNote(message)
+    load()
+    if (returnTo !== 'pick-driver') return
+    if (router.canGoBack()) {
+      router.back()
+      return
+    }
+    router.replace({
+      pathname: '/pick-driver',
+      params: {
+        dest: oneParam(params.dest),
+        pickup: oneParam(params.pickup),
+        tier: oneParam(params.tier),
+        note: oneParam(params.note),
+        pickupLat: oneParam(params.pickupLat),
+        pickupLng: oneParam(params.pickupLng),
+        destLat: oneParam(params.destLat),
+        destLng: oneParam(params.destLng),
+        passengers: oneParam(params.passengers),
+        tip: oneParam(params.tip),
+        driver: oneParam(params.driver),
+      },
+    })
+  }
+
   async function finishCheckout(methodId: string, returnUrl: string) {
     if (!supabase) return
     const session = await startPaymentMethodSetup(supabase, { paymentMethod: methodId, returnUrl })
@@ -148,9 +193,14 @@ function BillingScreen() {
       return
     }
     await saveCheckoutPaymentMethod(supabase, sessionId)
-    setNote('Payment method saved.')
-    load()
+    returnToRequest('Payment method saved.')
   }
+
+  useEffect(() => {
+    if (!addCard || autoOpened.current || !user || !supabase) return
+    autoOpened.current = true
+    void onPickMethod(ADD_ANOTHER_PAYMENT_METHOD_ID)
+  }, [addCard, user])
 
   async function onPickMethod(methodId: string) {
     if (!supabase || busy) return
@@ -174,8 +224,7 @@ function BillingScreen() {
               return
             }
             await saveSetupPaymentMethod(supabase, setup.setupIntentId)
-            setNote('Payment method saved.')
-            load()
+            returnToRequest('Payment method saved.')
             return
           }
           const sheetNote = setupSheetNote(presented)

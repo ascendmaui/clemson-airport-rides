@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router'
 import { useEffect, useRef } from 'react'
 import { showToast } from 'rides-native/toastStore.js'
 import { paymentFailedMoment, riderTripMoment, riderTripSnapshot, type Moment, type RiderTripSnapshot } from 'rides-native/rideMoments.js'
+import { afterRiderModal, riderModalIsOpen } from '@/lib/afterModal'
 import { useAuth } from '@/lib/auth'
 import { hapticsEnabled, playApproachPing, playCompleteCue, successHaptic, warningHaptic } from '@/lib/feedback'
 import { supabase } from '@/lib/supabase'
@@ -60,15 +61,22 @@ export function RiderMoments() {
       seen.current.set(row.id, next)
       if (!primed || !prev) return
       const moments = [riderTripMoment(prev, row), paymentFailedMoment(prev.hold, row, 'rider')].filter(Boolean) as Moment[]
+      const matched = ['accepted', 'arriving', 'arrived', 'in_progress'].includes(String(row.status || ''))
       for (const moment of moments) {
+        // The match sheet already shows Add a payment method. A second banner
+        // that navigates in the same tick fights that modal.
+        if (moment.cue === 'error' && matched && riderModalIsOpen()) continue
         showToast({
           key: moment.key,
           tone: moment.tone,
           title: moment.title,
           body: moment.body,
-          onPress: moment.cue === 'error'
-            ? () => router.push('/account')
-            : () => router.push({ pathname: '/requested', params: { trip: row.id } }),
+          onPress: () => {
+            const href = moment.cue === 'error' || moment.action === 'billing'
+              ? { pathname: '/billing' as const }
+              : { pathname: '/requested' as const, params: { trip: row.id } }
+            afterRiderModal(() => router.push(href))
+          },
         })
         playRiderMoment(moment)
       }

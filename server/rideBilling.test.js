@@ -44,7 +44,7 @@ async function call(handler, body, deps) {
   return { status: res.statusCode, json }
 }
 
-function createSb({ balance = 0, balanceMode = 'row' } = {}) {
+function createSb({ balance = 0, balanceMode = 'row', paymentMethodId = 'pm_test' } = {}) {
   const state = { trips: [], creditWrites: [], balance }
   function chain(table) {
     const api = {
@@ -70,7 +70,13 @@ function createSb({ balance = 0, balanceMode = 'row' } = {}) {
           if (balanceMode === 'missing-table') {
             return { data: null, error: { message: 'column credit_balance_cents does not exist' } }
           }
-          return { data: { credit_balance_cents: 0 }, error: null }
+          return {
+            data: {
+              credit_balance_cents: 0,
+              ...(paymentMethodId ? { stripe_default_pm_id: paymentMethodId } : {}),
+            },
+            error: null,
+          }
         }
         return { data: null, error: null }
       },
@@ -315,6 +321,27 @@ test('selecting credits records the choice and does not debit or charge', async 
   assert.equal(short.state.trips.length, 0)
   assert.equal(short.state.balance, fare - 1)
   assert.equal(short.state.creditWrites.length, 0)
+})
+
+test('a ride request without a saved card or Apple Pay is rejected before the trip is inserted', async () => {
+  const sb = createSb({ balance: 0, paymentMethodId: null })
+  const denied = await call(requestDriverTrip, {
+    driverId: 'driver-1',
+    ...campus,
+  }, depsFor(sb, rider('fan@gmail.com')))
+  assert.equal(denied.status, 402)
+  assert.equal(denied.json.code, 'payment_method_required')
+  assert.match(denied.json.error, /payment method/i)
+  assert.equal(sb.state.trips.length, 0)
+
+  const apple = createSb({ balance: 0, paymentMethodId: null })
+  const allowed = await call(requestDriverTrip, {
+    driverId: 'driver-1',
+    ...campus,
+    applePay: true,
+  }, depsFor(apple, rider('fan@gmail.com')))
+  assert.equal(allowed.status, 200, JSON.stringify(allowed.json))
+  assert.equal(apple.state.trips.length, 1)
 })
 
 test('campus rides still complete with no card, and airport pick-a-driver does not open a charge', async () => {

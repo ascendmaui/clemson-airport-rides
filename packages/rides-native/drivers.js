@@ -11,6 +11,7 @@ import { isSimulatedDriverId } from './simulatedDrivers.js'
 import { favoriteIdsForMatching } from '../../shared/riderFavorites.js'
 import { approvalGateMessage } from './syntheticOffers.js'
 import { rideRequestNote } from './driverNote.js'
+import { paymentMethodRequiredError } from '../../shared/ridePaymentReady.js'
 
 /** Straight-line campus pace. A stored road polyline can scale this; live traffic still needs a billed Routes call. */
 export const CAMPUS_MPH = 18
@@ -354,6 +355,8 @@ export async function loadPickerDriverRecord(supabase, driverId) {
   }
 }
 
+export { paymentMethodRequiredError }
+
 /** Older clients sent riders to Schedule after airport_deposit_required. New requests book with no upfront deposit. */
 export function scheduleRedirectForRequestError(err, destLabel) {
   if (err?.code !== 'airport_deposit_required') return null
@@ -581,6 +584,7 @@ export async function requestDriverTrip(supabase, {
   isStudent = false,
   note = '',
   prepaidTipCents = 0,
+  applePay = false,
 }) {
   void isStudent
   if (!supabase) throw new Error('Supabase is not configured')
@@ -611,6 +615,7 @@ export async function requestDriverTrip(supabase, {
       ...(passengers ? { passengers } : {}),
       ...(riderNote ? { note: riderNote } : {}),
       ...(prepaidTipCents > 0 ? { prepaidTipCents: Math.round(prepaidTipCents) } : {}),
+      ...(applePay === true ? { applePay: true } : {}),
     },
   })
   if (!data?.trip?.id) throw new Error('Could not request trip')
