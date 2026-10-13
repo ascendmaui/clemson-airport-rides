@@ -1,4 +1,5 @@
 import { Image, StyleSheet, Text, View } from 'react-native'
+import type { GestureType } from 'react-native-gesture-handler'
 import { riderConfirmCopy } from 'rides-native/swipeConfirm'
 import { useTheme } from '@/lib/theme'
 import { radius, type as typeScale } from 'rides-native/shared/theme.js'
@@ -10,11 +11,15 @@ export function RiderConfirmCard({
   photoUrl,
   busy,
   onStart,
+  onSwipeActive,
+  blockGesture,
 }: {
   firstName: string
   photoUrl: string | null
   busy: boolean
   onStart: () => void
+  onSwipeActive?: (active: boolean) => void
+  blockGesture?: GestureType
 }) {
   const { colors } = useTheme()
   const copy = riderConfirmCopy({ firstName, photoUrl })
@@ -34,7 +39,7 @@ export function RiderConfirmCard({
           <Text style={[styles.body, { color: colors.inkSecondary }]}>{copy.body}</Text>
         </View>
       </View>
-      <SwipeToStart label={busy ? 'Starting…' : copy.swipeLabel} a11yLabel={copy.a11yAction} disabled={busy} onConfirm={onStart} />
+      <SwipeToStart label={busy ? 'Starting…' : copy.swipeLabel} a11yLabel={copy.a11yAction} disabled={busy} onConfirm={onStart} onSwipeActive={onSwipeActive} blockGesture={blockGesture} />
     </View>
   )
 }

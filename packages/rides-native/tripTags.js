@@ -387,6 +387,8 @@ export function statusHeadline(status) {
       return 'Trip ended early'
     case 'cancelled_wait':
       return 'Canceled: rider no-show'
+    case 'expired':
+      return 'Trip expired'
     default:
       return status ? String(status) : 'Ride'
   }
@@ -417,6 +419,8 @@ export function driverStatusDetail(status) {
       return 'The rider ended this trip early. You can return home.'
     case 'cancelled_wait':
       return 'The rider did not arrive, so this ride is canceled. You can return home.'
+    case 'expired':
+      return 'This ride timed out with no one still on it. You were not charged. You can return home.'
     default:
       return 'Trip status updates as you move through the ride.'
   }

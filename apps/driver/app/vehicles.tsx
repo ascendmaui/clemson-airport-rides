@@ -1,7 +1,8 @@
 import { Glyph } from 'rides-native/icons'
 import { useRouter, useFocusEffect } from 'expo-router'
+import * as ImagePicker from 'expo-image-picker'
 import { useCallback, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Card, ErrorText, Field, Primary, Tag } from '@/components/chrome'
 import { EmptyState, FadeIn } from '@/components/day'
 import { StackPage } from '@/components/shell'
@@ -13,6 +14,16 @@ import { loadVehicle, type VehicleRow } from 'rides-native/driverDesk'
 import { saveRegisteredVehicle } from 'rides-native/shared/vehicle.js'
 import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { COMFORT_FLEET_NOTICE, comfortFleetNotice } from 'rides-native/tripTags'
+import { CONDITION_LEVELS } from '../../../shared/vehicleStandards.js'
+import {
+  DRIVER_RENTALS_BROWSE_URL,
+  LUXURY_EXCEPTION_MESSAGE,
+  OWN_OR_LEASE_LABEL,
+  POOR_CONDITION_MESSAGE,
+  RENT_FROM_PARTNER_LABEL,
+  assessOwnedVehicle,
+  isPreStandardYear,
+} from '../../../shared/ownedVehicle.js'
 
 const PAINT: Record<string, string> = {
   black: '#1C1C1E',
@@ -34,6 +45,8 @@ const PAINT: Record<string, string> = {
   maroon: '#6E2430',
 }
 
+type OwnershipChoice = 'own' | 'rent'
+
 function paintColor(name: string | null | undefined, fallback: string): string {
   const key = (name || '').trim().toLowerCase()
   return PAINT[key] || fallback
@@ -46,6 +59,7 @@ function fillForm(row: VehicleRow | null) {
     color: row?.color || '',
     plate: row?.plate || '',
     seats: String(row?.seats || 4),
+    year: row?.year ? String(row.year) : '',
   }
 }
 
@@ -57,11 +71,15 @@ export default function VehiclesScreen() {
   const [vehicle, setVehicle] = useState<VehicleRow | null>(null)
   const [ready, setReady] = useState(!user)
   const [editing, setEditing] = useState(false)
+  const [ownership, setOwnership] = useState<OwnershipChoice | null>(null)
   const [make, setMake] = useState('')
   const [model, setModel] = useState('')
   const [color, setColor] = useState('')
   const [plate, setPlate] = useState('')
   const [seats, setSeats] = useState('4')
+  const [year, setYear] = useState('')
+  const [condition, setCondition] = useState('')
+  const [luxuryPhotos, setLuxuryPhotos] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -73,6 +91,10 @@ export default function VehiclesScreen() {
     setColor(next.color)
     setPlate(next.plate)
     setSeats(next.seats)
+    setYear(next.year)
+    setCondition('')
+    setLuxuryPhotos([])
+    setOwnership(row ? 'own' : null)
   }, [])
 
   const refresh = useCallback(async () => {
@@ -98,8 +120,47 @@ export default function VehiclesScreen() {
     }
   }, [refresh, user]))
 
+  const ownedDecision = ownership === 'own'
+    ? assessOwnedVehicle({ year, condition, luxuryPhotos })
+    : null
+  const luxuryPath = ownership === 'own' && isPreStandardYear(year)
+  const poorBlocked = condition === 'poor'
+
+  async function openRentals() {
+    await Linking.openURL(DRIVER_RENTALS_BROWSE_URL)
+  }
+
+  async function addLuxuryPhoto() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      setError('Photo access is needed for a Luxury exception.')
+      return
+    }
+    const shot = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+    })
+    const uri = shot.canceled ? '' : shot.assets?.[0]?.uri || ''
+    if (!uri) return
+    setLuxuryPhotos((prev) => [...prev, uri])
+    setError(null)
+  }
+
   async function save() {
     if (!user || !supabase) return
+    if (ownership === 'rent') {
+      await openRentals()
+      return
+    }
+    if (ownership !== 'own') {
+      setError('Choose whether you own or lease this car, or rent from a partner.')
+      return
+    }
+    const decision = assessOwnedVehicle({ year, condition, luxuryPhotos })
+    if (!decision.ok) {
+      setError(decision.message)
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -109,7 +170,10 @@ export default function VehiclesScreen() {
         color,
         plate,
         seats: Number(seats) || 4,
-        comfortClass: Boolean(vehicle?.service_class),
+        comfortClass: vehicle?.service_class === 'comfort',
+        year,
+        condition,
+        luxuryPhotos,
       })
       setEditing(false)
       pulse('online')
@@ -128,12 +192,18 @@ export default function VehiclesScreen() {
     setColor(next.color)
     setPlate(next.plate)
     setSeats(next.seats)
+    setYear(next.year)
+    setCondition('')
+    setLuxuryPhotos([])
+    setOwnership(vehicle ? 'own' : null)
     setEditing(false)
+    setError(null)
   }
 
-  const title = [vehicle?.color, vehicle?.make, vehicle?.model].filter(Boolean).join(' ')
+  const title = [vehicle?.year, vehicle?.color, vehicle?.make, vehicle?.model].filter(Boolean).join(' ')
   const paint = paintColor(vehicle?.color, colors.purple)
-  const listedNotice = comfortFleetNotice(Boolean(vehicle?.service_class))
+  const listedNotice = comfortFleetNotice(vehicle?.service_class === 'comfort')
+  const saveDisabled = busy || poorBlocked
 
   return (
     <StackPage title="Vehicles" onBack={() => router.back()}>
@@ -160,7 +230,8 @@ export default function VehiclesScreen() {
             </View>
             <View style={styles.titleRow}>
               <Text style={[styles.name, { color: colors.ink }]}>{title || 'Your vehicle'}</Text>
-              {vehicle.service_class ? <Tag label="Extra Comfort" tone="orange" /> : null}
+              {vehicle.service_class === 'comfort' ? <Tag label="Extra Comfort" tone="orange" /> : null}
+              {vehicle.luxury_exception ? <Tag label="Luxury exception" tone="purple" /> : null}
             </View>
             {listedNotice ? (
               <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{listedNotice}</Text>
@@ -168,7 +239,7 @@ export default function VehiclesScreen() {
             <View style={styles.specs}>
               <Spec label="Plate" value={vehicle.plate || 'Add plate'} />
               <Spec label="Seats" value={String(vehicle.seats || 4)} />
-              <Spec label="Color" value={vehicle.color || 'Add color'} />
+              <Spec label="Year" value={vehicle.year ? String(vehicle.year) : 'Add year'} />
             </View>
             <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
               Riders see this car on Pick a driver. Plate and color should match the car you bring.
@@ -192,12 +263,41 @@ export default function VehiclesScreen() {
             <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
               This is the car riders match at pickup. It does not dispatch a different vehicle.
             </Text>
-            <Field label="Make" value={make} onChangeText={setMake} placeholder="Toyota" />
-            <Field label="Model" value={model} onChangeText={setModel} placeholder="Corolla" />
-            <Field label="Color" value={color} onChangeText={setColor} placeholder="Blue" />
-            <Field label="Plate" value={plate} onChangeText={setPlate} placeholder="ABC123" />
-            <Field label="Seats" value={seats} onChangeText={setSeats} keyboard="number-pad" />
-            <Primary label={busy ? 'Saving…' : 'Save vehicle'} onPress={save} disabled={busy} />
+            <OwnershipPicker value={ownership} onChange={(next) => { setOwnership(next); setError(null) }} />
+            {ownership === 'rent' ? (
+              <View style={{ gap: 8 }}>
+                <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+                  Browse weekly rentals from Clemson RIDES partners.
+                </Text>
+                <Primary label="Browse partner rentals" onPress={() => { void openRentals() }} accessibilityRole="link" />
+              </View>
+            ) : null}
+            {ownership === 'own' ? (
+              <View style={{ gap: 10 }}>
+                <Field label="Year" value={year} onChangeText={setYear} keyboard="number-pad" placeholder="2019" />
+                <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+                  2019 or newer is accepted. Older cars use the Luxury exception path.
+                </Text>
+                <ConditionPicker value={condition} onChange={(next) => { setCondition(next); setError(null) }} />
+                {poorBlocked ? <ErrorText>{POOR_CONDITION_MESSAGE}</ErrorText> : null}
+                {luxuryPath && ownedDecision && !ownedDecision.ok && ownedDecision.code === 'luxury_photos' ? <ErrorText>{ownedDecision.message}</ErrorText> : null}
+                {luxuryPath ? (
+                  <View style={{ gap: 8 }}>
+                    <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{LUXURY_EXCEPTION_MESSAGE}</Text>
+                    <Text style={{ color: colors.ink, fontWeight: '700' }}>
+                      Luxury photos: {luxuryPhotos.length}
+                    </Text>
+                    <Primary label="Add photo" onPress={() => { void addLuxuryPhoto() }} tone="purple" />
+                  </View>
+                ) : null}
+                <Field label="Make" value={make} onChangeText={setMake} placeholder="Toyota" />
+                <Field label="Model" value={model} onChangeText={setModel} placeholder="Corolla" />
+                <Field label="Color" value={color} onChangeText={setColor} placeholder="Blue" />
+                <Field label="Plate" value={plate} onChangeText={setPlate} placeholder="ABC123" />
+                <Field label="Seats" value={seats} onChangeText={setSeats} keyboard="number-pad" />
+                <Primary label={busy ? 'Saving…' : 'Save vehicle'} onPress={save} disabled={saveDisabled} />
+              </View>
+            ) : null}
             <Primary label="Cancel" onPress={cancel} tone="ghost" />
           </Card>
         ) : null}
@@ -212,6 +312,59 @@ export default function VehiclesScreen() {
         {error ? <ErrorText>{error}</ErrorText> : null}
       </FadeIn>
     </StackPage>
+  )
+}
+
+function OwnershipPicker({ value, onChange }: { value: OwnershipChoice | null; onChange: (value: OwnershipChoice) => void }) {
+  const { colors } = useTheme()
+  const choices: { id: OwnershipChoice; label: string }[] = [
+    { id: 'own', label: OWN_OR_LEASE_LABEL },
+    { id: 'rent', label: RENT_FROM_PARTNER_LABEL },
+  ]
+  return (
+    <View accessibilityRole="radiogroup" style={{ gap: 8 }}>
+      {choices.map((choice) => {
+        const on = value === choice.id
+        return (
+          <Pressable
+            key={choice.id}
+            onPress={() => onChange(choice.id)}
+            accessibilityRole="radio"
+            accessibilityLabel={choice.label}
+            accessibilityState={{ selected: on }}
+            style={[styles.choice, { borderColor: on ? colors.purple : colors.border, backgroundColor: on ? colors.track : colors.input }]}
+          >
+            <Text style={{ color: colors.ink, fontWeight: '700' }}>{choice.label}</Text>
+          </Pressable>
+        )
+      })}
+    </View>
+  )
+}
+
+function ConditionPicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const { colors } = useTheme()
+  return (
+    <View accessibilityRole="radiogroup" style={{ gap: 8 }}>
+      <Text style={{ color: colors.inkSecondary, fontSize: 13, fontWeight: '700' }}>Condition</Text>
+      <View style={styles.conditions}>
+        {CONDITION_LEVELS.map((level) => {
+          const on = value === level.id
+          return (
+            <Pressable
+              key={level.id}
+              onPress={() => onChange(level.id)}
+              accessibilityRole="radio"
+              accessibilityLabel={level.label}
+              accessibilityState={{ selected: on }}
+              style={[styles.choice, styles.condition, { borderColor: on ? colors.orange : colors.border, backgroundColor: on ? colors.track : colors.input }]}
+            >
+              <Text style={{ color: colors.ink, fontWeight: '700' }}>{level.label}</Text>
+            </Pressable>
+          )
+        })}
+      </View>
+    </View>
   )
 }
 
@@ -240,4 +393,7 @@ const styles = StyleSheet.create({
   name: { fontSize: 24, fontWeight: typeScale.title.fontWeight, letterSpacing: typeScale.headline.letterSpacing },
   specs: { flexDirection: 'row', gap: 8 },
   spec: { flex: 1, borderRadius: radius.lg, paddingHorizontal: 10, paddingVertical: 10, gap: 4 },
+  choice: { borderRadius: radius.lg, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 12 },
+  conditions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  condition: { flexGrow: 1 },
 })
