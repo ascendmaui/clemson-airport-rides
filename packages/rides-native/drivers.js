@@ -1,8 +1,9 @@
 import { canReceiveRides } from '../../shared/driverOnboarding.js'
 import { vehicleServesComfort } from '../../shared/rideOptions.js'
 import { defaultDriverRank, dispatchRankOf } from '../../shared/driverOrder.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 import { authedJson } from './apiClient.js'
-import { displayFirstName, standingFromRatings } from './authErrors.js'
+import { standingFromRatings } from './authErrors.js'
 import { GSP, STADIUM } from './places.js'
 import { airportCodeFromLabel } from './riderMoney.js'
 import { haversineMeters } from './riderShell.js'
@@ -15,8 +16,8 @@ export const CAMPUS_MPH = 18
 const STALE_LOCATION_MS = 10 * 60 * 1000
 const STATUS_COLUMNS = 'driver_id, online, priority_mode, lat, lng, heading, unlock_progress, unlock_target, updated_at'
 const VEHICLE_COLUMNS = 'id, driver_id, make, model, color, plate, seats, tier'
-const PROFILE_COLUMNS = 'id, full_name, phone, email, avatar_url, role, rating_avg, rating_count, standing'
-const PROFILE_COLUMNS_NARROW = 'id, full_name, phone, email, avatar_url, role'
+const PROFILE_COLUMNS = 'id, full_name, avatar_url, role, rating_avg, rating_count, standing'
+const PROFILE_COLUMNS_NARROW = 'id, full_name, avatar_url, role'
 
 export const PREFERRED_MATCH_COPY =
   'This request goes only to the driver you pick. If they decline, the trip is canceled. It does not auto-match to another driver.'
@@ -196,7 +197,7 @@ export async function saveFavoriteDriverIds(supabase, storage, userId, ids) {
 }
 
 function rowsLookLikeCards(rows) {
-  return Array.isArray(rows) && rows.some((row) => row && (row.full_name || row.make || row.model || row.color || row.plate))
+  return Array.isArray(rows) && rows.some((row) => row && (row.first_name || row.full_name || row.make || row.model || row.color || row.plate))
 }
 
 /** Same car line the pick-a-driver list renders: color, make, model, then plate. */
@@ -215,7 +216,7 @@ function partsFromCardRows(rows) {
     if (!id) continue
     profiles.push({
       id,
-      full_name: row.full_name || null,
+      full_name: riderDriverFirstName(row.first_name || row.full_name, '') || null,
       avatar_url: row.avatar_url || null,
       rating_avg: row.rating_avg,
       rating_count: row.rating_count,
@@ -270,6 +271,12 @@ async function overlayDispatchRanks(supabase, parts) {
 }
 
 async function loadDriverCardRows(supabase, ids) {
+  try {
+    const preferred = await supabase.rpc('list_rider_driver_cards', { ids })
+    if (!preferred.error && rowsLookLikeCards(preferred.data)) return partsFromCardRows(preferred.data)
+  } catch {
+    /* Databases that predate the rider card RPC still use list_driver_cards. */
+  }
   let missing = false
   try {
     const { data, error } = await supabase.rpc('list_driver_cards', { ids })
@@ -309,8 +316,10 @@ export async function loadPickerDriverRecord(supabase, driverId) {
   const profile = (parts.profiles || []).find((row) => row.id === driverId) || null
   const vehicle = (parts.vehicles || []).find((row) => row.driver_id === driverId) || null
   if (!profile && !vehicle) return null
+  const first = riderDriverFirstName(profile?.full_name, '') || null
   return {
-    full_name: profile?.full_name || null,
+    first_name: first,
+    full_name: first,
     avatar_url: profile?.avatar_url || null,
     vehicle: vehicle || null,
   }
@@ -343,11 +352,10 @@ function mapDrivers(statuses, profiles, vehicles) {
     if (standing === 'restricted') return null
     return {
       id: status.driver_id,
-      name: displayFirstName(profile.full_name, 'Driver'),
+      name: riderDriverFirstName(profile.full_name, 'Driver'),
       ratingAvg: profile.rating_avg != null ? Number(profile.rating_avg) : null,
       ratingCount: Number(profile.rating_count) || 0,
       standing,
-      phone: profile.phone || null,
       avatarUrl: profile.avatar_url || null,
       online: Boolean(status.online),
       priorityMode: Boolean(status.priority_mode),

@@ -7,6 +7,7 @@
  */
 import { sendExpoPush } from './expoPush.js'
 import { GRACE_MS } from '../src/lib/waitFee.js'
+import { riderDriverFirstName, sanitizeRiderNotice } from '../shared/riderDriverPrivacy.js'
 
 export const NOTICE_MAX_AGE_MS = 15 * 60 * 1000
 export const NOTICE_CLAIM_STALE_MS = 2 * 60 * 1000
@@ -43,8 +44,7 @@ function clean(value, max = 80) {
 }
 
 export function noticeFirstName(fullName, fallback = 'Your driver') {
-  const first = clean(fullName).split(' ')[0]
-  return first || fallback
+  return riderDriverFirstName(fullName, fallback) || fallback
 }
 
 export function vehicleLine(vehicle) {
@@ -199,7 +199,7 @@ async function noticeContext(sb, trip, notice) {
     const result = await sb.from('vehicles').select('color, make, model, plate').eq('driver_id', driverId).limit(1)
     vehicle = result?.error ? null : result?.data?.[0] || null
   } catch { vehicle = null }
-  return { ...base, driverName: profile?.full_name || '', vehicle: vehicleLine(vehicle) }
+  return { ...base, driverName: riderDriverFirstName(profile?.full_name, ''), vehicle: vehicleLine(vehicle) }
 }
 
 async function finish(sb, id, result, nowIso) {
@@ -243,13 +243,13 @@ export async function sweepTripStatusNotices(sb, { now = new Date(), dryRun = fa
       const rider = row.recipient_role === 'rider'
       const token = rider ? await readRiderPushToken(sb, row.recipient_id) : await readDriverStatusPushToken(sb, row.recipient_id)
       if (!copy || !token) { await finish(sb, row.id, copy ? 'no_token' : 'unknown_kind', nowIso); skip(row.id); continue }
-      const push = await sendPush({
+      const push = await sendPush(sanitizeRiderNotice({
         to: token,
         title: copy.title,
         body: copy.body,
         data: { tripId: trip.id, kind: row.kind, status: trip.status },
         channelId: rider ? RIDER_PUSH_CHANNEL : DRIVER_PUSH_CHANNEL,
-      })
+      }))
       await finish(sb, row.id, push?.sent ? 'sent' : (push?.reason || 'not_sent'), nowIso)
       if (push?.sent) { result.sent += 1; result.ids.sent.push(row.id) } else skip(row.id)
     } catch (err) {

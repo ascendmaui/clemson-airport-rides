@@ -7,6 +7,7 @@
  * the card processor. No card leaves the completed trip unchanged.
  */
 import { chargeSavedTip } from './tipCharge.js'
+import { riderDriverFirstName } from '../shared/riderDriverPrivacy.js'
 
 export const TIP_MIN_CENTS = 100
 export const TIP_MAX_CENTS = 10000
@@ -286,8 +287,7 @@ async function driverFirstName(sb, driverId) {
   try {
     const { data, error } = await sb.from('profiles').select('full_name').eq('id', driverId).maybeSingle()
     if (error || !data?.full_name) return null
-    const first = String(data.full_name).trim().split(/\s+/)[0]
-    return first || null
+    return riderDriverFirstName(data.full_name, '') || null
   } catch {
     return null
   }

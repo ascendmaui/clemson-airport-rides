@@ -162,7 +162,7 @@ test('profile aggregates format the stored average', () => {
     vehicle: { color: 'White', make: 'Honda', model: 'Accord', plate: 'TGR1' },
     avatar_url: 'https://cdn.example/sam.jpg',
   }, { viewerIsRider: true })
-  assert.equal(view.name, 'Sam Okonkwo')
+  assert.equal(view.name, 'Sam')
   assert.equal(view.ratingLine, '4.9 · 8 ratings')
   assert.equal(view.vehicle, 'White Honda Accord')
   assert.equal(view.plate, 'TGR1')
@@ -170,7 +170,7 @@ test('profile aggregates format the stored average', () => {
   assert.equal(view.photoUrl, 'https://cdn.example/sam.jpg')
   assert.equal(view.roleLabel, 'Your driver')
   assert.equal(view.student, true)
-  assert.equal(view.phone, '(864) 555-1212')
+  assert.equal('phone' in view, false)
 })
 
 const EXPORTED_HELPERS = [
@@ -660,7 +660,8 @@ test('counterpart view uses the first name, rider fallback, and raw rating field
     full_name: 'Sam Okonkwo',
     avatar_url: 'javascript:alert(1)',
   }, { viewerIsRider: true })
-  assert.equal(unsafe.name, 'Sam Okonkwo')
+  assert.equal(unsafe.name, 'Sam')
+  assert.equal('phone' in unsafe, false)
   assert.equal(unsafe.photoUrl, null)
   assert.equal(toCounterpartView({ full_name: 'Sam Okonkwo' }).name, 'Sam')
 
@@ -922,7 +923,10 @@ test('loadCounterpart shows the other party and a vehicle only to the rider', as
     { status: 'accepted', rider_id: 'rider', driver_id: 'driver' },
     'rider',
   )
-  assert.equal(riderView.name, 'Sam Okonkwo')
+  assert.equal(riderView.name, 'Sam')
+  assert.equal('phone' in riderView, false)
+  assert.equal(JSON.stringify(riderView).includes('8645551212'), false)
+  assert.equal(JSON.stringify(riderView).includes('Okonkwo'), false)
   assert.equal(riderView.roleLabel, 'Your driver')
   assert.equal(riderView.vehicle, 'White Honda Accord')
   assert.equal(asRider.calls.find((call) => call.op === 'rpc').args.target, 'driver')
@@ -1006,7 +1010,9 @@ test('loadCounterpart reuses the pick-a-driver card for full name, car, plate, a
     { status: 'accepted', rider_id: 'rider', driver_id: 'driver' },
     'rider',
   )
-  assert.equal(view.name, 'Sam Okonkwo')
+  assert.equal(view.name, 'Sam')
+  assert.equal('phone' in view, false)
+  assert.equal(JSON.stringify(view).includes('Okonkwo'), false)
   assert.equal(view.vehicleLine, 'White Honda Accord · TGR1')
   assert.equal(view.plate, 'TGR1')
   assert.equal(view.photoUrl, 'https://cdn.example/sam.jpg')

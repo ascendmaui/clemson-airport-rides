@@ -774,7 +774,9 @@ test('fetchOnlineDrivers happy path maps driver profile, status, vehicle, and fi
   assert.equal(driverA.ratingAvg, 4.95)
   assert.equal(driverA.ratingCount, 42)
   assert.equal(driverA.standing, 'good')
-  assert.equal(driverA.phone, '8645550100')
+  assert.equal('phone' in driverA, false)
+  assert.equal(JSON.stringify(driverA).includes('8645550100'), false)
+  assert.equal(JSON.stringify(driverA).includes('Lee'), false)
   assert.equal(driverA.avatarUrl, 'https://example.com/avatar.jpg')
   assert.equal(driverA.online, true)
   assert.equal(driverA.priorityMode, true)
@@ -828,7 +830,7 @@ test('fetchOnlineDrivers shows the driver name and vehicle when profile rows are
   assert.equal(lines.ratingLabel, 'New driver')
 })
 
-test('loadPickerDriverRecord keeps the pick-a-driver car, plate, and full name', async () => {
+test('loadPickerDriverRecord keeps the pick-a-driver car, plate, and first name', async () => {
   assert.equal(pickerVehicleLine('Midnight Silver Honda Accord', 'TGR-123'), 'Midnight Silver Honda Accord · TGR-123')
   assert.equal(pickerVehicleLine('gray Honda Accord', ''), 'gray Honda Accord')
   assert.equal(pickerVehicleLine('', 'DEMO03'), 'DEMO03')
@@ -845,7 +847,9 @@ test('loadPickerDriverRecord keeps the pick-a-driver car, plate, and full name',
     }],
   })
   const record = await loadPickerDriverRecord(supabase, A)
-  assert.equal(record.full_name, 'Jordan Lee')
+  assert.equal(record.full_name, 'Jordan')
+  assert.equal(record.first_name, 'Jordan')
+  assert.equal(JSON.stringify(record).includes('Lee'), false)
   assert.equal(record.avatar_url, 'https://cdn.example/jordan.jpg')
   assert.equal(pickerVehicleLine(
     [record.vehicle.color, record.vehicle.make, record.vehicle.model].filter(Boolean).join(' '),

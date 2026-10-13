@@ -6,6 +6,7 @@ import { useTripWait } from '../lib/useTripWait'
 import { formatUsd } from '../lib/waitFee'
 import { splitPlatformCut } from '../lib/platformFee'
 import { navigate } from '../lib/navigation'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 
 function firstNameOnly(fullName) {
   const token = String(fullName || '').trim().split(/\s+/)[0]
@@ -48,10 +49,13 @@ export function WaitFeeCard({
       .eq('id', otherId)
       .maybeSingle()
       .then(({ data }) => {
-        if (alive) setWho(firstNameOnly(data?.full_name))
+        if (alive) {
+          const raw = data?.full_name
+          setWho(role === 'driver' ? firstNameOnly(raw) : riderDriverFirstName(raw, ''))
+        }
       })
     return () => { alive = false }
-  }, [otherId])
+  }, [otherId, role])
 
   if (!trip) return null
 

@@ -2,6 +2,7 @@ import { uniqueChannelTopic } from '../../packages/rides-native/realtimeChannel.
 import { useEffect, useRef, useState } from 'react'
 import { fleetCarSvg, initialsMarkerSvg } from '../../shared/fleetCarSvg.js'
 import { resolveDriverPortrait } from '../../shared/driverPortrait.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 import {
   demoCarsNearReal,
   isSimulatedDriverId,
@@ -59,7 +60,7 @@ export function useLiveMapDrivers(enabled) {
         tracksRef.current.set(row.driver_id, { from, to: next, started: now, heading: Number(row.heading) || 0 })
         return {
           id: row.driver_id,
-          full_name: profile.full_name || 'Driver',
+          full_name: riderDriverFirstName(profile.full_name, '') || 'Driver',
           avatar_url: profile.avatar_url || null,
           isDemo: false,
           body: 'suv',
@@ -242,12 +243,12 @@ export function PreviewFleetMotion({ enabled, onSelect }) {
         node.style.top = `${spot.top}%`
         node.dataset.id = car.id
         node.dataset.demo = car.isDemo ? 'true' : 'false'
-        node.dataset.name = car.firstName || car.full_name || 'Driver'
+        node.dataset.name = riderDriverFirstName(car.firstName || car.full_name, 'Driver')
         node.dataset.label = car.label || ''
         node.dataset.photo = car.photo || ''
         node.dataset.small = car.photoSmall || ''
         node.dataset.avatar = car.avatar_url || ''
-        node.setAttribute('aria-label', car.isDemo ? `${car.firstName}, ${car.label}` : (car.full_name || 'Driver'))
+        node.setAttribute('aria-label', car.isDemo ? `${car.firstName}, ${car.label}` : riderDriverFirstName(car.firstName || car.full_name, 'Driver'))
         const portrait = resolveDriverPortrait(car)
         const face = portrait.kind === 'photo'
           ? `<img alt="" src="${portrait.url}" width="36" height="36" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid #fff" />`
@@ -289,7 +290,7 @@ export function DriverProfileCard({ driver, onClose }) {
     source: driver.isDemo ? 'demo' : undefined,
   })
   const photo = driver.isDemo ? (driver.photo || portrait.url) : portrait.url
-  const name = driver.firstName || driver.full_name || 'Driver'
+  const name = riderDriverFirstName(driver.firstName || driver.full_name, 'Driver')
   return (
     <div
       role="dialog"

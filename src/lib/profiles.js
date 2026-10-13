@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 
 export const CAMPUS_SPOTS = [
   // Neighborhoods / housing
@@ -175,7 +176,21 @@ export async function fetchFullProfile(userId, { viewerId = null, assumeMatched 
     recentRatings: recent || [],
     gallery,
   }
-  return filterProfileByPrivacy(full, { isOwner, isMatched })
+  return riderSafeDriver(filterProfileByPrivacy(full, { isOwner, isMatched }), isOwner)
+}
+
+function riderSafeDriver(profile, isOwner) {
+  if (!profile || isOwner) return profile
+  if (profile.role !== 'driver' && profile.role !== 'both') return profile
+  const next = { ...profile }
+  delete next.phone
+  delete next.email
+  delete next.stripe_customer_id
+  delete next.stripe_default_pm_id
+  delete next.stripe_card_brand
+  delete next.stripe_card_last4
+  next.full_name = riderDriverFirstName(next.full_name, 'Driver')
+  return next
 }
 
 export async function uploadAvatar(userId, file) {
