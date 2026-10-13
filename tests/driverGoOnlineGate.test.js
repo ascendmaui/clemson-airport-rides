@@ -75,7 +75,7 @@ test('the driver home checks documents before GO and links the banner to Documen
   const toggle = screen.slice(screen.indexOf('async function toggle'), screen.indexOf('async function onAccept'))
   const gateAt = toggle.indexOf('guardGoPress(')
   const goAt = toggle.indexOf('goOnline(')
-  const pulseAt = toggle.indexOf("pulse('online')")
+  const pulseAt = toggle.indexOf('pulseShift(')
   assert.ok(gateAt >= 0 && goAt > gateAt && pulseAt > gateAt)
   assert.match(screen, /DOCUMENTS_GO_ONLINE_COPY/)
   assert.match(screen, /documentGate\.sections\.map\(\(section\) => section\.label\)/)
