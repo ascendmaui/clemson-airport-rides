@@ -1484,7 +1484,23 @@ test('toggle favorite persistence failure surfaces a user-visible error', async 
   for (const source of [web, native]) {
     assert.match(source, /if \(saved\.error\) setError\(saved\.error\)/)
     assert.match(source, /setError\(err instanceof Error \? err\.message : FAVORITE_PERSIST_ERROR\)/)
+    assert.match(source, /setFavoriteDrivers\(supabase, saved\.ids\)/)
   }
   assert.match(web, /<AccessibleAlert error=\{error\}/)
   assert.match(native, /style=\{styles\.error\}/)
+})
+
+test('saveFavoriteDriverIds drops preview cars before they can be stored', async () => {
+  const storage = makeStorage()
+  const profiles = [{ id: 'user-1', favorite_driver_ids: [] }]
+  const saved = await saveFavoriteDriverIds(makeFakeSupabase({ profiles }), storage, 'user-1', [
+    'demo-marcus',
+    'sim-busy-1',
+    A,
+  ])
+  assert.deepEqual(saved.ids, [A])
+  assert.equal(saved.error, null)
+  assert.deepEqual(profiles[0].favorite_driver_ids, [A])
+  const stored = JSON.parse(await storage.getItem('rider.preferredDrivers.user-1'))
+  assert.deepEqual(stored, [A])
 })
