@@ -3,7 +3,7 @@
  * Rewrites are read from vercel.json so the self-hosted routes stay aligned with it.
  */
 import { createReadStream, readFileSync } from 'node:fs'
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { lstat, readdir, readFile, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 
@@ -288,6 +288,33 @@ function healthPayload() {
   }
 }
 
+const DOWNLOAD_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.(apk|aab)$/i
+
+export function resolveDownloadFile(downloadsDir, pathname) {
+  if (typeof downloadsDir !== 'string' || !downloadsDir.trim()) return null
+  if (typeof pathname !== 'string') return null
+  const pathOnly = pathname.split('?')[0]
+  if (!pathOnly.startsWith('/downloads/')) return null
+  const rest = pathOnly.slice('/downloads/'.length)
+  if (!rest || rest.includes('/')) return null
+  let name
+  try {
+    name = decodeURIComponent(rest)
+  } catch {
+    return null
+  }
+  if (name.includes('/') || name.includes('\\') || name.includes('\0') || name.includes('..')) return null
+  if (!DOWNLOAD_FILE.test(name)) return null
+  const root = path.resolve(downloadsDir)
+  const file = path.resolve(root, name)
+  if (!file.startsWith(`${root}${path.sep}`)) return null
+  return file
+}
+
+function isDownloadsPath(pathname) {
+  return pathname === '/downloads' || pathname.startsWith('/downloads/')
+}
+
 function cacheControlFor(pathname) {
   if (pathname === '/' || pathname === '/index.html' || pathname.endsWith('/index.html')) {
     return 'no-cache'
@@ -330,6 +357,58 @@ async function serveFile(req, res, file, pathname) {
   return true
 }
 
+async function serveDownload(req, res, downloadsDir, pathname) {
+  const file = resolveDownloadFile(downloadsDir, pathname)
+  if (!file) {
+    sendJson(res, 404, { error: 'Not found' })
+    return
+  }
+  let info
+  try {
+    info = await lstat(file)
+  } catch {
+    sendJson(res, 404, { error: 'Not found' })
+    return
+  }
+  if (info.isSymbolicLink() || !info.isFile()) {
+    sendJson(res, 404, { error: 'Not found' })
+    return
+  }
+  let rootReal
+  let fileReal
+  try {
+    rootReal = await realpath(downloadsDir)
+    fileReal = await realpath(file)
+  } catch {
+    sendJson(res, 404, { error: 'Not found' })
+    return
+  }
+  if (fileReal !== rootReal && !fileReal.startsWith(`${rootReal}${path.sep}`)) {
+    sendJson(res, 404, { error: 'Not found' })
+    return
+  }
+  const filename = path.basename(file)
+  const ext = path.extname(filename).toLowerCase()
+  res.statusCode = 200
+  res.setHeader('Content-Type', ext === '.apk'
+    ? 'application/vnd.android.package-archive'
+    : 'application/octet-stream')
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('Cache-Control', 'public, max-age=300')
+  res.setHeader('Content-Length', String(info.size))
+  if (req.method === 'HEAD') {
+    res.end()
+    return
+  }
+  await new Promise((resolve, reject) => {
+    const stream = createReadStream(fileReal)
+    stream.on('error', reject)
+    res.on('finish', resolve)
+    stream.pipe(res)
+  })
+}
+
 async function serveSpa(req, res, distDir) {
   const file = safeStaticPath(distDir, '/index.html')
   if (!file) {
@@ -359,6 +438,7 @@ export async function createApp(options = {}) {
   const root = options.root || REPO_ROOT
   const apiDir = options.apiDir || path.join(root, 'api')
   const distDir = options.distDir || path.join(root, 'dist')
+  const downloadsDir = options.downloadsDir || process.env.DOWNLOADS_DIR || '/downloads'
   const vercelPath = options.vercelPath || path.join(root, 'vercel.json')
   const routes = options.routes || await discoverApiRoutes(apiDir)
   const rewrites = options.rewrites || loadRewrites(vercelPath)
@@ -384,7 +464,7 @@ export async function createApp(options = {}) {
     }
     res.on('finish', finishLog)
     try {
-      await dispatch(req, res, { routes, rewrites, distDir })
+      await dispatch(req, res, { routes, rewrites, distDir, downloadsDir })
     } catch (error) {
       log({
         time: new Date().toISOString(),
@@ -403,7 +483,7 @@ export async function createApp(options = {}) {
   }
 }
 
-async function dispatch(req, res, { routes, rewrites, distDir }) {
+async function dispatch(req, res, { routes, rewrites, distDir, downloadsDir }) {
   trustProxy(req)
   const original = new URL(req.url || '/', 'http://localhost')
   req.originalUrl = req.url || '/'
@@ -417,6 +497,16 @@ async function dispatch(req, res, { routes, rewrites, distDir }) {
       return
     }
     sendJson(res, 200, healthPayload())
+    return
+  }
+
+  if (isDownloadsPath(originalPath)) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.setHeader('Allow', 'GET, HEAD')
+      sendJson(res, 405, { error: 'Method not allowed' })
+      return
+    }
+    await serveDownload(req, res, downloadsDir, originalPath)
     return
   }
 
