@@ -6,6 +6,7 @@ import { QrMark } from '../components/QrMark'
 import { FeatureBlock } from '../components/FeatureBlock'
 import { messagingGuide } from '../../shared/copy/messaging.js'
 import { HERO_COLLAGE, NIGHT_VENUES } from '../content/images.js'
+import { installOffer } from '../../shared/installLinks.js'
 import { APP_DOWNLOADS, supportEmail } from '../../shared/productLinks.js'
 import { RIDE_TYPE_NOTES, RIDE_TYPE_STUDENT_NOTE } from '../../shared/copy/rideTypes.js'
 import { RIDE_OPTION_CATALOG, SCHEDULE_AHEAD_DISCOUNT_PCT } from '../../shared/rideOptions.js'
@@ -322,6 +323,9 @@ export function GetTheAppPage() {
             Join the iPhone beta (TestFlight)
           </a>
           <QrMark value={app.testflightHref} label={`QR code for ${app.product} TestFlight beta`} />
+          <a className="mkt-text pressable" href={installOffer(app.id).pagePath}>
+            Phone install page
+          </a>
           <button
             type="button"
             className="mkt-text pressable"
