@@ -238,6 +238,7 @@ export function CampusMap({
             coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
             title={pin.title}
             pinColor={pin.pinColor || ORANGE}
+            anchor={{ x: 0.5, y: 1 }}
             onPress={() => onPinPress?.(pin.id)}
           />
         ))}

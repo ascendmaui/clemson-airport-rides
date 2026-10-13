@@ -10,6 +10,22 @@ const SPRING = Object.freeze({ damping: 16, stiffness: 260, mass: 0.7 })
 
 const LAYOUT_KEYS = ['width', 'height', 'minWidth', 'minHeight', 'maxWidth', 'maxHeight', 'flex', 'flexGrow', 'flexShrink', 'alignSelf']
 
+function mergedSurfaceStyle(variant, style) {
+  const parts = [styles.surface]
+  if (variant === 'chip' || variant === 'fab') parts.push(styles.inline)
+  if (style) parts.push(style)
+  const flat = { ...(StyleSheet.flatten(parts) || {}) }
+  if (flat.padding != null) {
+    delete flat.paddingVertical
+    delete flat.paddingHorizontal
+    delete flat.paddingTop
+    delete flat.paddingBottom
+    delete flat.paddingLeft
+    delete flat.paddingRight
+  }
+  return flat
+}
+
 function pressLayout(style, variant) {
   const flat = StyleSheet.flatten(style) || {}
   const layout = {}
@@ -35,6 +51,7 @@ export function GlassButton({
   scheme = 'light',
   accent,
   selected = false,
+  showStreak = true,
   style,
   accessibilityLabel,
   accessibilityRole = 'button',
@@ -85,7 +102,7 @@ export function GlassButton({
       style={pressLayout(style, variant)}
     >
       <Animated.View style={anim}>
-        <GlassSurface app={app} scheme={scheme} variant={variant} accent={accent} selected={selected} style={[styles.surface, variant === 'chip' || variant === 'fab' ? styles.inline : null, style]}>
+        <GlassSurface app={app} scheme={scheme} variant={variant} accent={accent} selected={selected} showStreak={showStreak} style={mergedSurfaceStyle(variant, style)}>
           {content}
         </GlassSurface>
       </Animated.View>

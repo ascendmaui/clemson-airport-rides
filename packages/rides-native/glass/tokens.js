@@ -6,6 +6,7 @@
 
 export const GLASS_ORANGE = '#F56600'
 export const GLASS_PURPLE = '#522D80'
+export const GLASS_GREEN = '#1F8A4C'
 export const GLASS_INK = '#16121F'
 export const GLASS_LIGHT_TEXT = '#F4F2F8'
 export const GLASS_AA = 4.5
@@ -115,18 +116,18 @@ const DARK_EDGE = {
 }
 
 /**
- * @param {{ app?: 'rider' | 'driver', scheme?: 'light' | 'dark', variant?: string, accent?: 'orange' | 'purple' }} [opts]
+ * @param {{ app?: 'rider' | 'driver', scheme?: 'light' | 'dark', variant?: string, accent?: 'orange' | 'purple' | 'green' }} [opts]
  */
 export function glassRecipe(opts = {}) {
   const app = opts.app === 'driver' ? 'driver' : 'rider'
   const scheme = opts.scheme === 'dark' ? 'dark' : 'light'
   const variant = VARIANTS.includes(opts.variant) ? opts.variant : 'surface'
-  const accent = opts.accent === 'purple' || opts.accent === 'orange'
+  const accent = opts.accent === 'purple' || opts.accent === 'orange' || opts.accent === 'green'
     ? opts.accent
     : (app === 'driver' ? 'purple' : 'orange')
   const dark = scheme === 'dark'
   const edge = dark ? DARK_EDGE : LIGHT_EDGE
-  const tint = accent === 'purple' ? GLASS_PURPLE : GLASS_ORANGE
+  const tint = accent === 'purple' ? GLASS_PURPLE : accent === 'green' ? GLASS_GREEN : GLASS_ORANGE
   const body = pickPlate(app, scheme, variant, accent)
   return recipe({
     tint,
@@ -162,18 +163,22 @@ function radiusFor(variant) {
 
 function pickPlate(app, scheme, variant, accent) {
   const dark = scheme === 'dark'
-  const orange = accent === 'orange'
   const strong = variant === 'primary' || variant === 'fab'
-  if (!dark && strong && orange) {
+  if (strong && accent === 'green') {
+    return dark
+      ? { text: '#F3FFF6', plate: plate([8, 64, 36], 0.94) }
+      : { text: '#F3FFF6', plate: plate([14, 104, 56], 0.94) }
+  }
+  if (!dark && strong && accent === 'orange') {
     return { text: '#1A1008', plate: plate([236, 98, 8], 0.94) }
   }
-  if (!dark && strong && !orange) {
+  if (!dark && strong && accent !== 'orange') {
     return { text: '#FFFFFF', plate: plate([82, 45, 128], 0.94) }
   }
-  if (dark && strong && orange) {
+  if (dark && strong && accent === 'orange') {
     return { text: '#FFF7F2', plate: plate([92, 34, 0], 0.94) }
   }
-  if (dark && strong && !orange) {
+  if (dark && strong && accent !== 'orange') {
     return { text: '#F4F2F8', plate: plate([46, 22, 78], 0.94) }
   }
   if (!dark && app === 'rider') {
@@ -223,3 +228,9 @@ export function glassContrastFailures() {
 }
 
 export const GLASS_LAYERS = Object.freeze(['shadow', 'blur', 'tint', 'specular', 'streak', 'border'])
+
+/** Orange primary, fab, and chip buttons skip the diagonal streak. Other glass keeps it. */
+export function glassShowsStreak({ variant, accent } = {}) {
+  if (accent === 'orange' && (variant === 'primary' || variant === 'fab' || variant === 'chip')) return false
+  return true
+}

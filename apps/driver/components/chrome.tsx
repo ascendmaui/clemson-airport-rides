@@ -31,9 +31,10 @@ export function BackButton({ onPress }: { onPress: () => void }) {
       accessibilityLabel="Back"
       accessibilityHint="Navigates to previous screen"
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      showStreak={false}
       style={styles.back}
     >
-      <Glyph name="back" size={20} color={ink} accessibilityLabel="Back" />
+      <Glyph name="back" size={20} color={ink} strokeWidth={2.6} accessibilityLabel="Back" />
     </GlassButton>
   )
 }

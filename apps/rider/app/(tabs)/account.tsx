@@ -20,6 +20,7 @@ import { loadRatingSummary } from 'rides-native/PartyScreens'
 import { WomenOnlyCard } from 'rides-native/WomenOnlyCard'
 import { loadComfortPreference, saveComfortPreference } from 'rides-native/comfortPreference.js'
 import { supabase } from '@/lib/supabase'
+import { SignInScreen } from 'rides-native/AuthScreens'
 
 type AccountHref = '/tiger-pass' | '/student' | '/community' | '/billing' | '/notifications' | '/help' | '/support' | '/lost-found' | '/safety'
 type AccountLink = { href: AccountHref; label: string; hint: string; icon: string }
@@ -59,7 +60,7 @@ export function AccountScreen() {
   const remeasureTabs = useTabSwipeRemeasure()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { user, configured, signOut } = useAuth()
+  const { user, configured, signOut, signIn, resetPassword } = useAuth()
   const student = useStudentStatus()
   const { colors, scheme, setDisplayMode } = useTheme()
   const styles = useThemedStyles(makeStyles)
@@ -140,7 +141,7 @@ export function AccountScreen() {
 
   async function onSaveSpots() {
     if (!user?.id) {
-      router.push('/sign-in')
+      setNote('Sign in on this tab to save spots.')
       return
     }
     setBusy(true)
@@ -177,6 +178,17 @@ export function AccountScreen() {
       <ScrollView contentContainerStyle={styles.body} onScroll={remeasureTabs} scrollEventThrottle={32}>
         <Text style={styles.kicker}>ACCOUNT</Text>
         <Text style={styles.title}>{name || 'Guest'}</Text>
+        {!user ? (
+          <SignInScreen
+            embedded
+            signIn={signIn}
+            resetPassword={resetPassword}
+            onSuccess={() => setNote('Signed in')}
+            onCreateAccount={() => router.push('/sign-up')}
+            onForgotPassword={() => router.push('/forgot-password')}
+            onBack={() => {}}
+          />
+        ) : null}
         {user?.email ? <Text style={styles.copy}>{user.email}</Text> : null}
         {user ? <Text style={styles.badge}>{ratingLine}</Text> : null}
         {pendingTrip ? (
@@ -302,10 +314,7 @@ export function AccountScreen() {
         {user ? (
           <PrimaryButton label={busy ? 'Signing out…' : 'Sign out'} onPress={onSignOut} disabled={busy} tone="purple" />
         ) : (
-          <View style={{ gap: 10 }}>
-            <PrimaryButton label="Sign in" onPress={() => router.push('/sign-in')} />
-            <PrimaryButton label="Create account" onPress={() => router.push('/sign-up')} tone="ghost" />
-          </View>
+          <PrimaryButton label="Create account" onPress={() => router.push('/sign-up')} tone="ghost" />
         )}
       </ScrollView>
     </View>

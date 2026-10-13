@@ -66,7 +66,7 @@ test('app gate and server push gate use the same window', () => {
 
 test('driver settings expose Quiet hours and save to the account prefs', () => {
   const section = read('apps/driver/app/settings/[section].tsx')
-  assert.match(section, /'quiet-hours'\] as const/)
+  assert.match(section, /'quiet-hours', 'priority'\] as const/)
   assert.match(section, /\{section === 'quiet-hours' \? <QuietHoursChoices \/> : null\}/)
   assert.match(read('apps/driver/app/settings/index.tsx'), /title: 'Quiet hours'[\s\S]{0,120}router\.push\('\/settings\/quiet-hours'\)/)
   const ui = read('apps/driver/components/QuietHoursChoices.tsx')

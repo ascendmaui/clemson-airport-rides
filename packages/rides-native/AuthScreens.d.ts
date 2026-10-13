@@ -29,6 +29,7 @@ export function SignInScreen(props: {
   resetPassword?: (email: string) => Promise<unknown>
   onOpenLegal?: (doc: 'privacy' | 'terms') => void
   ownerRequest?: boolean
+  embedded?: boolean
 }): ReactNode
 
 export function ForgotPasswordScreen(props: {
