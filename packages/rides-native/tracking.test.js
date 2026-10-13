@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { trackingIssue, startLocationPublisher } from './tracking.js'
+import { trackingIssue, staleEtaLine, startLocationPublisher } from './tracking.js'
 import { etaLineFor } from './liveTrip.js'
 
 const now = Date.parse('2026-10-04T12:00:00Z')
@@ -8,6 +8,7 @@ test('freshness follows every active phase and stops at terminal phases', () => 
   for (const status of ['accepted', 'arriving', 'arrived', 'in_progress']) {
     assert.equal(trackingIssue(status, new Date(now - 5000).toISOString(), now), null)
     assert.match(trackingIssue(status, new Date(now - 31000).toISOString(), now), /stalled/)
+    assert.doesNotMatch(trackingIssue(status, new Date(now - 31000).toISOString(), now), /unavailable/)
     assert.match(trackingIssue(status, null, now), /Waiting/)
     assert.match(trackingIssue(status, 'invalid', now), /Waiting/)
   }
@@ -23,6 +24,18 @@ test('ETA changes toward drop-off instead of repeating stored whole-route durati
   assert.match(near, /straight line to drop-off/)
   assert.equal(etaLineFor('completed', { lat: 34.68, lng: -82.84 }, places), null)
   assert.equal(etaLineFor('accepted', { lat: 34, lng: -82 }, { pickup_lat: null, pickup_lng: null }), null)
+})
+
+test('a stalled fix keeps the last ETA and a missing fix does not invent one', () => {
+  const stalled = trackingIssue('accepted', new Date(now - 31000).toISOString(), now)
+  assert.equal(staleEtaLine(null, 'About 4 min · 1.2 mi straight line to pickup'), 'About 4 min · 1.2 mi straight line to pickup')
+  assert.equal(
+    staleEtaLine(stalled, 'About 4 min · 1.2 mi straight line to pickup'),
+    'About 4 min · 1.2 mi straight line to pickup · last known',
+  )
+  assert.equal(staleEtaLine(stalled, 'Straight-line ETA shows when the driver shares a location. Road time needs a billed Maps key.', { placeholder: true }), 'Straight-line ETA shows when the driver shares a location. Road time needs a billed Maps key.')
+  assert.equal(staleEtaLine('Waiting for driver location. Retrying automatically.', 'About 4 min'), null)
+  assert.equal(staleEtaLine(stalled, null), null)
 })
 const flush = async () => { for (let i = 0; i < 15; i++) await Promise.resolve() }
 test('failed writes are visible; automatic retry obtains a new fix and clears error', async (t) => {

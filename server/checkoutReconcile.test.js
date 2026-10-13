@@ -412,6 +412,27 @@ test('Stripe retrieve error: gracefully handles errors without throwing unhandle
   assert.equal(db.payments.length, 0)
 })
 
+test('skips tiger_pass sessions instead of requiring a trip', async () => {
+  const db = createMockDb()
+  const session = {
+    id: 'cs_pass_105',
+    status: 'complete',
+    payment_status: 'paid',
+    metadata: { kind: 'tiger_pass', profile_id: 'rider_ada' },
+  }
+  const stripe = createMockStripe(new Map([[session.id, session]]))
+  const result = await reconcileCheckoutSession({
+    stripe,
+    sb: db,
+    sessionId: 'cs_pass_105',
+    userId: 'rider_ada',
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.skipped, true)
+  assert.equal(result.reason, 'tiger_pass')
+  assert.equal(db.payments.length, 0)
+})
+
 test('skips credit_purchase sessions cleanly', async () => {
   const db = createMockDb()
   const session = {
@@ -798,16 +819,9 @@ test('reconcileCheckout routed through api/stripe-payment-methods?action=reconci
   assert.equal(body.tripId, 'trip_route_ep')
 })
 
-test('create-checkout-session and airport-checkout success_url carry session_id={CHECKOUT_SESSION_ID}', () => {
+test('booking endpoints do not open a Checkout session', () => {
   const createCheckoutSrc = readFileSync(new URL('../api/create-checkout-session.js', import.meta.url), 'utf8')
   const airportCheckoutSrc = readFileSync(new URL('./endpoints/airportCheckout.js', import.meta.url), 'utf8')
-
-  assert.match(
-    createCheckoutSrc,
-    /success_url:\s*`\${origin}\/\${checkoutSuccessHash\([\s\S]*?\)}&session_id=\{CHECKOUT_SESSION_ID\}`/
-  )
-  assert.match(
-    airportCheckoutSrc,
-    /success_url:\s*`\${origin}\/\${checkoutSuccessHash\([\s\S]*?\)}&session_id=\{CHECKOUT_SESSION_ID\}`/
-  )
+  assert.doesNotMatch(createCheckoutSrc, /success_url|checkout\.sessions\.create/)
+  assert.doesNotMatch(airportCheckoutSrc, /success_url|checkout\.sessions\.create/)
 })

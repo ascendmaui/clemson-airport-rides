@@ -6,11 +6,11 @@ do $$
 declare
   retired text := 'te' || 'sla';
 begin
+  execute 'drop policy if exists ' || retired || '_fleet_offer_visibility on public.trips';
   execute 'drop trigger if exists trips_guard_' || retired || ' on public.trips';
   execute 'drop function if exists public.guard_' || retired || '_trip()';
   execute 'drop function if exists public.' || retired || '_driver_eligible(uuid)';
   execute 'drop function if exists public.' || retired || '_fleet_available()';
-  execute 'drop policy if exists ' || retired || '_fleet_offer_visibility on public.trips';
 end $$;
 
 alter table public.vehicles add column if not exists service_class text not null default 'standard';

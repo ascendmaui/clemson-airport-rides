@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Pressable, ScrollView, Text } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { RateTripPanel, partyColorsFromPalette } from 'rides-native/PartyScreens'
+import { RiderTripEnd } from '@/components/RiderTripEnd'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
@@ -27,16 +27,14 @@ export default function RateRoute() {
         <Text style={{ color: colors.link, fontSize: 13, fontWeight: '800' }}>← Back</Text>
       </Pressable>
       {user && tripId ? (
-        <RateTripPanel
+        <RiderTripEnd
           supabase={supabase}
           userId={user.id}
           tripId={tripId}
-          colors={partyColorsFromPalette(colors)}
           onDone={() => router.replace('/')}
-          onLater={() => router.back()}
         />
       ) : (
-        <Text style={{ color: colors.inkSecondary }}>Sign in to rate this ride.</Text>
+        <Text style={{ color: colors.inkSecondary }}>Sign in to finish this ride.</Text>
       )}
     </ScrollView>
   )

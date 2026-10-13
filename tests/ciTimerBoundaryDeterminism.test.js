@@ -32,6 +32,7 @@ function fakeSb() {
   const tripsInserted = []
   const events = []
   const rows = {
+    profiles: [{ id: 'drv-1', email: 'driver@example.com' }],
     driver_applications: [{ profile_id: 'drv-1', onboarding_status: 'approved' }],
     vehicles: [{ driver_id: 'drv-1', service_class: 'standard', tier: 'standard' }],
     driver_status: [{ driver_id: 'drv-1', online: true }],

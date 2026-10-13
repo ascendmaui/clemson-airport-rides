@@ -1,3 +1,5 @@
+import { useDemoBusyRoster } from '../lib/useDemoBusyRoster.js'
+import { busyRosterFor } from '../../packages/rides-native/busyRoster.js'
 import { useEffect, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { SkeletonDriverCard } from '../components/LoadingSkeleton'
@@ -13,6 +15,7 @@ import { pickupPoint } from '../../packages/rides-native/places.js'
 import {
   describeDriver,
   fetchDriversByIds,
+  canFavoriteDriver,
   fetchOnlineDrivers,
   filterDriversForFleet,
   groupDriversForPicker,
@@ -28,6 +31,8 @@ import {
 } from '../../packages/rides-native/drivers.js'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
 import { resolveDriverPortrait } from '../../shared/driverPortrait.js'
+import { setFavoriteDrivers } from '../../packages/rides-native/tigerPassClient.js'
+import { PREPAID_TIP_PRESETS_CENTS, formatTipDollars, parsePrepaidTipDollars } from '../../shared/prepaidTip.js'
 
 const browserStorage = {
   async getItem(key) {
@@ -49,6 +54,7 @@ const browserStorage = {
 export function PickDriver({
   dest = 'GSP Airport',
   tier = 'standard',
+  passengers = '',
   listCents = '',
   pickup = '',
   pickupLat = '',
@@ -60,6 +66,8 @@ export function PickDriver({
   const { user } = useAuth()
   const student = useStudentStatus()
   const { runOrPrompt } = useRequireAuthForAction()
+  const demoBusyRoster = useDemoBusyRoster()
+  const busy = busyRosterFor({ enabled: demoBusyRoster })
   const [drivers, setDrivers] = useState([])
   const [favoriteIds, setFavoriteIds] = useState([])
   const [favNote, setFavNote] = useState(null)
@@ -67,7 +75,10 @@ export function PickDriver({
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [tripFlash, setTripFlash] = useState(null)
-  const [busy, setBusy] = useState(false)
+  const [requesting, setRequesting] = useState(false)
+  const [prepaidTipCents, setPrepaidTipCents] = useState(0)
+  const [customTip, setCustomTip] = useState('')
+  const [tipError, setTipError] = useState(null)
   const [promptOpen, setPromptOpen] = useState(false)
   const stadium = pickupPoint(pickup || 'Memorial Stadium')
   const pinLat = finiteCoordinate(pickupLat)
@@ -90,7 +101,7 @@ export function PickDriver({
       ? await fetchDriversByIds(supabase, extraIds)
       : { drivers: [], error: null }
     const merged = sortPreferredDrivers(
-      filterDriversForFleet([...online, ...extra.drivers], tier),
+      filterDriversForFleet([...online, ...extra.drivers], tier, user?.id),
       fav.ids,
       approachPickup,
     )
@@ -116,6 +127,10 @@ export function PickDriver({
       setPromptOpen(true)
       return
     }
+    if (!canFavoriteDriver(driverId)) {
+      setFavNote('Map preview cars cannot be saved.')
+      return
+    }
     const next = favoriteIds.includes(driverId)
       ? favoriteIds.filter((id) => id !== driverId)
       : [...favoriteIds, driverId]
@@ -128,6 +143,20 @@ export function PickDriver({
       else setError((current) => (
         current === FAVORITE_PERSIST_ERROR || current === FAVORITE_ACCOUNT_SAVE_ERROR ? null : current
       ))
+      if (!saved.error || saved.note) {
+        try {
+          const remote = await setFavoriteDrivers(supabase, saved.ids)
+          if (Array.isArray(remote?.favoriteDriverIds)) {
+            setFavoriteIds(remote.favoriteDriverIds)
+            if (remote.demoDriversIgnored) setFavNote(remote.demoNote || 'Preview cars were not saved.')
+            if (saved.error === FAVORITE_ACCOUNT_SAVE_ERROR) {
+              setError((current) => (current === FAVORITE_ACCOUNT_SAVE_ERROR ? null : current))
+            }
+          }
+        } catch {
+          /* profile row remains the matching source when the API is down */
+        }
+      }
     } catch (err) {
       setFavoriteIds(favoriteIds)
       setError(err instanceof Error ? err.message : FAVORITE_PERSIST_ERROR)
@@ -148,7 +177,7 @@ export function PickDriver({
       setError('Extra Comfort fleet only. That driver is not listed as Comfort.')
       return
     }
-    setBusy(true)
+    setRequesting(true)
     setError(null)
     try {
       const trip = await requestDriverTrip({
@@ -161,9 +190,11 @@ export function PickDriver({
         pickupLat,
         pickupLng,
         tier,
+        passengers,
         isStudent: student.verified,
         listCents,
         billingChoice: billing || null,
+        prepaidTipCents,
       })
       navigate('requested', { dest, trip: trip.id, driver: selected?.name || 'Next driver' })
     } catch (err) {
@@ -177,7 +208,7 @@ export function PickDriver({
       }
       setError(requestFailureMessage(err))
     } finally {
-      setBusy(false)
+      setRequesting(false)
     }
   }
 
@@ -334,6 +365,29 @@ export function PickDriver({
             })}
           </div>
         ))}
+        {/* Busy roster: display only; kept outside real driver sections. */}
+        {busy.length > 0 && (
+          <section aria-label="Busy now">
+            <h2 style={{ fontSize: 12, fontWeight: 800, color: 'var(--ink-secondary)', margin: '8px 4px' }}>BUSY NOW</h2>
+            {busy.map((driver) => {
+              const portrait = resolveDriverPortrait(driver)
+              return (
+                <div key={driver.id} aria-disabled="true" style={{ opacity: 0.55, border: '1.5px solid #aaa', borderRadius: 16, padding: 16, marginBottom: 10, background: 'var(--surface)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: portrait.color, color: '#fff', fontWeight: 800 }}>{portrait.initials}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700 }}>{driver.name}</div>
+                      <div style={{ fontSize: 12, marginTop: 4 }}>★ {driver.rating} · {driver.tripCount.toLocaleString('en-US')} trips</div>
+                      <div style={{ fontSize: 13, marginTop: 4, color: 'var(--ink-secondary)' }}>{driver.vehicleLabel}</div>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '5px 8px', background: driver.status === 'on_trip' ? '#f4dfcc' : '#e5e5e5', color: driver.status === 'on_trip' ? '#855023' : '#555' }}>{driver.statusLabel}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </section>
+        )}
+        {/* End busy roster. */}
       </div>
 
       <div style={{ padding: '12px 20px calc(20px + var(--safe-bottom))' }}>
@@ -347,13 +401,47 @@ export function PickDriver({
             Student pricing is 10% off Standard. This tier stays full price.
           </p>
         ) : null}
+        <fieldset style={{ border: 0, padding: 0, margin: '0 0 10px' }}>
+          <legend style={{ fontSize: 13, fontWeight: 800, color: 'var(--purple)' }}>Tip boost (optional)</legend>
+          <p style={{ fontSize: 12, color: 'var(--ink-secondary)', margin: '2px 0 6px' }}>Held with your fare, 100% to your driver. You can still tip after.</p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {[0, ...PREPAID_TIP_PRESETS_CENTS].map((amount) => (
+              <button
+                key={amount}
+                type="button"
+                className="pressable"
+                aria-pressed={prepaidTipCents === amount}
+                onClick={() => { setPrepaidTipCents(amount); setCustomTip(''); setTipError(null) }}
+                style={{ minHeight: 44, minWidth: 56, borderRadius: 999, fontWeight: 800, border: '1px solid var(--purple)', color: prepaidTipCents === amount ? '#fff' : 'var(--purple)', background: prepaidTipCents === amount ? 'var(--purple)' : 'var(--purple-soft)' }}
+              >
+                {amount ? formatTipDollars(amount) : 'None'}
+              </button>
+            ))}
+            <input
+              aria-label="Custom tip amount in dollars"
+              inputMode="decimal"
+              placeholder="Custom $"
+              value={customTip}
+              onChange={(e) => setCustomTip(e.target.value)}
+              onBlur={() => {
+                if (!customTip.trim()) return
+                const parsed = parsePrepaidTipDollars(customTip)
+                if (!parsed.ok) { setTipError(parsed.error); return }
+                setTipError(null)
+                setPrepaidTipCents(parsed.cents)
+              }}
+              style={{ minHeight: 44, width: 96, borderRadius: 12, border: '1px solid var(--purple)', padding: '0 10px' }}
+            />
+          </div>
+          {tipError ? <p role="alert" style={{ color: 'var(--orange)', fontSize: 12 }}>{tipError}</p> : null}
+        </fieldset>
         <PrimaryButton
-          disabled={busy || (selected ? !selected.online : !anyOnline)}
-          loading={busy}
+          disabled={requesting || (selected ? !selected.online : !anyOnline)}
+          loading={requesting}
           spinnerTone="orange"
           onClick={() => runOrPrompt(onRequest, { setPromptOpen, nextPath: 'pick-driver', nextParams: placeParams })}
         >
-          {busy ? 'Requesting…' : selected ? `Request ${selected.name}` : (anyOnline ? 'Request next driver' : 'Select a driver')}
+          {requesting ? 'Requesting…' : selected ? `Request ${selected.name}` : (anyOnline ? 'Request next driver' : 'Select a driver')}
         </PrimaryButton>
       </div>
       <SignInToBookModal open={promptOpen} onClose={() => setPromptOpen(false)} nextPath="pick-driver" nextParams={placeParams} />

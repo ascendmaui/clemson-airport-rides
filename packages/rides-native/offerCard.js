@@ -11,11 +11,16 @@ import {
   fareCollection,
   formatCents,
   formatPickupAt,
+  incentiveLabel,
   isAirportDepositTrip,
   statusHeadline,
   tagLabel,
   tagTone,
 } from './tripTags.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
+import { formatHourlyRate, ladderOfferNet, offerHourly } from './offerLadder.js'
+import { driverBoostOfferLine } from '../../shared/copy/boost.js'
+import { driverBoostShareCents, formatBoostBadge, readBoostCents } from '../../shared/scheduledBoost.js'
 
 /** Default time window (in seconds) drivers have to accept an incoming offer. */
 export const DEFAULT_OFFER_TTL_SECONDS = 30
@@ -100,23 +105,59 @@ export function routeHeadline(cardOrPickup, dropoff) {
  * Driver net earnings details computed using existing tripTags earnings/fee helpers.
  * Never invents numbers.
  */
+function withBoost(card, fareNetCents, subtext) {
+  const boostCents = readBoostCents(card)
+  const boostDriverCents = driverBoostShareCents(boostCents)
+  const netCents = Math.max(0, Math.round(Number(fareNetCents) || 0)) + boostDriverCents
+  const next = boostDriverCents > 0 ? `${subtext} · includes ${formatBoostBadge(boostDriverCents)}` : subtext
+  return { netCents, subtext: next, boostCents, boostDriverCents }
+}
+
 export function formatDriverNetPay(card) {
   const fare = fareCollection(card)
+  const ladder = fare.usesStoredPayout ? null : ladderOfferNet(card)
+  if (ladder) {
+    const boosted = withBoost(card, ladder.netCents, ladder.subtext)
+    return {
+      netCents: boosted.netCents,
+      formattedNet: formatCents(boosted.netCents),
+      boostCents: boosted.boostCents,
+      boostDriverCents: boosted.boostDriverCents,
+      baseNetCents: null,
+      formattedBaseNet: null,
+      carpoolBonusCents: null,
+      formattedCarpoolBonus: null,
+      carpoolIncentiveId: null,
+      isCarpool: false,
+      platformFeeCents: ladder.platformFeeCents,
+      formattedPlatformFee: formatCents(ladder.platformFeeCents),
+      subtext: boosted.subtext,
+      offerPhase: ladder.phase,
+      hourly: offerHourly(card),
+      hourlyText: formatHourlyRate(offerHourly(card).hourlyCents),
+    }
+  }
   const explicitNet = card?.driverNetCents ?? card?.driver_net_cents ?? card?.driverPayoutCents ?? card?.driver_payout_cents
-  const netCents = fare.driverNetCents > 0 || explicitNet == null
+  let explicit = explicitNet == null ? null : Math.max(0, Math.round(Number(explicitNet) || 0))
+  if (explicit != null && card?.boostDriverCents != null) {
+    explicit = Math.max(0, explicit - driverBoostShareCents(readBoostCents(card)))
+  }
+  const baseNet = fare.driverNetCents > 0 || explicit == null
     ? fare.driverNetCents
-    : Math.max(0, Math.round(Number(explicitNet) || 0))
+    : explicit
+  const boosted = withBoost(card, baseNet, '')
+  const netCents = boosted.netCents
 
   const formattedNet = formatCents(netCents)
   const isCarpool = Boolean(fare.carpoolIncentiveId)
 
-  let subtext = 'You net 80%'
+  let subtext = boosted.boostDriverCents > 0 ? `You net 80% · includes ${formatBoostBadge(boosted.boostDriverCents)}` : 'You net 80%'
   if (card?.status) {
     const headline = statusHeadline(card.status)
     if (isCarpool) {
       const baseFormatted = formatCents(fare.baseNetCents || 0)
       const bonusFormatted = formatCents(fare.carpoolBonusCents || 0)
-      const incentiveName = fare.carpoolIncentiveId
+      const incentiveName = incentiveLabel(fare.carpoolIncentiveId)
       subtext = `${headline} · base ${baseFormatted} · ${incentiveName} ${bonusFormatted} · total ${formattedNet}`
     } else {
       subtext = `${headline} · you net 80%`
@@ -124,8 +165,11 @@ export function formatDriverNetPay(card) {
   } else if (isCarpool) {
     const baseFormatted = formatCents(fare.baseNetCents || 0)
     const bonusFormatted = formatCents(fare.carpoolBonusCents || 0)
-    const incentiveName = fare.carpoolIncentiveId
+    const incentiveName = incentiveLabel(fare.carpoolIncentiveId)
     subtext = `Base ${baseFormatted} · ${incentiveName} ${bonusFormatted} · total ${formattedNet}`
+  }
+  if (boosted.boostDriverCents > 0 && !/boost/i.test(subtext)) {
+    subtext = `${subtext} · includes ${formatBoostBadge(boosted.boostDriverCents)}`
   }
 
   return {
@@ -140,6 +184,8 @@ export function formatDriverNetPay(card) {
     platformFeeCents: fare.platformFeeCents,
     formattedPlatformFee: formatCents(fare.platformFeeCents),
     subtext,
+    boostCents: boosted.boostCents,
+    boostDriverCents: boosted.boostDriverCents,
   }
 }
 
@@ -283,8 +329,8 @@ export function depositBadge(card) {
   const formattedAmount = formatCents(depositCents)
   return {
     id: 'deposit',
-    label: `25% deposit · ${formattedAmount}`,
-    shortLabel: '25% deposit',
+    label: `Already paid · ${formattedAmount}`,
+    shortLabel: 'Already paid',
     amountCents: depositCents,
     formattedAmount,
     tone: 'orange',
@@ -295,6 +341,14 @@ export function depositBadge(card) {
 export function offerBadges(card) {
   if (!card) return []
   const badges = []
+  const boostDriverCents = driverBoostShareCents(readBoostCents(card))
+  if (boostDriverCents > 0) {
+    badges.push({
+      id: 'boost',
+      label: formatBoostBadge(boostDriverCents),
+      tone: 'orange',
+    })
+  }
 
   const airport = airportBadge(card)
   if (airport) badges.push(airport)
@@ -383,7 +437,7 @@ export function isOfferExpired(cardOrSeconds, options = {}) {
 
 /**
  * Combined accessibility summary describing the offer for assistive technologies.
- * e.g. "Ride offer: $54.40 net pay. From Tillman Hall to GSP Airport. Rider Ava, 4.9 rating. 4 min away · 32 mi. 1 seat. 25% deposit · $17.00."
+ * e.g. "Ride offer: $54.40 net pay. From Tillman Hall to GSP Airport. Rider Ava, 4.9 rating. 4 min away · 32 mi. 1 seat. Fri, Sep 25, 8:12 AM"
  */
 export function offerAccessibilityLabel(cardOrVm, options = {}) {
   if (!cardOrVm) return 'Ride offer: $0.00 net pay. From Pickup to Drop-off'
@@ -432,6 +486,10 @@ export function offerAccessibilityLabel(cardOrVm, options = {}) {
     parts.push(vm.timeLeft.label)
   }
 
+  if (vm.boostLine) {
+    parts.push(vm.boostLine)
+  }
+
   return parts.join('. ')
 }
 
@@ -451,6 +509,7 @@ export function offerCardViewModel(card, options = {}) {
   const headline = routeHeadline(card)
 
   const pay = formatDriverNetPay(card)
+  const boostLine = pay.boostDriverCents > 0 ? driverBoostOfferLine(pay.boostDriverCents) : null
   const distanceEta = formatDistanceEta(card)
   const eta = formatEta(card?.etaMin ?? card?.eta_min ?? card?.eta)
   const distance = formatDistance(card?.distanceMi ?? card?.distance_mi ?? card?.distance)
@@ -476,7 +535,7 @@ export function offerCardViewModel(card, options = {}) {
     id: card?.id ?? null,
     status: card?.status ?? 'offered',
     rider: {
-      firstName: card?.firstName || card?.rider_first_name || 'Rider',
+      firstName: riderDriverFirstName(card?.firstName || card?.rider_first_name, 'Rider') || 'Rider',
       rating: card?.riderRating != null ? Number(card.riderRating) : null,
       ratingText: card?.riderRating != null ? card.riderRating.toFixed(1) : null,
       rideType: card?.rideType || card?.purpose || null,
@@ -496,6 +555,7 @@ export function offerCardViewModel(card, options = {}) {
     timeLeft,
     timeLeftLabel: timeLabel,
     pickupAtText: card?.pickupAt ? formatPickupAt(card.pickupAt) : null,
+    boostLine,
   }
 
   return {

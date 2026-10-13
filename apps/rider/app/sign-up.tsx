@@ -19,7 +19,7 @@ export default function SignUpRoute() {
   const params = useLocalSearchParams<{ ref?: string }>()
   const { signUp } = useAuth()
   const onSocial = useSocialSignIn()
-  const googleState = googleAuthButtonState(process.env, { scheme: 'clemsonrides' })
+  const googleState = googleAuthButtonState(process.env, { scheme: 'clemsonrides', provider: 'supabase' })
 
   const socialProviders = RIDER_SOCIAL_PROVIDERS.map((provider) => {
     if (provider.id === 'google') {
@@ -42,7 +42,7 @@ export default function SignUpRoute() {
       onSocial={onSocial}
       mark="CR"
       initialPromo={oneParam(params.ref)}
-      subtitle="Metered fares to GSP and CLT. Students save 10% on Standard."
+      subtitle="Peace of mind, door to airport. Rides and carpools for Clemson students. Scheduled airport pickups can include a backup driver."
       onSuccess={() => finish(router)}
       onSignIn={() => router.replace('/sign-in')}
       onOpenLegal={(doc) => router.push({ pathname: '/legal', params: { doc } })}

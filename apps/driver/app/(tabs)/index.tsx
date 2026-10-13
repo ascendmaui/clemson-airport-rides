@@ -1,39 +1,69 @@
 import { useRouter } from 'expo-router'
 import * as Location from 'expo-location'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AccessibilityInfo, Animated, Linking, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AccessibilityInfo, Animated, AppState, Easing, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { FarePanel } from '@/components/FarePanel'
+import { DriverEndTripSheet } from '@/components/DriverEndTripSheet'
 import { Card, ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
 import { CircleButton, GoButton } from '@/components/shell'
+import { OfferRouteMap } from '@/components/OfferRouteMap'
 import { DriverStatusCard } from '@/components/DriverStatusCard'
+import { CommunityMatchChips } from 'rides-native/CommunityMatchChips'
+import { PerksStrip } from '@/components/PerksStrip'
+import { useMyMarker } from '@/lib/myMarker'
+import { ForecastCard } from '@/components/ForecastCard'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
-import { notifyAcceptedRide } from '@/lib/push'
+import { notifyAcceptedRide, setRideAlertSurface } from '@/lib/push'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
-import { useDriverLocation } from '@/lib/useDriverLocation'
-import { fetchDriverApplication, setDriverOnline } from 'rides-native/drivers'
-import { displayFirstName } from 'rides-native/authErrors'
+import { HOME_CLUTTER_SHIFT, HOME_CLUTTER_SPRING, homeClutterTranslateY } from '@/lib/bottomCluster'
+import { driverPresence, goOffline, goOnline, usePresence } from '@/lib/presence'
+import { fetchDriverApplication } from 'rides-native/drivers'
+import { fetchInspectionDeadline, fetchMyDriverDocuments } from 'rides-native/driverOnboardingClient'
+import { decideGoPress, idleGoTone } from 'rides-native/goPress'
+import { offerPayoutFigures } from 'rides-native/offerRoute.js'
+import {
+  DOCUMENTS_GO_ONLINE_COPY,
+  goOnlineDocumentGate,
+  type DocumentRow,
+} from 'rides-native/documentCategories'
+import {
+  INSPECTION_OVERDUE_COPY,
+  inspectionCountdown,
+  inspectionGoOnlineGate,
+} from 'rides-native/vehicleInspection'
+import {
+  DOCUMENT_BANNER_ELEVATION,
+  DOCUMENT_BANNER_Z,
+  OFFER_CARD_ELEVATION,
+  OFFER_CARD_Z,
+  dedupeOffersById,
+  documentBannersCollapsed,
+  offerAcceptSeconds,
+  setHomeOfferId,
+} from 'rides-native/offerStack.js'
+import { riderDriverFirstName } from '../../../../shared/riderDriverPrivacy.js'
 import { heatColor } from 'rides-native/heat.js'
 import { HEAT_WINDOWS } from 'rides-native/places.js'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
+import { useDemandHeat } from '@/lib/useDemandHeat'
 import {
   acceptTrip,
-  declineTrip,
+  declineDriverOffer,
+  markSearchingOffers,
   formatCents,
   loadDriverDesk,
   loadGameDay,
   loadEarnings,
   publishDriverCapacity,
-  publishDriverLocation,
-  setPriorityMode,
   subscribeTrips,
   type DriverDesk,
 } from 'rides-native/driverDesk'
-import { CUPD_PHONE_DISPLAY, CUPD_PHONE_E164 } from 'rides-native/safety.js'
 import {
   acceptActionLabel,
   declineActionLabel,
@@ -46,13 +76,28 @@ import {
   weekNetCents,
   type DriverCard,
 } from 'rides-native/tripTags'
-import { etaHoldLine, etaLineFor } from 'rides-native/liveTrip'
+import { etaHoldLine } from 'rides-native/liveTrip'
+import { followEtaLine } from 'rides-native/roadFollow'
+import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { useReduceMotion } from 'rides-native/shared/reduceMotion.js'
+import { motion } from 'rides-native/shared/theme.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
+import { GameDaySurgeLine } from 'rides-native/GameDayBoard.jsx'
+import { useGameDayExperience } from 'rides-native/useGameDayExperience.js'
 import { approvalGateMessage, isSyntheticOffer } from 'rides-native/syntheticOffers'
 import { driverGateView } from 'rides-native/driverGateView'
 import { loadCounterpart } from 'rides-native/partyProfile.js'
 import { offerCardViewModel } from 'rides-native/offerCard'
+import { offerHourly } from 'rides-native/offerLadder.js'
+import { WorthItLegend } from 'rides-native/WorthItLegend'
+import { offerCardGauge } from 'rides-native/offerGauge'
+import { fetchOfferPreview, riderInitials } from 'rides-native/offerPreviewClient'
+import { OfferGauge } from '@/components/OfferGauge'
+import { tipBoostOfferLine } from '../../../../shared/prepaidTip.js'
+import { ACTIVE_TRIP_RECONCILE_MS, reconcileActiveTrip } from 'rides-native/activeTripReconcile'
+import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
+import { canDriverEnd } from '../../../../shared/driverEndTrip.js'
 
 /** Home map overlay grid: screen-edge gutter, spacing between floating pieces, clearance under the status bar. */
 const EDGE = 16
@@ -86,11 +131,12 @@ function demandWord(intensity: number): string {
 export default function DriverHome() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { colors, scheme, earningsPrivate, setEarningsPrivate } = useTheme()
+  const { colors, scheme, earningsPrivate, autoAccept, setAutoAccept } = useTheme()
   const shadow = useCardShadow()
   const { user, configured } = useAuth()
-  const { pulse } = useFeedback()
+  const { pulse, pulseShift } = useFeedback()
   const [desk, setDesk] = useState<DriverDesk | null>(null)
+  const [tripReconciled, setTripReconciled] = useState(false)
   const [todayCents, setTodayCents] = useState(0)
   const [weekCents, setWeekCents] = useState(0)
   const [lastTrip, setLastTrip] = useState<string | null>(null)
@@ -98,10 +144,11 @@ export default function DriverHome() {
   const [reason, setReason] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [goCue, setGoCue] = useState(0)
+  const [documents, setDocuments] = useState<DocumentRow[] | null>(null)
+  const [inspectionDueAt, setInspectionDueAt] = useState<string | null>(null)
   const [self, setSelf] = useState<{ latitude: number; longitude: number } | null>(null)
-  const [peek, setPeek] = useState(false)
-  const [peekPage, setPeekPage] = useState(0)
-  const [safetyOpen, setSafetyOpen] = useState(false)
+  const [demandOpen, setDemandOpen] = useState(false)
   const [focusToken, setFocusToken] = useState(0)
   const [showHeat, setShowHeat] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
@@ -109,10 +156,13 @@ export default function DriverHome() {
   const [heatCaption, setHeatCaption] = useState('Popular campus spots from ride requests.')
   const [heatBlended, setHeatBlended] = useState(false)
   const [heatLoading, setHeatLoading] = useState(true)
+  const [peakOverride, setPeakOverride] = useState<boolean | null>(null)
   const [riderLine, setRiderLine] = useState<string | null>(null)
   const [hiddenOffers, setHiddenOffers] = useState<string[]>([])
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null)
   const [gameNotice, setGameNotice] = useState<GameDayNotice | null>(null)
+  const gameDayExperience = useGameDayExperience(supabase, { driverId: user?.id || null })
+  const myMarker = useMyMarker()
   const [refreshing, setRefreshing] = useState(false)
   const gate = useMemo(
     () => driverGateView(status, { rejectionReason: reason }),
@@ -122,7 +172,43 @@ export default function DriverHome() {
   const canGoOnline = gate.canGoOnline
   const approved = status === 'approved'
   const online = Boolean(desk?.online)
-  const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : 'Driver'
+  const documentGate = useMemo(
+    () => (documents ? goOnlineDocumentGate(documents) : null),
+    [documents],
+  )
+  const inspectionGate = inspectionGoOnlineGate({
+    documents: documents || [],
+    dueAt: inspectionDueAt,
+    now: new Date(),
+  })
+  const inspectionReminder = inspectionCountdown({
+    documents: documents || [],
+    dueAt: inspectionDueAt,
+    now: new Date(),
+  })?.message || ''
+  const showDocumentGate = Boolean(user && documentGate && !documentGate.allowed)
+  const showInspectionGate = Boolean(user && !showDocumentGate && !inspectionGate.allowed)
+  const showInspectionReminder = Boolean(user && !showDocumentGate && inspectionGate.allowed && inspectionReminder)
+  const idleTone = useMemo(
+    () => idleGoTone({ documents, dueAt: inspectionDueAt, canGoOnline }),
+    [documents, inspectionDueAt, canGoOnline],
+  )
+  const clutterY = useSharedValue(homeClutterTranslateY(online))
+  const [clutterInteractive, setClutterInteractive] = useState(!online)
+  useEffect(() => {
+    setRideAlertSurface({ online })
+    if (online) {
+      setClutterInteractive(false)
+      clutterY.value = withSpring(HOME_CLUTTER_SHIFT, HOME_CLUTTER_SPRING)
+      return
+    }
+    clutterY.value = withSpring(homeClutterTranslateY(false), HOME_CLUTTER_SPRING, (finished) => {
+      if (finished) runOnJS(setClutterInteractive)(true)
+    })
+  }, [clutterY, online])
+  const clutterStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: clutterY.value }],
+  }))
   const tabClearance = insets.bottom + 72
   // The dock is pinned between the status bar / Dynamic Island and the tab bar.
   // Its content stacks from the bottom; an offer card shrinks (and scrolls) to fit.
@@ -145,8 +231,18 @@ export default function DriverHome() {
   }, [])
 
   const refresh = useCallback(async () => {
-    if (!user || !supabase) return
-    const application = await fetchDriverApplication(supabase, user.id)
+    if (!user || !supabase) {
+      setDocuments(null)
+      setInspectionDueAt(null)
+      return
+    }
+    const [application, rows, deadline] = await Promise.all([
+      fetchDriverApplication(supabase, user.id),
+      fetchMyDriverDocuments(supabase, user.id).catch(() => null),
+      fetchInspectionDeadline(supabase, user.id).catch(() => null),
+    ])
+    setDocuments(rows)
+    setInspectionDueAt(deadline?.inspection_due_at ?? null)
     if (application.error) {
       setError(application.error)
       return
@@ -159,7 +255,13 @@ export default function DriverHome() {
     })
     if (currentGate.canSeeOffers) {
       const loaded = await loadDriverDesk(supabase, user.id)
-      setDesk(loaded)
+      if (loaded.online) markSearchingOffers(supabase, loaded.offers).catch(() => {})
+      const active = loaded.active
+      const decision = active
+        ? reconcileActiveTrip({ id: active.id, status: active.status }, { id: active.id, status: active.status })
+        : null
+      setDesk(decision?.action === 'clear' ? { ...loaded, active: null } : loaded)
+      setTripReconciled(true)
       if (loaded.lat != null && loaded.lng != null) {
         setSelf({ latitude: Number(loaded.lat), longitude: Number(loaded.lng) })
       }
@@ -172,6 +274,7 @@ export default function DriverHome() {
       }
     } else {
       setDesk(null)
+      setTripReconciled(true)
     }
   }, [user])
 
@@ -218,6 +321,25 @@ export default function DriverHome() {
     })
   }, [canSeeOffers, refresh])
 
+  const deskRef = useRef(desk)
+  deskRef.current = desk
+  useEffect(() => {
+    if (!supabase || !user || !canSeeOffers) return undefined
+    const reconcile = () => {
+      const active = deskRef.current?.active
+      if (active?.id && canDriverEnd(active.status)) void sendTripHeartbeat(supabase, active.id)
+      refresh().catch(() => {})
+    }
+    const timer = setInterval(reconcile, ACTIVE_TRIP_RECONCILE_MS)
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') reconcile()
+    })
+    return () => {
+      clearInterval(timer)
+      listener.remove()
+    }
+  }, [canSeeOffers, refresh, user])
+
   useEffect(() => {
     let alive = true
     setHeatLoading(true)
@@ -242,33 +364,63 @@ export default function DriverHome() {
     }
   }, [heatWindow])
 
-  const locationTracking = useDriverLocation(Boolean(user && ((approved && online) || desk?.active)), async (fix) => {
-    setSelf({ latitude: fix.lat, longitude: fix.lng })
-    if (!supabase || !user) return
-    await publishDriverLocation(supabase, user.id, { ...fix, online: true })
-  })
+  // One app-wide heartbeat (lib/presence). This screen only configures it, so a second
+  // mounted Home (e.g. after a deep-link sign-in) cannot keep writing online after END.
+  const locationTracking = usePresence()
+  useEffect(() => { driverPresence.setDriver(user?.id ?? null) }, [user?.id])
+  useEffect(() => {
+    if (!desk || !status) return
+    driverPresence.adoptServerOnline(Boolean(approved && desk.online))
+  }, [desk, status, approved])
+  useEffect(() => {
+    driverPresence.setTrip(desk?.active ? { id: desk.active.id, status: desk.active.status } : null)
+  }, [desk?.active?.id, desk?.active?.status])
+  useEffect(() => driverPresence.onFix((fix) => setSelf({ latitude: fix.lat, longitude: fix.lng })), [])
 
   async function toggle() {
+    setGoCue((value) => value + 1)
     if (!user) {
       router.push('/sign-in')
       return
     }
-    if (!canGoOnline) {
-      setError(gate.body)
-      return
+    const nextOnline = !online
+    if (nextOnline) {
+      const rows = supabase
+        ? await fetchMyDriverDocuments(supabase, user.id).catch(() => null)
+        : null
+      const deadline = supabase
+        ? await fetchInspectionDeadline(supabase, user.id).catch(() => null)
+        : null
+      const dueAt = deadline?.inspection_due_at ?? null
+      const decision = decideGoPress({
+        goingOnline: true,
+        documents: rows,
+        dueAt,
+        now: new Date(),
+        canGoOnline,
+      })
+      if (decision.outcome === 'attention') {
+        setError(null)
+        router.push({ pathname: '/documents', params: { attention: '1' } })
+        return
+      }
+      if (decision.outcome !== 'online') {
+        setError(gate.body)
+        return
+      }
     }
     setBusy(true)
     setError(null)
     try {
-      const nextOnline = !online
       const fix = nextOnline ? await currentFix() : null
-      await setDriverOnline(supabase, user.id, nextOnline, fix)
+      if (nextOnline) await goOnline(user.id, fix)
+      else await goOffline(user.id)
       if (fix) setSelf({ latitude: fix.lat, longitude: fix.lng })
       if (nextOnline) {
         await publishDriverCapacity(supabase, user.id, desk?.vehicle?.seats)
         setFocusToken((value: number) => value + 1)
       }
-      pulse('online')
+      pulseShift(nextOnline ? 'GO' : 'END')
       AccessibilityInfo.announceForAccessibility(nextOnline ? 'You are now online' : 'You are now offline')
       await refresh()
     } catch (err) {
@@ -308,7 +460,7 @@ export default function DriverHome() {
     setBusy(true)
     setError(null)
     try {
-      await declineTrip(supabase, card, user.id)
+      await declineDriverOffer(supabase, card, user.id)
       pulse('decline')
       await refresh()
     } catch (err) {
@@ -318,38 +470,34 @@ export default function DriverHome() {
     }
   }
 
-  async function onPriority() {
-    if (!user || !supabase || !desk) return
-    try {
-      await setPriorityMode(supabase, user.id, !desk.priority)
-      setDesk({ ...desk, priority: !desk.priority })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update priority')
-    }
-  }
-
-  const liveOffers = (canSeeOffers ? desk?.offers || [] : []).filter(
+  const liveOffers = dedupeOffersById((canSeeOffers ? desk?.offers || [] : []).filter(
     (card: DriverCard) => !isSyntheticOffer(card) && !hiddenOffers.includes(card.id),
-  )
+  ))
   const offer = liveOffers.find((card: DriverCard) => card.id === selectedOfferId) || liveOffers[0] || null
+  useEffect(() => {
+    setHomeOfferId(offer?.id ?? null)
+    return () => setHomeOfferId(null)
+  }, [offer?.id])
+  const bannersCollapsed = documentBannersCollapsed({ online, offerId: offer?.id })
   const liveFrom = self
     ? { lat: self.latitude, lng: self.longitude }
     : desk?.lat != null && desk?.lng != null
       ? { lat: Number(desk.lat), lng: Number(desk.lng) }
       : null
   const liveEta = desk?.active
-    ? etaHoldLine(desk.active.status, etaLineFor(desk.active.status, liveFrom, desk.active))
+    ? etaHoldLine(desk.active.status, followEtaLine(desk.active.status, liveFrom, desk.active))
     : null
   const hotspots = spots.slice().sort((a: BusySpot, b: BusySpot) => b.intensity - a.intensity).slice(0, 4)
   const pins: MapPin[] = []
-  if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE, kind: 'self' })
+  if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: myMarker?.fill || ORANGE, kind: 'self', marker: myMarker })
   liveOffers.forEach((card: DriverCard) => {
-    if (card.pickupLat == null || card.pickupLng == null) return
+    const pin = driverPickupTarget(card)
+    if (!pin) return
     pins.push({
       id: card.id,
-      latitude: card.pickupLat,
-      longitude: card.pickupLng,
-      title: card.pickupLabel,
+      latitude: pin.latitude,
+      longitude: pin.longitude,
+      title: pin.live ? `${card.pickupLabel} · live` : card.pickupLabel,
       pinColor: PURPLE,
       kind: 'request',
     })
@@ -377,157 +525,183 @@ export default function DriverHome() {
     const card = liveOffers.find((row: DriverCard) => row.id === id)
     if (!card) return
     setSelectedOfferId(card.id)
-    void onAccept(card)
   }
 
-  const statusLine = !user
-    ? 'Sign in to drive'
-    : !canGoOnline
-      ? gate.title
-      : online
-        ? `You're online, ${name}`
-        : 'You\'re offline'
+  // Peak mode: auto on game days, driver can flip it either way.
+  const peakMode = peakOverride ?? Boolean(gameNotice?.live)
+  const liveHeat = showHeat && heatWindow === 'now'
+  const demand = useDemandHeat({ enabled: liveHeat, peak: peakMode })
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <CampusMap
+        demandCells={liveHeat ? demand.cells : []}
+        peak={liveHeat && peakMode}
         pins={pins}
         center={self}
         colorScheme={scheme}
         focusToken={focusToken}
         spots={spots}
         showHeat={showHeat}
+        heatWindow={heatWindow}
         gameDay={Boolean(gameNotice?.live)}
         gameDayLabel={gameNotice?.live ? gameNotice.headline : null}
         lockOnCenter={Boolean(online && self)}
         onPinPress={onPinPress}
       />
       <View pointerEvents="box-none" style={styles.overlay}>
-        <View style={[styles.top, { paddingTop: dockTop }]} pointerEvents="box-none">
-          <CircleButton icon="home" label="Menu" onPress={() => router.push('/menu')} />
-          <Pressable
-            onPress={() => setPeek((open: boolean) => !open)}
-            style={[styles.pill, shadow, { backgroundColor: colors.card }]}
-            accessibilityRole="button"
-            accessibilityLabel="Earnings"
-            accessibilityHint="Expands today's and this week's earnings preview"
-            accessibilityState={{ expanded: peek }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={[styles.pillText, { color: colors.title }]}>{shownCents(todayCents, earningsPrivate)}</Text>
-            <Text style={{ color: colors.inkSecondary, fontWeight: '800' }}>{peek ? '▴' : '▾'}</Text>
-          </Pressable>
-          <CircleButton icon="search" label="Discover" onPress={() => router.push('/discover')} />
-        </View>
-
-        {peek ? (
-          <View style={[styles.peek, shadow, { backgroundColor: colors.card }]}>
-            <View style={styles.peekHead}>
-              <Pressable
-                onPress={() => setEarningsPrivate(!earningsPrivate)}
-                accessibilityRole="button"
-                accessibilityLabel={earningsPrivate ? 'Show earnings' : 'Hide earnings'}
-                accessibilityHint="Toggles visibility of earnings amounts"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={{ color: colors.title, fontWeight: '800' }}>{earningsPrivate ? 'Show' : 'Hide'}</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => router.push('/learning')}
-                accessibilityRole="button"
-                accessibilityLabel="Help"
-                accessibilityHint="Opens driver learning center"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={{ color: colors.orange, fontWeight: '800' }}>Help</Text>
-              </Pressable>
-            </View>
-            <Text style={[styles.peekAmount, { color: colors.title }]}>
-              {shownCents(peekPage === 0 ? todayCents : weekCents, earningsPrivate)}
-            </Text>
-            <Text style={{ color: colors.inkSecondary }}>{peekPage === 0 ? 'Today' : 'This week'}</Text>
-            <Text style={{ color: colors.ink, fontWeight: '700' }}>
-              {lastTrip ? `Last trip · ${lastTrip}` : 'No completed trip yet'}
-            </Text>
-            <Primary label="See earnings activity" onPress={() => router.push('/earnings-activity')} tone="purple" />
-            <View style={styles.dots}>
-              {[0, 1].map((page) => (
-                <Pressable
-                  key={page}
-                  onPress={() => setPeekPage(page)}
-                  accessibilityRole="button"
-                  accessibilityLabel={page === 0 ? "Today's earnings" : "This week's earnings"}
-                  accessibilityState={{ selected: page === peekPage }}
-                  hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-                  style={[styles.dot, { backgroundColor: page === peekPage ? colors.orange : colors.track }]}
-                />
-              ))}
-            </View>
+        <Reanimated.View
+          pointerEvents={clutterInteractive && !offer ? 'box-none' : 'none'}
+          style={[styles.clutter, clutterStyle]}
+        >
+          <View style={[styles.top, { paddingTop: dockTop }]} pointerEvents="box-none">
+            <CircleButton icon="inbox" label="Messages" onPress={() => router.push('/inbox')} />
+            <View style={styles.topSpacer} />
+            <CircleButton icon="search" label="Search and discover" onPress={() => router.push('/discover')} />
           </View>
-        ) : null}
-
-        <View style={styles.heatPanel}>
-          <View style={styles.heatRow}>
-            <Text style={[styles.heatLabel, { color: colors.inkSecondary }]}>Busy areas</Text>
+          <View pointerEvents="box-none" style={[styles.earningsWrap, { top: dockTop }]}>
             <Pressable
-              onPress={() => setShowHeat((value: boolean) => !value)}
-              style={[styles.heatToggle, { backgroundColor: showHeat ? colors.orange : colors.card }]}
-              accessibilityRole="switch"
-              accessibilityLabel={showHeat ? 'Hide busy areas' : 'Show busy areas'}
-              accessibilityState={{ checked: showHeat }}
+              onPress={() => router.push('/earnings')}
+              style={[styles.earningsButton, shadow, { backgroundColor: colors.card }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Earnings, ${shownCents(todayCents, earningsPrivate)} today`}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Text style={{ color: showHeat ? '#fff' : colors.title, fontWeight: '800', fontSize: 12 }}>
-                {showHeat ? 'On' : 'Off'}
-              </Text>
+              <Text style={[styles.pillText, { color: colors.title }]}>{shownCents(todayCents, earningsPrivate)}</Text>
+              <Text style={{ color: colors.inkSecondary, fontWeight: '800', fontSize: 12 }}>Earnings</Text>
             </Pressable>
           </View>
-          {showHeat ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.heatWindows}>
-              {HEAT_WINDOWS.map((item: { id: string; label: string }) => {
-                const on = item.id === heatWindow
-                return (
+
+          <View style={styles.heatPanel}>
+            <Pressable
+              onPress={() => setDemandOpen((value: boolean) => !value)}
+              accessibilityRole="button"
+              accessibilityLabel="Busy areas, peak, and live demand"
+              accessibilityState={{ expanded: demandOpen }}
+              style={styles.demandToggle}
+            >
+              <Text style={[styles.heatLabel, { color: colors.inkSecondary }]}>Busy areas, peak, and live demand</Text>
+              <Text style={{ color: colors.orange, fontWeight: '800' }}>{demandOpen ? 'Hide' : 'Show'}</Text>
+            </Pressable>
+            {demandOpen ? (
+              <>
+                <View style={styles.heatRow}>
+                  <Text style={[styles.heatLabel, { color: colors.inkSecondary }]}>Busy areas</Text>
                   <Pressable
-                    key={item.id}
-                    onPress={() => setHeatWindow(item.id)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${item.label} demand`}
-                    accessibilityState={{ selected: on }}
-                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                    style={[styles.heatChip, { backgroundColor: on ? colors.orange : colors.card }]}
+                    onPress={() => setShowHeat((value: boolean) => !value)}
+                    style={[styles.heatToggle, { backgroundColor: showHeat ? colors.orange : colors.card }]}
+                    accessibilityRole="switch"
+                    accessibilityLabel={showHeat ? 'Hide busy areas' : 'Show busy areas'}
+                    accessibilityState={{ checked: showHeat }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800', fontSize: 12 }}>{item.label}</Text>
+                    <Text style={{ color: showHeat ? '#fff' : colors.title, fontWeight: '800', fontSize: 12 }}>
+                      {showHeat ? 'On' : 'Off'}
+                    </Text>
                   </Pressable>
-                )
-              })}
-            </ScrollView>
-          ) : null}
-          <Text style={{ color: colors.inkSecondary, fontSize: 12, marginHorizontal: 16, marginTop: 6 }}>
-            {heatLoading ? 'Loading campus demand…' : showHeat ? `${heatCaption}${heatBlended ? ' · Live + typical' : ''}` : 'Busy areas are hidden.'}
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hotspots} style={styles.hotspotRow}>
-            <View style={[styles.hotspot, { backgroundColor: gameNotice?.live ? colors.orange : colors.card }]}>
-              <Text style={[gameNotice?.live ? styles.hotspotOn : styles.hotspotOff, gameNotice?.live ? null : { color: colors.purple }]}>
-                {gameNotice == null ? 'Game day…' : gameNotice.headline}
+                </View>
+                {showHeat ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.heatWindows}>
+                    <Pressable
+                      onPress={() => setPeakOverride(!peakMode)}
+                      accessibilityRole="switch"
+                      accessibilityLabel="Peak mode for game days and airport rushes"
+                      accessibilityState={{ checked: peakMode }}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                      style={[styles.heatChip, peakMode ? styles.heatChipOn : { backgroundColor: colors.card, borderColor: colors.border }]}
+                    >
+                      <Text style={{ color: peakMode ? '#FFFFFF' : colors.title, fontWeight: '700', fontSize: 13, letterSpacing: 0.2 }}>Peak</Text>
+                    </Pressable>
+                    {HEAT_WINDOWS.map((item: { id: string; label: string }) => {
+                      const on = item.id === heatWindow
+                      return (
+                        <Pressable
+                          key={item.id}
+                          onPress={() => setHeatWindow(item.id)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${item.label} demand`}
+                          accessibilityState={{ selected: on }}
+                          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                          style={[styles.heatChip, { backgroundColor: on ? colors.orange : colors.card }]}
+                        >
+                          <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800', fontSize: 12 }}>{item.label}</Text>
+                        </Pressable>
+                      )
+                    })}
+                  </ScrollView>
+                ) : null}
+                <Text style={{ color: colors.inkSecondary, fontSize: 12, marginHorizontal: 16, marginTop: 6 }}>
+                  {!showHeat
+                    ? 'Busy areas are hidden.'
+                    : liveHeat
+                      ? demand.cells.length
+                        ? `Live demand · last ${peakMode ? 30 : 20} min · tap a zone`
+                        : demand.updatedAt ? 'Quiet right now · updates every 30 s' : 'Loading live demand…'
+                      : heatLoading ? 'Loading campus demand…' : `${heatCaption}${heatBlended ? ' · Live + typical' : ''}`}
+                </Text>
+                {canSeeOffers && !desk?.active ? <ForecastCard /> : null}
+              </>
+            ) : null}
+          </View>
+
+          {!bannersCollapsed && showDocumentGate && documentGate ? (
+            <Pressable
+              onPress={() => router.push('/documents')}
+              accessibilityRole="link"
+              accessibilityLabel={`${DOCUMENTS_GO_ONLINE_COPY}. ${documentGate.sections.map((section) => section.label).join(', ')}. Documents`}
+              style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.danger, zIndex: DOCUMENT_BANNER_Z, elevation: DOCUMENT_BANNER_ELEVATION }]}
+            >
+              <Text style={[styles.docGateTitle, { color: colors.danger }]}>{DOCUMENTS_GO_ONLINE_COPY}</Text>
+              <Text style={[styles.docGateSections, { color: colors.title }]}>
+                {documentGate.sections.map((section) => section.label).join(', ')}
               </Text>
-            </View>
-            {hotspots.map((spot: BusySpot) => (
-              <View key={spot.id} style={[styles.hotspot, { backgroundColor: colors.card }, shadow]}>
-                <Text style={{ color: colors.title, fontWeight: '800' }}>{spot.name}</Text>
-                <Text style={{ color: colors.orange, fontWeight: '700', fontSize: 12 }}>{demandWord(spot.intensity)}</Text>
-              </View>
-            ))}
-          </ScrollView>
-          {gameNotice ? (
-            <Text style={{ color: colors.inkSecondary, fontSize: 12, marginHorizontal: 16, marginTop: 6 }}>
-              {gameNotice.live ? `${gameNotice.detail}. ${gameNotice.body}` : gameNotice.body}
-            </Text>
+              <Text style={[styles.docGateLink, { color: colors.orange }]}>Documents</Text>
+            </Pressable>
           ) : null}
-        </View>
+          {!bannersCollapsed && showInspectionGate ? (
+            <Pressable
+              onPress={() => router.push('/documents')}
+              accessibilityRole="link"
+              accessibilityLabel={`${INSPECTION_OVERDUE_COPY}. Documents`}
+              style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.danger, zIndex: DOCUMENT_BANNER_Z, elevation: DOCUMENT_BANNER_ELEVATION }]}
+            >
+              <Text style={[styles.docGateTitle, { color: colors.danger }]}>{INSPECTION_OVERDUE_COPY}</Text>
+              <Text style={[styles.docGateLink, { color: colors.orange }]}>Documents</Text>
+            </Pressable>
+          ) : null}
+          {!bannersCollapsed && showInspectionReminder ? (
+            <Pressable
+              onPress={() => router.push('/documents')}
+              accessibilityRole="link"
+              accessibilityLabel={`${inspectionReminder}. Documents`}
+              style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.orange, zIndex: DOCUMENT_BANNER_Z, elevation: DOCUMENT_BANNER_ELEVATION }]}
+            >
+              <Text style={[styles.docGateTitle, { color: colors.title }]}>{inspectionReminder}</Text>
+              <Text style={[styles.docGateLink, { color: colors.orange }]}>Documents</Text>
+            </Pressable>
+          ) : null}
 
-        <View style={styles.flex} pointerEvents="box-none" />
+          {!canSeeOffers ? (
+            <View style={styles.statusWrap}>
+              <DriverStatusCard
+                status={status}
+                gate={gate}
+                reason={reason}
+                onRefresh={onPullRefresh}
+                refreshing={refreshing}
+              />
+            </View>
+          ) : null}
+          {!online ? (
+            <GameDaySurgeLine
+              model={gameDayExperience.ready ? gameDayExperience.model : null}
+              online={false}
+              onPress={() => router.push('/game-day')}
+            />
+          ) : null}
+        </Reanimated.View>
 
-        <View pointerEvents="box-none" style={[styles.dock, { top: dockTop, bottom: tabClearance }]}>
+        <View pointerEvents="box-none" style={[styles.dock, styles.offerDock, { top: dockTop, bottom: tabClearance }]}>
           {!configured ? <ErrorText>Add EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable, then rebuild.</ErrorText> : null}
           {locationTracking.error ? (
             <View>
@@ -536,33 +710,7 @@ export default function DriverHome() {
             </View>
           ) : null}
           {error ? <ErrorText>{error}</ErrorText> : null}
-          {!canSeeOffers ? (
-            <ScrollView
-              style={styles.statusWrap}
-              contentContainerStyle={styles.statusScrollBody}
-              showsVerticalScrollIndicator={false}
-              alwaysBounceVertical={true}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onPullRefresh}
-                  tintColor={colors.orange}
-                  title="Checking application status…"
-                  titleColor={colors.inkSecondary}
-                  accessibilityLabel="Pull to refresh application status"
-                />
-              }
-            >
-              <DriverStatusCard
-                status={status}
-                gate={gate}
-                reason={reason}
-                onRefresh={onPullRefresh}
-                refreshing={refreshing}
-              />
-            </ScrollView>
-          ) : null}
-          {desk?.active ? (
+          {tripReconciled && desk?.active ? (
             <Pressable
               onPress={() => router.push({ pathname: '/trip', params: { id: desk.active!.id } })}
               accessibilityRole="button"
@@ -577,63 +725,57 @@ export default function DriverHome() {
               {riderLine ? <Text style={{ color: colors.onAccent, fontWeight: '700' }}>{riderLine}</Text> : null}
             </Pressable>
           ) : null}
+          {tripReconciled && desk?.active && canDriverEnd(desk.active.status) ? (
+            <DriverEndTripSheet
+              supabase={supabase}
+              tripId={desk.active.id}
+              disabled={busy}
+              onEnded={() => {
+                pulse('cancel')
+                refresh().catch(() => {})
+              }}
+            />
+          ) : null}
           {offer && !desk?.active ? (
             <RideCard
               card={offer}
               busy={busy}
               notice={null}
+              driver={liveFrom ? { lat: liveFrom.lat, lng: liveFrom.lng } : null}
+              favorite={Boolean(offer.riderId && autoAccept.favoriteRiders.some((rider) => rider.id === offer.riderId))}
+              onFavorite={() => {
+                if (!offer.riderId) return
+                const next = autoAccept.favoriteRiders.filter((rider) => rider.id !== offer.riderId)
+                setAutoAccept({
+                  favoriteRiders: autoAccept.favoriteRiders.some((rider) => rider.id === offer.riderId)
+                    ? next
+                    : [{ id: offer.riderId, name: riderDriverFirstName(offer.firstName, 'Rider') || 'Rider' }, ...autoAccept.favoriteRiders].slice(0, 50),
+                })
+              }}
               onAccept={() => onAccept(offer)}
               onDecline={() => onDecline(offer)}
             />
           ) : null}
-          <View style={styles.controls} pointerEvents="box-none">
-            <View style={styles.toolCol}>
-              <CircleButton icon="shield" label="Safety" onPress={() => setSafetyOpen(true)} />
-              <CircleButton icon="sparkles" label="Priority mode" onPress={onPriority} />
+          <View style={styles.goRow} pointerEvents="box-none">
+            {online ? (
+              <CircleButton icon="list" label="Ride queue" onPress={() => router.push('/queue')} />
+            ) : <View style={styles.goSide} />}
+            <View style={styles.goSlot}>
+              <GoButton
+                online={online}
+                busy={busy}
+                tone={idleTone}
+                cue={goCue}
+                onPress={toggle}
+              />
+              {online ? (
+                <Text style={[styles.onlineStatus, { color: colors.inkSecondary }]} accessibilityLiveRegion="polite">You're online</Text>
+              ) : null}
             </View>
-            <GoButton
-              online={online}
-              busy={busy}
-              disabled={!canGoOnline}
-              disabledReason={gate.body}
-              onPress={toggle}
-            />
-            <View style={styles.toolCol}>
-              <CircleButton icon="stats-chart" label="Earnings" onPress={() => router.push('/earnings')} />
-              <CircleButton icon="locate" label="Recenter map" onPress={() => setFocusToken((value: number) => value + 1)} />
-            </View>
-          </View>
-          <View style={[styles.bar, shadow, { backgroundColor: colors.card }]} accessibilityLiveRegion="polite">
-            <CircleButton icon="options" label="Ride queue" onPress={() => router.push('/queue')} />
-            <Text style={[styles.barText, { color: colors.title }]} accessibilityLiveRegion="polite">{statusLine}</Text>
-            <CircleButton icon="list" label="Open queue" onPress={() => router.push('/queue')} />
+            <View style={styles.goSide} />
           </View>
         </View>
       </View>
-      <Modal visible={safetyOpen} transparent animationType="slide" onRequestClose={() => setSafetyOpen(false)}>
-        <Pressable
-          style={styles.modalScrim}
-          onPress={() => setSafetyOpen(false)}
-          accessibilityRole="button"
-          accessibilityLabel="Close safety modal"
-          accessibilityHint="Dismisses the safety information"
-        >
-          <Pressable
-            style={[styles.modalCard, { backgroundColor: colors.card }]}
-            onPress={(e: { stopPropagation: () => void }) => e.stopPropagation()}
-            accessibilityRole="none"
-            accessibilityLabel="Safety options"
-          >
-            <Text style={[styles.cardTitle, { color: colors.title }]}>Safety</Text>
-            <Text style={{ color: colors.inkSecondary }}>
-              Clemson University Police are {CUPD_PHONE_DISPLAY}. If you are in danger, call 911.
-            </Text>
-            <Primary label="Call 911" onPress={() => Linking.openURL('tel:911')} />
-            <Primary label={`Call CUPD ${CUPD_PHONE_DISPLAY}`} onPress={() => Linking.openURL(`tel:${CUPD_PHONE_E164}`)} tone="purple" />
-            <Primary label="Close" onPress={() => setSafetyOpen(false)} tone="ghost" />
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   )
 }
@@ -642,26 +784,91 @@ export function RideCard({
   card,
   busy,
   notice,
+  driver,
+  favorite,
+  onFavorite,
   onAccept,
   onDecline,
 }: {
   card: DriverCard
   busy: boolean
   notice?: string | null
+  driver?: { lat: number; lng: number } | null
+  favorite?: boolean
+  onFavorite?: () => void
   onAccept: () => void
   onDecline: () => void
 }) {
   const { colors } = useTheme()
-  const vm = offerCardViewModel(card)
+  const [tick, setTick] = useState(() => Date.now())
+  const acceptClock = offerAcceptSeconds(card, tick)
+  const exclusiveLeft = acceptClock?.kind === 'exclusive' ? acceptClock.seconds : null
+  const poolLeft = acceptClock?.kind === 'pool' ? acceptClock.seconds : null
+  const secondsLeft = acceptClock?.seconds ?? null
+  const pulsing = exclusiveLeft != null && exclusiveLeft > 0
+  const vm = offerCardViewModel(secondsLeft == null ? card : { ...card, secondsLeft })
+  const hourlyQuote = offerHourly(card, driver)
+  const gauge = offerCardGauge(card, driver)
+  const [preview, setPreview] = useState<Awaited<ReturnType<typeof fetchOfferPreview>>>(null)
+  useEffect(() => {
+    let alive = true
+    setPreview(null)
+    if (!isSyntheticOffer(card)) {
+      fetchOfferPreview(supabase, card.id).then((p) => { if (alive) setPreview(p) })
+    }
+    return () => { alive = false }
+  }, [card.id])
+  const riderFirst = riderDriverFirstName(card.firstName || preview?.firstName || '', 'Rider') || 'Rider'
+  const avatarUrl = card.riderAvatarUrl || preview?.avatarUrl || null
+  const ratingAvg = (card as { riderRating?: number }).riderRating ?? preview?.ratingAvg ?? null
+  const prepaidTipCents = Number((card as { prepaidTipCents?: number }).prepaidTipCents) || 0
+  const tipBoostLine = tipBoostOfferLine(vm.pay.netCents + prepaidTipCents, prepaidTipCents)
+  const payoutFigures = offerPayoutFigures(card, driver)
+  const pickupPoint = card.pickupLat != null && card.pickupLng != null
+    ? { latitude: Number(card.pickupLat), longitude: Number(card.pickupLng) }
+    : null
+  const dropoffPoint = card.dropoffLat != null && card.dropoffLng != null
+    ? { latitude: Number(card.dropoffLat), longitude: Number(card.dropoffLng) }
+    : null
   const preferredNote = preferredRequestNote(card)
-  const opacity = useState(() => new Animated.Value(0))[0]
+  const reduceMotion = useReduceMotion()
+  const opacity = useState(() => new Animated.Value(reduceMotion ? 1 : 0))[0]
+  const glow = useRef(new Animated.Value(0.35)).current
   const scrollRef = useRef<ScrollView>(null)
   const [viewport, setViewport] = useState(0)
   const [content, setContent] = useState(0)
   const overflows = viewport > 0 && content > viewport + 1
   useEffect(() => {
-    Animated.timing(opacity, { toValue: 1, duration: 280, useNativeDriver: true }).start()
-  }, [opacity])
+    const timer = setInterval(() => setTick(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [card.id])
+  useEffect(() => {
+    if (reduceMotion) {
+      opacity.setValue(1)
+      return undefined
+    }
+    opacity.setValue(0)
+    const enter = Animated.timing(opacity, {
+      toValue: 1,
+      duration: motion.enterFadeMs,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    })
+    enter.start()
+    return () => enter.stop()
+  }, [opacity, reduceMotion])
+  useEffect(() => {
+    if (!pulsing || reduceMotion) {
+      glow.setValue(1)
+      return undefined
+    }
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(glow, { toValue: 1, duration: 700, useNativeDriver: true }),
+      Animated.timing(glow, { toValue: 0.35, duration: 700, useNativeDriver: true }),
+    ]))
+    loop.start()
+    return () => loop.stop()
+  }, [glow, pulsing, reduceMotion])
   useEffect(() => {
     // Hint that the breakdown scrolls when the card had to shrink to fit.
     if (overflows) scrollRef.current?.flashScrollIndicators()
@@ -669,9 +876,9 @@ export function RideCard({
   return (
     // flexShrink lets the dock squeeze the card to the room left above the controls;
     // only the details scroll — Accept / Decline stay pinned and visible.
-    <Animated.View style={[styles.offerWrap, { opacity }]}>
+    <Animated.View style={[styles.offerWrap, { opacity, zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION }]}>
       <Card
-        style={styles.offerCard}
+        style={[styles.offerCard, pulsing ? { borderColor: colors.orange, borderWidth: 2 } : null]}
         accessibilityRole="summary"
         accessibilityLabel={vm.accessibilityLabel}
       >
@@ -686,15 +893,51 @@ export function RideCard({
           onContentSizeChange={(_: number, height: number) => setContent(height)}
         >
           {notice ? <Text style={[styles.offerNotice, { color: colors.orange }]}>{notice}</Text> : null}
+          <View style={styles.riderRow}>
+            {avatarUrl ? (
+              <Image
+                source={{ uri: avatarUrl }}
+                style={styles.avatar}
+                accessibilityIgnoresInvertColors
+                accessibilityLabel={`${riderFirst} profile photo`}
+              />
+            ) : (
+              <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: colors.purple }]}>
+                <Text style={styles.avatarLetter}>{riderInitials(riderFirst)}</Text>
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.riderName, { color: colors.ink }]}>{riderFirst}</Text>
+              <Text
+                style={[styles.riderMeta, { color: colors.inkSecondary }]}
+                accessibilityLabel={ratingAvg != null ? `Rider rating ${Number(ratingAvg).toFixed(1)} stars` : 'New rider, no rating yet'}
+              >
+                {ratingAvg != null ? `★ ${Number(ratingAvg).toFixed(1)}` : '★ New'} · {card.tier === 'wait' ? 'Wait & Save' : card.tier === 'comfort' ? 'Extra Comfort' : card.tier === 'carpool' ? 'Carpool' : 'Standard'}
+              </Text>
+            </View>
+            <OfferGauge gauge={gauge} offerId={card.id} />
+            {onFavorite ? (
+              <Pressable onPress={onFavorite} accessibilityRole="button" accessibilityLabel={favorite ? 'Remove favorite rider' : 'Save favorite rider'}>
+                <Text style={{ color: favorite ? colors.orange : colors.purple, fontWeight: '800' }}>{favorite ? 'Favorite' : 'Save rider'}</Text>
+              </Pressable>
+            ) : null}
+          </View>
           <View style={styles.offerFareRow}>
             <Text style={[styles.offerFare, { color: colors.ink }]} accessibilityLabel={`Driver net pay ${vm.pay.formattedNet}`}>
               {vm.pay.formattedNet}
             </Text>
             <Text style={[styles.offerFareTag, { color: colors.inkSecondary }]}>net</Text>
           </View>
+          {tipBoostLine ? (
+            <View style={styles.tags} accessibilityLabel={tipBoostLine}>
+              <Text style={{ color: colors.ink, fontWeight: '700' }}>{tipBoostLine}</Text>
+              <Tag label="Tip boost" tone="purple" />
+            </View>
+          ) : null}
           <Text style={{ color: colors.inkSecondary }}>
             {vm.pay.subtext}
           </Text>
+          <WorthItLegend hourlyCents={hourlyQuote.hourlyCents} colors={colors} />
           {vm.badges.length > 0 ? (
             <View style={styles.tags}>
               {vm.badges.map((b: { id: string; label: string; tone?: 'orange' | 'purple' }) => (
@@ -702,15 +945,30 @@ export function RideCard({
               ))}
             </View>
           ) : null}
+          {vm.boostLine ? (
+            <Text style={{ color: colors.ink, fontSize: 15, lineHeight: 21 }}>{vm.boostLine}</Text>
+          ) : null}
           {preferredNote ? <Text style={{ color: colors.orange, fontWeight: '700' }}>{preferredNote}</Text> : null}
-          <Text style={{ color: colors.ink, fontWeight: '700' }}>
-            {vm.rider.firstName}
-            {vm.rider.ratingText ? ` · ${vm.rider.ratingText}` : ''}
-            {vm.rider.rideType ? ` · ${vm.rider.rideType}` : ''}
-            {vm.seats.seatsLabel ? ` · ${vm.seats.seatsLabel}` : ''}
-          </Text>
+          <CommunityMatchChips supabase={supabase} tripId={card.id} colors={colors} compact />
+          <OfferRouteMap
+            driver={driver ? { latitude: driver.lat, longitude: driver.lng } : null}
+            pickup={pickupPoint}
+            dropoff={dropoffPoint}
+          />
+          <View style={styles.payoutRow}>
+            {payoutFigures.map((figure: { id: string; label: string; value: string }) => (
+              <Text key={figure.id} style={{ color: figure.id === 'payout' ? colors.ink : colors.inkSecondary, fontWeight: '800' }}>
+                {figure.label} · {figure.value}
+              </Text>
+            ))}
+          </View>
           <Text style={{ color: colors.ink, fontWeight: '700' }}>Pickup · {card.pickupLabel}</Text>
           <Text style={{ color: colors.ink, fontWeight: '700' }}>Drop-off · {card.dropoffLabel}</Text>
+          {card.airportContext ? (
+            <Text style={{ color: colors.purple, fontWeight: '800' }} accessibilityLabel={`Airport: ${card.airportContext.line}`}>
+              {card.airportContext.line}
+            </Text>
+          ) : null}
           {vm.distanceEta ? (
             <Text style={{ color: colors.inkSecondary }}>
               {vm.distanceEta}
@@ -720,7 +978,17 @@ export function RideCard({
           {vm.deposit ? (
             <Text style={{ color: colors.inkSecondary }}>{vm.deposit.label}</Text>
           ) : null}
-          {vm.timeLeft?.label ? (
+          {pulsing ? (
+            <Animated.Text style={{ color: colors.orange, fontWeight: '800', opacity: glow }}>
+              {exclusiveLeft}s to accept
+            </Animated.Text>
+          ) : poolLeft != null ? (
+            <Text style={{ color: colors.purple, fontWeight: '800' }}>
+              {poolLeft > 0 ? `Pool · ${poolLeft}s left` : 'Pool offer ended'}
+            </Text>
+          ) : exclusiveLeft === 0 ? (
+            <Text style={{ color: colors.purple, fontWeight: '800' }}>Opening the pool</Text>
+          ) : vm.timeLeft?.label ? (
             <Text style={{ color: vm.timeLeft.isUrgent ? colors.orange : colors.inkSecondary, fontWeight: '700' }}>
               {vm.timeLeft.label}
             </Text>
@@ -757,6 +1025,14 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   overlay: { ...StyleSheet.absoluteFill },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: EDGE },
+  topSpacer: { flex: 1 },
+  earningsWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  earningsButton: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center' },
+  clutter: { gap: GAP },
+  demandToggle: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, minHeight: 44,
+  },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -773,33 +1049,43 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4 },
   heatPanel: { marginTop: 8 },
   heatRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
-  heatLabel: { fontSize: 12, fontWeight: '700' },
-  heatToggle: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
-  heatWindows: { paddingHorizontal: 16, gap: 8, marginTop: 8 },
-  heatChip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  heatLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 0.2 },
+  heatToggle: { borderRadius: 999, paddingHorizontal: 14, minHeight: 36, justifyContent: 'center' },
+  heatWindows: { paddingHorizontal: 16, gap: 8, marginTop: 10 },
+  heatChip: {
+    borderRadius: 999, paddingHorizontal: 14, minHeight: 36, justifyContent: 'center',
+    borderWidth: 1, borderColor: 'transparent',
+  },
+  heatChipOn: {
+    backgroundColor: PURPLE,
+    borderColor: 'rgba(255,255,255,0.16)',
+    shadowColor: PURPLE, shadowOpacity: 0.22, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
   hotspotRow: { flexGrow: 0, marginTop: 10 },
   hotspots: { paddingHorizontal: 16, gap: 8 },
   hotspot: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   hotspotOn: { color: '#fff', fontWeight: '800' as const },
   hotspotOff: { fontWeight: '800' as const },
-  flex: { flex: 1 },
   dock: { position: 'absolute', left: EDGE, right: EDGE, gap: GAP, justifyContent: 'flex-end' },
+  offerDock: { zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION },
+  goRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
+  goSlot: { alignItems: 'center', gap: 6 },
+  goSide: { width: 48, height: 48 },
+  onlineStatus: { fontWeight: '700', fontSize: 13, textAlign: 'center' },
   cardTitle: { fontWeight: '800', fontSize: 18 },
   live: { alignSelf: 'stretch', borderRadius: 18, padding: 14, gap: 4 },
-  liveKicker: { fontWeight: '800', fontSize: 11, letterSpacing: 1 },
+  liveKicker: { fontWeight: '800', fontSize: 11, letterSpacing: 1.1 },
   liveTitle: { fontWeight: '800', fontSize: 18 },
-  controls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  toolCol: { gap: GAP },
-  bar: {
-    alignSelf: 'stretch',
-    borderRadius: 28,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  riderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  riderName: { fontWeight: '700', fontSize: 16, letterSpacing: -0.3 },
+  riderMeta: { fontWeight: '600', fontSize: 13, marginTop: 2, letterSpacing: -0.1 },
+  avatar: {
+    width: 44, height: 44, borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(82,45,128,0.28)',
   },
-  barText: { fontWeight: '800', fontSize: 16, flex: 1, textAlign: 'center' },
+  avatarFallback: { alignItems: 'center', justifyContent: 'center' },
+  avatarLetter: { color: '#fff', fontWeight: '700', fontSize: 16, letterSpacing: -0.3 },
   offerFareRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   offerFare: { fontSize: 34, fontWeight: '800', letterSpacing: -0.6 },
   offerFareTag: { fontSize: 16, fontWeight: '700' },
@@ -811,15 +1097,18 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
   },
-  declineText: { fontWeight: '700', fontSize: 15 },
-  offerWrap: { flexShrink: 1 },
+  declineText: { fontWeight: '700', fontSize: 15, letterSpacing: -0.1 },
+  offerWrap: { flexShrink: 1, zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION },
   offerCard: { flexShrink: 1, gap: 0, paddingBottom: 12 },
   offerScroll: { flexGrow: 0, flexShrink: 1 },
   offerBody: { gap: 10, paddingBottom: 2 },
   offerNotice: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
-  offerActions: { gap: 8, paddingTop: 10 },
-  modalScrim: { flex: 1, backgroundColor: 'rgba(11,18,32,0.45)', justifyContent: 'flex-end' },
-  modalCard: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, gap: 12 },
+  offerActions: { gap: 8, paddingTop: 10, flexShrink: 0 },
+  payoutRow: { gap: 2 },
+  docGate: { borderRadius: 16, borderWidth: 1, padding: 12, gap: 4, marginHorizontal: 16, zIndex: DOCUMENT_BANNER_Z, elevation: DOCUMENT_BANNER_ELEVATION },
+  docGateTitle: { fontWeight: '800', fontSize: 14, lineHeight: 18 },
+  docGateSections: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
+  docGateLink: { fontWeight: '800', fontSize: 14 },
   statusWrap: { flexShrink: 1, maxHeight: 400 },
   statusScrollBody: { flexGrow: 1 },
 })

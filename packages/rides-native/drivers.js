@@ -1,24 +1,24 @@
 import { canReceiveRides } from '../../shared/driverOnboarding.js'
 import { vehicleServesComfort } from '../../shared/rideOptions.js'
 import { defaultDriverRank, dispatchRankOf } from '../../shared/driverOrder.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 import { authedJson } from './apiClient.js'
-import { displayFirstName, standingFromRatings } from './authErrors.js'
+import { standingFromRatings } from './authErrors.js'
 import { GSP, STADIUM } from './places.js'
 import { airportCodeFromLabel } from './riderMoney.js'
 import { haversineMeters } from './riderShell.js'
 import { isSimulatedDriverId } from './simulatedDrivers.js'
+import { favoriteIdsForMatching } from '../../shared/riderFavorites.js'
 import { approvalGateMessage } from './syntheticOffers.js'
+import { rideRequestNote } from './driverNote.js'
 
-/** Straight-line campus pace. TODO: a traffic ETA needs a billed GOOGLE_MAPS_API_KEY (Routes). */
-const CAMPUS_MPH = 18
+/** Straight-line campus pace. A stored road polyline can scale this; live traffic still needs a billed Routes call. */
+export const CAMPUS_MPH = 18
 const STALE_LOCATION_MS = 10 * 60 * 1000
-const FAVORITE_CAP = 12
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-
 const STATUS_COLUMNS = 'driver_id, online, priority_mode, lat, lng, heading, unlock_progress, unlock_target, updated_at'
 const VEHICLE_COLUMNS = 'id, driver_id, make, model, color, plate, seats, tier'
-const PROFILE_COLUMNS = 'id, full_name, phone, email, avatar_url, role, rating_avg, rating_count, standing'
-const PROFILE_COLUMNS_NARROW = 'id, full_name, phone, email, avatar_url, role'
+const PROFILE_COLUMNS = 'id, full_name, avatar_url, role, rating_avg, rating_count, standing'
+const PROFILE_COLUMNS_NARROW = 'id, full_name, avatar_url, role'
 
 export const PREFERRED_MATCH_COPY =
   'This request goes only to the driver you pick. If they decline, the trip is canceled. It does not auto-match to another driver.'
@@ -44,8 +44,9 @@ export const FAVORITE_ACCOUNT_SAVE_ERROR =
   'Could not save that driver to your account. It is still on this phone.'
 
 /** Ride options do not filter the driver list by a retired fleet. */
-export function filterDriversForFleet(drivers) {
-  return Array.isArray(drivers) ? drivers : []
+export function filterDriversForFleet(drivers, _tier, viewerId = null) {
+  const list = Array.isArray(drivers) ? drivers : []
+  return viewerId ? list.filter((driver) => driver.id !== viewerId) : list
 }
 
 
@@ -59,16 +60,11 @@ export function preferredTripFields(driverId) {
 }
 
 export function normalizeFavoriteDriverIds(raw) {
-  const list = Array.isArray(raw) ? raw : []
-  const ids = []
-  for (const item of list) {
-    if (typeof item !== 'string') continue
-    const id = item.trim()
-    if (!UUID_RE.test(id) || ids.includes(id)) continue
-    ids.push(id)
-    if (ids.length >= FAVORITE_CAP) break
-  }
-  return ids
+  return favoriteIdsForMatching(raw)
+}
+
+export function canFavoriteDriver(driverId) {
+  return favoriteIdsForMatching([driverId]).length === 1
 }
 
 export function driverApproach(driver, pickup) {
@@ -141,15 +137,20 @@ export function sortPreferredDrivers(drivers, favoriteIds, pickup) {
   })
 }
 
-export function groupDriversForPicker(drivers, favoriteIds) {
+export function groupDriversForPicker(drivers, favoriteIds, passPreferredIds) {
   const fav = new Set(normalizeFavoriteDriverIds(favoriteIds))
+  const usePass = Array.isArray(passPreferredIds)
+  const pass = new Set(usePass ? normalizeFavoriteDriverIds(passPreferredIds) : [])
+  const passPreferred = []
   const preferred = []
   const online = []
   for (const driver of drivers || []) {
-    if (fav.has(driver.id)) preferred.push(driver)
+    if (usePass && pass.has(driver.id)) passPreferred.push(driver)
+    else if (fav.has(driver.id)) preferred.push(driver)
     else if (driver.online) online.push(driver)
   }
-  return { preferred, online }
+  if (!usePass) return { preferred, online }
+  return { passPreferred, preferred, online }
 }
 
 async function readJson(storage, key) {
@@ -225,7 +226,7 @@ export async function saveFavoriteDriverIds(supabase, storage, userId, ids) {
 }
 
 function rowsLookLikeCards(rows) {
-  return Array.isArray(rows) && rows.some((row) => row && (row.full_name || row.make || row.model || row.color || row.plate))
+  return Array.isArray(rows) && rows.some((row) => row && (row.first_name || row.full_name || row.make || row.model || row.color || row.plate))
 }
 
 /** Same car line the pick-a-driver list renders: color, make, model, then plate. */
@@ -244,7 +245,7 @@ function partsFromCardRows(rows) {
     if (!id) continue
     profiles.push({
       id,
-      full_name: row.full_name || null,
+      full_name: riderDriverFirstName(row.first_name || row.full_name, '') || null,
       avatar_url: row.avatar_url || null,
       rating_avg: row.rating_avg,
       rating_count: row.rating_count,
@@ -299,6 +300,12 @@ async function overlayDispatchRanks(supabase, parts) {
 }
 
 async function loadDriverCardRows(supabase, ids) {
+  try {
+    const preferred = await supabase.rpc('list_rider_driver_cards', { ids })
+    if (!preferred.error && rowsLookLikeCards(preferred.data)) return partsFromCardRows(preferred.data)
+  } catch {
+    /* Databases that predate the rider card RPC still use list_driver_cards. */
+  }
   let missing = false
   try {
     const { data, error } = await supabase.rpc('list_driver_cards', { ids })
@@ -338,14 +345,16 @@ export async function loadPickerDriverRecord(supabase, driverId) {
   const profile = (parts.profiles || []).find((row) => row.id === driverId) || null
   const vehicle = (parts.vehicles || []).find((row) => row.driver_id === driverId) || null
   if (!profile && !vehicle) return null
+  const first = riderDriverFirstName(profile?.full_name, '') || null
   return {
-    full_name: profile?.full_name || null,
+    first_name: first,
+    full_name: first,
     avatar_url: profile?.avatar_url || null,
     vehicle: vehicle || null,
   }
 }
 
-/** Airport pick-a-driver returns 409. Schedule is where the 25% deposit is collected. */
+/** Older clients sent riders to Schedule after airport_deposit_required. New requests book with no upfront deposit. */
 export function scheduleRedirectForRequestError(err, destLabel) {
   if (err?.code !== 'airport_deposit_required') return null
   return { screen: 'schedule', airport: airportCodeFromLabel(destLabel) }
@@ -372,11 +381,10 @@ function mapDrivers(statuses, profiles, vehicles) {
     if (standing === 'restricted') return null
     return {
       id: status.driver_id,
-      name: displayFirstName(profile.full_name, 'Driver'),
+      name: riderDriverFirstName(profile.full_name, 'Driver'),
       ratingAvg: profile.rating_avg != null ? Number(profile.rating_avg) : null,
       ratingCount: Number(profile.rating_count) || 0,
       standing,
-      phone: profile.phone || null,
       avatarUrl: profile.avatar_url || null,
       online: Boolean(status.online),
       priorityMode: Boolean(status.priority_mode),
@@ -527,6 +535,8 @@ export async function setDriverOnline(supabase, driverId, online, fix = null) {
   const row = {
     driver_id: driverId,
     online: Boolean(online),
+    // GO is the only client write the server accepts as coming back online right after END.
+    online_source: online ? 'go' : 'end',
     updated_at: new Date().toISOString(),
   }
   if (fix && Number.isFinite(Number(fix.lat)) && Number.isFinite(Number(fix.lng))) {
@@ -534,7 +544,11 @@ export async function setDriverOnline(supabase, driverId, online, fix = null) {
     row.lng = Number(fix.lng)
     if (fix.heading != null && Number.isFinite(Number(fix.heading))) row.heading = Number(fix.heading)
   }
-  const { error } = await supabase.from('driver_status').upsert(row)
+  let { error } = await supabase.from('driver_status').upsert(row)
+  if (error && /online_source/i.test(error.message || '')) {
+    delete row.online_source
+    ;({ error } = await supabase.from('driver_status').upsert(row))
+  }
   if (error) throw new Error(error.message)
   return { ok: true }
 }
@@ -556,19 +570,24 @@ export async function fetchDriverApplication(supabase, driverId) {
  */
 export async function requestDriverTrip(supabase, {
   riderId,
-  driverId,
+  driverId = null,
+  autoAssign = false,
   dest = 'GSP Airport',
   destPoint = GSP,
   pickupLabel = 'Memorial Stadium',
   pickupPoint = STADIUM,
   tier = 'standard',
+  passengers = null,
   isStudent = false,
+  note = '',
+  prepaidTipCents = 0,
 }) {
   void isStudent
   if (!supabase) throw new Error('Supabase is not configured')
   if (!riderId) throw new Error('Sign in required to request a driver')
-  if (!driverId) throw new Error('Select a driver first')
-  if (isSimulatedDriverId(driverId)) {
+  const assigning = autoAssign === true && !driverId
+  if (!driverId && !assigning) throw new Error('Select a driver first')
+  if (driverId && isSimulatedDriverId(driverId)) {
     throw new Error('That driver is busy and cannot be requested.')
   }
 
@@ -576,11 +595,12 @@ export async function requestDriverTrip(supabase, {
   const destLng = destPoint?.longitude ?? destPoint?.lng
   const pickupLat = pickupPoint?.latitude ?? pickupPoint?.lat
   const pickupLng = pickupPoint?.longitude ?? pickupPoint?.lng
+  const riderNote = rideRequestNote(note).note
 
   const data = await authedJson(supabase, '/api/stripe-payment-methods?action=request-driver', {
     method: 'POST',
     body: {
-      driverId,
+      ...(assigning ? { autoAssign: true } : { driverId }),
       dest,
       destLat,
       destLng,
@@ -588,6 +608,9 @@ export async function requestDriverTrip(supabase, {
       pickupLat,
       pickupLng,
       tier: tier || 'standard',
+      ...(passengers ? { passengers } : {}),
+      ...(riderNote ? { note: riderNote } : {}),
+      ...(prepaidTipCents > 0 ? { prepaidTipCents: Math.round(prepaidTipCents) } : {}),
     },
   })
   if (!data?.trip?.id) throw new Error('Could not request trip')

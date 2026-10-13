@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    
+    <linearGradient id="backgroundBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#A47AD4"/>
+      <stop offset="46%" stop-color="#6E449E"/>
+      <stop offset="100%" stop-color="#522D80"/>
+    </linearGradient>
+    <radialGradient id="backgroundGlow" cx="50%" cy="46%" r="46%">
+      <stop offset="0%" stop-color="#E4D2FF" stop-opacity="0.55"/>
+      <stop offset="58%" stop-color="#E4D2FF" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#E4D2FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="backgroundSpec" cx="18%" cy="12%" r="40%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.88"/>
+      <stop offset="32%" stop-color="#FFFFFF" stop-opacity="0.33"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="backgroundEdge" cx="50%" cy="42%" r="78%">
+      <stop offset="0%" stop-color="#2A1248" stop-opacity="0"/>
+      <stop offset="70%" stop-color="#2A1248" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#2A1248" stop-opacity="0.34"/>
+    </radialGradient>
+    <linearGradient id="backgroundStreak" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="42%" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.85"/>
+      <stop offset="58%" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    
+    <linearGradient id="background-darkBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3C2460"/>
+      <stop offset="46%" stop-color="#241238"/>
+      <stop offset="100%" stop-color="#100818"/>
+    </linearGradient>
+    <radialGradient id="background-darkGlow" cx="50%" cy="46%" r="46%">
+      <stop offset="0%" stop-color="#522D80" stop-opacity="0.55"/>
+      <stop offset="58%" stop-color="#522D80" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#522D80" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="background-darkSpec" cx="18%" cy="12%" r="40%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.32"/>
+      <stop offset="32%" stop-color="#FFFFFF" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="background-darkEdge" cx="50%" cy="42%" r="78%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="70%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.34"/>
+    </radialGradient>
+    <linearGradient id="background-darkStreak" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="42%" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.85"/>
+      <stop offset="58%" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="wheelGlass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.96"/>
+      <stop offset="48%" stop-color="#FFFFFF" stop-opacity="0.72"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.40"/>
+    </linearGradient>
+    <filter id="arcGlow" x="-40%" y="-40%" width="180%" height="180%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+  </defs>
+  
+    <g id="background">
+      <rect width="1024" height="1024" fill="url(#backgroundBase)"/>
+      <rect width="1024" height="1024" fill="url(#backgroundGlow)"/>
+      <rect width="1024" height="1024" fill="url(#backgroundSpec)"/>
+      <rect width="1024" height="1024" fill="url(#backgroundEdge)"/>
+      <g opacity="0.28" transform="rotate(-32 512 280)">
+        <rect x="-80" y="210" width="1280" height="22" rx="11" fill="url(#backgroundStreak)"/>
+      </g>
+    </g>
+  
+    <g id="background-dark">
+      <rect width="1024" height="1024" fill="url(#background-darkBase)"/>
+      <rect width="1024" height="1024" fill="url(#background-darkGlow)"/>
+      <rect width="1024" height="1024" fill="url(#background-darkSpec)"/>
+      <rect width="1024" height="1024" fill="url(#background-darkEdge)"/>
+      <g opacity="0.28" transform="rotate(-32 512 280)">
+        <rect x="-80" y="210" width="1280" height="22" rx="11" fill="url(#background-darkStreak)"/>
+      </g>
+    </g>
+  <g id="background-tinted">
+    <rect width="1024" height="1024" fill="#000000"/>
+  </g>
+  <g id="glyph" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 298.00 512.00 A 214.00 214.00 0 1 1 726.00 512.00 A 214.00 214.00 0 1 1 298.00 512.00 Z M 364.00 512.00 A 148.00 148.00 0 1 0 660.00 512.00 A 148.00 148.00 0 1 0 364.00 512.00 Z" fill="url(#wheelGlass)" fill-rule="evenodd"/>
+    <path d="M 512.00 466.00 L 512.00 366.00 M 551.84 535.00 L 638.44 585.00 M 472.16 535.00 L 385.56 585.00" stroke="#FFFFFF" stroke-opacity="0.92" stroke-width="34"/>
+    <circle cx="512.00" cy="512.00" r="54" fill="#FFFFFF" fill-opacity="0.92"/>
+    <circle cx="512.00" cy="512.00" r="24" fill="#FFFFFF" fill-opacity="0.45"/>
+    <path d="M 332.76 486.81 A 181.00 181.00 0 0 1 579.80 344.18"
+          stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="16"/>
+  </g>
+  <g id="accent" fill="none" stroke-linecap="round">
+    <path d="M 287.30 402.41 A 250.00 250.00 0 0 1 736.70 402.41" stroke="#F56600" stroke-opacity="0.35" stroke-width="54" filter="url(#arcGlow)"/>
+    <path d="M 287.30 402.41 A 250.00 250.00 0 0 1 736.70 402.41" stroke="#F56600" stroke-width="30"/>
+    <path d="M 287.30 402.41 A 250.00 250.00 0 0 1 736.70 402.41" stroke="#FFD8B0" stroke-width="8"/>
+  </g>
+  <g id="mono" fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 298.00 512.00 A 214.00 214.00 0 1 1 726.00 512.00 A 214.00 214.00 0 1 1 298.00 512.00 Z M 364.00 512.00 A 148.00 148.00 0 1 0 660.00 512.00 A 148.00 148.00 0 1 0 364.00 512.00 Z" fill="#FFFFFF" fill-rule="evenodd"/>
+    <path d="M 512.00 466.00 L 512.00 366.00 M 551.84 535.00 L 638.44 585.00 M 472.16 535.00 L 385.56 585.00" stroke-width="34"/>
+    <path d="M 458.00 512.00 A 54.00 54.00 0 1 1 566.00 512.00 A 54.00 54.00 0 1 1 458.00 512.00 Z M 490.00 512.00 A 22.00 22.00 0 1 0 534.00 512.00 A 22.00 22.00 0 1 0 490.00 512.00 Z" fill="#FFFFFF" fill-rule="evenodd"/>
+    <path d="M 287.30 402.41 A 250.00 250.00 0 0 1 736.70 402.41" stroke-width="30"/>
+  </g>
+</svg>

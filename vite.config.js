@@ -7,6 +7,12 @@ import friendHandler from './api/friend-rides.js'
 import carpoolHandler from './api/carpool.js'
 import checkoutSessionHandler from './api/create-checkout-session.js'
 import expireHoldsHandler from './api/expire-unpaid-airport-holds.js'
+import riderLiveHandler from './api/rider-live.js'
+import tigerHeatHandler from './api/tiger-heat.js'
+import tripMessagesHandler from './api/trip-messages.js'
+import scheduledDispatchHandler from './api/scheduled-dispatch-tick.js'
+import riderSwitchHandler from './api/rider-switch.js'
+import partyNightHandler from './api/party-night.js'
 
 const legacy = {
   '/api/help-chat': ['/api/admin-drivers?action=help-chat', adminHandler],
@@ -36,6 +42,12 @@ const direct = {
   '/api/carpool': carpoolHandler,
   '/api/create-checkout-session': checkoutSessionHandler,
   '/api/expire-unpaid-airport-holds': expireHoldsHandler,
+  '/api/rider-live': riderLiveHandler,
+  '/api/tiger-heat': tigerHeatHandler,
+  '/api/trip-messages': tripMessagesHandler,
+  '/api/scheduled-dispatch-tick': scheduledDispatchHandler,
+  '/api/rider-switch': riderSwitchHandler,
+  '/api/party-night': partyNightHandler,
 }
 
 function readBody(req) {

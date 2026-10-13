@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Rider home icon. Orange-dominant glass, route pin. Groups background, shadow, glyph, gloss. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="riderBase" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFE7CC"/>
+      <stop offset="12%" stop-color="#FFB067"/>
+      <stop offset="34%" stop-color="#FF7A1A"/>
+      <stop offset="58%" stop-color="#F56600"/>
+      <stop offset="82%" stop-color="#D24E00"/>
+      <stop offset="100%" stop-color="#341555"/>
+    </linearGradient>
+    <radialGradient id="riderGlow" cx="22%" cy="8%" r="58%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.96"/>
+      <stop offset="18%" stop-color="#FFE4C4" stop-opacity="0.62"/>
+      <stop offset="48%" stop-color="#FF8C33" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="riderPool" cx="102%" cy="106%" r="64%">
+      <stop offset="0%" stop-color="#C49BE0"/>
+      <stop offset="18%" stop-color="#6B3A9A"/>
+      <stop offset="40%" stop-color="#522D80"/>
+      <stop offset="72%" stop-color="#522D80" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="riderDepth" cx="8%" cy="96%" r="40%">
+      <stop offset="0%" stop-color="#A33A00" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#A33A00" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="streak" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="46%" stop-color="#FFFFFF" stop-opacity="0.02"/>
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="54%" stop-color="#FFFFFF" stop-opacity="0.02"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="topSheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="vignette" x1="0" y1="0.62" x2="0" y2="1">
+      <stop offset="0%" stop-color="#120614" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#120614" stop-opacity="0.2"/>
+    </linearGradient>
+    <radialGradient id="glyphGloss" cx="32%" cy="28%" r="55%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.7"/>
+      <stop offset="55%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="markShadow" x="-35%" y="-35%" width="170%" height="170%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="13" result="blur"/>
+      <feOffset in="blur" dx="0" dy="16" result="off"/>
+      <feFlood flood-color="#140818" flood-opacity="0.46" result="flood"/>
+      <feComposite in="flood" in2="off" operator="in"/>
+    </filter>
+
+    <g id="mark">
+      <path fill="#FFFFFF" fill-rule="evenodd" d="M 342.00 593.86 A 224.00 224.00 0 1 1 682.00 593.86 L 534.14 766.20 Q 512.00 800.00 489.86 766.20 Z M 432.00 440.00 A 80.00 80.00 0 1 1 592.00 440.02 A 80.00 80.00 0 1 1 432.00 440.00 Z"/>
+    </g>
+    
+    <mask id="markMask" maskUnits="userSpaceOnUse">
+      <rect width="1024" height="1024" fill="#000000"/>
+      <use href="#mark"/>
+    </mask>
+  </defs>
+  
+    <g id="background">
+      <rect width="1024" height="1024" fill="#F56600"/>
+      <rect width="1024" height="1024" fill="url(#riderBase)"/>
+      <rect width="1024" height="1024" fill="url(#riderDepth)"/>
+      <rect width="1024" height="1024" fill="url(#riderPool)"/>
+      <rect width="1024" height="1024" fill="url(#riderGlow)"/>
+      <g opacity="0.34" transform="rotate(-28 512 390)">
+        <rect x="-160" y="168" width="1500" height="28" fill="url(#streak)"/>
+      </g>
+      <ellipse cx="300" cy="70" rx="420" ry="130" fill="url(#topSheen)"/>
+      <rect width="1024" height="1024" fill="url(#vignette)"/>
+    </g>
+    
+  <g id="shadow" filter="url(#markShadow)">
+    <use href="#mark"/>
+  </g>
+  <g id="glyph">
+    <use href="#mark"/>
+  </g>
+  <g id="gloss" mask="url(#markMask)">
+    <rect width="1024" height="1024" fill="url(#glyphGloss)"/>
+  </g>
+</svg>

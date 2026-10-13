@@ -21,6 +21,74 @@ exports[`Driver Offer Card snapshot 1`] = `
               "name": "View",
               "children": [
                 {
+                  "type": "Conditional",
+                  "branches": [
+                    {
+                      "name": "Image",
+                      "children": []
+                    },
+                    {
+                      "name": "View",
+                      "children": [
+                        {
+                          "name": "Text",
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "View",
+                  "children": [
+                    {
+                      "name": "Text",
+                      "children": []
+                    },
+                    {
+                      "name": "Text",
+                      "children": [
+                        {
+                          "type": "Conditional",
+                          "branches": []
+                        },
+                        {
+                          "type": "Conditional",
+                          "branches": []
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "OfferGauge",
+                  "children": []
+                },
+                {
+                  "type": "Conditional",
+                  "branches": [
+                    {
+                      "name": "Pressable",
+                      "children": [
+                        {
+                          "name": "Text",
+                          "children": [
+                            {
+                              "type": "Conditional",
+                              "branches": []
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "View",
+              "children": [
+                {
                   "name": "Text",
                   "children": []
                 },
@@ -31,7 +99,29 @@ exports[`Driver Offer Card snapshot 1`] = `
               ]
             },
             {
+              "type": "Conditional",
+              "branches": [
+                {
+                  "name": "View",
+                  "children": [
+                    {
+                      "name": "Text",
+                      "children": []
+                    },
+                    {
+                      "name": "Tag",
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            },
+            {
               "name": "Text",
+              "children": []
+            },
+            {
+              "name": "WorthItLegend",
               "children": []
             },
             {
@@ -53,29 +143,42 @@ exports[`Driver Offer Card snapshot 1`] = `
               ]
             },
             {
-              "name": "Text",
-              "children": [
+              "type": "Conditional",
+              "branches": [
                 {
-                  "type": "Conditional",
-                  "branches": []
-                },
-                {
-                  "type": "Conditional",
-                  "branches": []
-                },
-                {
-                  "type": "Conditional",
-                  "branches": []
+                  "name": "Text",
+                  "children": []
                 }
               ]
             },
             {
+              "name": "CommunityMatchChips",
+              "children": []
+            },
+            {
+              "name": "OfferRouteMap",
+              "children": []
+            },
+            {
+              "name": "View",
+              "children": []
+            },
+            {
               "name": "Text",
               "children": []
             },
             {
               "name": "Text",
               "children": []
+            },
+            {
+              "type": "Conditional",
+              "branches": [
+                {
+                  "name": "Text",
+                  "children": []
+                }
+              ]
             },
             {
               "type": "Conditional",

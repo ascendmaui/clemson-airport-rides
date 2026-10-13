@@ -1,11 +1,15 @@
+import { Glyph } from 'rides-native/icons'
 import { useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@/lib/auth'
 import { registerDriverPush, type PushState } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { displayFirstName } from 'rides-native/authErrors'
+import { WomenOnlyCard } from 'rides-native/WomenOnlyCard'
+import { loadComfortPreference, saveComfortPreference } from 'rides-native/comfortPreference.js'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
 
@@ -18,9 +22,18 @@ export default function AccountScreen() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [push, setPush] = useState<PushState | null>(null)
+  const [genderIdentity, setGenderIdentity] = useState('unspecified')
+  const [womenOnly, setWomenOnly] = useState(false)
+  const [comfortAvailable, setComfortAvailable] = useState(false)
+  const [comfortNote, setComfortNote] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user) return
+    loadComfortPreference(supabase, user.id).then((comfort) => {
+      setGenderIdentity(comfort.genderIdentity)
+      setWomenOnly(comfort.womenOnlyMatching)
+      setComfortAvailable(comfort.available)
+    }).catch(() => {})
     registerDriverPush(supabase, user.id).then(setPush).catch((err) => {
       setPush({
         granted: false,
@@ -31,6 +44,22 @@ export default function AccountScreen() {
     })
   }, [user])
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : null
+
+  async function persistComfort(nextGender: string, nextWomenOnly: boolean) {
+    if (!user?.id || !supabase) return
+    setComfortNote(null)
+    try {
+      const saved = await saveComfortPreference(supabase, user.id, {
+        genderIdentity: nextGender,
+        womenOnly: nextWomenOnly,
+      })
+      setGenderIdentity(saved.genderIdentity)
+      setWomenOnly(saved.womenOnlyMatching)
+      setComfortNote('Comfort preference saved')
+    } catch (err) {
+      setComfortNote(err instanceof Error ? err.message : 'Could not save the comfort preference')
+    }
+  }
 
   async function onSignOut() {
     setBusy(true)
@@ -46,7 +75,7 @@ export default function AccountScreen() {
   }
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + 12 }]}>
+    <ScrollView style={[styles.screen, { paddingTop: insets.top + 12 }]} contentContainerStyle={styles.list}>
       <Pressable
         onPress={() => router.back()}
         style={styles.back}
@@ -55,7 +84,7 @@ export default function AccountScreen() {
         accessibilityHint="Navigates to previous screen"
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Text style={styles.backText}>←</Text>
+        <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
       </Pressable>
       <Text style={styles.title}>{name || 'Guest'}</Text>
       {user?.email ? <Text style={styles.copy}>{user.email}</Text> : <Text style={styles.copy}>Sign in with email and password.</Text>}
@@ -88,10 +117,19 @@ export default function AccountScreen() {
             onPress={() => router.push('/earnings')}
             style={styles.linkRow}
             accessibilityRole="button"
-            accessibilityLabel="Earnings and deposits"
-            accessibilityHint="Navigates to earnings and deposit breakdown"
+            accessibilityLabel="Earnings"
+            accessibilityHint="Navigates to earnings"
           >
-            <Text style={styles.linkText}>Earnings and deposits</Text>
+            <Text style={styles.linkText}>Earnings</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/community')}
+            style={styles.linkRow}
+            accessibilityRole="button"
+            accessibilityLabel="Campus community"
+            accessibilityHint="Optional, off by default. Shows only what you and your rider share"
+          >
+            <Text style={styles.linkText}>Campus community</Text>
           </Pressable>
           <Pressable
             onPress={() => router.push('/fleet')}
@@ -103,6 +141,18 @@ export default function AccountScreen() {
             <Text style={styles.linkText}>Extra Comfort fleet</Text>
           </Pressable>
         </>
+      ) : null}
+      {user ? (
+        <WomenOnlyCard
+          role="driver"
+          genderIdentity={genderIdentity}
+          womenOnlyMatching={womenOnly}
+          available={comfortAvailable}
+          note={comfortNote}
+          colors={colors}
+          onGender={(next: string) => persistComfort(next, next === 'woman' ? womenOnly : false)}
+          onToggle={(next: boolean) => persistComfort(genderIdentity, next)}
+        />
       ) : null}
       {user ? (
         <Pressable
@@ -126,21 +176,22 @@ export default function AccountScreen() {
           <Text style={styles.primaryText}>Sign in</Text>
         </Pressable>
       )}
-    </View>
+    </ScrollView>
   )
 }
 
 function accountStyles(colors: Palette) {
   return StyleSheet.create({
-    screen: { flex: 1, backgroundColor: colors.background, padding: 20, gap: 12 },
-    back: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
+    screen: { flex: 1, backgroundColor: colors.background },
+    list: { padding: 20, gap: 12, paddingBottom: 40 },
+    back: { width: 40, height: 40, borderRadius: radius.control, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
     backText: { color: colors.title, fontSize: 18, fontWeight: '700' },
-    title: { fontSize: 28, fontWeight: '800', color: colors.title },
-    copy: { color: colors.inkSecondary, fontSize: 15, lineHeight: 21 },
+    title: { ...typeScale.title, color: colors.title },
+    copy: { color: colors.inkSecondary, ...typeScale.body },
     error: { color: colors.danger },
-    linkRow: { backgroundColor: colors.card, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16 },
-    linkText: { color: colors.title, fontWeight: '800' },
-    primary: { backgroundColor: colors.orange, borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
-    primaryText: { color: colors.onAccent, fontWeight: '700', fontSize: 16 },
+    linkRow: { backgroundColor: colors.card, borderRadius: radius.lg, paddingVertical: 14, paddingHorizontal: 16 },
+    linkText: { color: colors.title, fontWeight: '800', letterSpacing: -0.2 },
+    primary: { backgroundColor: colors.orange, borderRadius: radius.lg, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
+    primaryText: { color: colors.onAccent, ...typeScale.button },
   })
 }

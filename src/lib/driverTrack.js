@@ -1,3 +1,4 @@
+import { uniqueChannelTopic } from '../../packages/rides-native/realtimeChannel.js'
 import { createTrackingRefresh, onTrackingResume } from '../../packages/rides-native/tracking.js'
 import { locationFields } from './driverShift.js'
 import { supabase } from './supabase'
@@ -38,7 +39,7 @@ export function subscribeDriverStatus(driverId, onUpdate, onError) {
   const offResume = onTrackingResume(() => void reader.refresh(true))
 
   const channel = supabase
-    .channel(`driver-status-${driverId}`)
+    .channel(uniqueChannelTopic(`driver-status-${driverId}`))
     .on(
       'postgres_changes',
       {

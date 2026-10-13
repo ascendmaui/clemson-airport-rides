@@ -1,29 +1,40 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { driverFareNote, fareCollection, formatCents, type DriverCard } from 'rides-native/tripTags'
+import { driverFareNote, fareCollection, formatCents, incentiveLabel, type DriverCard } from 'rides-native/tripTags'
 import { useTheme } from '@/lib/theme'
 
 export function FarePanel({ card }: { card: DriverCard }) {
   const { colors } = useTheme()
   const fare = fareCollection(card)
+  // One net number: the bold total always equals the trip header (card.driverNetCents).
+  const hasExtras = fare.boostNetCents > 0 || fare.backupBonusCents > 0 || fare.waitNetCents > 0
+  const fareNetLabel = fare.sharePercent != null ? `Fare net · ${fare.sharePercent}%` : 'Fare net'
   return (
     <View style={[styles.box, { backgroundColor: colors.track }]}>
       <Text style={[styles.title, { color: colors.title }]}>Fare</Text>
       <Row label="Trip fare" value={formatCents(fare.fareCents)} />
-      <Row label="25% deposit" value={formatCents(fare.depositCents)} />
-      <Row label="Collected on complete" value={formatCents(fare.remainderCents)} />
+      {fare.depositCents > 0 ? <Row label="Already paid" value={formatCents(fare.depositCents)} /> : null}
+      <Row label="Charged at trip end" value={formatCents(fare.remainderCents)} />
       {fare.carpoolIncentiveId ? (
         <>
           <Row label="Base net" value={formatCents(fare.baseNetCents || 0)} />
-          <Row label={`Carpool bonus · ${fare.carpoolIncentiveId}`} value={formatCents(fare.carpoolBonusCents || 0)} />
-          <Row label="You net" value={formatCents(fare.driverNetCents)} strong />
+          <Row label={incentiveLabel(fare.carpoolIncentiveId)} value={formatCents(fare.carpoolBonusCents || 0)} />
+        </>
+      ) : null}
+      {hasExtras ? (
+        <>
+          {!fare.carpoolIncentiveId ? <Row label={fareNetLabel} value={formatCents(fare.driverNetCents)} /> : null}
+          {fare.boostNetCents > 0 ? <Row label="Boost · your share" value={formatCents(fare.boostNetCents)} /> : null}
+          {fare.backupBonusCents > 0 ? <Row label="Backup bonus" value={formatCents(fare.backupBonusCents)} /> : null}
+          {fare.waitNetCents > 0 ? <Row label="Wait time" value={formatCents(fare.waitNetCents)} /> : null}
+          <Row label="You net" value={formatCents(fare.totalNetCents)} strong />
         </>
       ) : (
-        <Row label={fare.usesStoredPayout ? 'You net' : 'You net · 80%'} value={formatCents(fare.driverNetCents)} strong />
+        <Row label={fare.carpoolIncentiveId ? 'You net' : fareNetLabel.replace('Fare net', 'You net')} value={formatCents(fare.totalNetCents)} strong />
       )}
       <Text style={[styles.note, { color: colors.inkSecondary }]}>
-        {fare.carpoolIncentiveId
-          ? `Platform fee ${formatCents(fare.platformFeeCents)}.`
-          : `Platform fee ${formatCents(fare.platformFeeCents)} · 20%.`}
+        {fare.sharePercent != null
+          ? `Platform fee ${formatCents(fare.platformFeeCents)} · ${100 - fare.sharePercent}%.`
+          : `Platform fee ${formatCents(fare.platformFeeCents)}.`}
       </Text>
       {fare.shares.length > 1 ? (
         <View style={styles.splits}>

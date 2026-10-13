@@ -193,7 +193,12 @@ export async function setPaymentHold(sb, tripId, failure) {
   if (upd.error) console.error('[collectPayment] hold', upd.error.message)
 }
 
-export async function clearPaymentHold(sb, tripId, { farePaidDelta = 0 } = {}) {
+/**
+ * Clear a payment hold after the gate allows progress. paymentStatus defaults
+ * to 'paid'; a cancel that charged nothing passes 'no_charge' so a canceled
+ * $0 trip never reads as paid.
+ */
+export async function clearPaymentHold(sb, tripId, { farePaidDelta = 0, paymentStatus = 'paid' } = {}) {
   if (!sb || !tripId) return
   const trip = await readTrip(sb, tripId)
   if (!trip) return
@@ -202,7 +207,7 @@ export async function clearPaymentHold(sb, tripId, { farePaidDelta = 0 } = {}) {
   if (farePaidDelta) {
     metadata.fare_paid_cents = Math.max(0, Math.round(Number(metadata.fare_paid_cents) || 0) + farePaidDelta)
   }
-  const patch = { metadata, payment_status: 'paid' }
+  const patch = { metadata, payment_status: paymentStatus }
   let upd = await sb.from('trips').update(patch).eq('id', tripId)
   if (upd.error && /payment_status|column|schema cache/i.test(upd.error.message || '')) {
     upd = await sb.from('trips').update({ metadata }).eq('id', tripId)
@@ -286,7 +291,7 @@ export async function collectPayment(input) {
       idempotency_key: idempotencyKey,
       metadata: { ...metadata, logical_kind: kind, admin_override: true },
     })
-    if (hold && tripId) await io.clearHold(tripId, { farePaidDelta: isFareKind(kind) ? amount : 0 })
+    if (hold && tripId) await io.clearHold(tripId, { farePaidDelta: isFareKind(kind) ? (metadata.fare_billed_cents ?? amount) : 0 })
     return {
       ok: true,
       status: 'succeeded',
@@ -481,7 +486,7 @@ export async function collectPayment(input) {
       },
     })
     if (hold && tripId) {
-      await io.clearHold(tripId, { farePaidDelta: isFareKind(kind) ? amount : 0 })
+      await io.clearHold(tripId, { farePaidDelta: isFareKind(kind) ? (metadata.fare_billed_cents ?? amount) : 0 })
     }
     const method = plan.cardCents && plan.creditsAppliedCents ? 'credits+card' : plan.cardCents ? 'card' : 'credits'
     return {
@@ -572,7 +577,7 @@ async function recordPaidIntent(io, pi, fields) {
     idempotency_key: idempotencyKey,
     metadata: { ...(metadata || {}), logical_kind: kind, stripe_status: pi.status, idempotent: true },
   })
-  if (hold && tripId) await io.clearHold(tripId, { farePaidDelta: isFareKind(kind) ? amount : 0 })
+  if (hold && tripId) await io.clearHold(tripId, { farePaidDelta: isFareKind(kind) ? (metadata.fare_billed_cents ?? amount) : 0 })
   return {
     ok: true,
     status: 'succeeded',

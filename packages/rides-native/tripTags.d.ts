@@ -13,6 +13,10 @@ export function driverFareNote(depositCents: number): string
 export type QueueFilter = 'all' | 'student' | 'game_day' | 'weekend_party'
 
 export type DriverCard = {
+  /** Carpool ordered stops; empty for single-rider trips. */
+  stops: import('./carpoolStops').TripStop[]
+  /** Airport trips only: terminal or airline and the rider's flight. */
+  airportContext: import('./airportContext').AirportContext | null
   id: string
   status: string
   matchingOffer?: boolean
@@ -29,6 +33,14 @@ export type DriverCard = {
   depositCents: number
   depositExplicit: boolean
   driverNetCents: number
+  /** Local only: the trip vanished from this driver's account (rider switched or canceled). */
+  released?: boolean
+  /** Payout-queue breakdown once a driver holds the trip (same math as server/payouts.js). */
+  earnings?: DriverTripEarnings | null
+  tipCents?: number
+  payoutStatusLine?: string | null
+  boostCents?: number
+  boostDriverCents?: number
   baseNetCents?: number | null
   carpoolBonusCents?: number | null
   carpoolIncentiveId?: string | null
@@ -39,11 +51,16 @@ export type DriverCard = {
   tags: TripTag[]
   tagLabels: string[]
   comfortStub: boolean
+  acceptedAt?: string | null
   arrivedAt: string | null
+  waitFeeCents: number
+  cancelFeeCents: number
+  driverWaitEarningsCents: number
   passengers: number
   shares: FareShare[]
   riderLat: number | null
   riderLng: number | null
+  riderFixAt: string | null
   routePolyline?: string | null
   routeDurationS?: number | null
   riderRating?: number
@@ -52,6 +69,22 @@ export type DriverCard = {
   rideType?: string
   isSynthetic?: boolean
   promoRide?: boolean
+  offerPhase?: 'exclusive' | 'pool' | 'scheduled' | 'expired' | null
+  offerShareBps?: number | null
+  offerExpiresAt?: string | null
+  riderAvatarUrl?: string | null
+  backupLabel?: string | null
+  backupRole?: 'primary' | 'backup' | 'open_primary' | 'open_backup' | 'full' | null
+  lookingForBackup?: boolean
+  backupConfirmOpen?: boolean
+  backupConfirmClosesAt?: string | null
+  backupConfirmCopy?: string | null
+  backupLeaveNowAt?: string | null
+  backupLeaveNowOpen?: boolean
+  backupEnroute?: boolean
+  backupStatusLine?: string | null
+  backupNotice?: string | null
+  backupUrgent?: boolean
 }
 
 export type FareCollection = {
@@ -65,9 +98,33 @@ export type FareCollection = {
   carpoolBonusCents?: number | null
   carpoolIncentiveId?: string | null
   usesStoredPayout?: boolean
+  boostNetCents: number
+  backupBonusCents: number
+  waitNetCents: number
+  /** Matches DriverCard.driverNetCents once assigned. */
+  totalNetCents: number
+  /** Percent of the fare kept when no stored payout applies (80, or the offer ladder share). */
+  sharePercent: number | null
+}
+
+export type DriverTripEarnings = {
+  kind: 'trip' | 'cancel'
+  fareCents: number
+  fareNetCents: number
+  platformFeeCents: number
+  boostCents: number
+  backupBonusCents: number
+  waitCents: number
+  riderWaitFeeCents: number
+  tigerHeatBonusCents: number
+  platformFundedCents: number
+  tipCents: number
+  netCents: number
 }
 
 export const DRIVER_CARPOOL_BONUS_ID: string
+
+export function incentiveLabel(id: string | null | undefined): string
 
 export function carpoolPayFromTrip(row: {
   fare_cents?: number
@@ -86,6 +143,9 @@ export function carpoolPayFromTrip(row: {
 } | null
 
 export function tripEarnedCents(trip: {
+  status?: string
+  driver_wait_earnings_cents?: number
+  driverWaitEarningsCents?: number
   fare_cents?: number
   fareCents?: number
   metadata?: Record<string, unknown> | null
@@ -95,6 +155,17 @@ export function tripEarnedCents(trip: {
   carpoolIncentiveId?: string | null
 } | null | undefined): number
 
+export function tripPayoutCents(trip: {
+  status?: string
+  driver_wait_earnings_cents?: number
+  driverWaitEarningsCents?: number
+  fare_cents?: number
+  fareCents?: number
+  boost_cents?: number
+  boostCents?: number
+  metadata?: Record<string, unknown> | null
+} | null | undefined): number
+
 export type PaymentRow = {
   kind?: string
   amountCents?: number
@@ -102,7 +173,7 @@ export type PaymentRow = {
   status?: string
 }
 
-export function formatCents(cents: number): string
+export function formatCents(cents: number | null | undefined): string
 export function driverNetCents(fareCents: number): number
 export function depositSliceCents(fareCents: number, stored?: number | string | null): number
 export function airportDepositRequiredCents(row: Record<string, unknown> | null | undefined): number
@@ -113,6 +184,8 @@ export function isOpenPoolClaimable(row: Record<string, unknown> | null | undefi
 export function zonedWeekdayHour(iso: string | null | undefined, timeZone?: string): { weekday: string; hour: number } | null
 export function isWeekendPartyWindow(iso: string | null | undefined): boolean
 export function formatPickupAt(iso: string | null | undefined): string
+export function confirmCountdownLabel(closesAt: string | null | undefined, now?: number | Date): string | null
+export function leaveNowCountdownLabel(leaveNowAt: string | null | undefined, now?: number | Date): string | null
 export function isSameZonedDay(iso: string | null | undefined, now?: Date, timeZone?: string): boolean
 export function isDueNow(trip: { pickupAt?: string | null; pickup_at?: string | null; scheduled_for?: string | null } | null, now?: Date): boolean
 export const TAG_LABELS: Record<string, string>
@@ -128,7 +201,7 @@ export function statusHeadline(status: string): string
 export function driverStatusDetail(status: string | null | undefined): string
 export function acceptActionLabel(status: string | null | undefined): string
 export function acceptNeedsDriverOnline(status: string | null | undefined): boolean
-export function toDriverCard(row: Record<string, unknown> | null | undefined, options?: { gameDayLive?: boolean }): DriverCard | null
+export function toDriverCard(row: Record<string, unknown> | null | undefined, options?: { gameDayLive?: boolean; driverId?: string }): DriverCard | null
 export function matchesQueueFilter(card: { tags: string[] } | null, filter: QueueFilter): boolean
 export function queueFilters(): QueueFilter[]
 export function queueEmptyCopy(filter: QueueFilter): { title: string; body: string }
@@ -162,3 +235,5 @@ export function summarizeDepositAwareness(
   todayNetCents: number
   lines: { tripId: string; dropoff: string; line: string; fareCents: number }[]
 }
+
+export function arrivedPromptCopy(input?: { firstName?: string | null; pickupLabel?: string | null }): { title: string; body: string; action: string }

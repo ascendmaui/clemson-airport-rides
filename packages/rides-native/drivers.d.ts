@@ -4,7 +4,6 @@ export type OnlineDriver = {
   ratingAvg: number | null
   ratingCount: number
   standing: string
-  phone: string | null
   avatarUrl: string | null
   online: boolean
   priorityMode: boolean
@@ -47,9 +46,11 @@ export const OPEN_POOL_COPY: string
 export const EMPTY_FAVORITES_COPY: string
 export const FAVORITE_PERSIST_ERROR: string
 export const FAVORITE_ACCOUNT_SAVE_ERROR: string
+export const CAMPUS_MPH: number
 
 export function preferredTripFields(driverId: string): { preferred_driver_id: string; match: 'preferred' }
 export function normalizeFavoriteDriverIds(raw: unknown): string[]
+export function canFavoriteDriver(driverId: string | null | undefined): boolean
 export function driverApproach(
   driver: { lat?: number | null; lng?: number | null } | null | undefined,
   pickup: { lat?: number | null; lng?: number | null } | null | undefined,
@@ -72,7 +73,8 @@ export function sortPreferredDrivers<T extends { id: string; online?: boolean; l
 export function groupDriversForPicker<T extends { id: string; online?: boolean }>(
   drivers: T[] | null | undefined,
   favoriteIds: string[] | null | undefined,
-): { preferred: T[]; online: T[] }
+  passPreferredIds?: string[] | null,
+): { preferred: T[]; online: T[]; passPreferred?: T[] }
 export function loadFavoriteDriverIds(
   supabase: unknown,
   storage: KeyValueStorage | null | undefined,
@@ -94,6 +96,7 @@ export function loadPickerDriverRecord(
   supabase: unknown,
   driverId: string | null | undefined,
 ): Promise<{
+  first_name: string | null
   full_name: string | null
   avatar_url: string | null
   vehicle: {
@@ -136,12 +139,18 @@ export function requestDriverTrip(
   supabase: unknown,
   input: {
     riderId: string
-    driverId: string
+    driverId?: string | null
+    autoAssign?: boolean
     dest?: string
-    destPoint?: { latitude: number; longitude: number }
+    destPoint?: { latitude?: number; longitude?: number; lat?: number; lng?: number }
     pickupLabel?: string
-    pickupPoint?: { latitude: number; longitude: number }
+    pickupPoint?: { latitude?: number; longitude?: number; lat?: number; lng?: number }
     tier?: string
+    passengers?: number | string | null
     isStudent?: boolean
+    note?: string
+    prepaidTipCents?: number
   },
-): Promise<{ id: string; status: string; driver_id: string; dropoff_label: string; fare_cents?: number | null; deposit_cents?: number | null }>
+): Promise<{ id: string; status: string; driver_id: string | null; dropoff_label?: string; fare_cents?: number | null; deposit_cents?: number | null }>
+
+export function filterDriversForFleet<T extends { id: string }>(drivers: T[], tier?: string, viewerId?: string | null): T[]

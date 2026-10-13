@@ -6,7 +6,7 @@ The app container is its own compose project (`clemson-rides`), its own bridge n
 
 ## Why the image is built in GitHub Actions
 
-The box has about 7.9 GB RAM, about 1.5 GB free, and no swap. `npm ci` plus `vite build` on the VPS can OOM-kill Hermes, OpenClaw, n8n, or Traefik. GitHub Actions builds `ghcr.io/ascendmaui/clemson-airport-rides`, tags it with the commit SHA and `prod` (or `staging`), and the VPS only runs `docker compose pull` and `up -d`.
+The box has about 7.9 GB RAM, about 1.5 GB free, and no swap. `npm ci` plus `vite build` on the VPS can OOM-kill Hermes, OpenClaw, n8n, or Traefik. GitHub Actions builds `ghcr.io/ascendmaui/clemson-airport-rides`, tags it with the commit SHA and `prod` (or `staging`), and the VPS only pulls that image. Production deploys are serialized in the `deploy-vps-prod` concurrency group (`cancel-in-progress: false`, `queue: max`). Staging uses `deploy-vps-staging`, so a staging run does not sit in the production queue. On the VPS a file lock still keeps the two from rewriting one git checkout at the same time.
 
 `VITE_*` values are inlined into the browser bundle at build time, so they are GitHub Actions secrets passed as Docker build args. Server secrets stay in `/opt/clemson-rides/.env` and are never baked into the image.
 
@@ -124,6 +124,47 @@ A signed-in driver can still GET their earnings summary. A signed-in payout retr
 
 `workflow_dispatch` runs only after this workflow file is on `main`. Until then, a push to `staging/**` or to `cursor/hostinger-vps-self-host-4d20` builds from that branch, pushes the image tagged `staging` and the commit SHA, and deploys the staging service only. That push never tags `prod` and never restarts `clemson-rides-web`. If `VPS_SSH_KEY` is missing, the workflow still pushes the image and skips SSH with a notice. A push to `main` deploys production only after the `CI` / `test` workflow succeeds. Manual deploy, once the file is on `main`: Actions → Deploy VPS → Run workflow → target `production` or `staging`.
 
+CI on a pull request also triggers this workflow via `workflow_run`, and the deploy job is skipped. That skipped run uses its own `deploy-vps-noop-<run id>` group, so it does not queue behind a production deploy.
+
+### Swap
+
+Traefik on this host (`traefik:latest`, container `traefik-bmeb-traefik-1`) uses the Docker provider in host networking. It reloads when a container starts, dies, or changes `health_status`. It does not reload on Docker network connect or disconnect. With the default `allowEmptyServices=false`, a container that is stopped or still `starting` is not a backend. When `clemson-rides-web` was the only backend, recreating it made `https://clemsonrides.com` (including `/` and `/home` after Google sign-in) answer with Traefik's own `404 page not found`, or reset the connection, until the new process was healthy.
+
+The first two overlap deploys (images `80d92237bb1a16a2d065c8b91dcc48470e2aa4bb`, Actions run 37290992747, and `60bcb552aa37ecd3ef73952672d5fe38b36e6b2a`, Actions run 37292006402) kept the live site on the previous SHA on purpose. `clemson-rides-web-next` became healthy, but the script had already disconnected it from `clemson_rides_net`. The `health_status: healthy` event therefore ran while that container had no address on the network Traefik is told to use, so Traefik ignored the server. The reconnect that followed is not an event Traefik watches, and every public `/api/healthz` sample stayed on the old container. The script refused to drop `clemson-rides-web`. Identical router names were not the failure: Traefik will append servers when two containers define the same service and the router configs match, but it never got a usable address for the new container.
+
+`deploy/remote-up.sh` now keeps both containers on `clemson_rides_net` for the whole swap. The overlap service publishes different routers (`clemson-next` and `clemson-www-next`, or `clemson-staging-next`) at priority 100. The canonical routers stay at priority 10. Traefik sends the host to the higher priority router, so the public SHA moves to the new container before the old one is recreated. Reusing one router name and hoping for round-robin would keep serving the previous container half the time, and any label drift between the two copies makes Traefik delete that router.
+
+When a healthy backend is already up:
+
+1. Start `clemson-rides-web-next` (compose profile `overlap`) on `clemson_rides_net`. It does not publish port 3080. Do not disconnect it. Docker is still `starting`, so Traefik skips it until the healthcheck passes.
+2. Wait until Docker is healthy, `/api/healthz` inside the container shows the new SHA, then 10 seconds so the `health_status` reload can add the priority-100 routers.
+3. Poll `https://clemsonrides.com/api/healthz` from the VPS. Continue only after that body contains the new SHA. If it still contains a different SHA, or Traefik answers `404 page not found`, remove `clemson-rides-web-next` and leave `clemson-rides-web` in place. If the public URL does not answer at all, continue because the overlap container is healthy on the network.
+4. Recreate `clemson-rides-web` while the priority-100 router is still up. The container stays on `clemson_rides_net`. Traefik's `die`/`start` reloads keep the overlap router, and the new container is filtered until it is healthy.
+5. After the new `clemson-rides-web` is healthy, stop `clemson-rides-web-next`. That `die` event is the reload that leaves the priority-10 router as the only match. Confirm the public health URL still returns the new SHA. If it does not, start the overlap container again and exit non-zero.
+
+Host checks against `127.0.0.1:3080/api/healthz` poll for up to 60×2 seconds. That wait happens while the overlap container can still serve, so a longer poll is not a longer public outage. Staging does the same with `clemson-rides-staging-next` and port 3081. A hand `docker compose up` of `web` alone still recreates in place and can 404; use the deploy script for a production swap.
+
+The overlap container is a second 512 MB cap for about a minute. It is not a reservation. Do not start a second overlap by hand while a deploy is running.
+
+### Verify the next production merge
+
+Do not run Deploy VPS by hand for the pull request that contains this swap. Merging to `main` is what starts it, after CI succeeds.
+
+On that Deploy VPS log, confirm this order:
+
+- `starting clemson-rides-web-next before recreating clemson-rides-web`
+- `waiting for clemson-rides-web-next to become healthy on clemson_rides_net`
+- `Traefik is serving <new sha>`
+- `recreating clemson-rides-web`
+- `Traefik is still serving <new sha> after clemson-rides-web-next stopped`
+- `deployed production <new sha>`
+
+`Traefik is still serving the previous sha` followed by `refusing to detach clemson-rides-web` means the new router never won. The previous container is still the live one. That refusal is intentional.
+
+During the swap, `docker ps` shows `clemson-rides-web` and `clemson-rides-web-next` together, then only `clemson-rides-web`. `curl -fsS https://clemsonrides.com/api/healthz` should change to the new SHA while both containers exist, and it should stay on that SHA after `-next` is gone. `/` and `/home` should keep returning the app. There should be no Traefik `404 page not found` and no empty reply.
+
+Staging is unchanged apart from the same router pattern: only `clemson-rides-staging` / `clemson-staging.srv1090862.hstgr.cloud`. A pull-request CI completion still skips Deploy VPS and uses `deploy-vps-noop-<run id>`, so it does not sit in `deploy-vps-prod`.
+
 ## Check TLS before DNS cutover
 
 Let's Encrypt HTTP-01 for `clemsonrides.com` succeeds only when that name resolves to this VPS, because Traefik answers port 80. `clemson-staging.srv1090862.hstgr.cloud` already points here, so staging can get a certificate before cutover. Use `--resolve` to preview the apex against the VPS IP:
@@ -141,7 +182,7 @@ If Traefik has no certificate for that name yet, the TLS handshake fails. `curl 
 3. Wait until `https://clemsonrides.com/api/healthz` returns that SHA without `--resolve`.
 4. Leave the Vercel project and `vercel.json` untouched for at least 24 hours.
 
-Rollback is DNS back to Vercel. That restores the previous host immediately. To roll the VPS image back without touching DNS, the deploy script retags the previous SHA and runs it again. By hand:
+Rollback is DNS back to Vercel. That restores the previous host immediately. To roll the VPS image back without touching DNS, the deploy script retags the previous SHA and runs it again when the overlap container is not already serving the new SHA. If the new overlap container is healthy and the canonical container fails, the script leaves the overlap container up and exits non-zero instead of putting the previous image back beside it. By hand:
 
 ```bash
 cd /opt/clemson-rides/src
@@ -149,7 +190,9 @@ sudo IMAGE_TAG=<previous-sha> \
   docker compose -f deploy/docker-compose.yml --project-name clemson-rides up -d --no-build web
 ```
 
-The previous SHA is recorded in `/opt/clemson-rides/previous-sha` after a successful deploy. A failed health check does this automatically and exits non-zero. This never runs `docker system prune` and never restarts other projects.
+That hand command recreates `web` in place. Expect a short Traefik gap unless `clemson-rides-web-next` is already healthy on `clemson_rides_net`.
+
+The previous SHA is recorded in `/opt/clemson-rides/previous-sha` after a successful deploy. A failed health check exits non-zero. This never runs `docker system prune` and never restarts other projects.
 
 ## Cron
 
@@ -157,7 +200,7 @@ Hold expiry is already applied in production. Supabase migration `repoint_hold_e
 
 `private.trigger_matching_rebroadcast()` already calls `https://clemsonrides.com/api/driver?action=rebroadcast-offers` every minute. It follows DNS, so after cutover it hits the VPS. Its bearer is the same Vault secret and must match the VPS `CRON_SECRET`. Leave that job alone.
 
-Driver payouts replace the Vercel cron `0 12 * * *` UTC. Use **pg_cron**, not a container or a systemd timer on the VPS. pg_cron and pg_net are already installed, the Vault secret already exists, and the box should not grow another process. The SQL is `supabase/migrations/20261005130000_driver_payouts_pg_cron.sql`. It is **not** applied. Run it in the Supabase SQL editor after the VPS is answering `https://clemsonrides.com/api/healthz`. It calls `https://clemsonrides.com/api/driver-payouts` with `Authorization: Bearer <clemson_cron_secret>` and a 60 second timeout. Off Vercel that route accepts the bearer alone (`VERCEL` is unset). Requests with no bearer are rejected. `?dry_run=1` still requires the bearer and computes due payouts without creating a Stripe transfer or writing a payout row.
+Driver payouts replace the Vercel cron `0 12 * * *` UTC. Use **pg_cron**, not a container or a systemd timer on the VPS. pg_cron and pg_net are already installed, the Vault secret already exists, and the box should not grow another process. The SQL is `supabase/migrations/20261006055405_driver_payouts_pg_cron.sql`. Remote migration history already records it as version `20261006055405` (applied 2026-10-06). Do not run it again. It calls `https://clemsonrides.com/api/driver-payouts` with `Authorization: Bearer <clemson_cron_secret>` and a 60 second timeout. Off Vercel that route accepts the bearer alone (`VERCEL` is unset). Requests with no bearer are rejected. `?dry_run=1` still requires the bearer and computes due payouts without creating a Stripe transfer or writing a payout row.
 
 Do not call the payout route with a live bearer until you have checked dry-run:
 

@@ -1,9 +1,10 @@
+import { Glyph } from 'rides-native/icons'
 import { useRouter } from 'expo-router'
-import { Ionicons } from '@expo/vector-icons'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Card, ErrorText, Primary, Tag } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
 import { useTheme } from '@/lib/theme'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import type { DriverGateView } from 'rides-native/driverGateView'
 
 export type DriverStatusCardProps = {
@@ -94,7 +95,7 @@ export function DriverStatusCard({
           accessibilityHint="Navigates to driver application"
         >
           <View style={[styles.stepIconWrap, { backgroundColor: colors.card }]}>
-            <Ionicons name="create-outline" size={18} color={colors.orange} />
+            <Glyph name="create-outline" size={18} color={colors.orange} />
           </View>
           <View style={styles.stepCopy}>
             <Text style={[styles.stepTitle, { color: colors.title }]}>Finish info</Text>
@@ -102,7 +103,7 @@ export function DriverStatusCard({
               Add personal info, vehicle, W-9, and contractor agreement.
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.inkSecondary} />
+          <Glyph name="chevron-forward" size={16} color={colors.inkSecondary} />
         </Pressable>
 
         {/* 2. Upload documents */}
@@ -114,7 +115,7 @@ export function DriverStatusCard({
           accessibilityHint="Navigates to documents screen"
         >
           <View style={[styles.stepIconWrap, { backgroundColor: colors.card }]}>
-            <Ionicons name="cloud-upload-outline" size={18} color={colors.orange} />
+            <Glyph name="cloud-upload-outline" size={18} color={colors.orange} />
           </View>
           <View style={styles.stepCopy}>
             <Text style={[styles.stepTitle, { color: colors.title }]}>Upload documents</Text>
@@ -122,7 +123,7 @@ export function DriverStatusCard({
               License, insurance, registration, and vehicle photos.
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.inkSecondary} />
+          <Glyph name="chevron-forward" size={16} color={colors.inkSecondary} />
         </Pressable>
 
         {/* 3. Wait for review */}
@@ -132,7 +133,7 @@ export function DriverStatusCard({
           accessibilityLabel={`Wait for review: ${reviewStepDetail}`}
         >
           <View style={[styles.stepIconWrap, { backgroundColor: colors.card }]}>
-            <Ionicons name="time-outline" size={18} color={colors.orange} />
+            <Glyph name="time-outline" size={18} color={colors.orange} />
           </View>
           <View style={styles.stepCopy}>
             <Text style={[styles.stepTitle, { color: colors.title }]}>Wait for review</Text>
@@ -151,7 +152,7 @@ export function DriverStatusCard({
           accessibilityHint="Navigates to support ticket screen"
         >
           <View style={[styles.stepIconWrap, { backgroundColor: colors.card }]}>
-            <Ionicons name="help-buoy-outline" size={18} color={colors.orange} />
+            <Glyph name="help-buoy-outline" size={18} color={colors.orange} />
           </View>
           <View style={styles.stepCopy}>
             <Text style={[styles.stepTitle, { color: colors.title }]}>Contact support</Text>
@@ -159,7 +160,7 @@ export function DriverStatusCard({
               Questions about driving or your application? Contact our team.
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.inkSecondary} />
+          <Glyph name="chevron-forward" size={16} color={colors.inkSecondary} />
         </Pressable>
       </View>
 
@@ -179,7 +180,7 @@ export function DriverStatusCard({
           accessibilityLabel="Refresh application status"
           accessibilityHint="Re-reads your driver onboarding status from the server"
         >
-          <Ionicons name="refresh" size={14} color={colors.inkSecondary} />
+          <Glyph name="refresh" size={14} color={colors.inkSecondary} />
           <Text style={[styles.refreshText, { color: colors.inkSecondary }]}>
             {refreshing ? 'Checking status…' : 'Pull down to refresh status'}
           </Text>
@@ -203,13 +204,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '800',
+    ...typeScale.cardTitle,
     flex: 1,
   },
   body: {
-    fontSize: 13,
-    lineHeight: 18,
+    ...typeScale.body,
   },
   nextStepsSection: {
     gap: 8,
@@ -225,7 +224,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 10,
-    borderRadius: 14,
+    borderRadius: radius.lg,
     gap: 10,
   },
   stepIconWrap: {
