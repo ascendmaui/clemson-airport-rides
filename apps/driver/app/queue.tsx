@@ -10,10 +10,8 @@ import { notifyAcceptedRide } from '@/lib/push'
 import { useFeedback } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
-import { openAcceptedPickup } from '@/lib/openMaps'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
-import { autoNavigationLeg, navigatePickupAfterAccept } from 'rides-native/autoNavigation'
 import { acceptTrip, confirmBackupQueueTrip, declineDriverOffer, loadDriverDesk, markSearchingOffers, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
 import { fetchDriverApplication } from 'rides-native/drivers'
 import { isSyntheticOffer } from 'rides-native/syntheticOffers'
@@ -229,7 +227,7 @@ export default function QueueScreen() {
   const params = useLocalSearchParams<{ filter?: string }>()
   const insets = useSafeAreaInsets()
   const styles = useQueueStyles()
-  const { colors, navApp, autoNavigate } = useTheme()
+  const { colors } = useTheme()
   const { user } = useAuth()
   const { pulse } = useFeedback()
   const [passed, setPassed] = useState<string[]>([])
@@ -311,24 +309,7 @@ export default function QueueScreen() {
     setBusyId(card.id)
     setError(null)
     try {
-      await navigatePickupAfterAccept({
-        accept: () => acceptTrip(supabase, card, user.id),
-        navApp,
-        pickup: card,
-        enabled: autoNavigationLeg({
-          status: 'accepted',
-          enabled: autoNavigate,
-          acceptedAt: new Date().toISOString(),
-          pickupAt: card.pickupAt,
-        }) === 'pickup',
-        openNav: async (app, stop) => {
-          try {
-            await openAcceptedPickup(card.id, app, stop)
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'Could not open maps')
-          }
-        },
-      })
+      await acceptTrip(supabase, card, user.id)
       notifyAcceptedRide(card).catch(() => {})
       pulse('accept')
       await refresh()

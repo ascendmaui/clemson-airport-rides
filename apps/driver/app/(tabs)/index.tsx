@@ -17,7 +17,6 @@ import { useFeedback } from '@/lib/feedback'
 import { notifyAcceptedRide, setRideAlertSurface } from '@/lib/push'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
-import { openAcceptedPickup } from '@/lib/openMaps'
 import { useTheme } from '@/lib/theme'
 import { driverPresence, goOffline, goOnline, usePresence } from '@/lib/presence'
 import { fetchDriverApplication } from 'rides-native/drivers'
@@ -58,7 +57,6 @@ import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { GameDaySurgeLine } from 'rides-native/GameDayBoard.jsx'
 import { useGameDayExperience } from 'rides-native/useGameDayExperience.js'
-import { autoNavigationLeg, navigatePickupAfterAccept } from 'rides-native/autoNavigation'
 import { approvalGateMessage, isSyntheticOffer } from 'rides-native/syntheticOffers'
 import { driverGateView } from 'rides-native/driverGateView'
 import { loadCounterpart } from 'rides-native/partyProfile.js'
@@ -101,7 +99,7 @@ function demandWord(intensity: number): string {
 export default function DriverHome() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { colors, scheme, earningsPrivate, setEarningsPrivate, autoAccept, setAutoAccept, navApp, autoNavigate } = useTheme()
+  const { colors, scheme, earningsPrivate, setEarningsPrivate, autoAccept, setAutoAccept } = useTheme()
   const shadow = useCardShadow()
   const { user, configured } = useAuth()
   const { pulse } = useFeedback()
@@ -318,24 +316,7 @@ export default function DriverHome() {
     setBusy(true)
     setError(null)
     try {
-      await navigatePickupAfterAccept({
-        accept: () => acceptTrip(supabase, card, user.id),
-        navApp,
-        pickup: card,
-        enabled: autoNavigationLeg({
-          status: 'accepted',
-          enabled: autoNavigate,
-          acceptedAt: new Date().toISOString(),
-          pickupAt: card.pickupAt,
-        }) === 'pickup',
-        openNav: async (app, stop) => {
-          try {
-            await openAcceptedPickup(card.id, app, stop)
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'Could not open maps')
-          }
-        },
-      })
+      await acceptTrip(supabase, card, user.id)
       notifyAcceptedRide(card).catch(() => {})
       pulse('accept')
       await refresh()
