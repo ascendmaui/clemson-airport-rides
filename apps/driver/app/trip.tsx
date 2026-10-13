@@ -3,6 +3,7 @@ import { createTrackingRefresh } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AccessibilityInfo, AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { WaitTimer } from '@/components/WaitTimer'
@@ -11,10 +12,12 @@ import { StopList } from '@/components/StopList'
 import { allStopsDone, nextStopIndex, type StopOp, type TripStop } from 'rides-native/carpoolStops'
 import { waitTimerAnchor, type WaitAnchor } from 'rides-native/waitTimer'
 import { DriverCancelSheet } from '@/components/DriverCancelSheet'
+import { DriverEndTripSheet } from '@/components/DriverEndTripSheet'
 import { FarePanel } from '@/components/FarePanel'
 import { TripEndSummary } from '@/components/TripEndSummary'
 import { BackInQueue } from '@/components/BackInQueue'
 import { ratingTagOptions } from 'rides-native/tripEndSummary'
+import { BootScreen } from '@/components/BootScreen'
 import { SosButton, SosSheet } from '@/components/SosSheet'
 import { ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
@@ -51,6 +54,7 @@ import { followEtaLine, followMapCoordinates } from 'rides-native/roadFollow'
 import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { LivePhase } from 'rides-native/LivePhase'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { CounterpartCard, RateTripPanel, partyColorsFromPalette } from 'rides-native/PartyScreens'
 import { CommunityMatchChips } from 'rides-native/CommunityMatchChips'
 import { loadCounterpart, type CounterpartView } from 'rides-native/partyProfile.js'
@@ -60,6 +64,9 @@ import { TripThread } from 'rides-native/TripThread.jsx'
 import { ScheduledRidesHint } from 'rides-native/ScheduledRidesInfo'
 import { MAPS_HANDOFF_HELPER } from '../../../shared/copy/scheduledRides.js'
 import { isActiveRideStatus } from 'rides-native/safety.js'
+import { driverColdStartView } from 'rides-native/activeTripReconcile'
+import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
+import { canDriverEnd } from '../../../shared/driverEndTrip.js'
 import { MISSING_TRIP_VIEW, driverCanceledView, nextDriverTripCard } from 'rides-native/tripCanceled'
 
 type RiderFix = { latitude: number; longitude: number }
@@ -99,6 +106,17 @@ export default function TripScreen() {
   const shadow = useCardShadow()
   const styles = useMemo(() => tripStyles(colors), [colors])
   const [serverTrip, setTrip] = useState<DriverCard | null>(null)
+  const [tripLoaded, setTripLoaded] = useState(false)
+  const [reconcileError, setReconcileError] = useState<string | null>(null)
+  const routeId = id ?? null
+  const [loadedId, setLoadedId] = useState<string | null>(routeId)
+  if (routeId !== loadedId) {
+    setLoadedId(routeId)
+    setTripLoaded(false)
+    setTrip(null)
+    setReconcileError(null)
+  }
+  const confirmedRef = useRef(false)
   const readerRef = useRef<ReturnType<typeof createTrackingRefresh> | null>(null)
   // Offline action queue: taps saved without signal show as done here and are
   // sent in order (same idempotency key on every retry) once signal returns.
@@ -114,12 +132,17 @@ export default function TripScreen() {
     void readerRef.current?.refresh(true)
   }, [id, user?.id])
   const queueState = useDriverActionQueue(onQueueEvent)
-  const trip = useMemo(() => projectQueuedTrip(serverTrip, queueState.actions), [serverTrip, queueState.actions])
+  const coldStart = driverColdStartView({ confirmed: tripLoaded, server: serverTrip })
+  const trip = useMemo(
+    () => (coldStart.phase === 'live' || coldStart.phase === 'clear'
+      ? projectQueuedTrip(serverTrip, queueState.actions)
+      : null),
+    [coldStart.phase, queueState.actions, serverTrip],
+  )
   const signalLabel = waitingForSignalLabel(queueState.actions.filter((a) => a.tripId === trip?.id).length)
   const sosActive = isActiveRideStatus(trip?.status)
   const [sosOpen, setSosOpen] = useState(false)
-  const terminalTrip = Boolean(trip && ['completed', 'canceled', 'canceled_midride', 'cancelled_wait'].includes(trip.status))
-  const [tripLoaded, setTripLoaded] = useState(false)
+  const terminalTrip = Boolean(trip && ['completed', 'canceled', 'canceled_midride', 'cancelled_wait', 'expired'].includes(trip.status))
   // Rider cancel, switch, early end, or no-show: explain it and offer a way back to offers.
   const canceledView = driverCanceledView(trip)
   const seenStatus = useRef<string | null>(null)
@@ -130,10 +153,15 @@ export default function TripScreen() {
   const [error, setError] = useState<string | null>(null)
   const [settleNote, setSettleNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // False only while the start-trip thumb is dragging, so the sheet does not scroll with it.
+  const [sheetScrollEnabled, setSheetScrollEnabled] = useState(true)
+  const sheetGesture = useMemo(() => Gesture.Native(), [])
   const [waitAnchor, setWaitAnchor] = useState<WaitAnchor | null>(null)
   const [waitError, setWaitError] = useState<string | null>(null)
   const [mapsOffer, setMapsOffer] = useState(false)
   const departedTrip = useRef<string | null>(null)
+  const statusRef = useRef<string | null>(null)
+  statusRef.current = trip?.status || null
   const [person, setPerson] = useState<CounterpartView | null>(null)
   // Completed trips: summary → rating → Back in queue.
   const [ratingClosed, setRatingClosed] = useState(false)
@@ -177,6 +205,10 @@ export default function TripScreen() {
 
   useEffect(() => {
     if (!supabase || !id) return undefined
+    confirmedRef.current = false
+    setTrip(null)
+    setTripLoaded(false)
+    setReconcileError(null)
     const reader = createTrackingRefresh({
       load: () => loadTrip(supabase, id, user?.id),
       onData: (row) => {
@@ -185,12 +217,22 @@ export default function TripScreen() {
         setTrip((current) => current && current.id === row?.id && row?.status === 'arrived'
           && ['in_progress', 'completed', 'canceled', 'canceled_midride', 'cancelled_wait'].includes(current.status)
           ? current : nextDriverTripCard(current, row))
+        if (row?.id && canDriverEnd(row.status)) void sendTripHeartbeat(supabase, row.id)
+        confirmedRef.current = true
+        setReconcileError(null)
         setTripLoaded(true)
       },
-      onError: (err) => setError(err ? (err instanceof Error ? err.message : 'Could not refresh trip. Retrying automatically.') : null),
+      onError: (err) => {
+        const message = err ? (err instanceof Error ? err.message : 'Could not refresh trip. Retrying automatically.') : null
+        setError(message)
+        if (!confirmedRef.current && message) setReconcileError(message)
+      },
     })
     readerRef.current = reader
-    const pull = () => reader.refresh()
+    const pull = () => {
+      if (canDriverEnd(statusRef.current)) void sendTripHeartbeat(supabase, id)
+      return reader.refresh()
+    }
     void pull()
     const listener = AppState.addEventListener('change', (state) => {
       if (state === 'active') void reader.refresh(true)
@@ -256,6 +298,12 @@ export default function TripScreen() {
   })
 
   function onDriverCanceled() {
+    locationTracking.stop()
+    pulse('cancel')
+    router.replace('/')
+  }
+
+  function onDriverEnded() {
     locationTracking.stop()
     pulse('cancel')
     router.replace('/')
@@ -488,6 +536,19 @@ export default function TripScreen() {
     return () => { alive = false }
   }, [trip?.id, trip?.status, autoNavigate, navApp, multiStop, currentStop?.index])
 
+  // Cold start: the server read finishes before any en-route or in-trip chrome.
+  if (id && !tripLoaded) {
+    if (reconcileError) {
+      return (
+        <View style={styles.screen}>
+          <ErrorText>{reconcileError}</ErrorText>
+          <Primary label="Try again" onPress={() => { setReconcileError(null); void readerRef.current?.refresh(true) }} />
+        </View>
+      )
+    }
+    return <BootScreen />
+  }
+
   const pins: MapPin[] = []
   if (self) pins.push({ id: 'me', ...self, title: 'You', pinColor: ORANGE })
   if (multiStop) {
@@ -545,7 +606,8 @@ export default function TripScreen() {
       />
       <View pointerEvents="box-none" style={[styles.sheet, shadow, { paddingBottom: insets.bottom + 12, borderColor: colors.border }]}>
         <View style={[styles.handle, { backgroundColor: colors.track }]} />
-        <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
+        <GestureDetector gesture={sheetGesture}>
+        <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false} scrollEnabled={sheetScrollEnabled}>
         <View style={styles.sheetHeader}>
           <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={10} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Glyph name="back" size={18} color={colors.orange} />
@@ -631,6 +693,8 @@ export default function TripScreen() {
                 photoUrl={person?.photoUrl || trip.riderAvatarUrl || null}
                 busy={busy}
                 onStart={onAdvance}
+                onSwipeActive={(active) => setSheetScrollEnabled(!active)}
+                blockGesture={sheetGesture}
               />
             ) : null}
             {trip.status === 'arrived' ? <WaitTimer arrivedAt={trip.arrivedAt} anchor={waitAnchor} busy={busy} onCancel={onNoShow} /> : null}
@@ -714,8 +778,8 @@ export default function TripScreen() {
         ) : null}
         {error ? <ErrorText>{error}</ErrorText> : null}
         {trip?.backupConfirmOpen ? (
-          <View style={{ marginBottom: 12, padding: 12, borderRadius: 14, backgroundColor: 'rgba(245,102,0,0.12)' }}>
-            <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 16 }}>Confirm trip</Text>
+          <View style={{ marginBottom: 12, padding: 16, borderRadius: radius.lg, backgroundColor: colors.orangeSoft }}>
+            <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 16, letterSpacing: -0.2 }}>Confirm trip</Text>
             <Text style={{ marginTop: 4 }}>{trip.backupConfirmCopy}</Text>
             <ScheduledRidesHint topic="confirm" colors={colors} />
             {trip.backupUrgent ? <Text style={{ color: ORANGE, fontWeight: '700', marginTop: 6 }}>You are up. Confirm and start toward pickup.</Text> : null}
@@ -764,16 +828,18 @@ export default function TripScreen() {
           </View>
         ) : null}
         {trip?.backupLeaveNowOpen ? (
-          <View style={{ marginBottom: 12, padding: 12, borderRadius: 14, backgroundColor: 'rgba(245,102,0,0.12)' }}>
-            <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 16 }}>Leave now</Text>
+          <View style={{ marginBottom: 12, padding: 16, borderRadius: radius.lg, backgroundColor: colors.orangeSoft }}>
+            <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 16, letterSpacing: -0.2 }}>Leave now</Text>
             <ScheduledRidesHint topic="leave" colors={colors} />
             <LeaveNowLabel leaveNowAt={trip.backupLeaveNowAt} />
           </View>
         ) : null}
         {terminalTrip && trip?.status !== 'completed' && !canceledView ? <Primary label="Back to Home" onPress={() => router.replace('/')} tone="purple" /> : null}
         {trip && ['accepted', 'arriving'].includes(trip.status) ? <DriverCancelSheet key={trip.id} supabase={supabase} tripId={trip.id} scheduled={Boolean(trip.pickupAt)} disabled={busy} onCanceled={onDriverCanceled} /> : null}
+        {trip && canDriverEnd(trip.status) ? <DriverEndTripSheet key={`end-${trip.id}`} supabase={supabase} tripId={trip.id} disabled={busy} onEnded={onDriverEnded} /> : null}
         {action && trip?.status !== 'arriving' && trip?.status !== 'arrived' && (!multiStop || (stopsDone && trip?.status === 'in_progress')) ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
         </ScrollView>
+        </GestureDetector>
       </View>
       <SosSheet
         open={sosOpen && sosActive}
@@ -789,8 +855,8 @@ export default function TripScreen() {
 function tripStyles(colors: Palette) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
-    signal: { borderWidth: 2, borderRadius: 14, padding: 10, gap: 2 },
-    signalText: { fontSize: 15, fontWeight: '900' },
+    signal: { borderWidth: 2, borderRadius: radius.lg, padding: 12, gap: 2 },
+    signalText: { fontSize: 15, fontWeight: '800', letterSpacing: -0.2 },
     signalNote: { fontSize: 12, lineHeight: 17 },
     sheet: {
       backgroundColor: colors.card,
@@ -801,23 +867,23 @@ function tripStyles(colors: Palette) {
       gap: 8,
       maxHeight: '78%',
     },
-    handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, marginBottom: 4 },
+    handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: radius.pill, marginBottom: 4 },
     sheetScroll: { flexGrow: 0 },
     sheetContent: { gap: 8, paddingBottom: 8 },
     sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-    kicker: { color: colors.orange, fontWeight: '800', letterSpacing: 1 },
-    copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    kicker: { color: colors.orange, ...typeScale.kickerSm },
+    copy: { color: colors.inkSecondary, ...typeScale.body },
     note: { color: colors.orange, fontSize: 13, lineHeight: 18, fontWeight: '700' },
     fare: { color: colors.ink, fontWeight: '800', fontSize: 16 },
     tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     navRow: { flexDirection: 'row', gap: 8 },
-    nav: { flex: 1, backgroundColor: colors.fill, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
+    nav: { flex: 1, backgroundColor: colors.fill, borderRadius: radius.lg, paddingVertical: 14, alignItems: 'center' },
     navPrimary: { flex: 2 },
-    arrivePrompt: { borderWidth: 2, borderRadius: 18, padding: 14, gap: 8 },
-    arriveTitle: { color: colors.title, fontWeight: '900', fontSize: 28 },
-    navText: { color: colors.onAccent, fontWeight: '800' },
+    arrivePrompt: { borderWidth: 2, borderRadius: radius.lg, padding: 14, gap: 8 },
+    arriveTitle: { color: colors.title, ...typeScale.title },
+    navText: { color: colors.onAccent, fontWeight: '800', letterSpacing: -0.2 },
     settle: { color: colors.title, fontWeight: '700', lineHeight: 20 },
-    airport: { borderRadius: 14, padding: 10, gap: 2, backgroundColor: colors.track },
-    airportChip: { color: colors.purple, fontWeight: '900', letterSpacing: 0.5 },
+    airport: { borderRadius: radius.lg, padding: 12, gap: 2, backgroundColor: colors.purpleSoft },
+    airportChip: { color: colors.purple, fontWeight: '800', letterSpacing: 0.6 },
   })
 }

@@ -37,6 +37,8 @@ import { RideTiers } from './screens/RideTiers'
 import { ScheduleAirport } from './screens/ScheduleAirport'
 import { DriverHome } from './screens/DriverHome'
 import { DriverEarnings } from './screens/DriverEarnings'
+import { DriverW9 } from './screens/DriverW9'
+import { DriverPayouts } from './screens/DriverPayouts'
 import { FriendsScreen, AccountScreen } from './screens/FriendsAccount'
 import { SignInScreen, SignUpScreen } from './screens/AuthScreens'
 import { DriverOnboarding } from './screens/DriverOnboarding'
@@ -218,6 +220,18 @@ function Screen({ path, params }) {
       return (
         <RequireAuth>
           <DriverEarnings />
+        </RequireAuth>
+      )
+    case 'driver-w9':
+      return (
+        <RequireAuth>
+          <DriverW9 />
+        </RequireAuth>
+      )
+    case 'driver-payouts':
+      return (
+        <RequireAuth>
+          <DriverPayouts />
         </RequireAuth>
       )
     case 'driver-onboarding':

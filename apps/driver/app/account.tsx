@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { displayFirstName } from 'rides-native/authErrors'
 import { WomenOnlyCard } from 'rides-native/WomenOnlyCard'
 import { loadComfortPreference, saveComfortPreference } from 'rides-native/comfortPreference.js'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
 
@@ -183,14 +184,14 @@ function accountStyles(colors: Palette) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
     list: { padding: 20, gap: 12, paddingBottom: 40 },
-    back: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
+    back: { width: 40, height: 40, borderRadius: radius.control, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
     backText: { color: colors.title, fontSize: 18, fontWeight: '700' },
-    title: { fontSize: 28, fontWeight: '800', color: colors.title },
-    copy: { color: colors.inkSecondary, fontSize: 15, lineHeight: 21 },
+    title: { ...typeScale.title, color: colors.title },
+    copy: { color: colors.inkSecondary, ...typeScale.body },
     error: { color: colors.danger },
-    linkRow: { backgroundColor: colors.card, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16 },
-    linkText: { color: colors.title, fontWeight: '800' },
-    primary: { backgroundColor: colors.orange, borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
-    primaryText: { color: colors.onAccent, fontWeight: '700', fontSize: 16 },
+    linkRow: { backgroundColor: colors.card, borderRadius: radius.lg, paddingVertical: 14, paddingHorizontal: 16 },
+    linkText: { color: colors.title, fontWeight: '800', letterSpacing: -0.2 },
+    primary: { backgroundColor: colors.orange, borderRadius: radius.lg, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
+    primaryText: { color: colors.onAccent, ...typeScale.button },
   })
 }

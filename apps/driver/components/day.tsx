@@ -1,8 +1,9 @@
 import { Glyph } from 'rides-native/icons'
 import type { ReactNode } from 'react'
-import { useEffect, useRef } from 'react'
-import { Animated, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { Card, useCardShadow } from '@/components/chrome'
+import { Enter } from '@/lib/enterMotion'
 import { ListRow } from '@/components/shell'
 import { useTheme } from '@/lib/theme'
 
@@ -25,23 +26,7 @@ export function FadeIn({
   token?: string | number
   style?: StyleProp<ViewStyle>
 }) {
-  const opacity = useRef(new Animated.Value(0)).current
-  const shift = useRef(new Animated.Value(10)).current
-
-  useEffect(() => {
-    opacity.setValue(0)
-    shift.setValue(10)
-    Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 280, useNativeDriver: true }),
-      Animated.timing(shift, { toValue: 0, duration: 280, useNativeDriver: true }),
-    ]).start()
-  }, [opacity, shift, token])
-
-  return (
-    <Animated.View style={[{ opacity, transform: [{ translateY: shift }] }, style]}>
-      {children}
-    </Animated.View>
-  )
+  return <Enter token={token} style={style}>{children}</Enter>
 }
 
 export function DayHeader({
@@ -121,20 +106,20 @@ export function EmptyState({
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 },
   headerCopy: { flex: 1, gap: 2 },
-  kicker: { fontWeight: '800', letterSpacing: 1.1, fontSize: 12 },
-  title: { fontSize: 32, fontWeight: '800', letterSpacing: -0.6 },
+  kicker: { ...typeScale.kicker },
+  title: { ...typeScale.display },
   group: {
-    borderRadius: 22,
+    borderRadius: radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  note: { borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12 },
+  note: { borderRadius: radius.lg, paddingHorizontal: 14, paddingVertical: 12 },
   badge: {
     width: 52,
     height: 52,
-    borderRadius: 18,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyTitle: { fontSize: 18, fontWeight: '800' },
-  emptyBody: { fontSize: 14, lineHeight: 20 },
+  emptyTitle: { ...typeScale.cardTitle },
+  emptyBody: { ...typeScale.body },
 })
