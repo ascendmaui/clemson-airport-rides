@@ -16,13 +16,13 @@ test('a real driver without avatar_url renders initials and never a demo photo',
   }
   const portrait = resolveDriverPortrait(driver)
   assert.equal(portrait.kind, 'initials')
-  assert.equal(portrait.initials, 'JH')
+  assert.equal(portrait.initials, 'J')
   assert.equal(portrait.url, null)
   assert.equal(portrait.isDemo, false)
   assert.equal(String(portrait.url || '').includes('/demo-drivers/'), false)
   const markup = renderDriverPortrait(driver)
   assert.match(markup, /data-portrait="initials"/)
-  assert.match(markup, />JH</)
+  assert.match(markup, />J</)
   assert.equal(markup.includes('/demo-drivers/'), false)
 })
 
@@ -38,7 +38,7 @@ test('a real driver keeps an uploaded photo and ignores a demo path', () => {
     avatar_url: '/demo-drivers/01-marcus.webp',
   })
   assert.equal(blocked.kind, 'initials')
-  assert.equal(blocked.initials, 'SL')
+  assert.equal(blocked.initials, 'S')
   assert.equal(renderDriverPortrait(blocked).includes('/demo-drivers/'), false)
 })
 

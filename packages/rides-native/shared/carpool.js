@@ -94,7 +94,7 @@ export const NEIGHBORHOOD_GROUPS = [
   {
     id: 'bars',
     label: 'Bars',
-    ids: ['tiger-town', 'esso', 'backstreets', 'nicks', 'study-hall', 'loose-change', 'bar-356'],
+    ids: ['tiger-town', 'tds', 'esso', 'backstreets', 'nicks', 'study-hall', 'loose-change', 'bar-356', 'charleston-sports', 'roar', 'the-wien'],
   },
   {
     id: 'campus',

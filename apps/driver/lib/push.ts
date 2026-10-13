@@ -49,6 +49,19 @@ export function isTripStatusPush(data: unknown): boolean {
   return typeof kind === 'string' && TRIP_STATUS_PUSH_KINDS.includes(kind)
 }
 
+/** Trip id from a remote push. Offer pushes and Carpool ready both set tripId; the url is the scheme deep link. */
+export function tripIdFromNotificationData(data: unknown): string {
+  if (!data || typeof data !== 'object') return ''
+  const row = data as { tripId?: unknown; url?: unknown }
+  if (typeof row.tripId === 'string' && row.tripId.trim()) return row.tripId.trim()
+  if (typeof row.url !== 'string' || !row.url.trim()) return ''
+  try {
+    return new URL(row.url).searchParams.get('id')?.trim() || ''
+  } catch {
+    return ''
+  }
+}
+
 /** Android 8+ plays a custom sound only when that sound is set on a channel. */
 export function rideChannelRequest() {
   return {

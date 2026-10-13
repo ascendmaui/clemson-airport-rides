@@ -23,6 +23,7 @@ import {
 } from '../shared/paymentFailure.js'
 import { loadGameDayMultiplier } from './creditLots.js'
 import {
+  APPROX_ETA_MINUTES,
   applyScheduleAheadDiscount,
   carpoolSeatCount,
   isOfferedRideTier,
@@ -479,6 +480,7 @@ export function riderTierQuotes({
   }
   const tiers = QUOTED_TIER_IDS.map((id) => {
     const priced = priceScheduledRequest({ ...input, tier: id })
+    const timing = quoteTiming(priced, id)
     return {
       id,
       fareCents: priced.fareCents,
@@ -488,13 +490,24 @@ export function riderTierQuotes({
       tigerPassDiscountCents: priced.tigerPassDiscountCents || 0,
       estimate: Boolean(priced.estimate),
       airport: priced.airport,
+      ...timing,
     }
   })
   const selected = priceScheduledRequest({ ...input, tier: requested, seatCount })
   return {
     ...selected,
     tier: requested,
+    ...quoteTiming(selected, requested),
     tiers,
+  }
+}
+
+function quoteTiming(priced, id) {
+  const minutes = Number(priced?.quote?.minutes)
+  const tripMinutes = Number.isFinite(minutes) && minutes > 0 ? Math.max(1, Math.round(minutes)) : null
+  return {
+    etaMinutes: APPROX_ETA_MINUTES[id] ?? null,
+    tripMinutes,
   }
 }
 

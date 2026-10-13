@@ -3,9 +3,10 @@ import test from 'node:test'
 import { buildLeaderboard, leaderboardName } from './leaderboard.js'
 import { weekStartIso } from '../../server/leaderboard.js'
 
-test('names are first name and last initial only', () => {
-  assert.equal(leaderboardName('john matveyev'), 'John M.')
-  assert.equal(leaderboardName('Mary Ann Smith'), 'Mary S.')
+test('names are the first name only', () => {
+  assert.equal(leaderboardName('john matveyev'), 'John')
+  assert.equal(leaderboardName('Mary Ann Smith'), 'Mary')
+  assert.equal(leaderboardName('A. Rivera'), 'Driver')
   assert.equal(leaderboardName('Kim'), 'Kim')
   assert.equal(leaderboardName(''), 'Driver')
 })
@@ -16,8 +17,8 @@ test('ranks by trips and earnings and drops excluded drivers', () => {
   const board = buildLeaderboard(trips, [{ id: 'a', full_name: 'Ann Lee' }, { id: 'b', full_name: 'Bo Diaz' }, { id: 'c', full_name: 'Cy Fox' }], {
     excluded: (id) => id === 'sim' || id === 'c', viewerId: 'b',
   })
-  assert.deepEqual(board.byTrips.map((r) => [r.name, r.trips]), [['Ann L.', 2], ['Bo D.', 1]])
-  assert.deepEqual(board.byEarnings.map((r) => [r.name, r.earningsCents]), [['Bo D.', 4000], ['Ann L.', 1600]])
+  assert.deepEqual(board.byTrips.map((r) => [r.name, r.trips]), [['Ann', 2], ['Bo', 1]])
+  assert.deepEqual(board.byEarnings.map((r) => [r.name, r.earningsCents]), [['Bo', 4000], ['Ann', 1600]])
   assert.equal(board.you.earnings.rank, 1)
   assert.ok(!JSON.stringify(board).includes('Diaz'))
   assert.ok(!JSON.stringify(board).includes('"b"'))

@@ -28,12 +28,14 @@ import { notifyDriverOffer } from '../driverOfferAlerts.js'
 import { exclusiveOfferPatch, netCentsForShare, poolOfferPatch, EXCLUSIVE_SHARE_BPS, POOL_SHARE_BPS } from '../../packages/rides-native/offerLadder.js'
 import { billingForPricedRide } from '../rideBilling.js'
 import { carpoolSeatCount, resolveOfferedTier, vehicleServesComfort } from '../../shared/rideOptions.js'
+import { rideRequestNote } from '../../packages/rides-native/driverNote.js'
 import { isSimulatedDriverId } from '../../packages/rides-native/simulatedDrivers.js'
 import { assertTierAvailable } from '../rideAvailability.js'
 import { releaseTigerHeatReservation, reserveTigerHeatOffer } from '../tigerHeatService.js'
 import { loadRiderMatchPreferences } from '../riderPass.js'
 import { tigerPassMetadata } from '../../shared/tigerPass.js'
 import { authorizeRideRequest } from '../fareAuthorization.js'
+import { enrollCarpoolSeat } from '../carpoolSeatBook.js'
 import { isE2ETestUser } from '../../shared/e2eTestAccounts.js'
 
 function optionError(res, error) {
@@ -245,7 +247,7 @@ export default async function handler(req, res, deps = {}) {
       error: error?.message || String(error),
     }))
   }
-  const riderNote = String(body.note || body.riderNote || '').replace(/\s+/g, ' ').trim().slice(0, 280)
+  const riderNote = rideRequestNote(body.note || body.riderNote).rider_note || ''
   const riderFirst = firstName(
     user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0],
     'Rider',
@@ -341,6 +343,23 @@ export default async function handler(req, res, deps = {}) {
   } catch (err) {
     console.error('[request-driver] fare auth', err?.message || err)
     authorization = { ok: false, parked: true, reason: 'authorization_error' }
+  }
+  if (tier === 'carpool') {
+    try {
+      await enrollCarpoolSeat(sb, {
+        riderId: user.id,
+        pickup: places.pickup,
+        dropoff: places.dropoff,
+        departAt: when,
+        tripId: inserted.data.id,
+        perSeatFareCents: priced.perSeatFareCents || priced.fareCents,
+        drivers: assignQueue
+          ? assignQueue.map((id) => ({ id }))
+          : (offerDriverId ? [{ id: offerDriverId }] : []),
+      }, deps)
+    } catch (err) {
+      console.error('[carpool-seat]', err?.message || err)
+    }
   }
   if (offerDriverId) {
     await notifyDriverOffer(sb, {

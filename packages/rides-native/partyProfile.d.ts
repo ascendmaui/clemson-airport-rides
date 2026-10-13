@@ -43,7 +43,7 @@ export type CounterpartView = {
   bio: string
   rideStyle: string
   spots: string[]
-  phone: string
+  phone?: string
   student: boolean
   vehicle: string
   plate: string

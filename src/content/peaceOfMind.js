@@ -86,9 +86,9 @@ export const BUILT_IN = [
     bookRoute: 'carpool',
     imageId: null,
     title: 'Carpool',
-    what: 'Carpool is a discounted seat. The fare is 15% off, for 1 or 2 seats.',
-    how: 'You choose Carpool. A driver is matched the same way as a Standard ride. Two separate carpool requests are not combined into one car. It does not pair you with other riders.',
-    why: 'The seat costs less than the full fare.',
+    what: 'Carpool is half the Standard fare per seat when 3 or 4 riders share the trip.',
+    how: 'Riders group when pickup and drop-off are each nearby and the times are close. When 3 riders are in, the group books, up to 4. Each rider is pre-authorized for their own seat. There is no deposit. Demo cars do not count.',
+    why: 'Splitting the ride costs less than booking Standard alone.',
   },
   {
     id: 'tiger-pass',
@@ -253,24 +253,24 @@ export const SAFETY_FEATURES = [
 
 export const CARPOOL_SECTION = {
   kicker: 'Carpool',
-  title: 'A discounted seat.',
-  what: 'Carpool is a discounted seat. It is 15% off, for 1 or 2 seats. It does not pair you with other riders.',
-  why: 'The seat costs less than the full fare. Two separate carpool requests are not combined into one car.',
+  title: 'Half of Standard, per seat.',
+  what: 'Carpool is 50% of the Standard fare per seat when 3 or 4 riders split the trip.',
+  why: 'Nearby pickups and drop-offs share one car. Each rider pays for their own seat. There is no deposit.',
   steps: [
     {
       title: 'Choose Carpool',
-      body: 'Carpool is a discounted seat. The fare is 15% off, for 1 or 2 seats.',
+      body: 'The fare is 50% of Standard per seat.',
     },
     {
-      title: 'Get picked up at your stop',
-      body: 'A driver is matched the same way as a Standard ride. You are not paired with another rider.',
+      title: 'Nearby riders group',
+      body: 'Pickup and drop-off each need to be close, and the times need to fall in the same window.',
     },
     {
-      title: 'Pay your share',
-      body: 'You pay the Carpool price for your seat. This does not split a fare with strangers.',
+      title: 'The group books',
+      body: 'At 3 riders the trip merges, up to 4. Each seat is pre-authorized. There is no deposit.',
     },
   ],
-  diagramCaption: 'One car. Your stop. Then the ride.',
+  diagramCaption: 'Same or similar pickup. Same or similar drop-off. One car.',
 }
 
 export const AIRPORT_SECTION = {

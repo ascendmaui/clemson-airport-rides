@@ -1,4 +1,5 @@
 import { displayFirstName, primeDisplayFirstName } from './privacyName.js'
+import { riderDriverFirstName } from '../shared/riderDriverPrivacy.js'
 import { isClemsonEmail, studentDiscountGranted } from '../src/lib/studentDomain.js'
 
 const PROFILE_SELECTS = [
@@ -51,7 +52,11 @@ async function peerNames(sb, userId, trips) {
   for (const row of data) {
     const full = String(row.full_name || '').trim()
     if (full) fullNames.push(full)
-    byId[row.id] = displayFirstName(full)
+    const given = riderDriverFirstName(full, '')
+    byId[row.id] = {
+      display: given,
+      rider: given,
+    }
   }
   return { byId, fullNames }
 }
@@ -99,7 +104,10 @@ export async function loadUserContext(sb, user) {
   const peers = await peerNames(sb, user.id, trips)
   const recentTrips = trips.map((trip) => {
     const peerId = trip.driver_id === user.id ? trip.rider_id : trip.driver_id
-    const peerFirstName = peerId && peerId !== user.id ? (peers.byId[peerId] || '') : ''
+    const entry = peerId && peerId !== user.id ? peers.byId[peerId] : null
+    const peerFirstName = entry
+      ? (trip.rider_id === user.id ? entry.rider : entry.display)
+      : ''
     return {
       id: trip.id,
       status: trip.status,
