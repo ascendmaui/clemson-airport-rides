@@ -1,8 +1,9 @@
+import { nativeGlassAvailable } from 'rides-native/glass'
 import { Glyph } from 'rides-native/icons'
 import { normalizeFlight } from 'rides-native/airportContext'
 import { useFocusEffect, useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, Image, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
+import { AccessibilityInfo, Image, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
@@ -1350,5 +1351,6 @@ function rowPurpose(row: ScheduledRow) {
 
 
 export default function ScheduleScreenRoute() {
+  if (Platform.OS === 'ios' && nativeGlassAvailable()) return <ScheduleScreen />
   return null
 }

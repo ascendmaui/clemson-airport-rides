@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, Switch, Text, View } from 'react-native'
+import { Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { TabSwipeRegion, useTabSwipeRemeasure } from '@/components/MainTabPager'
@@ -10,6 +10,7 @@ import { hapticsEnabled, playMatchChime, setHapticsEnabled, setSoundsEnabled, so
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
+import { nativeGlassAvailable } from 'rides-native/glass'
 import { Glyph } from 'rides-native/icons'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { displayFirstName } from 'rides-native/authErrors'
@@ -361,5 +362,6 @@ function makeStyles(colors: Palette) {
 
 
 export default function AccountScreenRoute() {
+  if (Platform.OS === 'ios' && nativeGlassAvailable()) return <AccountScreen />
   return null
 }
