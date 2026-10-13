@@ -832,7 +832,7 @@ export function RideCard({
     : null
   const preferredNote = preferredRequestNote(card)
   const reduceMotion = useReduceMotion()
-  const opacity = useState(() => new Animated.Value(reduceMotion ? 1 : 0))[0]
+  const rise = useState(() => new Animated.Value(reduceMotion ? 0 : 16))[0]
   const glow = useRef(new Animated.Value(0.35)).current
   const scrollRef = useRef<ScrollView>(null)
   const [viewport, setViewport] = useState(0)
@@ -844,19 +844,19 @@ export function RideCard({
   }, [card.id])
   useEffect(() => {
     if (reduceMotion) {
-      opacity.setValue(1)
+      rise.setValue(0)
       return undefined
     }
-    opacity.setValue(0)
-    const enter = Animated.timing(opacity, {
-      toValue: 1,
+    rise.setValue(16)
+    const enter = Animated.timing(rise, {
+      toValue: 0,
       duration: motion.enterFadeMs,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     })
     enter.start()
     return () => enter.stop()
-  }, [opacity, reduceMotion])
+  }, [reduceMotion, rise])
   useEffect(() => {
     if (!pulsing || reduceMotion) {
       glow.setValue(1)
@@ -876,7 +876,7 @@ export function RideCard({
   return (
     // flexShrink lets the dock squeeze the card to the room left above the controls;
     // only the details scroll — Accept / Decline stay pinned and visible.
-    <Animated.View style={[styles.offerWrap, { opacity, zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION }]}>
+    <Animated.View style={[styles.offerWrap, { transform: [{ translateY: rise }], zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION }]}>
       <Card
         style={[styles.offerCard, pulsing ? { borderColor: colors.orange, borderWidth: 2 } : null]}
         accessibilityRole="summary"

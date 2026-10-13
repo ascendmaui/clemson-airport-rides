@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Card, Primary } from '@/components/chrome'
+import { BackButton, Card, Primary } from '@/components/chrome'
 import { CampusEventsCard } from '@/components/CampusEventsCard'
 import { useTheme } from '@/lib/theme'
 import { FlightsLandingCard } from '@/components/FlightsLandingCard'
@@ -88,6 +88,7 @@ export default function DiscoverScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top + 12 }]}>
       <ScrollView contentContainerStyle={styles.list}>
+        <BackButton onPress={() => router.back()} />
         <Text style={[styles.kicker, { color: colors.orange }]}>DISCOVER</Text>
         <Text style={[styles.title, { color: colors.title }]}>Campus demand</Text>
         <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
