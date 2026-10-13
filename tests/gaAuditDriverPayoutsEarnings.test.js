@@ -237,6 +237,8 @@ test('GA95: cronAuthorized validates secret hygiene, case-insensitivity, and bea
   assert.equal(cronAuthorized({ headers: { Authorization: 'bearer secret123' } }, 'secret123'), true)
   assert.equal(cronAuthorized({ headers: { AUTHORIZATION: 'Bearer secret123' } }, 'secret123'), true)
   assert.equal(cronAuthorized({ headers: { authorization: 'Bearer wrong' } }, 'secret123'), false)
+  assert.equal(cronAuthorized({ headers: { authorization: 'Bearer secret123extra' } }, 'secret123'), false)
+  assert.equal(cronAuthorized({ headers: { authorization: 'Bearer secretx23' } }, 'secret123'), false)
 })
 
 test('GA95: isVercelCron detects various header representations', () => {
