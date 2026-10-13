@@ -75,18 +75,34 @@ test('END plays a different chime with two light impacts and a gap', async () =>
   assert.equal(muted[1].style, 'light')
 })
 
-test('the GO hook is about two seconds and ends in a low boom; END is a short soft chime', () => {
+function zeroCrossRate(samples, rate, startSec, endSec) {
+  const start = Math.max(1, Math.floor(startSec * rate))
+  const end = Math.min(samples.length, Math.floor(endSec * rate))
+  let crosses = 0
+  for (let i = start; i < end; i += 1) {
+    const prev = samples[i - 1]
+    const sample = samples[i]
+    if ((prev <= 0 && sample > 0) || (prev >= 0 && sample < 0)) crosses += 1
+  }
+  return crosses / (((end - start) / rate) || 1)
+}
+
+test('GO rises and END falls, both short warm chimes under 400 ms', () => {
   const go = pcm('apps/driver/assets/sounds/go.wav')
   const end = pcm('apps/driver/assets/sounds/end.wav')
   assert.equal(go.rate, 44100)
   assert.equal(end.rate, 44100)
-  assert.ok(go.seconds > 1.8 && go.seconds < 2.3, `GO is ${go.seconds}s`)
-  assert.ok(end.seconds > 0.7 && end.seconds < 0.95, `END is ${end.seconds}s`)
-  const goTail = lowRatio(go.samples, go.rate, go.seconds - 0.4, go.seconds)
-  const goHead = lowRatio(go.samples, go.rate, 0.1, 1.2)
-  const endTail = lowRatio(end.samples, end.rate, end.seconds - 0.35, end.seconds)
-  assert.ok(goTail > goHead * 5, 'the GO cue ends lower than it starts')
-  assert.ok(goTail > 0.2 && endTail < 0.08, 'only GO ends with the low boom')
+  assert.ok(go.seconds > 0.2 && go.seconds < 0.4, `GO is ${go.seconds}s`)
+  assert.ok(end.seconds > 0.2 && end.seconds < 0.4, `END is ${end.seconds}s`)
+  const goRise = zeroCrossRate(go.samples, go.rate, go.seconds * 0.55, go.seconds * 0.9)
+  const goStart = zeroCrossRate(go.samples, go.rate, 0.02, go.seconds * 0.28)
+  const endFall = zeroCrossRate(end.samples, end.rate, end.seconds * 0.55, end.seconds * 0.9)
+  const endStart = zeroCrossRate(end.samples, end.rate, 0.02, end.seconds * 0.28)
+  assert.ok(goRise > goStart, 'GO rises')
+  assert.ok(endFall < endStart, 'END falls')
+  const goPeak = Math.max(...go.samples.map((sample) => Math.abs(sample)))
+  const endPeak = Math.max(...end.samples.map((sample) => Math.abs(sample)))
+  assert.ok(goPeak < 0.9 && endPeak < 0.9, 'peaks stay under about -1 dBTP')
   assert.notDeepEqual(read('apps/driver/assets/sounds/go.wav'), read('apps/driver/assets/sounds/end.wav'))
   for (const other of ['accept.wav', 'complete.wav', 'request.wav']) {
     assert.notDeepEqual(read('apps/driver/assets/sounds/go.wav'), read(`apps/driver/assets/sounds/${other}`))
@@ -99,7 +115,7 @@ test('GO and END taps use those cues, and accept and complete keep theirs', () =
   assert.match(home, /pulseShift\(nextOnline \? 'GO' : 'END'\)/)
   assert.match(home, /if \(nextOnline\) await goOnline\(user\.id, fix\)/)
   assert.match(home, /else await goOffline\(user\.id\)/)
-  assert.match(home, /toValue: bottomClusterTranslateY\(online\)/)
+  assert.match(home, /homeClutterTranslateY\(false\)/)
   assert.match(fb, /import goSound from '@\/assets\/sounds\/go\.wav'/)
   assert.match(fb, /import endSound from '@\/assets\/sounds\/end\.wav'/)
   assert.match(fb, /import acceptSound from '@\/assets\/sounds\/accept\.wav'/)
@@ -113,6 +129,8 @@ test('GO and END taps use those cues, and accept and complete keep theirs', () =
   assert.match(text('apps/driver/app/vehicles.tsx'), /pulse\('online'\)/)
   assert.match(text('apps/driver/app/fleet.tsx'), /pulse\('online'\)/)
   const script = text('scripts/synthDriverShiftCues.py')
-  assert.match(script, /1917/)
+  assert.match(script, /loudnorm=I=-16:TP=-1/)
+  assert.match(script, /synthesize_go/)
+  assert.match(script, /synthesize_end/)
   assert.doesNotMatch(script, /clemson|band recording/i)
 })

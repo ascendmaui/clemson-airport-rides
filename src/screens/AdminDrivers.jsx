@@ -36,6 +36,7 @@ import {
 import { fetchApplicantThread, messageApplicant, requestApplicantInfo } from '../lib/adminDesk'
 import { AdminAccessDenied } from '../components/AdminAccessDenied'
 import { ProfilePhotoReviewQueue } from '../components/ProfilePhotoReviewQueue'
+import { DocumentAiReviewQueue } from '../components/DocumentAiReviewQueue'
 
 const FILTERS = [
   ['pending_review', 'Needs review'],
@@ -307,6 +308,7 @@ export function AdminDrivers({ embedded = false }) {
       </div>
 
       <ProfilePhotoReviewQueue />
+      <DocumentAiReviewQueue />
 
       {error && <p style={{ color: 'var(--danger)', marginTop: 12 }}>{error}</p>}
       {note && <p style={{ color: 'var(--purple)', fontWeight: 700, marginTop: 12 }}>{note}</p>}

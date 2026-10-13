@@ -2,12 +2,14 @@ import { useRouter } from 'expo-router'
 import * as Location from 'expo-location'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AccessibilityInfo, Animated, AppState, Easing, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { FarePanel } from '@/components/FarePanel'
 import { DriverEndTripSheet } from '@/components/DriverEndTripSheet'
 import { Card, ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
 import { CircleButton, GoButton } from '@/components/shell'
+import { OfferRouteMap } from '@/components/OfferRouteMap'
 import { DriverStatusCard } from '@/components/DriverStatusCard'
 import { CommunityMatchChips } from 'rides-native/CommunityMatchChips'
 import { PerksStrip } from '@/components/PerksStrip'
@@ -18,24 +20,35 @@ import { useFeedback } from '@/lib/feedback'
 import { notifyAcceptedRide, setRideAlertSurface } from '@/lib/push'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
-import { GlassSurface } from 'rides-native/glass'
 import { useTheme } from '@/lib/theme'
-import { BOTTOM_CLUSTER_SHIFT, bottomClusterTranslateY } from '@/lib/bottomCluster'
+import { HOME_CLUTTER_SHIFT, HOME_CLUTTER_SPRING, homeClutterTranslateY } from '@/lib/bottomCluster'
 import { driverPresence, goOffline, goOnline, usePresence } from '@/lib/presence'
 import { fetchDriverApplication } from 'rides-native/drivers'
 import { fetchInspectionDeadline, fetchMyDriverDocuments } from 'rides-native/driverOnboardingClient'
+import { decideGoPress, idleGoTone } from 'rides-native/goPress'
+import { offerPayoutFigures } from 'rides-native/offerRoute.js'
 import {
+  ATTENTION_COPY,
   DOCUMENTS_GO_ONLINE_COPY,
   goOnlineDocumentGate,
-  guardGoPress,
   type DocumentRow,
 } from 'rides-native/documentCategories'
+import { documentAttentionItems } from '../../../../shared/documentAiReview.js'
 import {
   INSPECTION_OVERDUE_COPY,
   inspectionCountdown,
   inspectionGoOnlineGate,
 } from 'rides-native/vehicleInspection'
-import { displayFirstName } from 'rides-native/authErrors'
+import {
+  DOCUMENT_BANNER_ELEVATION,
+  DOCUMENT_BANNER_Z,
+  OFFER_CARD_ELEVATION,
+  OFFER_CARD_Z,
+  dedupeOffersById,
+  documentBannersCollapsed,
+  offerAcceptSeconds,
+  setHomeOfferId,
+} from 'rides-native/offerStack.js'
 import { riderDriverFirstName } from '../../../../shared/riderDriverPrivacy.js'
 import { heatColor } from 'rides-native/heat.js'
 import { HEAT_WINDOWS } from 'rides-native/places.js'
@@ -50,7 +63,6 @@ import {
   loadGameDay,
   loadEarnings,
   publishDriverCapacity,
-  setPriorityMode,
   subscribeTrips,
   type DriverDesk,
 } from 'rides-native/driverDesk'
@@ -79,7 +91,7 @@ import { approvalGateMessage, isSyntheticOffer } from 'rides-native/syntheticOff
 import { driverGateView } from 'rides-native/driverGateView'
 import { loadCounterpart } from 'rides-native/partyProfile.js'
 import { offerCardViewModel } from 'rides-native/offerCard'
-import { EXCLUSIVE_SECONDS, exclusiveSecondsLeft, offerHourly, poolSecondsLeft } from 'rides-native/offerLadder.js'
+import { offerHourly } from 'rides-native/offerLadder.js'
 import { WorthItLegend } from 'rides-native/WorthItLegend'
 import { offerCardGauge } from 'rides-native/offerGauge'
 import { fetchOfferPreview, riderInitials } from 'rides-native/offerPreviewClient'
@@ -121,7 +133,7 @@ function demandWord(intensity: number): string {
 export default function DriverHome() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { colors, scheme, earningsPrivate, setEarningsPrivate, autoAccept, setAutoAccept } = useTheme()
+  const { colors, scheme, earningsPrivate, autoAccept, setAutoAccept } = useTheme()
   const shadow = useCardShadow()
   const { user, configured } = useAuth()
   const { pulse, pulseShift } = useFeedback()
@@ -131,14 +143,14 @@ export default function DriverHome() {
   const [weekCents, setWeekCents] = useState(0)
   const [lastTrip, setLastTrip] = useState<string | null>(null)
   const [status, setStatus] = useState('none')
-  const [documents, setDocuments] = useState<DocumentRow[] | null>(null)
-  const [inspectionDueAt, setInspectionDueAt] = useState<string | null>(null)
   const [reason, setReason] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [goCue, setGoCue] = useState(0)
+  const [documents, setDocuments] = useState<DocumentRow[] | null>(null)
+  const [inspectionDueAt, setInspectionDueAt] = useState<string | null>(null)
   const [self, setSelf] = useState<{ latitude: number; longitude: number } | null>(null)
-  const [peek, setPeek] = useState(false)
-  const [peekPage, setPeekPage] = useState(0)
+  const [demandOpen, setDemandOpen] = useState(false)
   const [focusToken, setFocusToken] = useState(0)
   const [showHeat, setShowHeat] = useState(true)
   const [heatWindow, setHeatWindow] = useState('now')
@@ -166,6 +178,10 @@ export default function DriverHome() {
     () => (documents ? goOnlineDocumentGate(documents) : null),
     [documents],
   )
+  const attentionItems = useMemo(
+    () => documentAttentionItems(documents || []),
+    [documents],
+  )
   const inspectionGate = inspectionGoOnlineGate({
     documents: documents || [],
     dueAt: inspectionDueAt,
@@ -176,17 +192,29 @@ export default function DriverHome() {
     dueAt: inspectionDueAt,
     now: new Date(),
   })?.message || ''
-  const documentsHoldGo = !online && (documents == null || documentGate?.allowed === false)
-  const inspectionHoldGo = !online && !inspectionGate.allowed
   const showDocumentGate = Boolean(user && documentGate && !documentGate.allowed)
   const showInspectionGate = Boolean(user && !showDocumentGate && !inspectionGate.allowed)
   const showInspectionReminder = Boolean(user && !showDocumentGate && inspectionGate.allowed && inspectionReminder)
-  const clusterY = useRef(new Animated.Value(BOTTOM_CLUSTER_SHIFT)).current
+  const idleTone = useMemo(
+    () => idleGoTone({ documents, dueAt: inspectionDueAt, canGoOnline }),
+    [documents, inspectionDueAt, canGoOnline],
+  )
+  const clutterY = useSharedValue(homeClutterTranslateY(online))
+  const [clutterInteractive, setClutterInteractive] = useState(!online)
   useEffect(() => {
     setRideAlertSurface({ online })
-    Animated.timing(clusterY, { toValue: bottomClusterTranslateY(online), duration: 280, useNativeDriver: true }).start()
-  }, [clusterY, online])
-  const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Driver') : 'Driver'
+    if (online) {
+      setClutterInteractive(false)
+      clutterY.value = withSpring(HOME_CLUTTER_SHIFT, HOME_CLUTTER_SPRING)
+      return
+    }
+    clutterY.value = withSpring(homeClutterTranslateY(false), HOME_CLUTTER_SPRING, (finished) => {
+      if (finished) runOnJS(setClutterInteractive)(true)
+    })
+  }, [clutterY, online])
+  const clutterStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: clutterY.value }],
+  }))
   const tabClearance = insets.bottom + 72
   // The dock is pinned between the status bar / Dynamic Island and the tab bar.
   // Its content stacks from the bottom; an offer card shrinks (and scrolls) to fit.
@@ -356,6 +384,7 @@ export default function DriverHome() {
   useEffect(() => driverPresence.onFix((fix) => setSelf({ latitude: fix.lat, longitude: fix.lng })), [])
 
   async function toggle() {
+    setGoCue((value) => value + 1)
     if (!user) {
       router.push('/sign-in')
       return
@@ -369,30 +398,22 @@ export default function DriverHome() {
         ? await fetchInspectionDeadline(supabase, user.id).catch(() => null)
         : null
       const dueAt = deadline?.inspection_due_at ?? null
-      const decision = guardGoPress({ goingOnline: true, documents: rows })
-      if (!decision.proceed) {
-        if (rows) setDocuments(rows)
-        setInspectionDueAt(dueAt)
-        setError(decision.message)
-        return
-      }
-      const inspectionDecision = inspectionGoOnlineGate({
-        documents: rows || [],
+      const decision = decideGoPress({
+        goingOnline: true,
+        documents: rows,
         dueAt,
         now: new Date(),
+        canGoOnline,
       })
-      if (!inspectionDecision.allowed) {
-        if (rows) setDocuments(rows)
-        setInspectionDueAt(dueAt)
-        setError(inspectionDecision.message)
+      if (decision.outcome === 'attention') {
+        setError(null)
+        router.push({ pathname: '/documents', params: { attention: '1' } })
         return
       }
-      if (rows) setDocuments(rows)
-      setInspectionDueAt(dueAt)
-    }
-    if (!canGoOnline) {
-      setError(gate.body)
-      return
+      if (decision.outcome !== 'online') {
+        setError(gate.body)
+        return
+      }
     }
     setBusy(true)
     setError(null)
@@ -455,20 +476,15 @@ export default function DriverHome() {
     }
   }
 
-  async function onPriority() {
-    if (!user || !supabase || !desk) return
-    try {
-      await setPriorityMode(supabase, user.id, !desk.priority)
-      setDesk({ ...desk, priority: !desk.priority })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update priority')
-    }
-  }
-
-  const liveOffers = (canSeeOffers ? desk?.offers || [] : []).filter(
+  const liveOffers = dedupeOffersById((canSeeOffers ? desk?.offers || [] : []).filter(
     (card: DriverCard) => !isSyntheticOffer(card) && !hiddenOffers.includes(card.id),
-  )
+  ))
   const offer = liveOffers.find((card: DriverCard) => card.id === selectedOfferId) || liveOffers[0] || null
+  useEffect(() => {
+    setHomeOfferId(offer?.id ?? null)
+    return () => setHomeOfferId(null)
+  }, [offer?.id])
+  const bannersCollapsed = documentBannersCollapsed({ online, offerId: offer?.id })
   const liveFrom = self
     ? { lat: self.latitude, lng: self.longitude }
     : desk?.lat != null && desk?.lng != null
@@ -517,14 +533,6 @@ export default function DriverHome() {
     setSelectedOfferId(card.id)
   }
 
-  const statusLine = !user
-    ? 'Sign in to drive'
-    : !canGoOnline
-      ? gate.title
-      : online
-        ? `You're online, ${name}`
-        : 'You\'re offline'
-
   // Peak mode: auto on game days, driver can flip it either way.
   const peakMode = peakOverride ?? Boolean(gameNotice?.live)
   const liveHeat = showHeat && heatWindow === 'now'
@@ -548,150 +556,170 @@ export default function DriverHome() {
         onPinPress={onPinPress}
       />
       <View pointerEvents="box-none" style={styles.overlay}>
-        <View style={[styles.top, { paddingTop: dockTop }]} pointerEvents="box-none">
-          <CircleButton icon="inbox" label="Inbox" onPress={() => router.push('/inbox')} />
-          <Pressable
-            onPress={() => setPeek((open: boolean) => !open)}
-            style={[styles.pill, shadow, { backgroundColor: 'transparent', overflow: 'hidden' }]}
-            accessibilityRole="button"
-            accessibilityLabel="Earnings"
-            accessibilityHint="Expands today's and this week's earnings preview"
-            accessibilityState={{ expanded: peek }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <GlassSurface app="driver" scheme={scheme} variant="chip" pointerEvents="none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
-            <Text style={[styles.pillText, { color: colors.title }]}>{shownCents(todayCents, earningsPrivate)}</Text>
-            <Text style={{ color: colors.inkSecondary, fontWeight: '800' }}>{peek ? '▴' : '▾'}</Text>
-          </Pressable>
-          <CircleButton icon="search" label="Discover" onPress={() => router.push('/discover')} />
-        </View>
-
-        {peek ? (
-          <View style={[styles.peek, shadow, { backgroundColor: colors.card }]}>
-            <View style={styles.peekHead}>
-              <Pressable
-                onPress={() => setEarningsPrivate(!earningsPrivate)}
-                accessibilityRole="button"
-                accessibilityLabel={earningsPrivate ? 'Show earnings' : 'Hide earnings'}
-                accessibilityHint="Toggles visibility of earnings amounts"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={{ color: colors.title, fontWeight: '800' }}>{earningsPrivate ? 'Show' : 'Hide'}</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => router.push('/learning')}
-                accessibilityRole="button"
-                accessibilityLabel="Help"
-                accessibilityHint="Opens driver learning center"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={{ color: colors.orange, fontWeight: '800' }}>Help</Text>
-              </Pressable>
-            </View>
-            <Text style={[styles.peekAmount, { color: colors.title }]}>
-              {shownCents(peekPage === 0 ? todayCents : weekCents, earningsPrivate)}
-            </Text>
-            <Text style={{ color: colors.inkSecondary }}>{peekPage === 0 ? 'Today' : 'This week'}</Text>
-            <Text style={{ color: colors.ink, fontWeight: '700' }}>
-              {lastTrip ? `Last trip · ${lastTrip}` : 'No completed trip yet'}
-            </Text>
-            <Primary label="See earnings activity" onPress={() => router.push('/earnings-activity')} tone="purple" />
-            <View style={styles.dots}>
-              {[0, 1].map((page) => (
-                <Pressable
-                  key={page}
-                  onPress={() => setPeekPage(page)}
-                  accessibilityRole="button"
-                  accessibilityLabel={page === 0 ? "Today's earnings" : "This week's earnings"}
-                  accessibilityState={{ selected: page === peekPage }}
-                  hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-                  style={[styles.dot, { backgroundColor: page === peekPage ? colors.orange : colors.track }]}
-                />
-              ))}
-            </View>
+        <Reanimated.View
+          pointerEvents={clutterInteractive && !offer ? 'box-none' : 'none'}
+          style={[styles.clutter, clutterStyle]}
+        >
+          <View style={[styles.top, { paddingTop: dockTop }]} pointerEvents="box-none">
+            <CircleButton icon="inbox" label="Messages" onPress={() => router.push('/inbox')} />
+            <View style={styles.topSpacer} />
+            <CircleButton icon="search" label="Search and discover" onPress={() => router.push('/discover')} />
           </View>
-        ) : null}
-
-        <View style={styles.heatPanel}>
-          <View style={styles.heatRow}>
-            <Text style={[styles.heatLabel, { color: colors.inkSecondary }]}>Busy areas</Text>
+          <View pointerEvents="box-none" style={[styles.earningsWrap, { top: dockTop }]}>
             <Pressable
-              onPress={() => setShowHeat((value: boolean) => !value)}
-              style={[styles.heatToggle, { backgroundColor: showHeat ? colors.orange : colors.card }]}
-              accessibilityRole="switch"
-              accessibilityLabel={showHeat ? 'Hide busy areas' : 'Show busy areas'}
-              accessibilityState={{ checked: showHeat }}
+              onPress={() => router.push('/earnings')}
+              style={[styles.earningsButton, shadow, { backgroundColor: colors.card }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Earnings, ${shownCents(todayCents, earningsPrivate)} today`}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Text style={{ color: showHeat ? '#fff' : colors.title, fontWeight: '800', fontSize: 12 }}>
-                {showHeat ? 'On' : 'Off'}
-              </Text>
+              <Text style={[styles.pillText, { color: colors.title }]}>{shownCents(todayCents, earningsPrivate)}</Text>
+              <Text style={{ color: colors.inkSecondary, fontWeight: '800', fontSize: 12 }}>Earnings</Text>
             </Pressable>
           </View>
-          {showHeat ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.heatWindows}>
-              <Pressable
-                onPress={() => setPeakOverride(!peakMode)}
-                accessibilityRole="switch"
-                accessibilityLabel="Peak mode for game days and airport rushes"
-                accessibilityState={{ checked: peakMode }}
-                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                style={[styles.heatChip, peakMode ? styles.heatChipOn : { backgroundColor: colors.card, borderColor: colors.border }]}
-              >
-                <Text style={{ color: peakMode ? '#FFFFFF' : colors.title, fontWeight: '700', fontSize: 13, letterSpacing: 0.2 }}>Peak</Text>
-              </Pressable>
-              {HEAT_WINDOWS.map((item: { id: string; label: string }) => {
-                const on = item.id === heatWindow
-                return (
+
+          <View style={styles.heatPanel}>
+            <Pressable
+              onPress={() => setDemandOpen((value: boolean) => !value)}
+              accessibilityRole="button"
+              accessibilityLabel="Busy areas, peak, and live demand"
+              accessibilityState={{ expanded: demandOpen }}
+              style={styles.demandToggle}
+            >
+              <Text style={[styles.heatLabel, { color: colors.inkSecondary }]}>Busy areas, peak, and live demand</Text>
+              <Text style={{ color: colors.orange, fontWeight: '800' }}>{demandOpen ? 'Hide' : 'Show'}</Text>
+            </Pressable>
+            {demandOpen ? (
+              <>
+                <View style={styles.heatRow}>
+                  <Text style={[styles.heatLabel, { color: colors.inkSecondary }]}>Busy areas</Text>
                   <Pressable
-                    key={item.id}
-                    onPress={() => setHeatWindow(item.id)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${item.label} demand`}
-                    accessibilityState={{ selected: on }}
-                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                    style={[styles.heatChip, { backgroundColor: on ? colors.orange : colors.card }]}
+                    onPress={() => setShowHeat((value: boolean) => !value)}
+                    style={[styles.heatToggle, { backgroundColor: showHeat ? colors.orange : colors.card }]}
+                    accessibilityRole="switch"
+                    accessibilityLabel={showHeat ? 'Hide busy areas' : 'Show busy areas'}
+                    accessibilityState={{ checked: showHeat }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800', fontSize: 12 }}>{item.label}</Text>
+                    <Text style={{ color: showHeat ? '#fff' : colors.title, fontWeight: '800', fontSize: 12 }}>
+                      {showHeat ? 'On' : 'Off'}
+                    </Text>
                   </Pressable>
-                )
-              })}
-            </ScrollView>
-          ) : null}
-          <Text style={{ color: colors.inkSecondary, fontSize: 12, marginHorizontal: 16, marginTop: 6 }}>
-            {!showHeat
-              ? 'Busy areas are hidden.'
-              : liveHeat
-                ? demand.cells.length
-                  ? `Live demand · last ${peakMode ? 30 : 20} min · tap a zone`
-                  : demand.updatedAt ? 'Quiet right now · updates every 30 s' : 'Loading live demand…'
-                : heatLoading ? 'Loading campus demand…' : `${heatCaption}${heatBlended ? ' · Live + typical' : ''}`}
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hotspots} style={styles.hotspotRow}>
-            <View style={[styles.hotspot, { backgroundColor: gameNotice?.live ? colors.orange : colors.card }]}>
-              <Text style={[gameNotice?.live ? styles.hotspotOn : styles.hotspotOff, gameNotice?.live ? null : { color: colors.purple }]}>
-                {gameNotice == null ? 'Game day…' : gameNotice.headline}
+                </View>
+                {showHeat ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.heatWindows}>
+                    <Pressable
+                      onPress={() => setPeakOverride(!peakMode)}
+                      accessibilityRole="switch"
+                      accessibilityLabel="Peak mode for game days and airport rushes"
+                      accessibilityState={{ checked: peakMode }}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                      style={[styles.heatChip, peakMode ? styles.heatChipOn : { backgroundColor: colors.card, borderColor: colors.border }]}
+                    >
+                      <Text style={{ color: peakMode ? '#FFFFFF' : colors.title, fontWeight: '700', fontSize: 13, letterSpacing: 0.2 }}>Peak</Text>
+                    </Pressable>
+                    {HEAT_WINDOWS.map((item: { id: string; label: string }) => {
+                      const on = item.id === heatWindow
+                      return (
+                        <Pressable
+                          key={item.id}
+                          onPress={() => setHeatWindow(item.id)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${item.label} demand`}
+                          accessibilityState={{ selected: on }}
+                          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                          style={[styles.heatChip, { backgroundColor: on ? colors.orange : colors.card }]}
+                        >
+                          <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800', fontSize: 12 }}>{item.label}</Text>
+                        </Pressable>
+                      )
+                    })}
+                  </ScrollView>
+                ) : null}
+                <Text style={{ color: colors.inkSecondary, fontSize: 12, marginHorizontal: 16, marginTop: 6 }}>
+                  {!showHeat
+                    ? 'Busy areas are hidden.'
+                    : liveHeat
+                      ? demand.cells.length
+                        ? `Live demand · last ${peakMode ? 30 : 20} min · tap a zone`
+                        : demand.updatedAt ? 'Quiet right now · updates every 30 s' : 'Loading live demand…'
+                      : heatLoading ? 'Loading campus demand…' : `${heatCaption}${heatBlended ? ' · Live + typical' : ''}`}
+                </Text>
+                {canSeeOffers && !desk?.active ? <ForecastCard /> : null}
+              </>
+            ) : null}
+          </View>
+
+          {!bannersCollapsed && showDocumentGate && documentGate ? (
+            <Pressable
+              onPress={() => router.push('/documents')}
+              accessibilityRole="link"
+              accessibilityLabel={`${ATTENTION_COPY}. ${DOCUMENTS_GO_ONLINE_COPY}. ${documentGate.sections.map((section) => section.label).join(', ')}. ${attentionItems.map((item) => `${item.label}. ${item.reason}`).join(' ')}. Documents`}
+              style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.orange, zIndex: DOCUMENT_BANNER_Z, elevation: DOCUMENT_BANNER_ELEVATION }]}
+            >
+              <Text style={[styles.docGateTitle, { color: colors.orange }]}>{ATTENTION_COPY}</Text>
+              <Text style={[styles.docGateSections, { color: colors.title }]}>{DOCUMENTS_GO_ONLINE_COPY}</Text>
+              <Text style={[styles.docGateSections, { color: colors.title }]}>
+                {documentGate.sections.map((section) => section.label).join(', ')}
               </Text>
-            </View>
-            {hotspots.map((spot: BusySpot) => (
-              <View key={spot.id} style={[styles.hotspot, { backgroundColor: colors.card }, shadow]}>
-                <Text style={{ color: colors.title, fontWeight: '800' }}>{spot.name}</Text>
-                <Text style={{ color: colors.orange, fontWeight: '700', fontSize: 12 }}>{demandWord(spot.intensity)}</Text>
-              </View>
-            ))}
-          </ScrollView>
-          {gameNotice ? (
-            <Text style={{ color: colors.inkSecondary, fontSize: 12, marginHorizontal: 16, marginTop: 6 }}>
-              {gameNotice.live ? `${gameNotice.detail}. ${gameNotice.body}` : gameNotice.body}
-            </Text>
+              {attentionItems.map((item) => (
+                <Text key={item.id} style={[styles.docGateReason, { color: colors.title }]}>
+                  {item.label}: {item.reason}
+                </Text>
+              ))}
+              <Text style={[styles.docGateLink, { color: colors.orange }]}>Documents</Text>
+            </Pressable>
           ) : null}
-          <PerksStrip />
-          {canSeeOffers && !desk?.active ? <ForecastCard /> : null}
-        </View>
+          {!bannersCollapsed && showInspectionGate ? (
+            <Pressable
+              onPress={() => router.push('/documents')}
+              accessibilityRole="link"
+              accessibilityLabel={`${INSPECTION_OVERDUE_COPY}. Documents`}
+              style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.danger, zIndex: DOCUMENT_BANNER_Z, elevation: DOCUMENT_BANNER_ELEVATION }]}
+            >
+              <Text style={[styles.docGateTitle, { color: colors.orange }]}>{ATTENTION_COPY}</Text>
+              <Text style={[styles.docGateSections, { color: colors.title }]}>{INSPECTION_OVERDUE_COPY}</Text>
+              {attentionItems.filter((item) => item.id.startsWith('inspection')).map((item) => (
+                <Text key={item.id} style={[styles.docGateReason, { color: colors.title }]}>
+                  {item.label}: {item.reason}
+                </Text>
+              ))}
+              <Text style={[styles.docGateLink, { color: colors.orange }]}>Documents</Text>
+            </Pressable>
+          ) : null}
+          {!bannersCollapsed && showInspectionReminder ? (
+            <Pressable
+              onPress={() => router.push('/documents')}
+              accessibilityRole="link"
+              accessibilityLabel={`${inspectionReminder}. Documents`}
+              style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.orange, zIndex: DOCUMENT_BANNER_Z, elevation: DOCUMENT_BANNER_ELEVATION }]}
+            >
+              <Text style={[styles.docGateTitle, { color: colors.title }]}>{inspectionReminder}</Text>
+              <Text style={[styles.docGateLink, { color: colors.orange }]}>Documents</Text>
+            </Pressable>
+          ) : null}
 
-        <View style={styles.flex} pointerEvents="box-none" />
+          {!canSeeOffers ? (
+            <View style={styles.statusWrap}>
+              <DriverStatusCard
+                status={status}
+                gate={gate}
+                reason={reason}
+                onRefresh={onPullRefresh}
+                refreshing={refreshing}
+              />
+            </View>
+          ) : null}
+          {!online ? (
+            <GameDaySurgeLine
+              model={gameDayExperience.ready ? gameDayExperience.model : null}
+              online={false}
+              onPress={() => router.push('/game-day')}
+            />
+          ) : null}
+        </Reanimated.View>
 
-        <View pointerEvents="box-none" style={[styles.dock, { top: dockTop, bottom: tabClearance }]}>
+        <View pointerEvents="box-none" style={[styles.dock, styles.offerDock, { top: dockTop, bottom: tabClearance }]}>
           {!configured ? <ErrorText>Add EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable, then rebuild.</ErrorText> : null}
           {locationTracking.error ? (
             <View>
@@ -700,32 +728,6 @@ export default function DriverHome() {
             </View>
           ) : null}
           {error ? <ErrorText>{error}</ErrorText> : null}
-          {!canSeeOffers ? (
-            <ScrollView
-              style={styles.statusWrap}
-              contentContainerStyle={styles.statusScrollBody}
-              showsVerticalScrollIndicator={false}
-              alwaysBounceVertical={true}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onPullRefresh}
-                  tintColor={colors.orange}
-                  title="Checking application status…"
-                  titleColor={colors.inkSecondary}
-                  accessibilityLabel="Pull to refresh application status"
-                />
-              }
-            >
-              <DriverStatusCard
-                status={status}
-                gate={gate}
-                reason={reason}
-                onRefresh={onPullRefresh}
-                refreshing={refreshing}
-              />
-            </ScrollView>
-          ) : null}
           {tripReconciled && desk?.active ? (
             <Pressable
               onPress={() => router.push({ pathname: '/trip', params: { id: desk.active!.id } })}
@@ -772,89 +774,24 @@ export default function DriverHome() {
               onDecline={() => onDecline(offer)}
             />
           ) : null}
-          {!online ? (
-            <GameDaySurgeLine
-              model={gameDayExperience.ready ? gameDayExperience.model : null}
-              online={false}
-              onPress={() => router.push('/game-day')}
-            />
-          ) : null}
-          {showDocumentGate && documentGate ? (
-            <Pressable
-              onPress={() => router.push('/documents')}
-              accessibilityRole="link"
-              accessibilityLabel={`${DOCUMENTS_GO_ONLINE_COPY}. ${documentGate.sections.map((section) => section.label).join(', ')}. Documents`}
-              style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.danger }]}
-            >
-              <Text style={[styles.docGateTitle, { color: colors.danger }]}>{DOCUMENTS_GO_ONLINE_COPY}</Text>
-              <Text style={[styles.docGateSections, { color: colors.title }]}>
-                {documentGate.sections.map((section) => section.label).join(', ')}
-              </Text>
-              <Text style={[styles.docGateLink, { color: colors.orange }]}>Documents</Text>
-            </Pressable>
-          ) : null}
-          {showInspectionGate ? (
-            <Pressable
-              onPress={() => router.push('/documents')}
-              accessibilityRole="link"
-              accessibilityLabel={`${INSPECTION_OVERDUE_COPY}. Documents`}
-              style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.danger }]}
-            >
-              <Text style={[styles.docGateTitle, { color: colors.danger }]}>{INSPECTION_OVERDUE_COPY}</Text>
-              <Text style={[styles.docGateLink, { color: colors.orange }]}>Documents</Text>
-            </Pressable>
-          ) : null}
-          {showInspectionReminder ? (
-            <Pressable
-              onPress={() => router.push('/documents')}
-              accessibilityRole="link"
-              accessibilityLabel={`${inspectionReminder}. Documents`}
-              style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.orange }]}
-            >
-              <Text style={[styles.docGateTitle, { color: colors.title }]}>{inspectionReminder}</Text>
-              <Text style={[styles.docGateLink, { color: colors.orange }]}>Documents</Text>
-            </Pressable>
-          ) : null}
-          {/* One transform: END slides the bar, GO, and side icons together; GO restores them. */}
-          <Animated.View
-            pointerEvents="box-none"
-            style={[styles.bottomCluster, { transform: [{ translateY: clusterY }] }]}
-          >
-            <View style={styles.controls} pointerEvents="box-none">
-              <View style={styles.toolCol}>
-                <CircleButton icon="shield" label="Safety" onPress={() => router.push('/safety')} />
-                <CircleButton icon="sparkles" label="Priority mode" onPress={onPriority} />
-              </View>
+          <View style={styles.goRow} pointerEvents="box-none">
+            {online ? (
+              <CircleButton icon="list" label="Ride queue" onPress={() => router.push('/queue')} />
+            ) : <View style={styles.goSide} />}
+            <View style={styles.goSlot}>
               <GoButton
                 online={online}
                 busy={busy}
-                disabled={!canGoOnline || documentsHoldGo || inspectionHoldGo}
-                disabledReason={
-                  documentsHoldGo && documentGate && !documentGate.allowed
-                    ? documentGate.message
-                    : inspectionHoldGo
-                      ? INSPECTION_OVERDUE_COPY
-                      : gate.body
-                }
+                tone={idleTone}
+                cue={goCue}
                 onPress={toggle}
               />
-              <View style={styles.toolCol}>
-                <CircleButton icon="stats-chart" label="Earnings" onPress={() => router.push('/earnings')} />
-                <CircleButton icon="locate" label="Recenter map" onPress={() => setFocusToken((value: number) => value + 1)} />
-              </View>
+              {online ? (
+                <Text style={[styles.onlineStatus, { color: colors.inkSecondary }]} accessibilityLiveRegion="polite">You're online</Text>
+              ) : null}
             </View>
-            <View
-              style={[styles.bar, shadow, { backgroundColor: 'transparent', overflow: 'hidden' }]}
-              accessibilityLiveRegion="polite"
-              accessibilityElementsHidden={!online}
-              pointerEvents={online ? 'auto' : 'none'}
-            >
-              <GlassSurface app="driver" scheme={scheme} variant="header" pointerEvents="none" accent="orange" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
-              <CircleButton icon="options" label="Ride queue" onPress={() => router.push('/queue')} />
-              <Text style={[styles.barText, { color: colors.title }]} accessibilityLiveRegion="polite">{online ? statusLine : ''}</Text>
-              <CircleButton icon="list" label="Open queue" onPress={() => router.push('/queue')} />
-            </View>
-          </Animated.View>
+            <View style={styles.goSide} />
+          </View>
         </View>
       </View>
     </View>
@@ -882,16 +819,10 @@ export function RideCard({
 }) {
   const { colors } = useTheme()
   const [tick, setTick] = useState(() => Date.now())
-  const seenAt = useRef(Date.now())
-  useEffect(() => {
-    seenAt.current = Date.now()
-  }, [card.id])
-  const waitingOnPool = card.offerPhase === 'pool' || card.offerPhase === 'scheduled' || card.status === 'scheduled'
-  const exclusiveLeft = waitingOnPool
-    ? null
-    : (exclusiveSecondsLeft(card, tick) ?? Math.max(0, EXCLUSIVE_SECONDS - Math.round((tick - seenAt.current) / 1000)))
-  const poolLeft = poolSecondsLeft(card, tick)
-  const secondsLeft = exclusiveLeft ?? poolLeft
+  const acceptClock = offerAcceptSeconds(card, tick)
+  const exclusiveLeft = acceptClock?.kind === 'exclusive' ? acceptClock.seconds : null
+  const poolLeft = acceptClock?.kind === 'pool' ? acceptClock.seconds : null
+  const secondsLeft = acceptClock?.seconds ?? null
   const pulsing = exclusiveLeft != null && exclusiveLeft > 0
   const vm = offerCardViewModel(secondsLeft == null ? card : { ...card, secondsLeft })
   const hourlyQuote = offerHourly(card, driver)
@@ -910,6 +841,13 @@ export function RideCard({
   const ratingAvg = (card as { riderRating?: number }).riderRating ?? preview?.ratingAvg ?? null
   const prepaidTipCents = Number((card as { prepaidTipCents?: number }).prepaidTipCents) || 0
   const tipBoostLine = tipBoostOfferLine(vm.pay.netCents + prepaidTipCents, prepaidTipCents)
+  const payoutFigures = offerPayoutFigures(card, driver)
+  const pickupPoint = card.pickupLat != null && card.pickupLng != null
+    ? { latitude: Number(card.pickupLat), longitude: Number(card.pickupLng) }
+    : null
+  const dropoffPoint = card.dropoffLat != null && card.dropoffLng != null
+    ? { latitude: Number(card.dropoffLat), longitude: Number(card.dropoffLng) }
+    : null
   const preferredNote = preferredRequestNote(card)
   const reduceMotion = useReduceMotion()
   const opacity = useState(() => new Animated.Value(reduceMotion ? 1 : 0))[0]
@@ -956,7 +894,7 @@ export function RideCard({
   return (
     // flexShrink lets the dock squeeze the card to the room left above the controls;
     // only the details scroll — Accept / Decline stay pinned and visible.
-    <Animated.View style={[styles.offerWrap, { opacity }]}>
+    <Animated.View style={[styles.offerWrap, { opacity, zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION }]}>
       <Card
         style={[styles.offerCard, pulsing ? { borderColor: colors.orange, borderWidth: 2 } : null]}
         accessibilityRole="summary"
@@ -1030,6 +968,18 @@ export function RideCard({
           ) : null}
           {preferredNote ? <Text style={{ color: colors.orange, fontWeight: '700' }}>{preferredNote}</Text> : null}
           <CommunityMatchChips supabase={supabase} tripId={card.id} colors={colors} compact />
+          <OfferRouteMap
+            driver={driver ? { latitude: driver.lat, longitude: driver.lng } : null}
+            pickup={pickupPoint}
+            dropoff={dropoffPoint}
+          />
+          <View style={styles.payoutRow}>
+            {payoutFigures.map((figure: { id: string; label: string; value: string }) => (
+              <Text key={figure.id} style={{ color: figure.id === 'payout' ? colors.ink : colors.inkSecondary, fontWeight: '800' }}>
+                {figure.label} · {figure.value}
+              </Text>
+            ))}
+          </View>
           <Text style={{ color: colors.ink, fontWeight: '700' }}>Pickup · {card.pickupLabel}</Text>
           <Text style={{ color: colors.ink, fontWeight: '700' }}>Drop-off · {card.dropoffLabel}</Text>
           {card.airportContext ? (
@@ -1093,6 +1043,14 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   overlay: { ...StyleSheet.absoluteFill },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: EDGE },
+  topSpacer: { flex: 1 },
+  earningsWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  earningsButton: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center' },
+  clutter: { gap: GAP },
+  demandToggle: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, minHeight: 44,
+  },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1127,25 +1085,16 @@ const styles = StyleSheet.create({
   hotspot: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   hotspotOn: { color: '#fff', fontWeight: '800' as const },
   hotspotOff: { fontWeight: '800' as const },
-  flex: { flex: 1 },
   dock: { position: 'absolute', left: EDGE, right: EDGE, gap: GAP, justifyContent: 'flex-end' },
+  offerDock: { zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION },
+  goRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
+  goSlot: { alignItems: 'center', gap: 6 },
+  goSide: { width: 48, height: 48 },
+  onlineStatus: { fontWeight: '700', fontSize: 13, textAlign: 'center' },
   cardTitle: { fontWeight: '800', fontSize: 18 },
   live: { alignSelf: 'stretch', borderRadius: 18, padding: 14, gap: 4 },
   liveKicker: { fontWeight: '800', fontSize: 11, letterSpacing: 1.1 },
   liveTitle: { fontWeight: '800', fontSize: 18 },
-  controls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  bottomCluster: { gap: GAP },
-  toolCol: { gap: GAP },
-  bar: {
-    alignSelf: 'stretch',
-    borderRadius: 28,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  barText: { fontWeight: '800', fontSize: 16, flex: 1, textAlign: 'center' },
   riderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   riderName: { fontWeight: '700', fontSize: 16, letterSpacing: -0.3 },
   riderMeta: { fontWeight: '600', fontSize: 13, marginTop: 2, letterSpacing: -0.1 },
@@ -1167,16 +1116,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   declineText: { fontWeight: '700', fontSize: 15, letterSpacing: -0.1 },
-  offerWrap: { flexShrink: 1 },
+  offerWrap: { flexShrink: 1, zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION },
   offerCard: { flexShrink: 1, gap: 0, paddingBottom: 12 },
   offerScroll: { flexGrow: 0, flexShrink: 1 },
   offerBody: { gap: 10, paddingBottom: 2 },
   offerNotice: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
-  offerActions: { gap: 8, paddingTop: 10 },
-  docGate: { borderRadius: 16, borderWidth: 1, padding: 12, gap: 4, marginBottom: 10 },
+  offerActions: { gap: 8, paddingTop: 10, flexShrink: 0 },
+  payoutRow: { gap: 2 },
+  docGate: { borderRadius: 16, borderWidth: 1, padding: 12, gap: 4, marginHorizontal: 16, zIndex: DOCUMENT_BANNER_Z, elevation: DOCUMENT_BANNER_ELEVATION },
   docGateTitle: { fontWeight: '800', fontSize: 14, lineHeight: 18 },
   docGateSections: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
   docGateLink: { fontWeight: '800', fontSize: 14 },
+  docGateReason: { fontWeight: '600', fontSize: 13, lineHeight: 18 },
   statusWrap: { flexShrink: 1, maxHeight: 400 },
   statusScrollBody: { flexGrow: 1 },
 })

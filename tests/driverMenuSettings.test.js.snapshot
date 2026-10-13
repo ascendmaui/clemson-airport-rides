@@ -143,6 +143,11 @@ exports[`Driver Settings snapshot 1`] = `
       "icon": "flash",
       "title": "Auto-accept",
       "subtitle": "Distance, hourly rate, favorite riders"
+    },
+    {
+      "icon": "sparkles",
+      "title": "Priority mode",
+      "subtitle": "Go first for new requests"
     }
   ]
 }

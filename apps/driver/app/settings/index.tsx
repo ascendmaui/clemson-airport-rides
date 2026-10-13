@@ -22,6 +22,7 @@ export default function SettingsScreen() {
     { icon: 'volume-high', title: 'Sounds and voice', subtitle: 'Chime and vibration by ride type', onPress: () => router.push('/settings/sounds') },
     { icon: 'moon', title: 'Quiet hours', subtitle: 'Silent offers overnight, Clemson time', onPress: () => router.push('/settings/quiet-hours') },
     { icon: 'flash', title: 'Auto-accept', subtitle: 'Distance, hourly rate, favorite riders', onPress: () => router.push('/settings/auto-accept') },
+    { icon: 'sparkles', title: 'Priority mode', subtitle: 'Go first for new requests', onPress: () => router.push('/settings/priority') },
   ]
 
   return (

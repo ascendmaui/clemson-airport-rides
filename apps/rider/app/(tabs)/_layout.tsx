@@ -68,7 +68,7 @@ export default function RiderTabLayout() {
         <RiderHome />
         {user ? <ScheduleScreen /> : <View style={{ flex: 1, backgroundColor: colors.background }} />}
         <CarpoolHubScreen />
-        {user ? <AccountScreen /> : <View style={{ flex: 1, backgroundColor: colors.background }} />}
+        <AccountScreen />
       </MainTabPager>
       <MainTabs active={active.id} />
     </View>

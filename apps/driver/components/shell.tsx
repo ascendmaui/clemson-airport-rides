@@ -1,7 +1,8 @@
 import { GlassButton, GlassSurface, glassTextColor } from 'rides-native/glass'
 import { Glyph } from 'rides-native/icons'
 import type { ReactNode } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useRef } from 'react'
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { motion, radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { Enter } from '@/lib/enterMotion'
@@ -9,6 +10,11 @@ import { useTheme } from '@/lib/theme'
 import { useLift } from '@/components/chrome'
 
 type IconName = string
+type GoTone = 'orange' | 'purple' | 'green'
+
+function isChevron(icon: string) {
+  return icon === 'chevron-back' || icon === 'back' || icon === 'chevron-forward' || icon === 'forward'
+}
 
 export function CircleButton({
   icon,
@@ -20,18 +26,20 @@ export function CircleButton({
   onPress: () => void
 }) {
   const { scheme } = useTheme()
+  const chevron = isChevron(icon)
   const ink = glassTextColor({ app: 'driver', scheme, variant: 'fab' })
   return (
     <GlassButton
       app="driver"
       scheme={scheme}
       variant="fab"
+      showStreak={!chevron}
       onPress={onPress}
       accessibilityLabel={label}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       style={styles.circle}
     >
-      <Glyph name={icon} size={22} color={ink} />
+      <Glyph name={icon} size={22} color={ink} strokeWidth={chevron ? 2.6 : undefined} />
     </GlassButton>
   )
 }
@@ -39,44 +47,58 @@ export function CircleButton({
 export function GoButton({
   online,
   busy,
-  disabled = false,
-  disabledReason,
+  tone = 'orange',
+  cue = 0,
   onPress,
 }: {
   online: boolean
   busy: boolean
-  disabled?: boolean
-  disabledReason?: string | null
+  tone?: GoTone
+  cue?: number
   onPress: () => void
 }) {
-  const { colors, scheme } = useTheme()
-  const isDisabled = Boolean(busy || disabled)
-  const label = disabled
-    ? (disabledReason ? `Go online disabled: ${disabledReason}` : 'Go online disabled')
-    : (online ? 'Go offline' : 'Go online')
-  const accent = online ? 'purple' : 'orange'
+  const { scheme } = useTheme()
+  const accent: GoTone = online ? 'purple' : tone
   const ink = glassTextColor({ app: 'driver', scheme, variant: 'fab', accent })
-  const mark = isDisabled ? colors.inkSecondary : ink
+  const scale = useRef(new Animated.Value(1)).current
+  useEffect(() => {
+    scale.setValue(1)
+  }, [online, scale])
+  useEffect(() => {
+    if (!cue) return undefined
+    scale.setValue(1)
+    const anim = Animated.sequence([
+      Animated.timing(scale, { toValue: 0.86, duration: 90, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, friction: 5, useNativeDriver: true }),
+    ])
+    anim.start(({ finished }) => {
+      if (finished) scale.setValue(1)
+    })
+    return () => anim.stop()
+  }, [cue, scale])
+  const label = online ? 'Go offline' : tone === 'green' ? 'Going online' : 'Go online'
 
   return (
-    <GlassButton
-      app="driver"
-      scheme={scheme}
-      variant="fab"
-      accent={accent}
-      onPress={onPress}
-      disabled={isDisabled}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityHint={disabled && disabledReason ? disabledReason : online ? 'Takes you offline' : 'Goes online to receive ride requests'}
-      accessibilityState={{ disabled: isDisabled, busy }}
-      style={styles.go}
-    >
-      <Glyph name="online" size={22} color={mark} />
-      <Text style={[styles.goText, { color: mark }]}>
-        {online ? 'END' : 'GO'}
-      </Text>
-    </GlassButton>
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <GlassButton
+        app="driver"
+        scheme={scheme}
+        variant="fab"
+        accent={accent}
+        onPress={onPress}
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityHint={online ? 'Takes you offline' : 'Goes online to receive ride requests'}
+        accessibilityState={{ disabled: busy, busy }}
+        style={styles.go}
+      >
+        <Glyph name="online" size={22} color={ink} />
+        <Text style={[styles.goText, { color: ink }]}>
+          {online ? 'END' : 'GO'}
+        </Text>
+      </GlassButton>
+    </Animated.View>
   )
 }
 
@@ -245,7 +267,16 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 8,
   },
-  goText: { fontSize: 26, fontWeight: '800', letterSpacing: 0.5 },
+  goText: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 30,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    width: 84,
+  },
   switch: { width: 52, height: 30, borderRadius: 999, padding: 3, justifyContent: 'center' },
   knob: { width: 24, height: 24, borderRadius: 12 },
   segments: { flexDirection: 'row', borderRadius: radius.pill, padding: 4 },
