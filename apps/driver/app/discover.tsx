@@ -1,0 +1,173 @@
+import { useRouter } from 'expo-router'
+import { useEffect, useState } from 'react'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { BackButton, Card, Primary } from '@/components/chrome'
+import { CampusEventsCard } from '@/components/CampusEventsCard'
+import { useTheme } from '@/lib/theme'
+import { FlightsLandingCard } from '@/components/FlightsLandingCard'
+import { supabase } from '@/lib/supabase'
+import { loadGameDay } from 'rides-native/driverDesk'
+import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
+import { HEAT_WINDOWS } from 'rides-native/places.js'
+import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
+import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
+import type { TigerHeatZone } from 'rides-native/tigerHeat.js'
+
+function demandWord(intensity: number): string {
+  if (intensity >= 0.75) return 'Busy'
+  if (intensity >= 0.45) return 'Picking up'
+  if (intensity >= 0.22) return 'Light'
+  return 'Quiet'
+}
+
+export default function DiscoverScreen() {
+  const router = useRouter()
+  const insets = useSafeAreaInsets()
+  const { colors } = useTheme()
+  const [windowId, setWindowId] = useState('now')
+  const [game, setGame] = useState<GameDayNotice | null>(null)
+  const [spots, setSpots] = useState<BusySpot[]>([])
+  const [caption, setCaption] = useState('Typical campus patterns for College Ave, the stadium, and the dorms.')
+  const [blended, setBlended] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [tigerZones, setTigerZones] = useState<TigerHeatZone[]>([])
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    loadBusySpots(windowId)
+      .then((result) => {
+        if (!alive) return
+        setSpots(result.spots.slice().sort((a, b) => b.intensity - a.intensity))
+        setCaption(result.caption)
+        setBlended(result.blended)
+      })
+      .catch(() => {
+        if (!alive) return
+        setSpots([])
+        setCaption('Could not load campus demand.')
+        setBlended(false)
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [windowId])
+
+  useEffect(() => {
+    let alive = true
+    fetchTigerHeatMap(windowId).then((result) => {
+      if (alive) setTigerZones(result.zones || [])
+    }).catch(() => {
+      if (alive) setTigerZones([])
+    })
+    return () => {
+      alive = false
+    }
+  }, [windowId])
+
+  useEffect(() => {
+    if (!supabase) {
+      setGame(gameDayNotice(null))
+      return undefined
+    }
+    let alive = true
+    loadGameDay(supabase).then((row) => {
+      if (alive) setGame(gameDayNotice(row))
+    }).catch(() => {
+      if (alive) setGame(gameDayNotice(null))
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  return (
+    <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top + 12 }]}>
+      <ScrollView contentContainerStyle={styles.list}>
+        <BackButton onPress={() => router.back()} />
+        <Text style={[styles.kicker, { color: colors.orange }]}>DISCOVER</Text>
+        <Text style={[styles.title, { color: colors.title }]}>Campus demand</Text>
+        <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+          {loading ? 'Loading campus demand…' : `${caption}${blended ? ' Live requests are blended in when available.' : ' Typical patterns when live demand is quiet.'}`}
+        </Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          {HEAT_WINDOWS.map((item: { id: string; label: string }) => {
+            const on = item.id === windowId
+            return (
+              <Pressable
+                key={item.id}
+                onPress={() => setWindowId(item.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.label} demand`}
+                accessibilityState={{ selected: on }}
+                style={[styles.chip, { backgroundColor: on ? colors.fill : colors.card }]}
+              >
+                <Text style={{ color: on ? colors.onAccent : colors.title, fontWeight: '800' }}>{item.label}</Text>
+              </Pressable>
+            )
+          })}
+        </ScrollView>
+        <Card>
+          <Text style={[styles.kicker, { color: game?.live ? colors.orange : colors.purple }]}>
+            {game == null ? 'GAME DAY' : game.live ? 'GAME DAY' : 'GAME DAY OFF'}
+          </Text>
+          <Text style={[styles.cardTitle, { color: colors.title }]}>
+            {game == null ? 'Checking the server…' : game.headline}
+          </Text>
+          {game?.detail ? <Text style={{ color: colors.orange, fontWeight: '800' }}>{game.detail}</Text> : null}
+          {game ? <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{game.body}</Text> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open game-day prep, hot times, and the fare multiplier"
+            onPress={() => router.push('/game-day')}
+            style={{ marginTop: 8 }}
+          >
+            <Text style={{ color: '#F56600', fontWeight: '800' }}>Prep, hot times, and the fare →</Text>
+          </Pressable>
+        </Card>
+        <CampusEventsCard />
+        {tigerZones.map((zone: TigerHeatZone) => (
+          <Card key={`tiger-${zone.id}`}>
+            <View style={styles.spotHead}>
+              <Text style={[styles.cardTitle, { color: colors.title }]}>{zone.name}</Text>
+              <Text style={{ color: zone.preview ? colors.purple : colors.orange, fontWeight: '800' }}>{zone.bonusLabel}</Text>
+            </View>
+          </Card>
+        ))}
+        {!loading && spots.length === 0 ? (
+          <Text style={{ color: colors.inkSecondary }}>Campus demand is quiet in this window.</Text>
+        ) : null}
+        {spots.map((spot: BusySpot) => (
+          <Card key={spot.id}>
+            <View style={styles.spotHead}>
+              <Text style={[styles.cardTitle, { color: colors.title }]}>{spot.name}</Text>
+              <Text style={{ color: colors.orange, fontWeight: '800' }}>{demandWord(spot.intensity)}</Text>
+            </View>
+            <View style={[styles.track, { backgroundColor: colors.track }]}>
+              <View style={[styles.fill, { width: `${Math.round(spot.intensity * 100)}%`, backgroundColor: colors.orange }]} />
+            </View>
+          </Card>
+        ))}
+        <FlightsLandingCard airport="GSP" />
+        <Primary label="Open the ride queue" onPress={() => router.push('/queue')} />
+      </ScrollView>
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  list: { padding: 16, gap: 12, paddingBottom: 32 },
+  kicker: { fontWeight: '800', letterSpacing: 1.1, fontSize: 12 },
+  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.4 },
+  chips: { gap: 8 },
+  chip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+  cardTitle: { fontWeight: '800', fontSize: 16 },
+  spotHead: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  track: { height: 8, borderRadius: 999, overflow: 'hidden' },
+  fill: { height: '100%', borderRadius: 999 },
+})

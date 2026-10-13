@@ -1,4 +1,5 @@
 import { serviceClassFromBody } from '../../shared/rideOptions.js'
+import { isAiReviewedDocument } from '../../shared/documentAiReview.js'
 import { supabase } from './supabase'
 import {
   EMAIL_TODO,
@@ -30,18 +31,31 @@ import {
   blockerLabel,
 } from '../../shared/driverOnboarding.js'
 import { buildAgreementPrefill, renderPrefilledAgreement } from '../../shared/agreementPrefill.js'
+import { pickAgreementRow } from '../../shared/contractIdentity.js'
 import {
   readStoredApplicantEmail,
+  resolveSignupApplicantEmail,
   selectDriverApplicationQueue,
   submittedApplicantEmail,
   withSubmittedApplicantEmail,
   writeDriverApplication,
 } from '../../shared/applicantEmail.js'
 import {
+  backgroundAttestationWrite,
+  backgroundGateFromApplication,
+  missingBackgroundColumns,
+  withoutBackgroundExtras,
+} from '../../shared/backgroundCheck.js'
+import {
   loadApplicantVehicles,
   withVehicleYear,
   writeVehicleWithYearFallback,
 } from '../../shared/vehicleYear.js'
+import {
+  titleStatusError,
+  withTitleStatus,
+  writeVehicleWithTitleFallback,
+} from '../../shared/vehicleTitle.js'
 
 export {
   submittedApplicantEmail,
@@ -134,24 +148,34 @@ async function postJson(path, body) {
   return data
 }
 
+const APPLICATION_COLUMNS = 'id, profile_id, onboarding_status, status, rejection_reason, review_note, submitted_at, reviewed_at, notify_error, admin_notified_at, background_authorized_at, work_eligibility_attested_at, work_eligibility_category, applicant_email, background_check_status, background_legal_name, background_signature_name, background_signed_on, background_disclosures, background_admin_reviewed_at'
+const APPLICATION_COLUMNS_BASIC = 'id, profile_id, onboarding_status, status, rejection_reason, review_note, submitted_at, reviewed_at, notify_error, admin_notified_at, background_authorized_at, work_eligibility_attested_at, work_eligibility_category'
+
 export async function fetchMyDriverApplication(userId) {
   if (!supabase || !userId) return null
-  const { data, error } = await supabase
+  let result = await supabase
     .from('driver_applications')
-    .select('id, profile_id, onboarding_status, status, rejection_reason, review_note, submitted_at, reviewed_at, notify_error, admin_notified_at, background_authorized_at, work_eligibility_attested_at, work_eligibility_category')
+    .select(APPLICATION_COLUMNS)
     .eq('profile_id', userId)
     .maybeSingle()
-  if (error) throw new Error(error.message)
-  return data
+  if (result.error && /applicant_email|background_|schema cache|column/i.test(result.error.message || '')) {
+    result = await supabase
+      .from('driver_applications')
+      .select(APPLICATION_COLUMNS_BASIC)
+      .eq('profile_id', userId)
+      .maybeSingle()
+  }
+  if (result.error) throw new Error(result.error.message)
+  return result.data
 }
 
 export async function fetchMyDriverDocuments(userId) {
   if (!supabase || !userId) return []
   let result = await supabase
     .from('driver_documents')
-    .select('id, doc_type, storage_path, created_at, match_status, review_status, review_note')
+    .select('id, doc_type, storage_path, created_at, match_status, review_status, review_note, ai_reason, ai_verdict, ai_confidence')
     .eq('profile_id', userId)
-  if (result.error && /match_status|review_status|review_note|schema cache/i.test(result.error.message || '')) {
+  if (result.error && /match_status|review_status|review_note|ai_reason|ai_verdict|ai_confidence|schema cache/i.test(result.error.message || '')) {
     result = await supabase.from('driver_documents').select('id, doc_type, storage_path, created_at').eq('profile_id', userId)
   }
   if (result.error) throw new Error(result.error.message)
@@ -208,8 +232,27 @@ export async function uploadDriverDocument(userId, docType, file) {
     await supabase.storage.from('driver-documents').remove([previous.storage_path])
   }
 
+  let review = null
+  if (isAiReviewedDocument(docType)) {
+    try {
+      review = await postJson('/api/driver?action=review-document', {
+        docType,
+        storagePath: path,
+      })
+    } catch {
+      review = null
+    }
+  }
+
   const signed = await supabase.storage.from('driver-documents').createSignedUrl(path, 60 * 20)
-  return { doc_type: docType, storage_path: path, url: signed.data?.signedUrl || null }
+  return {
+    doc_type: docType,
+    storage_path: path,
+    url: signed.data?.signedUrl || null,
+    reviewStatus: review?.reviewStatus || null,
+    aiReason: review?.aiReason || null,
+    driverMessage: review?.driverMessage || null,
+  }
 }
 
 async function saveDriverInfoDirect(userId, payload, email) {
@@ -262,7 +305,7 @@ async function saveDriverInfoDirect(userId, payload, email) {
     .select('id')
     .eq('driver_id', userId)
     .limit(1)
-  const vehFields = withVehicleYear({
+  const vehFields = withTitleStatus(withVehicleYear({
     make: payload.make,
     model: payload.model,
     color: payload.color || null,
@@ -271,14 +314,14 @@ async function saveDriverInfoDirect(userId, payload, email) {
     autonomous_capable: false,
     service_class: payload.comfortClass === true || serviceClassFromBody(payload) === 'comfort' ? 'comfort' : 'standard',
     tier: payload.comfortClass === true || serviceClassFromBody(payload) === 'comfort' ? 'comfort' : 'standard',
-  }, payload.year)
+  }, payload.year), payload.titleStatus ?? payload.title_status)
   let vehicle = existingVeh?.[0] || null
-  const savedVehicle = await writeVehicleWithYearFallback((fields) => {
+  const savedVehicle = await writeVehicleWithTitleFallback((fields) => writeVehicleWithYearFallback((yearFields) => {
     if (!vehicle) {
-      return supabase.from('vehicles').insert({ driver_id: userId, ...fields }).select('*').single()
+      return supabase.from('vehicles').insert({ driver_id: userId, ...yearFields }).select('*').single()
     }
-    return supabase.from('vehicles').update(fields).eq('id', vehicle.id).select('*').single()
-  }, vehFields)
+    return supabase.from('vehicles').update(yearFields).eq('id', vehicle.id).select('*').single()
+  }, fields), vehFields)
   if (savedVehicle.error) throw new Error(savedVehicle.error.message)
   vehicle = savedVehicle.data
 
@@ -303,34 +346,68 @@ async function saveDriverInfoDirect(userId, payload, email) {
 
 export async function saveDriverInfo(user, payload) {
   if (!user?.id) throw new Error('Sign in required')
+  const titleError = titleStatusError(payload?.titleStatus ?? payload?.title_status)
+  if (titleError) throw new Error(titleError)
+  const email = resolveSignupApplicantEmail(payload, user)
+  if (!email) throw new Error('A valid email is required.')
+  const body = { ...payload, email }
   try {
-    return await postJson('/api/driver?action=signup', payload)
+    return await postJson('/api/driver?action=signup', body)
   } catch (err) {
     if (!err.unavailable && !err.network) throw err
-    return saveDriverInfoDirect(user.id, payload, user.email)
+    return saveDriverInfoDirect(user.id, body, email)
   }
 }
 
-export async function saveEmploymentVerification(userId, { backgroundAuthorized, category }) {
+export async function saveEmploymentVerification(userId, input) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!userId) throw new Error('Sign in required')
-  if (!backgroundAuthorized) throw new Error('Authorize the background check to continue.')
+  if (!input?.backgroundAuthorized && input?.authorized !== true) {
+    throw new Error('Authorize the background check to continue.')
+  }
+  const category = input?.category
   if (!WORK_ELIGIBILITY_CATEGORIES.some((item) => item.id === category)) {
     throw new Error('Select your eligibility to work.')
   }
+  const written = backgroundAttestationWrite({
+    legalName: input.legalName,
+    disclosures: input.disclosures,
+    authorized: true,
+    signatureName: input.signatureName,
+    signedOn: input.signedOn,
+  })
+  if (written.error) throw new Error(written.error)
   const now = new Date().toISOString()
-  const { data, error } = await supabase
+  const full = {
+    ...written.row,
+    background_authorized_at: now,
+    work_eligibility_attested_at: now,
+    work_eligibility_category: category,
+  }
+  let saved = await supabase
     .from('driver_applications')
-    .update({
-      background_authorized_at: now,
-      work_eligibility_attested_at: now,
-      work_eligibility_category: category,
-    })
+    .update(full)
     .eq('profile_id', userId)
-    .select('background_authorized_at, work_eligibility_attested_at, work_eligibility_category')
+    .select('background_authorized_at, work_eligibility_attested_at, work_eligibility_category, background_check_status, background_disclosures')
     .single()
-  if (error) throw new Error(error.message)
-  return data
+  if (saved.error && missingBackgroundColumns(saved.error)) {
+    if (written.assessment.status === 'needs_review') {
+      throw new Error('This disclosure needs admin review. Apply the background attestation migration before continuing.')
+    }
+    saved = await supabase
+      .from('driver_applications')
+      .update(withoutBackgroundExtras(full))
+      .eq('profile_id', userId)
+      .select('background_authorized_at, work_eligibility_attested_at, work_eligibility_category')
+      .single()
+  }
+  if (saved.error) throw new Error(saved.error.message)
+  return {
+    ...saved.data,
+    background_check_status: written.assessment.status,
+    background_disclosures: written.assessment.disclosures,
+    vendor_result: null,
+  }
 }
 
 export async function fetchMyTaxProfile(userId) {
@@ -431,11 +508,12 @@ export async function signDriverAgreement(signatureName) {
   }
 }
 
-function complianceContext({ application, documents, tax, agreement }) {
+function complianceContext({ application, documents, tax, agreement, email }) {
   return {
     uploaded: (documents || []).map((doc) => doc.doc_type),
     registrationMatch: (documents || []).find((doc) => doc.doc_type === 'registration')?.match_status || null,
-    backgroundAuthorized: Boolean(application?.background_authorized_at),
+    ...backgroundGateFromApplication(application),
+    applicantEmail: submittedApplicantEmail(application, { email }),
     workEligibilityAttested: Boolean(application?.work_eligibility_attested_at),
     workEligibilityCategory: application?.work_eligibility_category || null,
     taxSaved: Boolean(tax?.legal_name && /^[0-9]{4}$/.test(String(tax?.tin_last4 || ''))),
@@ -455,7 +533,7 @@ async function submitDriverReviewDirect(userId, email) {
     fetchMyTaxProfile(userId),
     fetchMyAgreement(userId),
   ])
-  const blockers = submissionBlockers(complianceContext({ application, documents: docs, tax, agreement }))
+  const blockers = submissionBlockers(complianceContext({ application, documents: docs, tax, agreement, email }))
   if (blockers.length) {
     const error = new Error('Finish every required step before submitting for review.')
     error.payload = { missing: blockers }
@@ -513,10 +591,15 @@ export async function submitDriverReview() {
 }
 
 const APP_QUEUE_COLS = 'id, profile_id, onboarding_status, status, background_authorized_at, work_eligibility_attested_at, work_eligibility_category, submitted_at, reviewed_at, rejection_reason, review_note, notify_error'
+const APP_QUEUE_COLS_BACKGROUND = `${APP_QUEUE_COLS}, background_check_status, background_legal_name, background_signature_name, background_signed_on, background_disclosures, background_admin_reviewed_at`
 
 async function fetchDriverQueueDirect(status) {
   if (!supabase) throw new Error('Supabase is not configured')
-  const { data: apps, error } = await selectDriverApplicationQueue(supabase, APP_QUEUE_COLS, status)
+  let queued = await selectDriverApplicationQueue(supabase, APP_QUEUE_COLS_BACKGROUND, status)
+  if (queued.error && missingBackgroundColumns(queued.error)) {
+    queued = await selectDriverApplicationQueue(supabase, APP_QUEUE_COLS, status)
+  }
+  const { data: apps, error } = queued
   if (error) throw new Error(error.message)
   const ids = (apps || []).map((app) => app.profile_id)
   if (!ids.length) return { applications: [], email_todo_present: false, direct: true }
@@ -545,23 +628,35 @@ async function fetchDriverQueueDirect(status) {
     tin_last4: row.tin_last4,
     tax_classification: row.tax_classification,
   }]))
-  const agreementByProfile = {}
+  const agreementsByProfile = {}
   for (const row of agreements || []) {
-    if (row.agreement_version === IC_AGREEMENT_VERSION) agreementByProfile[row.profile_id] = row
+    if (!agreementsByProfile[row.profile_id]) agreementsByProfile[row.profile_id] = []
+    agreementsByProfile[row.profile_id].push(row)
+  }
+  const agreementByProfile = {}
+  for (const [profileId, rows] of Object.entries(agreementsByProfile)) {
+    const picked = pickAgreementRow(rows, IC_AGREEMENT_VERSION)
+    if (picked) agreementByProfile[profileId] = picked
   }
 
   const applications = (apps || []).map((app) => {
     const tax = taxByProfile[app.profile_id] || null
     const agreement = agreementByProfile[app.profile_id] || null
+    const background = backgroundGateFromApplication(app)
     const blockers = approvalBlockers({
       uploaded: docsByProfile[app.profile_id] || [],
-      backgroundAuthorized: Boolean(app.background_authorized_at),
+      ...background,
+      applicantEmail: submittedApplicantEmail(app, profileById[app.profile_id]),
       workEligibilityAttested: Boolean(app.work_eligibility_attested_at),
       workEligibilityCategory: app.work_eligibility_category,
       taxSaved: Boolean(tax?.legal_name && /^[0-9]{4}$/.test(String(tax.tin_last4 || ''))),
       agreementSigned: Boolean(agreement?.signed_at && agreement?.signature_name),
       agreementVersion: agreement?.agreement_version || null,
       agreementSha256: agreement?.agreement_sha256 || null,
+      signatureName: agreement?.signature_name || null,
+      contractLegalName: tax?.legal_name || null,
+      applicantName: profileById[app.profile_id]?.full_name || null,
+      applicantLegalName: tax?.legal_name || null,
     })
     const presented = withSubmittedApplicantEmail(app, profileById[app.profile_id] || null)
     return {
@@ -576,7 +671,8 @@ async function fetchDriverQueueDirect(status) {
   })
   return {
     applications,
-    email_todo_present: applications.some((app) => app.notify_error),
+    // Browser fallback cannot see server Resend env. Stored notify_error is not current setup.
+    email_todo_present: false,
     direct: true,
   }
 }
@@ -647,13 +743,20 @@ async function fetchDriverReviewDetailDirect(profileId) {
     fetchMyTaxProfile(profileId),
     fetchMyAgreement(profileId),
   ])
-  const ctx = complianceContext({ application, documents, tax, agreement })
+  const ctx = complianceContext({ application, documents, tax, agreement, email: application?.applicant_email })
   const blockers = approvalBlockers(ctx)
   return {
     profile_id: profileId,
     documents,
     employment: {
       background_authorized_at: application?.background_authorized_at || null,
+      background_check_status: application?.background_check_status || null,
+      background_legal_name: application?.background_legal_name || null,
+      background_signature_name: application?.background_signature_name || null,
+      background_signed_on: application?.background_signed_on || null,
+      background_disclosures: application?.background_disclosures || null,
+      background_admin_reviewed_at: application?.background_admin_reviewed_at || null,
+      vendor_result: null,
       work_eligibility_attested_at: application?.work_eligibility_attested_at || null,
       work_eligibility_category: application?.work_eligibility_category || null,
     },
@@ -690,9 +793,16 @@ export async function signAgreementWithToken({ token, signatureName, accepted })
   return postJson('/api/driver?action=sign-agreement', { token, signatureName, accepted })
 }
 
-export async function reviewDriverApplication({ profileId, decision, reason }) {
+export async function reviewDriverApplication({ profileId, decision, reason, acknowledgeContractMismatch = false, acknowledgeBackgroundReview = false, approveLuxuryException = false }) {
   try {
-    return await postJson('/api/admin-drivers', { profileId, decision, reason })
+    return await postJson('/api/admin-drivers', {
+      approveLuxuryException: approveLuxuryException === true,
+      profileId,
+      decision,
+      reason,
+      acknowledgeContractMismatch: acknowledgeContractMismatch === true,
+      acknowledgeBackgroundReview: acknowledgeBackgroundReview === true,
+    })
   } catch (err) {
     if (!err.unavailable && !err.network) throw err
     if (!supabase) throw err
@@ -704,4 +814,38 @@ export async function reviewDriverApplication({ profileId, decision, reason }) {
     if (error) throw new Error(error.message)
     return { ok: true, onboarding_status: decision === 'approve' ? 'approved' : 'rejected', application: data, direct: true }
   }
+}
+
+export async function fetchProfilePhotoQueue() {
+  const headers = await authHeaders()
+  const res = await fetch('/api/admin-drivers?queue=profile-photos', { headers })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`)
+  return data
+}
+
+export async function reviewProfilePhoto({ photoId, decision, reason }) {
+  return postJson('/api/admin-drivers', {
+    action: 'review-profile-photo',
+    photoId,
+    decision,
+    reason,
+  })
+}
+
+export async function fetchDocumentReviewQueue() {
+  const headers = await authHeaders()
+  const res = await fetch('/api/admin-drivers?queue=documents', { headers })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`)
+  return data
+}
+
+export async function reviewDriverDocument({ documentId, decision, reason }) {
+  return postJson('/api/admin-drivers', {
+    action: 'review-document',
+    documentId,
+    decision,
+    reason,
+  })
 }

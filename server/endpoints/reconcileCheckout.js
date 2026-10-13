@@ -40,8 +40,10 @@ export default async function handler(req, res, deps = {}) {
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
 
-  const rawSessionId = body?.sessionId || body?.session_id
-  const sessionId = typeof rawSessionId === 'string' ? rawSessionId.trim() : ''
+  const rawSessionId = body?.sessionId || body?.session_id || req?.query?.sessionId || req?.query?.session_id
+  const sessionId = typeof rawSessionId === 'string'
+    ? rawSessionId.trim().replace(/^["']|["']$/g, '').trim()
+    : ''
   if (!sessionId) {
     return json(res, 400, { error: 'sessionId required' })
   }

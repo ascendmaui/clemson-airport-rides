@@ -1,0 +1,365 @@
+import { useRouter } from 'expo-router'
+import { useEffect, useState } from 'react'
+import { Pressable, ScrollView, Switch, Text, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Pill, PrimaryButton } from '@/components/Button'
+import { TabSwipeRegion, useTabSwipeRemeasure } from '@/components/MainTabPager'
+import { loadAccount, saveProfile } from '@/lib/accountApi'
+import { useAuth } from '@/lib/auth'
+import { hapticsEnabled, playMatchChime, setHapticsEnabled, setSoundsEnabled, soundsEnabled, tapHaptic } from '@/lib/feedback'
+import { lift } from '@/lib/elevation'
+import type { Palette } from '@/lib/palette'
+import { useTheme } from '@/lib/theme'
+import { Glyph } from 'rides-native/icons'
+import { useThemedStyles } from '@/lib/useThemedStyles'
+import { displayFirstName } from 'rides-native/authErrors'
+import { useStudentStatus } from '@/lib/useStudentStatus'
+import { FAVORITE_SPOTS } from 'rides-native/riderShell.js'
+import { TIGER_PASS_NAME } from 'rides-native/tigerPassClient'
+import { loadRatingSummary } from 'rides-native/PartyScreens'
+import { WomenOnlyCard } from 'rides-native/WomenOnlyCard'
+import { loadComfortPreference, saveComfortPreference } from 'rides-native/comfortPreference.js'
+import { supabase } from '@/lib/supabase'
+import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
+import { SignInScreen } from 'rides-native/AuthScreens'
+
+type AccountHref = '/tiger-pass' | '/student' | '/community' | '/billing' | '/notifications' | '/help' | '/support' | '/lost-found' | '/safety'
+type AccountLink = { href: AccountHref; label: string; hint: string; icon: string }
+
+const GROUPS: { title: string; links: AccountLink[] }[] = [
+  {
+    title: 'Membership',
+    links: [
+      { href: '/tiger-pass', label: TIGER_PASS_NAME, hint: 'Frequent-rider discount, preferred drivers, and ride types', icon: 'pass' },
+      { href: '/student', label: 'Student', hint: 'Confirmed Clemson email · 10% off Standard', icon: 'student' },
+      { href: '/community', label: 'Campus community', hint: 'Optional, off by default · shows only what you and your driver share', icon: 'people' },
+    ],
+  },
+  {
+    title: 'Payments',
+    links: [
+      { href: '/billing', label: 'Billing', hint: 'Card, deposits, and ride fares', icon: 'money' },
+    ],
+  },
+  {
+    title: 'Preferences',
+    links: [
+      { href: '/notifications', label: 'Notifications', hint: 'Ride, billing, friends, and promo alerts', icon: 'bell' },
+    ],
+  },
+  {
+    title: 'Help and support',
+    links: [
+      { href: '/help', label: 'Help', hint: 'How booking, Schedule, friends, and billing work', icon: 'help' },
+      { href: '/support', label: 'Support', hint: 'Charge, ride, bug, or safety tickets', icon: 'chat' },
+      { href: '/lost-found', label: 'Lost & found', hint: 'An item left in the car after a ride', icon: 'lostFound' },
+    ],
+  },
+]
+
+export function AccountScreen() {
+  const remeasureTabs = useTabSwipeRemeasure()
+  const router = useRouter()
+  const insets = useSafeAreaInsets()
+  const { user, configured, signOut, signIn, resetPassword } = useAuth()
+  const student = useStudentStatus()
+  const { colors, scheme, setDisplayMode } = useTheme()
+  const styles = useThemedStyles(makeStyles)
+  const [error, setError] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [spots, setSpots] = useState<string[]>([])
+  const [fullName, setFullName] = useState('')
+  const [bio, setBio] = useState('')
+  const [soundsOn, setSoundsOn] = useState(true)
+  const [hapticsOn, setHapticsOn] = useState(true)
+  const [ratingLine, setRatingLine] = useState('New · no ratings yet')
+  const [pendingTrip, setPendingTrip] = useState<string | null>(null)
+  const [genderIdentity, setGenderIdentity] = useState('unspecified')
+  const [womenOnly, setWomenOnly] = useState(false)
+  const [comfortAvailable, setComfortAvailable] = useState(false)
+  const [comfortNote, setComfortNote] = useState<string | null>(null)
+  const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Rider') : null
+
+  useEffect(() => {
+    let alive = true
+    hapticsEnabled().then(setHapticsOn).catch(() => {})
+    soundsEnabled().then((on) => {
+      if (alive) setSoundsOn(on)
+    })
+    if (!user?.id) {
+      setSpots([])
+      return () => {
+        alive = false
+      }
+    }
+    loadAccount(user.id).then((account) => {
+      if (!alive) return
+      setSpots(account.profile?.favorite_spots || [])
+      setFullName(account.profile?.full_name || user.user_metadata?.full_name || '')
+      setBio(account.profile?.bio || '')
+      if (account.error) setError(account.error)
+    })
+    if (supabase) {
+      loadComfortPreference(supabase, user.id).then((comfort) => {
+        if (!alive) return
+        setGenderIdentity(comfort.genderIdentity)
+        setWomenOnly(comfort.womenOnlyMatching)
+        setComfortAvailable(comfort.available)
+      }).catch(() => {})
+      loadRatingSummary(supabase, user.id).then((summary) => {
+        if (!alive) return
+        setRatingLine(summary.line)
+        setPendingTrip(summary.pending?.id || null)
+      }).catch(() => {})
+    }
+    return () => {
+      alive = false
+    }
+  }, [user?.id])
+
+  async function persistComfort(nextGender: string, nextWomenOnly: boolean) {
+    if (!user?.id || !supabase) return
+    setComfortNote(null)
+    try {
+      const saved = await saveComfortPreference(supabase, user.id, {
+        genderIdentity: nextGender,
+        womenOnly: nextWomenOnly,
+      })
+      setGenderIdentity(saved.genderIdentity)
+      setWomenOnly(saved.womenOnlyMatching)
+      setComfortNote('Comfort preference saved')
+      void tapHaptic()
+    } catch (err) {
+      setComfortNote(err instanceof Error ? err.message : 'Could not save the comfort preference')
+    }
+  }
+
+  function toggleSpot(spot: string) {
+    void tapHaptic()
+    setSpots((prev: string[]) => (prev.includes(spot) ? prev.filter((item: string) => item !== spot) : [...prev, spot].slice(0, 6)))
+  }
+
+  async function onSaveSpots() {
+    if (!user?.id) {
+      setNote('Sign in on this tab to save spots.')
+      return
+    }
+    setBusy(true)
+    setNote(null)
+    try {
+      await saveProfile(user.id, {
+        full_name: fullName || user.user_metadata?.full_name || '',
+        bio,
+        favorite_spots: spots,
+      })
+      setNote('Favorite spots saved')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save spots')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function onSignOut() {
+    setBusy(true)
+    setError(null)
+    try {
+      await signOut()
+      router.replace('/')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not sign out')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
+      <ScrollView contentContainerStyle={styles.body} onScroll={remeasureTabs} scrollEventThrottle={32}>
+        <Text style={styles.kicker}>ACCOUNT</Text>
+        <Text style={styles.title}>{name || 'Guest'}</Text>
+        {!user ? (
+          <SignInScreen
+            embedded
+            signIn={signIn}
+            resetPassword={resetPassword}
+            onSuccess={() => setNote('Signed in')}
+            onCreateAccount={() => router.push('/sign-up')}
+            onForgotPassword={() => router.push('/forgot-password')}
+            onBack={() => {}}
+          />
+        ) : null}
+        {user?.email ? <Text style={styles.copy}>{user.email}</Text> : null}
+        {user ? <Text style={styles.badge}>{ratingLine}</Text> : null}
+        {pendingTrip ? (
+          <PrimaryButton label="Rate your last ride" onPress={() => router.push({ pathname: '/rate', params: { trip: pendingTrip } })} />
+        ) : null}
+        {student.verified ? (
+          <Text style={styles.badge}>Clemson student · 10% off Standard</Text>
+        ) : user ? (
+          <Text style={styles.copy}>{student.gateCopy}</Text>
+        ) : null}
+        <Pressable accessibilityRole="button" onPress={() => router.push('/safety')} style={[styles.safety, lift(colors, 'rest')]}>
+          <Text style={styles.safetyKicker}>SAFETY</Text>
+          <Text style={styles.safetyTitle}>Audio, video, live tracking, SOS</Text>
+          <Text style={styles.safetyBody}>One place for recording, a live trip link, and a confirmed SOS.</Text>
+        </Pressable>
+        {user ? (
+          <WomenOnlyCard
+            role="rider"
+            genderIdentity={genderIdentity}
+            womenOnlyMatching={womenOnly}
+            available={comfortAvailable}
+            note={comfortNote}
+            colors={colors}
+            onGender={(next: string) => persistComfort(next, next === 'woman' ? womenOnly : false)}
+            onToggle={(next: boolean) => persistComfort(genderIdentity, next)}
+          />
+        ) : null}
+        <Text style={styles.copy}>
+          {configured
+            ? 'Payments, student pricing, promos, and alerts use the same account as the web app.'
+            : 'Supabase anon key is missing. Add EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable, then rebuild.'}
+        </Text>
+        {GROUPS.map((group) => (
+          <View key={group.title} style={styles.group}>
+            <Text style={styles.groupTitle}>{group.title}</Text>
+            {group.links.map((link) => (
+              <Pressable key={link.href} onPress={() => router.push(link.href)} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
+                <View style={styles.settingLine}>
+                  <Glyph name={link.icon} size={22} color={colors.purple} scheme={scheme} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowTitle}>{link.label}</Text>
+                    <Text style={styles.copy}>{link.hint}</Text>
+                  </View>
+                  <Glyph name="forward" size={16} color={colors.inkSecondary} />
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        ))}
+        <Text style={styles.groupTitle}>Settings</Text>
+        <AdminAccountRow supabase={supabase} colors={colors} onPress={() => router.push('/admin')} />
+        <View style={[styles.row, lift(colors, 'rest')]}>
+          <View style={styles.settingLine}>
+            <Glyph name={scheme === 'dark' ? 'moon' : 'sun'} size={22} color={colors.orange} active={scheme === 'dark'} scheme={scheme} knockout={colors.card} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>Night mode</Text>
+              <Text style={styles.copy}>Opens in light mode. Turn on for dark screens and icons. Saved on this phone.</Text>
+            </View>
+            <Switch
+              value={scheme === 'dark'}
+              onValueChange={(on: boolean) => {
+                void tapHaptic()
+                setDisplayMode(on ? 'dark' : 'light')
+              }}
+              trackColor={{ true: colors.orange, false: colors.track }}
+              accessibilityLabel="Night mode"
+            />
+          </View>
+        </View>
+        <View style={[styles.row, lift(colors, 'rest')]}>
+          <Text style={styles.rowTitle}>Favorite spots</Text>
+          <Text style={styles.copy}>Pick up to six, including White C and Bigsby.</Text>
+          <TabSwipeRegion style={styles.pills}>
+            {FAVORITE_SPOTS.map((spot) => (
+              <Pill key={spot} label={spot} active={spots.includes(spot)} onPress={() => toggleSpot(spot)} />
+            ))}
+          </TabSwipeRegion>
+          <PrimaryButton label={busy ? 'Saving…' : 'Save spots'} onPress={onSaveSpots} disabled={busy} tone="ghost" />
+        </View>
+        <View style={[styles.row, lift(colors, 'rest')]}>
+          <Text style={styles.rowTitle}>Sounds</Text>
+          <Text style={styles.copy}>Tiger sounds use expo-audio and stay quiet when the phone is on silent or vibrate.</Text>
+          <PrimaryButton
+            label={soundsOn ? 'Tiger sounds · On' : 'Tiger sounds · Off'}
+            tone={soundsOn ? 'orange' : 'ghost'}
+            onPress={async () => {
+              const next = !soundsOn
+              await setSoundsEnabled(next)
+              setSoundsOn(next)
+              void tapHaptic()
+              if (next) await playMatchChime()
+            }}
+          />
+        </View>
+        <View style={[styles.row, lift(colors, 'rest')]}>
+          <Text style={styles.rowTitle}>Haptics</Text>
+          <Text style={styles.copy}>Vibration for taps, booking, and the driver-approach alert. The distance in feet and a soft glow still show when this is off.</Text>
+          <PrimaryButton
+            label={hapticsOn ? 'Haptics · On' : 'Haptics · Off'}
+            tone={hapticsOn ? 'orange' : 'ghost'}
+            onPress={async () => {
+              const next = !hapticsOn
+              await setHapticsEnabled(next)
+              setHapticsOn(next)
+              if (next) void tapHaptic()
+            }}
+          />
+        </View>
+        <Text style={styles.groupTitle}>Legal and privacy</Text>
+        <Pressable onPress={() => router.push({ pathname: '/legal', params: { doc: 'privacy' } })} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
+          <Text style={styles.rowTitle}>Privacy policy</Text>
+          <Text style={styles.copy}>Same policy as the website.</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push({ pathname: '/legal', params: { doc: 'terms' } })} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
+          <Text style={styles.rowTitle}>Terms of service</Text>
+          <Text style={styles.copy}>Fares, wait fees, and driver duties.</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push('/delete-account')} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
+          <Text style={styles.rowTitle}>Delete account</Text>
+          <Text style={styles.copy}>Files a confirmed support request. The account stays until that request is processed.</Text>
+        </Pressable>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {note ? <Text style={styles.note}>{note}</Text> : null}
+        {user ? (
+          <PrimaryButton label={busy ? 'Signing out…' : 'Sign out'} onPress={onSignOut} disabled={busy} tone="purple" />
+        ) : (
+          <PrimaryButton label="Create account" onPress={() => router.push('/sign-up')} tone="ghost" />
+        )}
+      </ScrollView>
+    </View>
+  )
+}
+
+function makeStyles(colors: Palette) {
+  return {
+    screen: { flex: 1, backgroundColor: colors.background },
+    body: { padding: 20, gap: 12, paddingBottom: 24 },
+    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.2, fontSize: 12 },
+    title: { fontSize: 28, fontWeight: '800' as const, color: colors.title, letterSpacing: -0.4 },
+    copy: { fontSize: 14, lineHeight: 20, color: colors.inkSecondary },
+    badge: { color: colors.link, fontWeight: '700' as const },
+    safety: {
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    safetyKicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
+    safetyTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16, marginTop: 4 },
+    safetyBody: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 },
+    row: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      gap: 4,
+    },
+    rowTitle: { color: colors.ink, fontWeight: '800' as const, fontSize: 16 },
+    group: { gap: 8 },
+    groupTitle: { color: colors.inkSecondary, fontWeight: '800' as const, fontSize: 12, letterSpacing: 1, textTransform: 'uppercase' as const, marginTop: 8 },
+    settingLine: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+    pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 8 },
+    note: { color: colors.link, fontWeight: '700' as const, fontSize: 13 },
+    error: { color: colors.danger, fontSize: 13 },
+  }
+}
+
+
+export default function AccountScreenRoute() {
+  return null
+}

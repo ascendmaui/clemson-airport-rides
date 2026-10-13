@@ -8,6 +8,8 @@ export const APPROACH_DECREASE_FT = 25
 export const APPROACH_NEAR_FT = 500
 export const APPROACH_CLOSE_FT = 200
 export const APPROACH_HERE_FT = 100
+export const CROWD_MIN_INTERVAL_MS = 2000
+export const CROWD_MAX_INTERVAL_MS = 3000
 
 const FEET_PER_METER = 3.280839895013123
 
@@ -15,6 +17,47 @@ export type ApproachStatus = (typeof APPROACH_STATUSES)[number]
 export type ApproachStage = 'far' | 'near' | 'close' | 'here'
 export type ApproachHapticLevel = 'light' | 'medium' | 'heavy'
 export type ApproachPulseMode = 'off' | 'burst' | 'steady'
+
+/**
+ * Card-ring breath that replaced the full-screen orange flash.
+ * Opacities stay strictly between 0 and 1. One half is at least 800ms,
+ * eased with a sine in-out, so the ring never hard-toggles.
+ * Reduce motion turns `enabled` off; the ring holds `rest`.
+ */
+export const APPROACH_PULSE_DURATION_MS = 1400
+
+export type ApproachPulseEasing = 'inOutSin'
+
+export type ApproachPulseKeyframe = {
+  opacity: number
+  scale: number
+}
+
+export type ApproachPulseMotion = {
+  /** False when the OS asks for reduced motion. */
+  enabled: boolean
+  /** Half of one breath. The full cycle is twice this. */
+  durationMs: number
+  easing: ApproachPulseEasing
+  /** Reanimated runs opacity and scale on the UI thread. */
+  uiThread: true
+  rest: ApproachPulseKeyframe
+  peak: ApproachPulseKeyframe
+}
+
+const PULSE_REST: ApproachPulseKeyframe = { opacity: 0.28, scale: 1.015 }
+const PULSE_PEAK: ApproachPulseKeyframe = { opacity: 0.62, scale: 1.06 }
+
+export function approachPulseMotion(reduceMotion: boolean): ApproachPulseMotion {
+  return {
+    enabled: reduceMotion !== true,
+    durationMs: APPROACH_PULSE_DURATION_MS,
+    easing: 'inOutSin',
+    uiThread: true,
+    rest: PULSE_REST,
+    peak: PULSE_PEAK,
+  }
+}
 
 export type ApproachReading = {
   feet: number
@@ -207,6 +250,21 @@ export function approachAttention(input: {
   return { stage, decreasing, pulseMode, washPeak, brightPeak, haptic, hapticReason }
 }
 
+/**
+ * The September 2026 proximity cue: a steady pulse inside 500 ft, a short
+ * burst when the driver closes in from farther out, and the crowd loop
+ * (buzz + ping) while they are inside 500 ft.
+ */
+export function proximityTriggerFires(input: {
+  previousFeet: number | null
+  feet: number | null
+  previousStage?: ApproachStage | null
+}): boolean {
+  const attention = approachAttention(input)
+  if (attention?.pulseMode === 'steady' || attention?.pulseMode === 'burst') return true
+  return crowdCue(input.feet) != null
+}
+
 function approachPhrase(stage: ApproachStage | null, decreasing: boolean): string {
   if (stage == null) return 'Locating'
   if (decreasing && stage !== 'here') return 'Getting closer'
@@ -235,4 +293,93 @@ export function approachStatusLine(
   const distance = formatApproachFeet(feet)
   if (distance === 'nearby' && phrase.toLowerCase().includes('nearby')) return phrase
   return `${phrase} · ${distance}`
+}
+
+const COMPASS_WORDS = [
+  'North',
+  'Northeast',
+  'East',
+  'Southeast',
+  'South',
+  'Southwest',
+  'West',
+  'Northwest',
+] as const
+
+export type CrowdCue = {
+  intervalMs: number
+  haptic: ApproachHapticLevel
+  flash: number
+}
+
+export type ApproachDirection = {
+  bearing: number
+  compass: string
+  facing: string | null
+}
+
+function finiteCoord(value: number) {
+  return Number.isFinite(value) ? value : null
+}
+
+/** Clockwise degrees from north, from the rider toward the driver. */
+export function bearingDegrees(lat1: number, lng1: number, lat2: number, lng2: number): number | null {
+  if ([lat1, lng1, lat2, lng2].some((value) => finiteCoord(value) == null)) return null
+  const toRad = (degrees: number) => (degrees * Math.PI) / 180
+  const y = Math.sin(toRad(lng2 - lng1)) * Math.cos(toRad(lat2))
+  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2))
+    - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lng2 - lng1))
+  const degrees = (Math.atan2(y, x) * 180) / Math.PI
+  return (degrees + 360) % 360
+}
+
+export function compassPoint(bearing: number | null | undefined): string | null {
+  if (typeof bearing !== 'number' || !Number.isFinite(bearing)) return null
+  const wrapped = ((bearing % 360) + 360) % 360
+  const index = Math.round(wrapped / 45) % COMPASS_WORDS.length
+  return COMPASS_WORDS[index]
+}
+
+/** Phone-facing phrase when GPS heading is known. Null when the rider is still. */
+export function facingPhrase(bearing: number, heading: number | null | undefined): string | null {
+  if (typeof heading !== 'number' || !Number.isFinite(heading) || heading < 0 || heading >= 360) return null
+  let delta = (bearing - heading + 360) % 360
+  if (delta > 180) delta -= 360
+  const abs = Math.abs(delta)
+  if (abs <= 25) return 'Straight ahead'
+  if (abs >= 155) return 'Behind you'
+  if (delta > 0) return abs < 70 ? 'Ahead to your right' : 'To your right'
+  return abs < 70 ? 'Ahead to your left' : 'To your left'
+}
+
+export function approachDirection(
+  from: { lat: number; lng: number } | null | undefined,
+  to: { lat: number; lng: number } | null | undefined,
+  heading?: number | null,
+): ApproachDirection | null {
+  if (!from || !to) return null
+  const bearing = bearingDegrees(from.lat, from.lng, to.lat, to.lng)
+  const compass = compassPoint(bearing)
+  if (bearing == null || !compass) return null
+  return { bearing, compass, facing: facingPhrase(bearing, heading) }
+}
+
+/**
+ * Crowd-find cadence inside 500 ft. Closer means a (throttled, 2-3 s) faster ping and a stronger
+ * buzz. `flash` is the retired full-screen peak (still under 1) and is not painted; the card
+ * ring uses approachPulseMotion. Outside 500 ft there is no loop.
+ */
+export function crowdCue(feet: number | null | undefined): CrowdCue | null {
+  const whole = wholeApproachFeet(feet)
+  if (whole == null || whole > APPROACH_NEAR_FT) return null
+  const span = whole / APPROACH_NEAR_FT
+  // Throttled: at most one buzz + ping every 2-3 s (2 s right beside, 3 s at 500 ft).
+  const intervalMs = Math.round(CROWD_MIN_INTERVAL_MS + span * (CROWD_MAX_INTERVAL_MS - CROWD_MIN_INTERVAL_MS))
+  const haptic: ApproachHapticLevel = whole <= APPROACH_HERE_FT
+    ? 'heavy'
+    : whole <= APPROACH_CLOSE_FT
+      ? 'medium'
+      : 'light'
+  const flash = whole <= APPROACH_HERE_FT ? 0.7 : whole <= APPROACH_CLOSE_FT ? 0.55 : 0.4
+  return { intervalMs, haptic, flash }
 }

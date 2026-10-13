@@ -1,7 +1,9 @@
 import { useRouter } from 'expo-router'
 import { Text } from 'react-native'
+import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
 import { FadeIn, type MenuRow, RowGroup, SoftNote } from '@/components/day'
 import { SectionLabel, StackPage } from '@/components/shell'
+import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 
 export default function SettingsScreen() {
@@ -14,10 +16,13 @@ export default function SettingsScreen() {
   ]
   const general: MenuRow[] = [
     { icon: 'accessibility', title: 'Accessibility', subtitle: 'Text size follows the phone', onPress: () => router.push('/settings/accessibility') },
-    { icon: 'sunny', title: 'Display', subtitle: 'Auto, light, or dark', onPress: () => router.push('/settings/display') },
-    { icon: 'chatbubbles', title: 'Communication', subtitle: 'Trip alerts on this phone', onPress: () => router.push('/settings/communication') },
+    { icon: 'moon', title: 'Appearance', subtitle: 'Night mode', onPress: () => router.push('/settings/display') },
+    { icon: 'chatbubbles', title: 'Communication', subtitle: 'Lock screen and in-app ride alerts', onPress: () => router.push('/settings/communication') },
     { icon: 'navigate', title: 'Navigation', subtitle: 'Apple Maps or Google Maps', onPress: () => router.push('/settings/navigation') },
-    { icon: 'volume-high', title: 'Sounds and voice', subtitle: 'Request chime', onPress: () => router.push('/settings/sounds') },
+    { icon: 'volume-high', title: 'Sounds and voice', subtitle: 'Chime and vibration by ride type', onPress: () => router.push('/settings/sounds') },
+    { icon: 'moon', title: 'Quiet hours', subtitle: 'Silent offers overnight, Clemson time', onPress: () => router.push('/settings/quiet-hours') },
+    { icon: 'flash', title: 'Auto-accept', subtitle: 'Distance, hourly rate, favorite riders', onPress: () => router.push('/settings/auto-accept') },
+    { icon: 'sparkles', title: 'Priority mode', subtitle: 'Go first for new requests', onPress: () => router.push('/settings/priority') },
   ]
 
   return (
@@ -26,6 +31,7 @@ export default function SettingsScreen() {
         <SoftNote>These choices stay on this phone. Your driver profile, documents, and payouts stay on your Clemson RIDES account.</SoftNote>
         <SectionLabel>Account</SectionLabel>
         <RowGroup rows={account} />
+        <AdminAccountRow supabase={supabase} colors={colors} onPress={() => router.push('/admin')} />
         <SectionLabel>General</SectionLabel>
         <RowGroup rows={general} />
         <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>

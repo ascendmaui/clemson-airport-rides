@@ -1,30 +1,36 @@
+import { useState } from 'react'
 import { navigate } from '../lib/navigation'
 import { LEGAL_UPDATED, PRIVACY_SECTIONS, TERMS_SECTIONS } from '../../shared/legalCopy.js'
 
+const AGREED_KEY = 'clemson.legal.agreed'
+
 function LegalShell({ title, children }) {
+  const [agreed, setAgreed] = useState(false)
+  function agree() {
+    try { window.sessionStorage.setItem(AGREED_KEY, LEGAL_UPDATED) } catch { /* private mode */ }
+    setAgreed(true)
+    navigate('landing')
+  }
   return (
-    <div className="mkt-legal fade-in">
-      <div className="mkt-legal-card">
+    <div className="mkt-legal lux-legal">
+      <div className="lux-legal-scroll">
         <button
           type="button"
-          className="pressable glass-pill nav-back-btn"
+          className="pressable nav-back-btn lux-legal-back"
           aria-label="Back to landing"
           onClick={() => navigate('landing')}
-          style={{ marginBottom: 16 }}
         >
-          ←
+          Back
         </button>
-        <p className="mkt-kicker">Clemson RIDES</p>
-        <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.4, color: 'var(--purple)', marginBottom: 8 }}>
-          {title}
-        </h1>
-        <p style={{ fontSize: 13, color: 'var(--ink-tertiary)', marginBottom: 24 }}>
-          Clemson RIDES · Campus airport rides · Last updated {LEGAL_UPDATED}
-        </p>
-        <div style={{ fontSize: 15, lineHeight: 1.55, color: 'var(--ink-secondary)' }}>{children}</div>
-        <p style={{ marginTop: 32, fontSize: 13, color: 'var(--ink-tertiary)' }}>
-          Questions? Contact support through the in-app Account screen or your Clemson RIDES campus lead.
-        </p>
+        <p className="lux-kicker">Clemson RIDES</p>
+        <h1>{title}</h1>
+        <p className="lux-legal-meta">Last updated {LEGAL_UPDATED}</p>
+        <div className="lux-legal-body">{children}</div>
+      </div>
+      <div className="lux-legal-bar">
+        <button type="button" className="pressable lux-agree" onClick={agree}>
+          {agreed ? 'Saved' : 'I agree to all'}
+        </button>
       </div>
     </div>
   )
@@ -32,8 +38,8 @@ function LegalShell({ title, children }) {
 
 function Section({ heading, children }) {
   return (
-    <section style={{ marginBottom: 22 }}>
-      <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--ink)', marginBottom: 8 }}>{heading}</h2>
+    <section className="lux-legal-section">
+      <h2>{heading}</h2>
       {children}
     </section>
   )
@@ -43,10 +49,10 @@ function LegalBody({ sections }) {
   return sections.map((section) => (
     <Section key={section.heading} heading={section.heading}>
       {section.paragraphs?.map((paragraph) => (
-        <p key={paragraph.slice(0, 48)} style={{ marginBottom: 10 }}>{paragraph}</p>
+        <p key={paragraph.slice(0, 48)}>{paragraph}</p>
       ))}
       {section.bullets ? (
-        <ul style={{ paddingLeft: 20, margin: 0 }}>
+        <ul>
           {section.bullets.map((bullet) => <li key={bullet.slice(0, 48)}>{bullet}</li>)}
         </ul>
       ) : null}

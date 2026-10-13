@@ -1,10 +1,11 @@
-import { Redirect, useFocusEffect, useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import * as DocumentPicker from 'expo-document-picker'
 import * as ImagePicker from 'expo-image-picker'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BackButton, Card, ErrorText, Field, Primary, Tag } from '@/components/chrome'
+import { TitleStatusField } from '@/components/TitleStatusField'
 import { SignaturePad } from '@/components/SignaturePad'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
@@ -40,13 +41,23 @@ import {
 } from 'rides-native/driverOnboardingClient'
 import { extractReadableText, licensePendingCopy, matchRegistration, reviewLicenseImage } from 'rides-native/documentReview'
 import { loadDriverProfile, loadVehicle } from 'rides-native/driverDesk'
-import { COMFORT_FLEET_NOTICE } from 'rides-native/tripTags'
-import { comfortClassMakeModel, modelsForMake, VEHICLE_COLORS, VEHICLE_MAKES } from 'rides-native/vehicleCatalog'
+import { modelsForMake, VEHICLE_COLORS, VEHICLE_MAKES } from 'rides-native/vehicleCatalog'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { useTheme } from '@/lib/theme'
+import { DriverAgreementPrompt } from '@/components/DriverAgreementPrompt'
+import { WEB_DRIVER_RENTALS_URL, WEB_DRIVER_SIGNUP_URL } from '../../../shared/productLinks.js'
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
+import { applicantEmailError } from '../../../shared/applicantEmail.js'
+import { titleStatusError } from '../../../shared/vehicleTitle.js'
+import {
+  BACKGROUND_DISCLOSURES,
+  assessBackgroundAttestation,
+  backgroundStatusLabel,
+  emptyDisclosures,
+} from '../../../shared/backgroundCheck.js'
 
 const HEADLINE = 'Become a driver'
-const TAGLINE = 'For Clemson University students — and for drivers already on Uber or Lyft.'
+const TAGLINE = 'For Clemson University students and experienced rideshare drivers.'
 
 const STEP_KINDS = ['account', 'documents', 'employment', 'tax', 'agreement', 'review'] as const
 type StepKind = (typeof STEP_KINDS)[number]
@@ -64,8 +75,6 @@ const QUESTIONS: { key: keyof Answers; label: string; optional?: boolean }[] = [
   { key: 'hasInsurance', label: 'Do you have auto insurance?' },
   { key: 'wantsExtraMoney', label: 'Do you want extra driving income?', optional: true },
 ]
-
-const BACKGROUND_TEXT = 'I authorize Clemson RIDES / Operator and its screening vendor to obtain a background check, including criminal history and motor-vehicle records, as a condition of driving. I understand this queues a check as submitted and pending. A vendor connection is not live in this build. My electronic signature and date are my authorization. This is not legal advice.'
 
 const ELIGIBILITY_TEXT = 'I attest that I am eligible to work in the United States in the category I select, that the information is mine, and that I will update it if my status changes. My electronic signature and date are my attestation. This form does not replace legal advice.'
 
@@ -155,6 +164,7 @@ export default function OnboardingScreen() {
     wantsExtraMoney: null,
   })
   const [attestation, setAttestation] = useState(false)
+  const [applicantEmail, setApplicantEmail] = useState('')
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [make, setMake] = useState('')
@@ -162,10 +172,15 @@ export default function OnboardingScreen() {
   const [color, setColor] = useState('')
   const [plate, setPlate] = useState('')
   const [year, setYear] = useState('')
+  const [titleStatus, setTitleStatus] = useState('')
   const [seats, setSeats] = useState('4')
   const [comfortClass, setIsComfort] = useState(false)
   const [picker, setPicker] = useState<null | 'make' | 'model' | 'color'>(null)
   const [eligibility, setEligibility] = useState('')
+  const [bgStep, setBgStep] = useState(0)
+  const [bgLegalName, setBgLegalName] = useState('')
+  const [disclosures, setDisclosures] = useState(emptyDisclosures)
+  const [backgroundAuthorized, setBackgroundAuthorized] = useState(false)
   const [legalName, setLegalName] = useState('')
   const [businessName, setBusinessName] = useState('')
   const [address, setAddress] = useState('')
@@ -185,6 +200,7 @@ export default function OnboardingScreen() {
     if (!user || !supabase) return
     const next = await loadOnboarding(supabase, user.id)
     setBundle(next)
+    setStepId(next.stepId)
     if (next.application?.onboarding_status === 'approved') return
     const [profile, vehicle] = await Promise.all([
       loadDriverProfile(supabase, user.id).catch(() => null),
@@ -201,6 +217,8 @@ export default function OnboardingScreen() {
     }
     if (profile?.phone) setPhone(String(profile.phone))
     const app = next.application
+    const storedEmail = String(app?.applicant_email || user.email || '')
+    if (storedEmail) setApplicantEmail((current: string) => current || storedEmail)
     if (app) {
       setAnswers({
         isStudent: boolAnswer(app.is_student),
@@ -215,13 +233,24 @@ export default function OnboardingScreen() {
       setModel(String(vehicle.model || ''))
       setColor(String(vehicle.color || ''))
       setYear(vehicle.year ? String(vehicle.year) : '')
+      setTitleStatus(String(vehicle.title_status || ''))
       setPlate(String(vehicle.plate || ''))
       setSeats(String(vehicle.seats || 4))
-      setIsComfort(Boolean(vehicle.service_class))
+      setIsComfort(vehicle.service_class === 'comfort')
     }
     if (tax?.legal_name) setLegalName(String(tax.legal_name))
     if (tax?.tax_classification) setTaxClass(String(tax.tax_classification))
     if (app?.work_eligibility_category) setEligibility(String(app.work_eligibility_category))
+    if (app?.background_legal_name) setBgLegalName((current: string) => current || String(app.background_legal_name))
+    if (app?.background_disclosures && typeof app.background_disclosures === 'object') {
+      const stored = app.background_disclosures as Record<string, unknown>
+      setDisclosures({
+        conviction: boolAnswer(stored.conviction),
+        license_action: boolAnswer(stored.license_action),
+        impaired_driving: boolAnswer(stored.impaired_driving),
+      })
+    }
+    if (app?.background_authorized_at) setBackgroundAuthorized(true)
     if (next.agreement?.signature_name) setSignature(String(next.agreement.signature_name))
   }, [user])
 
@@ -348,16 +377,26 @@ export default function OnboardingScreen() {
       setError(quizError)
       return
     }
-    const fieldErrors = vehicleAccountErrors({ fullName, phone, make, model, color, plate, year })
+    const fieldErrors = {
+      ...vehicleAccountErrors({ fullName, phone, make, model, color, plate, year }),
+    }
+    const titleIssue = titleStatusError(titleStatus)
+    if (titleIssue) fieldErrors.titleStatus = titleIssue
     const fieldMessages = Object.values(fieldErrors)
     if (fieldMessages.length) {
       setError(fieldMessages.join(' '))
+      return
+    }
+    const emailIssue = applicantEmailError(applicantEmail)
+    if (emailIssue) {
+      setError(emailIssue)
       return
     }
     setBusy(true)
     setError(null)
     try {
       await saveDriverInfo(supabase, user, {
+        email: applicantEmail.trim(),
         isStudent: answers.isStudent === true,
         hasCar: true,
         hasInsurance: true,
@@ -369,9 +408,10 @@ export default function OnboardingScreen() {
         model,
         color,
         year,
+        titleStatus,
         plate: plate.trim(),
         seats: Number(seats) || 4,
-        comfortClass: comfortClass || comfortClassMakeModel(make, model),
+        comfortClass,
       })
       const next = await loadOnboarding(supabase, user.id)
       setBundle(next)
@@ -385,6 +425,17 @@ export default function OnboardingScreen() {
 
   async function onSaveEmployment() {
     if (!user || !supabase) return
+    const assessment = assessBackgroundAttestation({
+      legalName: bgLegalName,
+      disclosures,
+      authorized: backgroundAuthorized,
+      signatureName: signature.trim(),
+      signedOn,
+    })
+    if (!assessment.complete) {
+      setError(assessment.issue || 'Finish the background attestation.')
+      return
+    }
     if (!eligibility) {
       setError('Select your eligibility to work.')
       return
@@ -398,6 +449,8 @@ export default function OnboardingScreen() {
     try {
       await saveEmploymentVerification(supabase, user.id, {
         backgroundAuthorized: true,
+        legalName: bgLegalName.trim(),
+        disclosures,
         category: eligibility,
         signatureName: signature.trim(),
         signedOn,
@@ -508,9 +561,17 @@ export default function OnboardingScreen() {
     hasInsurance: answers.hasInsurance,
     attestation,
   })
-  const accountReady = !accountQuizIssue && Object.keys(accountIssues).length === 0
-  const accountBlockReason = accountQuizIssue || (accountIssues.year ? null : Object.values(accountIssues)[0] || null)
-  const employmentReady = Boolean(eligibility) && signature.trim().length >= 2 && Boolean(signedOn.trim())
+  const salvageTitle = titleStatus === 'salvage'
+  const accountReady = !accountQuizIssue && Object.keys(accountIssues).length === 0 && !salvageTitle
+  const accountBlockReason = accountQuizIssue || (accountIssues.year ? null : Object.values(accountIssues)[0] || null) || (salvageTitle ? titleStatusError(titleStatus) : null)
+  const backgroundAssessment = assessBackgroundAttestation({
+    legalName: bgLegalName,
+    disclosures,
+    authorized: backgroundAuthorized,
+    signatureName: signature,
+    signedOn,
+  })
+  const employmentReady = backgroundAssessment.complete && Boolean(eligibility) && signature.trim().length >= 2 && Boolean(signedOn.trim())
   const agreementSignReady = readAgreement && signature.trim().length >= 2 && Boolean(signedOn.trim())
   const w9Fields = {
     legalName,
@@ -542,15 +603,30 @@ export default function OnboardingScreen() {
     )
   }
 
-  if (status === 'approved') return <Redirect href="/(tabs)" />
-
   return (
+    <DriverAgreementPrompt onBack={() => router.back()}>
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <BackButton onPress={() => router.back()} />
         <Text style={styles.kicker}>DRIVER APPLICATION</Text>
         <Text style={styles.title}>{HEADLINE}</Text>
         <Text style={styles.copy}>{TAGLINE}</Text>
+        <Pressable
+          onPress={() => { void Linking.openURL(WEB_DRIVER_SIGNUP_URL) }}
+          accessibilityRole="link"
+          accessibilityLabel="Open the website driver application"
+          accessibilityHint="Opens clemsonrides.com if you would rather finish the application in a browser"
+        >
+          <Text style={styles.link}>Prefer the website? Open the driver application</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => { void Linking.openURL(WEB_DRIVER_RENTALS_URL) }}
+          accessibilityRole="link"
+          accessibilityLabel="No car? Rent one"
+          accessibilityHint="Opens weekly rentals from Clemson RIDES partners. Available after your license and background check pass."
+        >
+          <Text style={styles.link}>No car? Rent one from a rental partner</Text>
+        </Pressable>
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${progress.percent}%` }]} />
         </View>
@@ -630,25 +706,26 @@ export default function OnboardingScreen() {
               <Text style={styles.checkCopy}>I attest I carry valid auto insurance for the vehicle I will drive.</Text>
             </Pressable>
             <Field label="Full name" value={fullName} onChangeText={setFullName} />
+            <Field label="Email" value={applicantEmail} onChangeText={setApplicantEmail} keyboard="email-address" placeholder="you@email.com" />
             <Field label="Phone" value={phone} onChangeText={setPhone} keyboard="phone-pad" />
             <PickerField label="Make" value={make || 'Select make'} onPress={() => setPicker('make')} />
             <PickerField label="Model" value={make ? (model || 'Select model') : 'Select make first'} onPress={() => make && setPicker('model')} />
             <PickerField label="Color" value={color || 'Select color'} onPress={() => setPicker('color')} />
             <Field label="Year" value={year} onChangeText={setYear} keyboard="number-pad" />
             <Field label="Plate" value={plate} onChangeText={setPlate} />
+            <TitleStatusField value={titleStatus} onChange={setTitleStatus} />
             <Field label="Seats" value={seats} onChangeText={setSeats} keyboard="number-pad" />
             <Pressable
               onPress={() => setIsComfort((value: boolean) => !value)}
               accessibilityRole="checkbox"
-              accessibilityLabel="List a Extra Comfort on my profile"
-              accessibilityState={{ checked: Boolean(comfortClass || comfortClassMakeModel(make, model)) }}
+              accessibilityLabel="List this car as Extra Comfort"
+              accessibilityState={{ checked: comfortClass }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={styles.checkRow}
             >
-              <View style={[styles.box, (comfortClass || comfortClassMakeModel(make, model)) && styles.boxOn]} />
+              <View style={[styles.box, comfortClass && styles.boxOn]} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.checkCopy}>List a Extra Comfort on my profile</Text>
-                <Text style={styles.hint}>{COMFORT_FLEET_NOTICE}</Text>
+                <Text style={styles.checkCopy}>List this car as Extra Comfort</Text>
               </View>
             </Pressable>
             {accountBlockReason ? <Text style={styles.hint}>{accountBlockReason}</Text> : null}
@@ -689,35 +766,96 @@ export default function OnboardingScreen() {
 
         {kind === 'employment' ? (
           <Card>
-            <Text style={styles.cardTitle}>Background check and eligibility</Text>
-            <ScrollView style={styles.agreement} nestedScrollEnabled>
-              <Text style={styles.agreementText}>{BACKGROUND_TEXT}</Text>
-              <Text style={styles.agreementText}>{ELIGIBILITY_TEXT}</Text>
-            </ScrollView>
-            <Text style={styles.questionLabel}>Eligibility to work</Text>
-            <View style={styles.choices}>
-              {WORK_ELIGIBILITY_CATEGORIES.map((item) => {
-                const on = eligibility === item.id
-                return (
-                  <Pressable
-                    key={item.id}
-                    onPress={() => setEligibility(item.id)}
-                    accessibilityRole="radio"
-                    accessibilityLabel={item.label}
-                    accessibilityState={{ selected: on }}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={[styles.choice, on && styles.choiceOn]}
-                  >
-                    <Text style={[styles.choiceText, on && styles.choiceTextOn]}>{item.label}</Text>
-                  </Pressable>
-                )
-              })}
-            </View>
-            <Field label="Legal name" value={signature} onChangeText={setSignature} />
-            <Field label="Date" value={signedOn} onChangeText={setSignedOn} placeholder="YYYY-MM-DD" />
-            <SignaturePad onChange={setMark} />
-            <Text style={styles.hint}>Signing queues the background check as pending. You do not upload a file.</Text>
-            <Primary label={busy ? 'Saving…' : 'Sign and continue'} onPress={onSaveEmployment} disabled={busy || !employmentReady || forwardCtaDisabled('employment', hintCtx)} />
+            <Text style={styles.cardTitle}>Background attestation</Text>
+            <Text style={styles.hint}>
+              Step {bgStep + 1} of 3. This records your authorization and disclosures. It does not run a background check and it does not mark you clear.
+            </Text>
+            {bgStep === 0 ? (
+              <>
+                <Field label="Legal name" value={bgLegalName} onChangeText={setBgLegalName} />
+                <Primary label="Continue to disclosures" onPress={() => setBgStep(1)} disabled={bgLegalName.trim().length < 2} />
+              </>
+            ) : null}
+            {bgStep === 1 ? (
+              <>
+                {BACKGROUND_DISCLOSURES.map((question: { id: string; prompt: string }) => (
+                  <View key={question.id} style={styles.question}>
+                    <Text style={styles.questionLabel}>{question.prompt}</Text>
+                    <View style={styles.yesNo}>
+                      {[false, true].map((value: boolean) => {
+                        const on = disclosures[question.id as 'conviction' | 'license_action' | 'impaired_driving'] === value
+                        return (
+                          <Pressable
+                            key={String(value)}
+                            onPress={() => setDisclosures((prev: ReturnType<typeof emptyDisclosures>) => ({ ...prev, [question.id]: value }))}
+                            accessibilityRole="radio"
+                            accessibilityLabel={`${question.prompt}: ${value ? 'Yes' : 'No'}`}
+                            accessibilityState={{ selected: on }}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            style={[styles.choice, on && styles.choiceOn]}
+                          >
+                            <Text style={[styles.choiceText, on && styles.choiceTextOn]}>{value ? 'Yes' : 'No'}</Text>
+                          </Pressable>
+                        )
+                      })}
+                    </View>
+                  </View>
+                ))}
+                <Primary label="Back" onPress={() => setBgStep(0)} />
+                <Primary
+                  label="Continue to authorization"
+                  onPress={() => setBgStep(2)}
+                  disabled={BACKGROUND_DISCLOSURES.some((question: { id: string }) => disclosures[question.id as 'conviction'] == null)}
+                />
+              </>
+            ) : null}
+            {bgStep === 2 ? (
+              <>
+                <Pressable
+                  onPress={() => setBackgroundAuthorized((value: boolean) => !value)}
+                  accessibilityRole="checkbox"
+                  accessibilityLabel="I authorize a background check if a screening vendor is connected later."
+                  accessibilityState={{ checked: backgroundAuthorized }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.checkRow}
+                >
+                  <View style={[styles.box, backgroundAuthorized && styles.boxOn]} />
+                  <Text style={styles.checkCopy}>
+                    I authorize Clemson RIDES to request a background check, including motor-vehicle records, if a screening vendor is connected later. Signing this does not mean a check was completed.
+                  </Text>
+                </Pressable>
+                <Field label="Type your legal name to sign" value={signature} onChangeText={setSignature} />
+                <Field label="Date" value={signedOn} onChangeText={setSignedOn} placeholder="YYYY-MM-DD" />
+                <Text style={styles.hint}>
+                  {backgroundAssessment.complete
+                    ? `${backgroundStatusLabel(backgroundAssessment.status)} This is not a completed check.`
+                    : 'Finish the authorization. This does not run a check.'}
+                </Text>
+                <Text style={styles.questionLabel}>Eligibility to work</Text>
+                <View style={styles.choices}>
+                  {WORK_ELIGIBILITY_CATEGORIES.map((item) => {
+                    const on = eligibility === item.id
+                    return (
+                      <Pressable
+                        key={item.id}
+                        onPress={() => setEligibility(item.id)}
+                        accessibilityRole="radio"
+                        accessibilityLabel={item.label}
+                        accessibilityState={{ selected: on }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={[styles.choice, on && styles.choiceOn]}
+                      >
+                        <Text style={[styles.choiceText, on && styles.choiceTextOn]}>{item.label}</Text>
+                      </Pressable>
+                    )
+                  })}
+                </View>
+                <Text style={styles.hint}>{ELIGIBILITY_TEXT}</Text>
+                <SignaturePad onChange={setMark} />
+                <Primary label="Back" onPress={() => setBgStep(1)} />
+                <Primary label={busy ? 'Saving…' : 'Sign and continue'} onPress={onSaveEmployment} disabled={busy || !employmentReady || forwardCtaDisabled('employment', hintCtx)} />
+              </>
+            ) : null}
           </Card>
         ) : null}
 
@@ -805,6 +943,9 @@ export default function OnboardingScreen() {
         {kind === 'review' ? (
           <Card>
             <Text style={styles.cardTitle}>Submit for review</Text>
+            <Text style={styles.copy}>
+              Email: {String(bundle?.application?.applicant_email || applicantEmail || 'Not submitted')}
+            </Text>
             {status === 'approved' ? (
               <Text style={styles.copy}>You are approved. You can go online from driver home.</Text>
             ) : (
@@ -866,10 +1007,8 @@ export default function OnboardingScreen() {
                     if (picker === 'make') {
                       setMake(option)
                       setModel('')
-                      setIsComfort(comfortClassMakeModel(option, ''))
                     } else if (picker === 'model') {
                       setModel(option)
-                      setIsComfort(comfortClassMakeModel(make, option))
                     } else {
                       setColor(option)
                     }
@@ -884,6 +1023,7 @@ export default function OnboardingScreen() {
         </Pressable>
       </Modal>
     </View>
+    </DriverAgreementPrompt>
   )
 }
 
@@ -1004,9 +1144,10 @@ function useOnboardingStyles() {
   return useMemo(() => StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
     scroll: { padding: 16, paddingBottom: 48, gap: 12 },
-    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12, marginTop: 12 },
-    title: { fontSize: 28, fontWeight: '800' as const, color: colors.title, letterSpacing: -0.4 },
-    copy: { color: colors.inkSecondary, fontSize: 15, lineHeight: 21 },
+    kicker: { color: colors.orange, ...typeScale.kicker, marginTop: 12 },
+    title: { ...typeScale.title, color: colors.title },
+    copy: { color: colors.inkSecondary, ...typeScale.body },
+    link: { color: colors.purple, fontSize: 14, fontWeight: '800' as const, lineHeight: 20 },
     progressTrack: { height: 8, borderRadius: 999, backgroundColor: colors.track, overflow: 'hidden' as const },
     progressFill: { height: '100%' as const, backgroundColor: colors.orange, borderRadius: 999 },
     progressLabel: { color: colors.title, fontWeight: '700' as const, fontSize: 13 },
@@ -1015,13 +1156,13 @@ function useOnboardingStyles() {
     stepChipOn: { backgroundColor: colors.fill },
     stepChipText: { color: colors.title, fontWeight: '700' as const, fontSize: 12 },
     stepChipTextOn: { color: colors.onAccent },
-    cardTitle: { fontSize: 20, fontWeight: '800' as const, color: colors.title },
+    cardTitle: { fontSize: 20, fontWeight: '800' as const, letterSpacing: -0.3, color: colors.title },
     question: { gap: 8 },
     questionLabel: { color: colors.ink, fontWeight: '700' as const, fontSize: 14 },
     yesNo: { flexDirection: 'row' as const, gap: 8, flexWrap: 'wrap' as const },
     choices: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
-    choice: { borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.input },
-    choiceOn: { borderColor: accent, backgroundColor: colors.track },
+    choice: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.input },
+    choiceOn: { borderColor: accent, backgroundColor: colors.purpleSoft },
     choiceText: { color: colors.ink, fontWeight: '700' as const },
     choiceTextOn: { color: colors.title },
     checkRow: { flexDirection: 'row' as const, gap: 10, alignItems: 'flex-start' as const },
@@ -1031,13 +1172,13 @@ function useOnboardingStyles() {
     hint: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18 },
     nextStep: { color: colors.purple, fontWeight: '700' as const, fontSize: 14, lineHeight: 20 },
     saved: { color: colors.title, fontWeight: '700' as const, fontSize: 13 },
-    agreement: { maxHeight: 180, backgroundColor: colors.input, borderRadius: 14, padding: 12 },
-    agreementTall: { maxHeight: 280, backgroundColor: colors.input, borderRadius: 14, padding: 12 },
+    agreement: { maxHeight: 180, backgroundColor: colors.input, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 12 },
+    agreementTall: { maxHeight: 280, backgroundColor: colors.input, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 12 },
     agreementText: { color: colors.ink, fontSize: 13, lineHeight: 19 },
     blocker: { color: colors.danger, fontSize: 13 },
     doc: { gap: 6, paddingTop: 8 },
-    scrim: { flex: 1, backgroundColor: 'rgba(11,18,32,0.45)', justifyContent: 'flex-end' as const },
-    sheet: { backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 16, gap: 8 },
+    scrim: { flex: 1, backgroundColor: colors.scrim, justifyContent: 'flex-end' as const },
+    sheet: { backgroundColor: colors.card, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, padding: 16, gap: 8 },
     sheetRow: { paddingVertical: 12 },
   }), [colors, accent])
 }

@@ -422,6 +422,10 @@ function createMockEndpointSb({
           return { data: null, error: null }
         },
         then(resolve) {
+          if (table === 'profiles') {
+            resolve({ data: [{ id: 'drv_test_123', email: 'driver@example.com' }], error: null })
+            return
+          }
           if (table === 'driver_applications') {
             resolve({
               data: [{ profile_id: 'drv_test_123', onboarding_status: 'approved' }],

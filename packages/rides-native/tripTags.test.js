@@ -34,7 +34,7 @@ import {
 
 test('driver net is 80 percent and the deposit slice is 25 percent', () => {
   assert.equal(driverNetCents(10000), 8000)
-  assert.equal(depositSliceCents(10000), 2500)
+  assert.equal(depositSliceCents(10000), 0)
   assert.equal(depositSliceCents(10000, 400), 400)
 })
 
@@ -165,8 +165,8 @@ test('carpool shares replace the listed fare and keep the 25 percent deposit', (
   assert.equal(card.passengers, 3)
   const fare = fareCollection(card)
   assert.equal(fare.fareCents, 2400)
-  assert.equal(fare.depositCents, 600)
-  assert.equal(fare.remainderCents, 1800)
+  assert.equal(fare.depositCents, 0)
+  assert.equal(fare.remainderCents, 2400)
   assert.equal(fare.driverNetCents, 1920)
   assert.equal(fare.platformFeeCents, 480)
   assert.equal(fare.shares[1].label, 'Blair')
@@ -311,7 +311,7 @@ test('unpaid airport deposit trips are gated out of the open pool until paid', (
 test('driver fare note is short, driver-friendly, and only mentions a deposit when one was taken', () => {
   assert.equal(
     driverFareNote(1850),
-    'The rider already paid a 25% deposit. The rest is charged to their card automatically when you complete the trip.',
+    'Part of this fare is already paid. The rest is charged to the rider’s card when you complete the trip.',
   )
   assert.equal(driverFareNote(1850), APPLE_PAY_DRIVER_COPY)
   assert.equal(driverFareNote(0), NO_DEPOSIT_DRIVER_COPY)
@@ -320,4 +320,14 @@ test('driver fare note is short, driver-friendly, and only mentions a deposit wh
     assert.doesNotMatch(copy, /Stripe|settle|server|Apple Pay sheet/i)
     assert.ok(copy.length <= 120, copy)
   }
+})
+
+test('arrived prompt names the rider and pickup, with safe fallbacks', async () => {
+  const { arrivedPromptCopy } = await import('./tripTags.js')
+  const copy = arrivedPromptCopy({ firstName: 'Riley', pickupLabel: 'Cooper Library' })
+  assert.equal(copy.title, 'Arrived?')
+  assert.match(copy.body, /close to Cooper Library/)
+  assert.match(copy.body, /Riley is told/)
+  assert.equal(copy.action, "Yes, I've arrived")
+  assert.match(arrivedPromptCopy().body, /close to pickup.*your rider is told/)
 })

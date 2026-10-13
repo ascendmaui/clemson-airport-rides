@@ -11,7 +11,43 @@ export type AirportQuote = {
   surgeLabel: string | null
   routeSource: string | null
   source?: string
+  tigerPassApplied?: boolean
+  tigerPassName?: string | null
+  tigerPassDiscountBps?: number
+  tigerPassDiscountCents?: number
+  preferredCarTypes?: string[]
+  etaMinutes?: number | null
+  tripMinutes?: number | null
+  tiers?: { id: string; fareCents: number; discountCents?: number; tigerPassApplied?: boolean; tigerPassDiscountCents?: number; etaMinutes?: number | null; tripMinutes?: number | null }[]
 }
+
+export function withTigerPassQuote<T extends { fareCents?: number; depositCents?: number; tigerPassApplied?: boolean }>(
+  quote: T,
+  input?: { active?: boolean; bps?: number; name?: string },
+): T & {
+  tigerPassApplied: boolean
+  tigerPassName: string | null
+  tigerPassDiscountBps: number
+  tigerPassDiscountCents: number
+  fareCents: number
+  depositCents: number
+}
+
+export function fetchRideQuote(
+  supabase: unknown,
+  body?: {
+    pickupLabel?: string
+    pickupLat?: number
+    pickupLng?: number
+    dest?: string
+    destLat?: number
+    destLng?: number
+    airport?: string
+    date?: string
+    time?: string
+    tier?: string
+  },
+): Promise<AirportQuote>
 
 export type CheckoutSession = {
   id?: string
@@ -62,6 +98,8 @@ export function startAirportDeposit(
     studentDiscountCents?: number
     riderId?: string
     riderName?: string
+    /** Optional flight for the driver: number like DL 1234, time HH:MM. */
+    flight?: { number?: string; time?: string }
   },
 ): Promise<CheckoutSession>
 
@@ -165,6 +203,32 @@ export function loadTripDeposit(
 export const ADD_ANOTHER_PAYMENT_METHOD_ID: string
 export const ADD_ANOTHER_PAYMENT_METHOD_LABEL: string
 
+export function googlePayTestEnv(publishableKey: string | null | undefined): boolean
+
+export function nativeSetupSheetParams(
+  methodId: string,
+  options?: { testEnv?: boolean },
+): {
+  merchantDisplayName: string
+  returnURL: string
+  primaryButtonLabel: string
+  allowsDelayedPaymentMethods: boolean
+  paymentMethodOrder: string[]
+  link: { display: 'automatic' | 'never' }
+  applePay?: { merchantCountryCode: string }
+  googlePay?: { merchantCountryCode: string; currencyCode: string; testEnv: boolean }
+}
+
+export function nativeWalletUnavailableCopy(methodId: string): string
+
+export function savedPaymentMethodLabel(method: {
+  brand?: string | null
+  last4?: string | null
+  type?: string | null
+  cashtag?: string | null
+  email?: string | null
+} | null): string
+
 export type RidePaymentMethod = {
   id: string
   label: string
@@ -218,13 +282,53 @@ export function buyPrepaidCredits(supabase: unknown, tierId: string): Promise<{
 
 export function startPaymentMethodSetup(
   supabase: unknown,
-  input?: { paymentMethod?: string; returnUrl?: string },
-): Promise<{ url?: string; sessionId?: string; error?: string; note?: string }>
+  input?: { paymentMethod?: string; returnUrl?: string; native?: boolean },
+): Promise<{
+  url?: string
+  sessionId?: string
+  clientSecret?: string
+  setupIntentId?: string
+  publishableKey?: string | null
+  merchantIdentifier?: string | null
+  error?: string
+  note?: string
+}>
 
 export function saveCheckoutPaymentMethod(
   supabase: unknown,
   checkoutSessionId: string,
 ): Promise<{ ok?: boolean; brand?: string; last4?: string }>
+
+export function saveSetupPaymentMethod(
+  supabase: unknown,
+  setupIntentId: string,
+): Promise<{ ok?: boolean; brand?: string; last4?: string; paymentMethodId?: string }>
+
+export type SavedPaymentMethod = {
+  id: string
+  brand: string
+  last4: string | null
+  type?: string
+  cashtag?: string | null
+  email?: string | null
+}
+
+export function listSavedPaymentMethods(supabase: unknown): Promise<{
+  methods?: SavedPaymentMethod[]
+  defaultPmId?: string | null
+  error?: string
+}>
+
+export function updateSavedPaymentMethod(
+  supabase: unknown,
+  input: { action: 'default' | 'detach'; paymentMethodId: string },
+): Promise<{
+  ok?: boolean
+  defaultPmId?: string | null
+  brand?: string | null
+  last4?: string | null
+  methods?: SavedPaymentMethod[]
+}>
 
 export function loadRiderBilling(
   supabase: unknown,

@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Driver home icon. Purple-dominant glass, steering wheel with speed arcs. Groups background, shadow, glyph, gloss. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="driverBase" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F7F1FF"/>
+      <stop offset="14%" stop-color="#C4A6E4"/>
+      <stop offset="36%" stop-color="#7A4EAE"/>
+      <stop offset="58%" stop-color="#522D80"/>
+      <stop offset="84%" stop-color="#3A1864"/>
+      <stop offset="100%" stop-color="#6A2400"/>
+    </linearGradient>
+    <radialGradient id="driverGlow" cx="22%" cy="8%" r="58%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.92"/>
+      <stop offset="20%" stop-color="#E7D6FF" stop-opacity="0.55"/>
+      <stop offset="50%" stop-color="#6A449C" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="driverPool" cx="100%" cy="104%" r="54%">
+      <stop offset="0%" stop-color="#FFC48A"/>
+      <stop offset="20%" stop-color="#FF7A1A"/>
+      <stop offset="42%" stop-color="#F56600"/>
+      <stop offset="70%" stop-color="#F56600" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="driverDepth" cx="30%" cy="86%" r="42%">
+      <stop offset="0%" stop-color="#1A0830" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#1A0830" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="streak" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="46%" stop-color="#FFFFFF" stop-opacity="0.02"/>
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="54%" stop-color="#FFFFFF" stop-opacity="0.02"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="topSheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="vignette" x1="0" y1="0.62" x2="0" y2="1">
+      <stop offset="0%" stop-color="#120614" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#120614" stop-opacity="0.2"/>
+    </linearGradient>
+    <radialGradient id="glyphGloss" cx="32%" cy="28%" r="55%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.7"/>
+      <stop offset="55%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="markShadow" x="-35%" y="-35%" width="170%" height="170%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="13" result="blur"/>
+      <feOffset in="blur" dx="0" dy="16" result="off"/>
+      <feFlood flood-color="#140818" flood-opacity="0.46" result="flood"/>
+      <feComposite in="flood" in2="off" operator="in"/>
+    </filter>
+
+    <g id="mark" fill="none" stroke="#FFFFFF" stroke-width="68" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="512" cy="486" r="190"/>
+      <g stroke-width="54">
+        <path d="M 512.00 414.00 L 512.00 324.00"/><path d="M 449.65 522.00 L 371.70 567.00"/><path d="M 574.35 522.00 L 652.30 567.00"/>
+      </g>
+      <path fill="#FFFFFF" stroke="none" fill-rule="evenodd" d="M 452.00 486.00 A 60.00 60.00 0 1 1 572.00 486.02 A 60.00 60.00 0 1 1 452.00 486.00 Z M 489.00 486.00 A 23.00 23.00 0 1 1 535.00 486.02 A 23.00 23.00 0 1 1 489.00 486.00 Z"/>
+      <g fill="none" stroke="#FFFFFF" stroke-linecap="round">
+        <path d="M 752.16 358.30 A 272.00 272.00 0 0 0 596.05 227.31" stroke-width="30"/>
+        <path d="M 764.41 302.61 A 312.00 312.00 0 0 0 638.90 200.97" stroke-width="20"/>
+      </g>
+    </g>
+    
+    <mask id="markMask" maskUnits="userSpaceOnUse">
+      <rect width="1024" height="1024" fill="#000000"/>
+      <use href="#mark"/>
+    </mask>
+  </defs>
+  
+    <g id="background">
+      <rect width="1024" height="1024" fill="#522D80"/>
+      <rect width="1024" height="1024" fill="url(#driverBase)"/>
+      <rect width="1024" height="1024" fill="url(#driverDepth)"/>
+      <rect width="1024" height="1024" fill="url(#driverPool)"/>
+      <rect width="1024" height="1024" fill="url(#driverGlow)"/>
+      <g opacity="0.34" transform="rotate(-28 512 390)">
+        <rect x="-160" y="168" width="1500" height="28" fill="url(#streak)"/>
+      </g>
+      <ellipse cx="300" cy="70" rx="420" ry="130" fill="url(#topSheen)"/>
+      <rect width="1024" height="1024" fill="url(#vignette)"/>
+    </g>
+    
+  <g id="shadow" filter="url(#markShadow)">
+    <use href="#mark"/>
+  </g>
+  <g id="glyph">
+    <use href="#mark"/>
+  </g>
+  <g id="gloss" mask="url(#markMask)">
+    <rect width="1024" height="1024" fill="url(#glyphGloss)"/>
+  </g>
+</svg>

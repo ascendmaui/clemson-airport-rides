@@ -2,5 +2,8 @@
   "name": "@clemson/rides-native",
   "private": true,
   "version": "1.1.0",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "expo-glass-effect": "~57.0.4"
+  }
 }

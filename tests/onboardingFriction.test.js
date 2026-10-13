@@ -77,7 +77,7 @@ test('inventory of remaining incomplete-step messages stays in the screens that 
   assert.equal(blockerLabel('w9_tax_info'), 'W-9 legal name and TIN')
   assert.equal(blockerLabel('ic_agreement'), 'Signed independent contractor agreement')
   assert.equal(blockerLabel('registration_match'), 'Registration that matches the vehicle you entered')
-  assert.equal(blockerLabel('background_authorization_attestation'), 'Signed background-check authorization')
+  assert.equal(blockerLabel('background_authorization_attestation'), 'Background attestation (consent is not a completed check)')
   assert.equal(blockerLabel('work_eligibility_attestation'), 'Work-eligibility attestation')
   assert.equal(driverQuizError({ hasCar: false, hasInsurance: true, attestation: true }), 'A car is required to apply as a driver.')
   assert.match(vehicleAccountErrors({ year: '' }, NOW).year, /^Year must be from 1980 to 2027\.$/)

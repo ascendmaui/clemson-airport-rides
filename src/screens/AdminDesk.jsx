@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
 import { AdminDrivers } from './AdminDrivers'
+import { AdminRentalPartners } from './RentalPartners'
 import { navigate, getHashRoute } from '../lib/navigation'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { AdminAccessDenied } from '../components/AdminAccessDenied'
-import { isAdminIdentity } from '../lib/driverOnboarding'
+import { AdminEventsPanel } from '../components/AdminEventsPanel'
+import { AdminInboxPanel } from '../components/AdminInboxPanel'
+import { rideOptionLabel } from '../../shared/rideOptions.js'
 import {
+  fetchAdminInbox,
   fetchAdminNotifications,
   fetchAdminOverview,
   fetchAdminPeople,
@@ -17,11 +21,14 @@ import {
 } from '../lib/adminDesk'
 
 const TABS = [
+  ['inbox', 'To-do'],
   ['notifications', 'Notifications'],
   ['applications', 'Applicants'],
   ['people', 'People'],
   ['trips', 'Trips'],
   ['support', 'Support'],
+  ['events', 'Events'],
+  ['rentals', 'Rental partners'],
 ]
 
 const TICKET_FILTERS = [
@@ -35,19 +42,25 @@ const TICKET_FILTERS = [
 
 function readTab() {
   const tab = getHashRoute().params.tab
-  return TABS.some(([id]) => id === tab) ? tab : 'notifications'
+  return TABS.some(([id]) => id === tab) ? tab : 'inbox'
 }
 
 export function AdminDesk() {
   const { user, loading } = useAuth()
   const [allowed, setAllowed] = useState(null)
+  const [gateError, setGateError] = useState('')
   const [tab, setTab] = useState(readTab)
   const [overview, setOverview] = useState(null)
+  const [inbox, setInbox] = useState(null)
 
   useEffect(() => {
     const sync = () => setTab(readTab())
     window.addEventListener('hashchange', sync)
-    return () => window.removeEventListener('hashchange', sync)
+    window.addEventListener('popstate', sync)
+    return () => {
+      window.removeEventListener('hashchange', sync)
+      window.removeEventListener('popstate', sync)
+    }
   }, [])
 
   useEffect(() => {
@@ -57,15 +70,22 @@ export function AdminDesk() {
       return undefined
     }
     let alive = true
-    supabase.from('profiles').select('role, is_admin, email').eq('id', user.id).maybeSingle()
-      .then(({ data }) => {
+    fetchAdminInbox()
+      .then((data) => {
         if (!alive) return
-        const adminOk = isAdminIdentity({
-          jwtEmail: user.email || data?.email,
-          role: data?.role,
-          isAdmin: data?.is_admin,
-        })
-        setAllowed(Boolean(adminOk))
+        setInbox(data)
+        setAllowed(true)
+        setGateError('')
+      })
+      .catch((err) => {
+        if (!alive) return
+        if (err.status === 401 || err.status === 403) {
+          setAllowed(false)
+          setGateError('')
+          return
+        }
+        setAllowed(false)
+        setGateError(err.message || 'Could not check admin access')
       })
     return () => { alive = false }
   }, [user, loading])
@@ -80,7 +100,11 @@ export function AdminDesk() {
     return <div style={{ padding: 40, color: 'var(--ink-secondary)' }}>Loading admin dashboard…</div>
   }
 
-  if (!allowed) return <AdminAccessDenied />
+  if (!allowed) {
+    return gateError
+      ? <div style={{ padding: 40, color: 'var(--danger)' }}>{gateError}</div>
+      : <AdminAccessDenied />
+  }
 
   return (
     <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 20px 48px' }}>
@@ -93,10 +117,11 @@ export function AdminDesk() {
       </p>
       <div style={{ display: 'flex', gap: 8, marginTop: 14, overflowX: 'auto' }}>
         {TABS.map(([id, label]) => {
-          const badge = id === 'notifications' ? overview?.unreadNotifications
-            : id === 'applications' ? overview?.pendingApplications
-              : id === 'support' ? overview?.escalatedTickets
-                : 0
+          const badge = id === 'inbox' ? inbox?.total
+            : id === 'notifications' ? overview?.unreadNotifications
+              : id === 'applications' ? overview?.pendingApplications
+                : id === 'support' ? overview?.escalatedTickets
+                  : 0
           return (
             <button
               key={id}
@@ -119,11 +144,19 @@ export function AdminDesk() {
           )
         })}
       </div>
+      {tab === 'inbox' && (
+        <AdminInboxPanel
+          inbox={inbox}
+          onChanged={() => fetchAdminInbox().then(setInbox).catch(() => {})}
+        />
+      )}
       {tab === 'notifications' && <NotificationsPanel onChanged={() => fetchAdminOverview().then(setOverview).catch(() => {})} />}
       {tab === 'applications' && <AdminDrivers embedded />}
       {tab === 'people' && <PeoplePanel />}
       {tab === 'trips' && <TripsPanel />}
       {tab === 'support' && <SupportPanel />}
+      {tab === 'events' && <AdminEventsPanel />}
+      {tab === 'rentals' && <AdminRentalPartners />}
     </div>
   )
 }
@@ -164,7 +197,9 @@ function NotificationsPanel({ onChanged }) {
           onClick={() => {
             mark(row.id).catch(() => {})
             if (row.entity_type === 'support_ticket') navigate('admin', { tab: 'support' })
-            if (row.entity_type === 'driver_application') navigate('admin', { tab: 'applications' })
+            if (row.entity_type === 'driver_application' || row.entity_type === 'driver_profile_photo') {
+              navigate('admin', { tab: 'applications' })
+            }
           }}
           style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 10, padding: 14, borderRadius: 16, opacity: row.read_at ? 0.65 : 1 }}
         >
@@ -203,6 +238,29 @@ function PeoplePanel() {
   )
 }
 
+function BackupQueueAdmin({ row }) {
+  const queue = row?.metadata?.backup_queue
+  if (!queue?.enabled) return null
+  const events = Array.isArray(queue.events) ? queue.events : []
+  return (
+    <div style={{ marginTop: 8, padding: 10, borderRadius: 12, background: 'rgba(245,102,0,0.08)' }}>
+      <div style={{ fontWeight: 800, color: '#F56600' }}>Backup queue</div>
+      <div style={{ fontSize: 12, color: '#522D80', marginTop: 4 }}>
+        Primary {queue.primaryDriverId || 'open'} · Backup {queue.backupDriverId || 'open'} · {queue.confirmState || 'idle'}
+        {queue.bonusCents ? ` · +$${(queue.bonusCents / 100).toFixed(0)}` : ''}
+        {queue.urgent ? ' · urgent' : ''}
+      </div>
+      {events.length > 0 && (
+        <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 12 }}>
+          {events.slice(-6).map((event, index) => (
+            <li key={`${event.kind}-${event.at || index}`}>{event.kind}{event.feeLabel ? ` · ${event.feeLabel}` : ''}{event.reason ? ` · ${event.reason}` : ''}{event.safetyReport ? ' · safety report' : ''}{event.at ? ` · ${event.at}` : ''}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function TripsPanel() {
   const [rows, setRows] = useState([])
   const [error, setError] = useState('')
@@ -219,8 +277,11 @@ function TripsPanel() {
           <div style={{ fontSize: 13 }}>{row.pickup_label || 'Pickup'} → {row.dropoff_label || 'Drop-off'}</div>
           <div style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 4 }}>
             Rider {row.rider?.full_name || row.rider_id || '—'} · Driver {row.driver?.full_name || row.driver_id || '—'}
+            {row.tier ? ` · ${rideOptionLabel(row.tier)}` : ''}
+            {row.passengers > 1 ? ` · ${row.passengers} seats` : ''}
             {row.fare_cents != null ? ` · $${(Number(row.fare_cents) / 100).toFixed(2)}` : ''}
           </div>
+          <BackupQueueAdmin row={row} />
         </div>
       ))}
     </section>
@@ -290,6 +351,13 @@ function SupportPanel() {
                 {detail.profile?.full_name || 'Rider'} · {detail.profile?.email}{detail.profile?.phone ? ` · ${detail.profile.phone}` : ''}
               </div>
               <p style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{detail.ticket.body}</p>
+              {detail.disputeSummary?.summary_text ? (
+                <div style={{ margin: '8px 0', padding: 10, borderRadius: 10, background: 'rgba(82,45,128,0.06)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: '#522D80' }}>Dispute summary (generated from trip records)</div>
+                  <pre style={{ fontSize: 12, whiteSpace: 'pre-wrap', margin: '6px 0 0' }}>{detail.disputeSummary.summary_text}</pre>
+                  <button type="button" onClick={() => navigator.clipboard?.writeText(detail.disputeSummary.summary_text)} style={{ fontSize: 12, marginTop: 6 }}>Copy summary</button>
+                </div>
+              ) : null}
               {(detail.messages || []).map((message) => (
                 <p key={message.id} style={{ fontSize: 13 }}>
                   <strong style={{ color: message.author_role === 'bot' ? '#F56600' : '#522D80' }}>{message.author_role}</strong>

@@ -1,13 +1,20 @@
 import { IconCar, IconCarpool, IconProfile, IconSchedule } from './icons'
 import { navigate } from '../lib/navigation'
+import { WEB_BOTTOM_TABS } from '../lib/webTabOrder'
 
-/** Exact four-tab bar: Schedule · Friends · Account · Rides */
-const TABS = [
-  { id: 'schedule', label: 'Schedule', Icon: IconSchedule },
-  { id: 'friends', label: 'Friends', Icon: IconCarpool },
-  { id: 'account', label: 'Account', Icon: IconProfile },
-  { id: 'home', label: 'Rides', Icon: IconCar },
-]
+/** Web bottom tabs, left to right: Rides · Schedule · Friends · Account */
+const TAB_ICONS = {
+  car: IconCar,
+  schedule: IconSchedule,
+  carpool: IconCarpool,
+  profile: IconProfile,
+}
+
+const TABS = WEB_BOTTOM_TABS.map((tab) => ({
+  id: tab.id,
+  label: tab.label,
+  Icon: TAB_ICONS[tab.icon],
+}))
 
 function goTab(id) {
   if (id === 'home' || id === 'rides') navigate('home')

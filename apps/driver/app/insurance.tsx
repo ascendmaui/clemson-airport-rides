@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons'
+import { Glyph } from 'rides-native/icons'
 import { useRouter } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
 import { Card, Primary, Tag } from '@/components/chrome'
@@ -6,7 +6,7 @@ import { FadeIn, SoftNote } from '@/components/day'
 import { StackPage } from '@/components/shell'
 import { useTheme } from '@/lib/theme'
 
-type IconName = keyof typeof Ionicons.glyphMap
+type IconName = string
 
 export default function InsuranceScreen() {
   const router = useRouter()
@@ -57,7 +57,7 @@ function InfoBlock({
     <Card>
       <View style={styles.row}>
         <View style={[styles.badge, { backgroundColor: colors.track }]}>
-          <Ionicons name={icon} size={20} color={colors.purple} />
+          <Glyph name={icon} size={20} color={colors.purple} />
         </View>
         <View style={styles.copy}>
           <Tag label={tag} tone={tag === 'Your policy' ? 'orange' : 'purple'} />
@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
   badge: {
     width: 40,
     height: 40,
-    borderRadius: 14,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
