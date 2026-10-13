@@ -11,6 +11,7 @@ import { StopList } from '@/components/StopList'
 import { allStopsDone, nextStopIndex, type StopOp, type TripStop } from 'rides-native/carpoolStops'
 import { waitTimerAnchor, type WaitAnchor } from 'rides-native/waitTimer'
 import { DriverCancelSheet } from '@/components/DriverCancelSheet'
+import { DriverEndTripSheet } from '@/components/DriverEndTripSheet'
 import { FarePanel } from '@/components/FarePanel'
 import { TripEndSummary } from '@/components/TripEndSummary'
 import { BackInQueue } from '@/components/BackInQueue'
@@ -60,6 +61,8 @@ import { TripThread } from 'rides-native/TripThread.jsx'
 import { ScheduledRidesHint } from 'rides-native/ScheduledRidesInfo'
 import { MAPS_HANDOFF_HELPER } from '../../../shared/copy/scheduledRides.js'
 import { isActiveRideStatus } from 'rides-native/safety.js'
+import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
+import { canDriverEnd } from '../../../shared/driverEndTrip.js'
 import { MISSING_TRIP_VIEW, driverCanceledView, nextDriverTripCard } from 'rides-native/tripCanceled'
 
 type RiderFix = { latitude: number; longitude: number }
@@ -118,7 +121,7 @@ export default function TripScreen() {
   const signalLabel = waitingForSignalLabel(queueState.actions.filter((a) => a.tripId === trip?.id).length)
   const sosActive = isActiveRideStatus(trip?.status)
   const [sosOpen, setSosOpen] = useState(false)
-  const terminalTrip = Boolean(trip && ['completed', 'canceled', 'canceled_midride', 'cancelled_wait'].includes(trip.status))
+  const terminalTrip = Boolean(trip && ['completed', 'canceled', 'canceled_midride', 'cancelled_wait', 'expired'].includes(trip.status))
   const [tripLoaded, setTripLoaded] = useState(false)
   // Rider cancel, switch, early end, or no-show: explain it and offer a way back to offers.
   const canceledView = driverCanceledView(trip)
@@ -134,6 +137,8 @@ export default function TripScreen() {
   const [waitError, setWaitError] = useState<string | null>(null)
   const [mapsOffer, setMapsOffer] = useState(false)
   const departedTrip = useRef<string | null>(null)
+  const statusRef = useRef<string | null>(null)
+  statusRef.current = trip?.status || null
   const [person, setPerson] = useState<CounterpartView | null>(null)
   // Completed trips: summary → rating → Back in queue.
   const [ratingClosed, setRatingClosed] = useState(false)
@@ -190,7 +195,10 @@ export default function TripScreen() {
       onError: (err) => setError(err ? (err instanceof Error ? err.message : 'Could not refresh trip. Retrying automatically.') : null),
     })
     readerRef.current = reader
-    const pull = () => reader.refresh()
+    const pull = () => {
+      if (canDriverEnd(statusRef.current)) void sendTripHeartbeat(supabase, id)
+      return reader.refresh()
+    }
     void pull()
     const listener = AppState.addEventListener('change', (state) => {
       if (state === 'active') void reader.refresh(true)
@@ -256,6 +264,12 @@ export default function TripScreen() {
   })
 
   function onDriverCanceled() {
+    locationTracking.stop()
+    pulse('cancel')
+    router.replace('/')
+  }
+
+  function onDriverEnded() {
     locationTracking.stop()
     pulse('cancel')
     router.replace('/')
@@ -772,6 +786,7 @@ export default function TripScreen() {
         ) : null}
         {terminalTrip && trip?.status !== 'completed' && !canceledView ? <Primary label="Back to Home" onPress={() => router.replace('/')} tone="purple" /> : null}
         {trip && ['accepted', 'arriving'].includes(trip.status) ? <DriverCancelSheet key={trip.id} supabase={supabase} tripId={trip.id} scheduled={Boolean(trip.pickupAt)} disabled={busy} onCanceled={onDriverCanceled} /> : null}
+        {trip && canDriverEnd(trip.status) ? <DriverEndTripSheet key={`end-${trip.id}`} supabase={supabase} tripId={trip.id} disabled={busy} onEnded={onDriverEnded} /> : null}
         {action && trip?.status !== 'arriving' && trip?.status !== 'arrived' && (!multiStop || (stopsDone && trip?.status === 'in_progress')) ? <Primary label={busy ? 'Updating…' : action} onPress={onAdvance} disabled={busy} tone="purple" /> : null}
         </ScrollView>
       </View>

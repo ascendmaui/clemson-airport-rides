@@ -52,7 +52,7 @@ export function isQueueableAction(action) {
 }
 
 const STATUS_AFTER_OP = { arriving: 'arriving', arrive: 'arrived', start: 'in_progress', complete: 'completed' }
-export const TERMINAL_TRIP_STATUSES = Object.freeze(['completed', 'canceled', 'canceled_midride', 'cancelled_wait'])
+export const TERMINAL_TRIP_STATUSES = Object.freeze(['completed', 'canceled', 'canceled_midride', 'cancelled_wait', 'expired'])
 
 /** Trip status as the driver will see it once the queued taps land. */
 export function projectTripStatus(status, actions = [], tripId = null) {

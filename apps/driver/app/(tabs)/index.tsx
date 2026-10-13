@@ -1,10 +1,11 @@
 import { useRouter } from 'expo-router'
 import * as Location from 'expo-location'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, Animated, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { AccessibilityInfo, Animated, AppState, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { FarePanel } from '@/components/FarePanel'
+import { DriverEndTripSheet } from '@/components/DriverEndTripSheet'
 import { Card, ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
 import { CircleButton, GoButton } from '@/components/shell'
 import { DriverStatusCard } from '@/components/DriverStatusCard'
@@ -66,6 +67,9 @@ import { fetchOfferPreview, riderInitials } from 'rides-native/offerPreviewClien
 import { OfferGauge } from '@/components/OfferGauge'
 import { tipBoostOfferLine } from '../../../../shared/prepaidTip.js'
 import { EXCLUSIVE_SECONDS, exclusiveSecondsLeft, poolSecondsLeft } from 'rides-native/offerLadder.js'
+import { ACTIVE_TRIP_RECONCILE_MS } from 'rides-native/activeTripReconcile'
+import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
+import { canDriverEnd } from '../../../../shared/driverEndTrip.js'
 
 /** Home map overlay grid: screen-edge gutter, spacing between floating pieces, clearance under the status bar. */
 const EDGE = 16
@@ -238,6 +242,25 @@ export default function DriverHome() {
       refresh().catch(() => {})
     })
   }, [canSeeOffers, refresh])
+
+  const deskRef = useRef(desk)
+  deskRef.current = desk
+  useEffect(() => {
+    if (!supabase || !user || !canSeeOffers) return undefined
+    const reconcile = () => {
+      const active = deskRef.current?.active
+      if (active?.id && canDriverEnd(active.status)) void sendTripHeartbeat(supabase, active.id)
+      refresh().catch(() => {})
+    }
+    const timer = setInterval(reconcile, ACTIVE_TRIP_RECONCILE_MS)
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') reconcile()
+    })
+    return () => {
+      clearInterval(timer)
+      listener.remove()
+    }
+  }, [canSeeOffers, refresh, user])
 
   useEffect(() => {
     let alive = true
@@ -631,6 +654,17 @@ export default function DriverHome() {
               {liveEta && !locationTracking.error ? <Text style={{ color: colors.orange, fontWeight: '800' }}>{liveEta}</Text> : null}
               {riderLine ? <Text style={{ color: colors.onAccent, fontWeight: '700' }}>{riderLine}</Text> : null}
             </Pressable>
+          ) : null}
+          {desk?.active && canDriverEnd(desk.active.status) ? (
+            <DriverEndTripSheet
+              supabase={supabase}
+              tripId={desk.active.id}
+              disabled={busy}
+              onEnded={() => {
+                pulse('cancel')
+                refresh().catch(() => {})
+              }}
+            />
           ) : null}
           {offer && !desk?.active ? (
             <RideCard

@@ -138,6 +138,7 @@ export function advanceOpFor(status: string | null | undefined): 'arriving' | 'a
 export const QUEUED_ACTION_TIMEOUT_MS: number
 export function sendQueuedDriverAction(supabase: unknown, action: { id: string; tripId: string; kind: 'status' | 'stop'; op: string; stopIndex?: number }, options?: { timeoutMs?: number }): Promise<any>
 export function advanceResultTrip(result: any): (DriverTripRow & { settle?: { reason?: string; payment?: unknown; payout?: { status?: string; amountCents?: number; waitCents?: number } | null } | null }) | null
+export function driverEndTrip(supabase: unknown, tripId: string, reason: string, note?: string): Promise<{ ok: boolean; idempotent?: boolean; charged?: boolean }>
 export function driverCancelTrip(supabase: unknown, tripId: string, reason: string, note?: string): Promise<{ ok: boolean; idempotent?: boolean }>
 
 export type StreakView = { enabled: boolean; current: number; target: number; toNext: number; progress: number; bonusCents: number }
