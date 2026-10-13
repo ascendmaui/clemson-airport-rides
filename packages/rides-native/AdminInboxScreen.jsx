@@ -80,6 +80,7 @@ export function AdminInboxScreen({ supabase, colors, onBack, onOpenWeb }) {
             </View>
             <Text style={{ color: ink, fontWeight: '800', fontSize: 16 }}>{item.title}</Text>
             <Text style={{ color: muted, lineHeight: 18 }}>{item.detail}</Text>
+            {item.body ? <Text style={{ color: ink, lineHeight: 18 }}>{item.body}</Text> : null}
             {needsReason ? (
               <TextInput
                 value={reasons[item.id] || ''}

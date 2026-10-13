@@ -2,7 +2,7 @@
  * Admin dashboard API. Service role reads after an admin check.
  * Support staff cannot call this — driver documents and rider PII stay admin-only.
  *
- * GET  /api/admin?action=overview|notifications|people|trips|tickets|applicant-thread
+ * GET  /api/admin?action=overview|notifications|people|trips|tickets|applicant-thread|inbox
  * POST /api/admin?action=mark-notification|ticket-reply|applicant-message|info-request
  */
 import { isTicketStatus } from '../../shared/adminAccess.js'
