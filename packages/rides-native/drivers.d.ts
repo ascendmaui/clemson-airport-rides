@@ -4,7 +4,6 @@ export type OnlineDriver = {
   ratingAvg: number | null
   ratingCount: number
   standing: string
-  phone: string | null
   avatarUrl: string | null
   online: boolean
   priorityMode: boolean
@@ -94,6 +93,7 @@ export function loadPickerDriverRecord(
   supabase: unknown,
   driverId: string | null | undefined,
 ): Promise<{
+  first_name: string | null
   full_name: string | null
   avatar_url: string | null
   vehicle: {

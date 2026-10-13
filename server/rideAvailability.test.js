@@ -109,7 +109,7 @@ test('scheduled mode keeps comfort for an offline approved vehicle and drops a b
   assert.equal(ok.availableTierIds.includes('wait'), true)
 })
 
-test('missing service class column still reads tier', async () => {
+test('missing service class column does not treat tier comfort as Extra Comfort', async () => {
   const vehicles = {
     data: [{ driver_id: 'a', tier: 'comfort' }],
     error: null,
@@ -138,5 +138,5 @@ test('missing service class column still reads tier', async () => {
     },
   }
   const snapshot = await loadRideAvailability(sb, { now: NOW })
-  assert.deepEqual(snapshot.availableTierIds, ['standard', 'wait', 'comfort', 'carpool'])
+  assert.deepEqual(snapshot.availableTierIds, ['standard', 'wait', 'carpool'])
 })

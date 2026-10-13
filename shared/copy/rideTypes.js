@@ -2,20 +2,20 @@
  * Rider-facing explanations for Standard, Wait & Save, Extra Comfort, and Carpool.
  * The sentences are the ride-types page notes.
  */
-import { CARPOOL_DISCOUNT_BPS, STUDENT_DISCOUNT_BPS } from '../../src/lib/fareRates.js'
+import { CARPOOL_SEAT_FRACTION_BPS, STUDENT_DISCOUNT_BPS } from '../../src/lib/fareRates.js'
 import { OFFERED_RIDE_TIERS, RIDE_OPTION_CATALOG } from '../rideOptions.js'
 
 export const RIDE_TYPE_ORANGE = '#F56600'
 export const RIDE_TYPE_PURPLE = '#522D80'
 
-const carpoolPct = CARPOOL_DISCOUNT_BPS / 100
+const carpoolPct = CARPOOL_SEAT_FRACTION_BPS / 100
 const studentPct = STUDENT_DISCOUNT_BPS / 100
 
 export const RIDE_TYPE_NOTES = Object.freeze({
   standard: 'The base ride. The fare on the booking screen is the price before you confirm.',
   wait: 'Shown when a driver can serve it. The fare is the quote on that screen. The student discount does not apply.',
-  comfort: 'Newer cars. Only a vehicle marked Extra Comfort can take this ride.',
-  carpool: `${carpoolPct}% off the Standard fare for each seat. Book 1 or 2 seats. Drivers see it labeled Carpool, and it is offered to the same cars as Standard. Two separate carpool requests are not combined into one car.`,
+  comfort: 'Nicer cars. Only a vehicle with service class comfort can take this ride.',
+  carpool: `${carpoolPct}% of the Standard fare per seat when 3 or 4 riders split the trip.`,
 })
 
 export const RIDE_TYPE_STUDENT_NOTE = `${studentPct}% off Standard when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Other ride types are not included.`

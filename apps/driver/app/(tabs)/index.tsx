@@ -23,7 +23,20 @@ import { useTheme } from '@/lib/theme'
 import { BOTTOM_CLUSTER_SHIFT, bottomClusterTranslateY } from '@/lib/bottomCluster'
 import { driverPresence, goOffline, goOnline, usePresence } from '@/lib/presence'
 import { fetchDriverApplication } from 'rides-native/drivers'
+import { fetchInspectionDeadline, fetchMyDriverDocuments } from 'rides-native/driverOnboardingClient'
+import {
+  DOCUMENTS_GO_ONLINE_COPY,
+  goOnlineDocumentGate,
+  guardGoPress,
+  type DocumentRow,
+} from 'rides-native/documentCategories'
+import {
+  INSPECTION_OVERDUE_COPY,
+  inspectionCountdown,
+  inspectionGoOnlineGate,
+} from 'rides-native/vehicleInspection'
 import { displayFirstName } from 'rides-native/authErrors'
+import { riderDriverFirstName } from '../../../../shared/riderDriverPrivacy.js'
 import { heatColor } from 'rides-native/heat.js'
 import { HEAT_WINDOWS } from 'rides-native/places.js'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
@@ -118,6 +131,8 @@ export default function DriverHome() {
   const [weekCents, setWeekCents] = useState(0)
   const [lastTrip, setLastTrip] = useState<string | null>(null)
   const [status, setStatus] = useState('none')
+  const [documents, setDocuments] = useState<DocumentRow[] | null>(null)
+  const [inspectionDueAt, setInspectionDueAt] = useState<string | null>(null)
   const [reason, setReason] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -147,6 +162,25 @@ export default function DriverHome() {
   const canGoOnline = gate.canGoOnline
   const approved = status === 'approved'
   const online = Boolean(desk?.online)
+  const documentGate = useMemo(
+    () => (documents ? goOnlineDocumentGate(documents) : null),
+    [documents],
+  )
+  const inspectionGate = inspectionGoOnlineGate({
+    documents: documents || [],
+    dueAt: inspectionDueAt,
+    now: new Date(),
+  })
+  const inspectionReminder = inspectionCountdown({
+    documents: documents || [],
+    dueAt: inspectionDueAt,
+    now: new Date(),
+  })?.message || ''
+  const documentsHoldGo = !online && (documents == null || documentGate?.allowed === false)
+  const inspectionHoldGo = !online && !inspectionGate.allowed
+  const showDocumentGate = Boolean(user && documentGate && !documentGate.allowed)
+  const showInspectionGate = Boolean(user && !showDocumentGate && !inspectionGate.allowed)
+  const showInspectionReminder = Boolean(user && !showDocumentGate && inspectionGate.allowed && inspectionReminder)
   const clusterY = useRef(new Animated.Value(BOTTOM_CLUSTER_SHIFT)).current
   useEffect(() => {
     setRideAlertSurface({ online })
@@ -175,8 +209,18 @@ export default function DriverHome() {
   }, [])
 
   const refresh = useCallback(async () => {
-    if (!user || !supabase) return
-    const application = await fetchDriverApplication(supabase, user.id)
+    if (!user || !supabase) {
+      setDocuments(null)
+      setInspectionDueAt(null)
+      return
+    }
+    const [application, rows, deadline] = await Promise.all([
+      fetchDriverApplication(supabase, user.id),
+      fetchMyDriverDocuments(supabase, user.id).catch(() => null),
+      fetchInspectionDeadline(supabase, user.id).catch(() => null),
+    ])
+    setDocuments(rows)
+    setInspectionDueAt(deadline?.inspection_due_at ?? null)
     if (application.error) {
       setError(application.error)
       return
@@ -316,6 +360,36 @@ export default function DriverHome() {
       router.push('/sign-in')
       return
     }
+    const nextOnline = !online
+    if (nextOnline) {
+      const rows = supabase
+        ? await fetchMyDriverDocuments(supabase, user.id).catch(() => null)
+        : null
+      const deadline = supabase
+        ? await fetchInspectionDeadline(supabase, user.id).catch(() => null)
+        : null
+      const dueAt = deadline?.inspection_due_at ?? null
+      const decision = guardGoPress({ goingOnline: true, documents: rows })
+      if (!decision.proceed) {
+        if (rows) setDocuments(rows)
+        setInspectionDueAt(dueAt)
+        setError(decision.message)
+        return
+      }
+      const inspectionDecision = inspectionGoOnlineGate({
+        documents: rows || [],
+        dueAt,
+        now: new Date(),
+      })
+      if (!inspectionDecision.allowed) {
+        if (rows) setDocuments(rows)
+        setInspectionDueAt(dueAt)
+        setError(inspectionDecision.message)
+        return
+      }
+      if (rows) setDocuments(rows)
+      setInspectionDueAt(dueAt)
+    }
     if (!canGoOnline) {
       setError(gate.body)
       return
@@ -323,7 +397,6 @@ export default function DriverHome() {
     setBusy(true)
     setError(null)
     try {
-      const nextOnline = !online
       const fix = nextOnline ? await currentFix() : null
       if (nextOnline) await goOnline(user.id, fix)
       else await goOffline(user.id)
@@ -692,7 +765,7 @@ export default function DriverHome() {
                 setAutoAccept({
                   favoriteRiders: autoAccept.favoriteRiders.some((rider) => rider.id === offer.riderId)
                     ? next
-                    : [{ id: offer.riderId, name: offer.firstName }, ...autoAccept.favoriteRiders].slice(0, 50),
+                    : [{ id: offer.riderId, name: riderDriverFirstName(offer.firstName, 'Rider') || 'Rider' }, ...autoAccept.favoriteRiders].slice(0, 50),
                 })
               }}
               onAccept={() => onAccept(offer)}
@@ -705,6 +778,42 @@ export default function DriverHome() {
               online={false}
               onPress={() => router.push('/game-day')}
             />
+          ) : null}
+          {showDocumentGate && documentGate ? (
+            <Pressable
+              onPress={() => router.push('/documents')}
+              accessibilityRole="link"
+              accessibilityLabel={`${DOCUMENTS_GO_ONLINE_COPY}. ${documentGate.sections.map((section) => section.label).join(', ')}. Documents`}
+              style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.danger }]}
+            >
+              <Text style={[styles.docGateTitle, { color: colors.danger }]}>{DOCUMENTS_GO_ONLINE_COPY}</Text>
+              <Text style={[styles.docGateSections, { color: colors.title }]}>
+                {documentGate.sections.map((section) => section.label).join(', ')}
+              </Text>
+              <Text style={[styles.docGateLink, { color: colors.orange }]}>Documents</Text>
+            </Pressable>
+          ) : null}
+          {showInspectionGate ? (
+            <Pressable
+              onPress={() => router.push('/documents')}
+              accessibilityRole="link"
+              accessibilityLabel={`${INSPECTION_OVERDUE_COPY}. Documents`}
+              style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.danger }]}
+            >
+              <Text style={[styles.docGateTitle, { color: colors.danger }]}>{INSPECTION_OVERDUE_COPY}</Text>
+              <Text style={[styles.docGateLink, { color: colors.orange }]}>Documents</Text>
+            </Pressable>
+          ) : null}
+          {showInspectionReminder ? (
+            <Pressable
+              onPress={() => router.push('/documents')}
+              accessibilityRole="link"
+              accessibilityLabel={`${inspectionReminder}. Documents`}
+              style={[styles.docGate, { backgroundColor: colors.card, borderColor: colors.orange }]}
+            >
+              <Text style={[styles.docGateTitle, { color: colors.title }]}>{inspectionReminder}</Text>
+              <Text style={[styles.docGateLink, { color: colors.orange }]}>Documents</Text>
+            </Pressable>
           ) : null}
           {/* One transform: END slides the bar, GO, and side icons together; GO restores them. */}
           <Animated.View
@@ -719,8 +828,14 @@ export default function DriverHome() {
               <GoButton
                 online={online}
                 busy={busy}
-                disabled={!canGoOnline}
-                disabledReason={gate.body}
+                disabled={!canGoOnline || documentsHoldGo || inspectionHoldGo}
+                disabledReason={
+                  documentsHoldGo && documentGate && !documentGate.allowed
+                    ? documentGate.message
+                    : inspectionHoldGo
+                      ? INSPECTION_OVERDUE_COPY
+                      : gate.body
+                }
                 onPress={toggle}
               />
               <View style={styles.toolCol}>
@@ -790,7 +905,7 @@ export function RideCard({
     }
     return () => { alive = false }
   }, [card.id])
-  const riderFirst = displayFirstName(card.firstName || preview?.firstName || '', 'Rider')
+  const riderFirst = riderDriverFirstName(card.firstName || preview?.firstName || '', 'Rider') || 'Rider'
   const avatarUrl = card.riderAvatarUrl || preview?.avatarUrl || null
   const ratingAvg = (card as { riderRating?: number }).riderRating ?? preview?.ratingAvg ?? null
   const prepaidTipCents = Number((card as { prepaidTipCents?: number }).prepaidTipCents) || 0
@@ -1058,6 +1173,10 @@ const styles = StyleSheet.create({
   offerBody: { gap: 10, paddingBottom: 2 },
   offerNotice: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
   offerActions: { gap: 8, paddingTop: 10 },
+  docGate: { borderRadius: 16, borderWidth: 1, padding: 12, gap: 4, marginBottom: 10 },
+  docGateTitle: { fontWeight: '800', fontSize: 14, lineHeight: 18 },
+  docGateSections: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
+  docGateLink: { fontWeight: '800', fontSize: 14 },
   statusWrap: { flexShrink: 1, maxHeight: 400 },
   statusScrollBody: { flexGrow: 1 },
 })

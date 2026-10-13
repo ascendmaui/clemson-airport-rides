@@ -282,7 +282,7 @@ test('pickup ETA follows current GPS and confirmed arrival replaces countdown', 
   assert.notEqual(far, close)
   assert.match(close, /to pickup/)
   assert.equal(etaLineFor('arrived', null, places), 'Driver is at pickup')
-  assert.equal(liveDriverTitle('Sam Okonkwo', 'Next driver'), 'Sam Okonkwo')
+  assert.equal(liveDriverTitle('Sam Okonkwo', 'Next driver'), 'Sam')
   assert.equal(liveDriverTitle('', 'Next driver'), 'Your driver')
   assert.equal(liveDriverTitle(null, 'your driver'), 'Your driver')
   assert.equal(liveDriverTitle(null, 'Jordan'), 'Jordan')

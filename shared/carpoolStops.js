@@ -14,6 +14,7 @@
  * keep the existing Arriving / Arrived / Start / Complete flow unchanged.
  * Pure functions only: the server endpoint and the native app share them.
  */
+import { riderDriverFirstName } from './riderDriverPrivacy.js'
 
 export const STOP_OPS = Object.freeze(['arrive', 'start', 'drop'])
 export const STOP_TRIP_KINDS = Object.freeze(['carpool', 'friend_ride'])
@@ -35,7 +36,7 @@ function participantsOf(trip) {
     .filter((row) => row && row.id != null)
     .map((row, index) => ({
       id: String(row.id),
-      name: String(row.display_name || row.first_name || row.name || `Rider ${index + 1}`).trim().split(/\s+/)[0] || `Rider ${index + 1}`,
+      name: riderDriverFirstName(row.display_name || row.first_name || row.name, '') || `Rider ${index + 1}`,
       fareCents: Math.max(0, Math.round(Number(row.fare_cents) || 0)),
     }))
 }
@@ -180,7 +181,11 @@ export function storedStops(trip, stops) {
 }
 
 function names(stop) {
-  const list = (stop?.riders || []).map((r) => r.name).filter(Boolean)
+  const list = (stop?.riders || []).map((r) => {
+    const raw = String(r?.name || '').trim()
+    if (/^Rider \d+$/.test(raw)) return raw
+    return riderDriverFirstName(raw, '')
+  }).filter(Boolean)
   if (!list.length) return 'rider'
   if (list.length === 1) return list[0]
   return `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`

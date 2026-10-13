@@ -1,31 +1,65 @@
-import { useRouter } from 'expo-router'
+import { useCallback } from 'react'
+import { usePathname, useRouter, type Href } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GlassTabBar } from 'rides-native/icons'
 import { useTheme } from '@/lib/theme'
 import { tapHaptic } from '@/lib/feedback'
 import { useAuth } from '@/lib/auth'
 import { setAuthNext } from '@/lib/authNext'
+import {
+  RIDER_MAIN_TABS,
+  applyTabNavigation,
+  normalizeTabPath,
+  tabIndexForPath,
+  tabRequiresAuth,
+  type RiderMainTabId,
+} from '@/lib/tabSwipe'
 
-export const RIDER_TABS = [
-  { id: 'home', href: '/', label: 'Home', icon: 'home' },
-  { id: 'rides', href: '/history', label: 'Rides', icon: 'rides' },
-  { id: 'money', href: '/billing', label: 'Money', icon: 'money' },
-  { id: 'account', href: '/account', label: 'Account', icon: 'account' },
-] as const
+export const RIDER_TABS = RIDER_MAIN_TABS
 
-export type RiderTab = (typeof RIDER_TABS)[number]['id']
-/** Older call sites: Schedule lives in Rides, Friends/Carpool is a Home shortcut. */
-type LegacyTab = 'schedule' | 'friends'
+export type RiderTab = RiderMainTabId
+/** Call sites from before Schedule and Friends were their own tabs. */
+type LegacyTab = 'home' | 'money' | 'schedule' | 'friends'
 
 function tabFor(active: RiderTab | LegacyTab): RiderTab {
-  if (active === 'schedule') return 'rides'
-  if (active === 'friends') return 'home'
-  return active
+  switch (active) {
+    case 'home':
+      return 'rides'
+    case 'money':
+      return 'account'
+    case 'rides':
+    case 'schedule':
+    case 'friends':
+    case 'account':
+      return active
+    default: {
+      const exhaustive: never = active
+      return exhaustive
+    }
+  }
+}
+
+/** Tap and swipe both end here, so the highlighted tab and the route stay the same. */
+export function useOpenRiderTab() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const { user } = useAuth()
+  return useCallback((next: number) => {
+    const tab = RIDER_MAIN_TABS[next]
+    if (!tab) return
+    if (tabRequiresAuth(tab.id) && !user) {
+      setAuthNext(tab.href as Href)
+      router.push('/sign-in')
+      return
+    }
+    if (normalizeTabPath(pathname) === tab.href) return
+    void tapHaptic()
+    router.replace(tab.href as Href)
+  }, [pathname, router, user])
 }
 
 export function MainTabs({ active }: { active: RiderTab | LegacyTab }) {
-  const router = useRouter()
-  const { user } = useAuth()
+  const open = useOpenRiderTab()
   const insets = useSafeAreaInsets()
   const { scheme } = useTheme()
   const current = tabFor(active)
@@ -33,20 +67,13 @@ export function MainTabs({ active }: { active: RiderTab | LegacyTab }) {
   return (
     <GlassTabBar
       tabs={RIDER_TABS.map((tab) => ({ id: tab.id, label: tab.label, icon: tab.icon }))}
-      activeIndex={index}
+      activeIndex={index < 0 ? 0 : index}
       scheme={scheme}
       app="rider"
       bottomInset={insets.bottom}
-      onSelect={(tab: { id: string }) => {
-        const target = RIDER_TABS.find((item) => item.id === tab.id)
-        if (!target || target.id === current) return
-        void tapHaptic()
-        if (target.id !== 'home' && !user) {
-          setAuthNext(target.href)
-          router.push('/sign-in')
-          return
-        }
-        router.replace(target.href)
+      onSelect={(_tab: { id: string }, selected: number) => {
+        const next = applyTabNavigation(index < 0 ? tabIndexForPath('/') : index, { type: 'tap', index: selected })
+        open(next)
       }}
     />
   )

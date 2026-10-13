@@ -6,6 +6,7 @@ import { readDriverPushToken } from './driverPushToken.js'
 import { sendExpoPush } from './expoPush.js'
 import { sendApplicantNotice } from './applicantMail.js'
 import { lostItemNoticeBody } from '../shared/copy/messaging.js'
+import { sanitizeRiderNotice } from '../shared/riderDriverPrivacy.js'
 import { LOST_ITEM_THREAD_WINDOW_MS } from '../src/lib/tripChatRules.js'
 
 const WINDOW_DAYS = LOST_ITEM_THREAD_WINDOW_MS / (24 * 60 * 60 * 1000)
@@ -119,18 +120,19 @@ export async function notifyTripCounterpart(input, deps = {}) {
   const sendPush = deps.sendPush || sendExpoPush
   const sendEmail = deps.sendEmail || ((payload) => sendApplicantNotice(payload))
   const token = await pushTokenForUser(sb, recipientId)
-  const push = await sendPush({
+  const push = await sendPush(sanitizeRiderNotice({
     to: token,
     title: copy.title,
     body: copy.body,
     data: { tripId, kind: kind === 'lost-item' ? 'trip_lost_item' : 'trip_message' },
     channelId: 'ride-requests',
-  })
+  }))
 
   let email = { emailed: false, reason: 'not_requested' }
   if (copy.email) {
     const to = await emailForUser(sb, recipientId)
-    email = await sendEmail({ to, subject: copy.subject, text: copy.body })
+    const mail = { to, subject: copy.subject, text: copy.body }
+    email = await sendEmail(sanitizeRiderNotice(mail))
   }
 
   return {
