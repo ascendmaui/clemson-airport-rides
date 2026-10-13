@@ -32,6 +32,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import { RideTypeInfoButton } from 'rides-native/RideTypeSheet'
 import { formatUsd } from 'rides-native/places.js'
+import { riderStatusPhrase } from 'rides-native/liveTrip.js'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useStudentStatus } from '@/lib/useStudentStatus'
@@ -1175,7 +1176,7 @@ export function ScheduleScreen() {
             {reminder ? <Text style={styles.remindKicker}>{reminder.label}</Text> : null}
             <Text style={styles.cardLine}>{row.pickup_label} → {row.dropoff_label}</Text>
             <Text style={styles.fine}>
-              {rowPurpose(row)} · {row.status} · {formatPickupAt(row.pickup_at || row.scheduled_for)}
+              {rowPurpose(row)} · {riderStatusPhrase(row.status)} · {formatPickupAt(row.pickup_at || row.scheduled_for)}
               {row.metadata?.recurrence?.weekdays?.length ? ` · weekly ${row.metadata.recurrence.weekdays.join(', ')}` : ''}
             </Text>
             {rideTypeName(String(row.tier || '')) ? <Text style={styles.student}>{rideTypeName(String(row.tier || ''))}</Text> : null}
