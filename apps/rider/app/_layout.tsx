@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar'
 import { useEffect, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { ApproachAlert } from '@/components/ApproachAlert'
+import { PickupBeaconHost } from '@/components/PickupBeaconHost'
 import { LostItemBanner } from 'rides-native/LostItemBanner.jsx'
 import { ToastHost } from 'rides-native/ToastHost.jsx'
 import { RiderMatchPopup } from '@/components/RiderMatchPopup'
@@ -211,6 +212,7 @@ export default function RootLayout() {
           <Gate>
             <ThemedStack />
             <ApproachHost />
+            <PickupBeaconHost />
             <RiderMatchPopup />
             <ToastMount />
             <RiderMoments />

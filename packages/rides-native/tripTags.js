@@ -383,6 +383,7 @@ export function statusHeadline(status) {
     case 'completed':
       return 'Completed'
     case 'canceled':
+    case 'cancelled':
       return 'Ride canceled'
     case 'canceled_midride':
       return 'Trip ended early'
@@ -401,7 +402,7 @@ export function driverStatusDetail(status) {
       return 'Accept to head to pickup. Declining cancels this request. It does not return to the open pool.'
     case 'searching':
     case 'offered':
-      return 'Accept to take this ride. Declining leaves it in the open pool for another driver.'
+      return 'Accept to take this ride. Declining keeps the rider searching and sends the offer to the next driver, or back to the open pool if nobody is left.'
     case 'scheduled':
       return 'This pickup is on the calendar. Accepting keeps it on your upcoming list.'
     case 'accepted':
@@ -415,6 +416,7 @@ export function driverStatusDetail(status) {
     case 'completed':
       return 'This trip is complete.'
     case 'canceled':
+    case 'cancelled':
       return 'This ride is canceled. You can return home.'
     case 'canceled_midride':
       return 'The rider ended this trip early. You can return home.'

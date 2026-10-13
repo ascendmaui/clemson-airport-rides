@@ -58,7 +58,7 @@ export function AdminInboxPanel({ inbox, onChanged }) {
       {error ? <p role="alert" style={{ color: 'var(--danger)' }}>{error}</p> : null}
       {note ? <p role="status" style={{ color: '#1d6b34' }}>{note}</p> : null}
       {items.length === 0 ? (
-        <p style={{ color: 'var(--ink-secondary)' }}>Nothing is waiting. New document reviews, applicants, inspections, lost items, payout problems, failed holds, and stuck trips show up here.</p>
+        <p style={{ color: 'var(--ink-secondary)' }}>Nothing is waiting. New document reviews, applicants, inspections, lost items, payout problems, failed holds, stuck trips, and drafts for approval show up here.</p>
       ) : null}
       {items.map((item) => {
         const needsReason = item.actions.some((action) => action.needsReason)
@@ -70,6 +70,9 @@ export function AdminInboxPanel({ inbox, onChanged }) {
             </div>
             <h3 style={{ margin: '4px 0 0', fontSize: 16, color: '#522D80' }}>{item.title}</h3>
             <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.4 }}>{item.detail}</p>
+            {item.body ? (
+              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 13, margin: '8px 0 0' }}>{item.body}</pre>
+            ) : null}
             {needsReason ? (
               <label style={{ display: 'block', marginTop: 10, fontSize: 12, fontWeight: 700, color: '#522D80' }}>
                 Reason

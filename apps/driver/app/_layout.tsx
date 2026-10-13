@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from '@/lib/auth'
 import { FeedbackProvider } from '@/lib/feedback'
 import { OfferBridge } from '@/components/OfferBridge'
 import { ActiveTripResume } from '@/components/ActiveTripResume'
+import { PickupBeaconHost } from '@/components/PickupBeaconHost'
 import { DriverMoments } from '@/components/DriverMoments'
 import { LostItemBanner } from 'rides-native/LostItemBanner.jsx'
 import { ToastHost } from 'rides-native/ToastHost.jsx'
@@ -138,6 +139,7 @@ export default function RootLayout() {
               <DriverAgreementPrompt>
                 <ThemedStack />
                 <ActiveTripResume />
+                <PickupBeaconHost />
               </DriverAgreementPrompt>
               <ToastMount />
               <DriverMoments />

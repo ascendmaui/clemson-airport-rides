@@ -72,6 +72,7 @@ import {
   acceptActionLabel,
   declineActionLabel,
   declineDisposition,
+  driverStatusDetail,
   formatPickupAt,
   preferredRequestNote,
   statusHeadline,
@@ -80,6 +81,7 @@ import {
   weekNetCents,
   type DriverCard,
 } from 'rides-native/tripTags'
+import { declinePassMessage, offlineWhileOfferedMessage } from 'rides-native/matchingMessages'
 import { etaHoldLine } from 'rides-native/liveTrip'
 import { followEtaLine } from 'rides-native/roadFollow'
 import { driverPickupTarget } from 'rides-native/riderLivePickup'
@@ -168,6 +170,7 @@ export default function DriverHome() {
   const gameDayExperience = useGameDayExperience(supabase, { driverId: user?.id || null })
   const myMarker = useMyMarker()
   const [refreshing, setRefreshing] = useState(false)
+  const [offerNote, setOfferNote] = useState<string | null>(null)
   const gate = useMemo(
     () => driverGateView(status, { rejectionReason: reason }),
     [status, reason]
@@ -429,7 +432,15 @@ export default function DriverHome() {
         setFocusToken((value: number) => value + 1)
       }
       pulseShift(nextOnline ? 'GO' : 'END')
-      AccessibilityInfo.announceForAccessibility(nextOnline ? 'You are now online' : 'You are now offline')
+      if (nextOnline) {
+        setOfferNote(null)
+        AccessibilityInfo.announceForAccessibility('You are now online')
+      } else {
+        const held = offer && !desk?.active ? { status: offer.status } : null
+        const message = offlineWhileOfferedMessage({ online: false, card: held })
+        setOfferNote(message)
+        AccessibilityInfo.announceForAccessibility(message || 'You are now offline')
+      }
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update online status')
@@ -468,8 +479,15 @@ export default function DriverHome() {
     setBusy(true)
     setError(null)
     try {
-      await declineDriverOffer(supabase, card, user.id)
+      const result = await declineDriverOffer(supabase, card, user.id)
       pulse('decline')
+      const message = result?.disposition === 'release' && (result.passed || result.released)
+        ? declinePassMessage({ keptSearching: true })
+        : null
+      if (message) {
+        setOfferNote(message)
+        AccessibilityInfo.announceForAccessibility(message)
+      }
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not decline')
@@ -482,7 +500,8 @@ export default function DriverHome() {
     (card: DriverCard) => !isSyntheticOffer(card) && !hiddenOffers.includes(card.id),
   ))
   const offer = liveOffers.find((card: DriverCard) => card.id === selectedOfferId) || liveOffers[0] || null
-  const offerOwnsBottom = offerSheetOwnsBottom({ offerId: offer?.id ?? null, activeTrip: Boolean(desk?.active) })
+  const liveCard = online && offer && !desk?.active ? offer : null
+  const offerOwnsBottom = offerSheetOwnsBottom({ offerId: liveCard?.id ?? null, activeTrip: Boolean(desk?.active) })
   useEffect(() => {
     setHomeOfferId(offer?.id ?? null)
     return () => setHomeOfferId(null)
@@ -733,6 +752,11 @@ export default function DriverHome() {
             </View>
           ) : null}
           {error ? <ErrorText>{error}</ErrorText> : null}
+          {offerNote && !liveCard ? (
+            <Text accessibilityLiveRegion="polite" style={{ color: colors.ink, fontWeight: '700', fontSize: 14 }}>
+              {offerNote}
+            </Text>
+          ) : null}
           {tripReconciled && desk?.active ? (
             <Pressable
               onPress={() => router.push({ pathname: '/trip', params: { id: desk.active!.id } })}
@@ -759,24 +783,28 @@ export default function DriverHome() {
               }}
             />
           ) : null}
-          {offerOwnsBottom && offer ? (
+          {liveCard ? (
             <RideCard
-              card={offer}
+              card={liveCard}
               busy={busy}
-              notice={null}
+              notice={
+                liveCard.status === 'searching' || liveCard.status === 'offered'
+                  ? driverStatusDetail(liveCard.status)
+                  : null
+              }
               driver={liveFrom ? { lat: liveFrom.lat, lng: liveFrom.lng } : null}
-              favorite={Boolean(offer.riderId && autoAccept.favoriteRiders.some((rider) => rider.id === offer.riderId))}
+              favorite={Boolean(liveCard.riderId && autoAccept.favoriteRiders.some((rider) => rider.id === liveCard.riderId))}
               onFavorite={() => {
-                if (!offer.riderId) return
-                const next = autoAccept.favoriteRiders.filter((rider) => rider.id !== offer.riderId)
+                if (!liveCard.riderId) return
+                const next = autoAccept.favoriteRiders.filter((rider) => rider.id !== liveCard.riderId)
                 setAutoAccept({
-                  favoriteRiders: autoAccept.favoriteRiders.some((rider) => rider.id === offer.riderId)
+                  favoriteRiders: autoAccept.favoriteRiders.some((rider) => rider.id === liveCard.riderId)
                     ? next
-                    : [{ id: offer.riderId, name: riderDriverFirstName(offer.firstName, 'Rider') || 'Rider' }, ...autoAccept.favoriteRiders].slice(0, 50),
+                    : [{ id: liveCard.riderId, name: riderDriverFirstName(liveCard.firstName, 'Rider') || 'Rider' }, ...autoAccept.favoriteRiders].slice(0, 50),
                 })
               }}
-              onAccept={() => onAccept(offer)}
-              onDecline={() => onDecline(offer)}
+              onAccept={() => onAccept(liveCard)}
+              onDecline={() => onDecline(liveCard)}
             />
           ) : null}
           {offerOwnsBottom ? null : (
