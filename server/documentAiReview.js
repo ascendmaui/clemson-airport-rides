@@ -5,7 +5,8 @@
  */
 import { generateText } from 'ai'
 import {
-  nvidiaModelNotServed,
+  NVIDIA_DOC_CALL_TIMEOUT_MS,
+  nvidiaCallShouldFallback,
   resolveNvidiaDocumentModel,
 } from './llm.js'
 import {
@@ -109,11 +110,13 @@ function contentPart(bytes, mime) {
   return { type: 'image', image: bytes, mediaType: mime }
 }
 
-async function callModel(gen, model, bytes, mime) {
+async function callModel(gen, model, bytes, mime, timeoutMs) {
   const result = await gen({
     model,
     temperature: 0,
     maxOutputTokens: 500,
+    maxRetries: 0,
+    timeout: timeoutMs,
     messages: [{
       role: 'user',
       content: [
@@ -125,24 +128,32 @@ async function callModel(gen, model, bytes, mime) {
   return parseModelJson(result?.text || '')
 }
 
+function modelIdsFor(resolved) {
+  if (Array.isArray(resolved.modelIds) && resolved.modelIds.length) return resolved.modelIds
+  return [resolved.modelId, resolved.fallbackModelId].filter(Boolean)
+}
+
 export async function readDocumentOnce(input, deps = {}) {
   const env = deps.env || process.env
   const resolve = deps.resolveNvidiaDocumentModel || resolveNvidiaDocumentModel
   const resolved = resolve(env)
   if (!resolved) return { unavailable: true }
   const gen = deps.generateText || generateText
-  let modelId = resolved.modelId
-  let model = resolved.client(modelId)
-  try {
-    const json = await callModel(gen, model, input.bytes, input.mime)
-    return { ...json, modelId }
-  } catch (err) {
-    if (!resolved.fallbackModelId || !nvidiaModelNotServed(err)) throw err
-    modelId = resolved.fallbackModelId
-    model = resolved.client(modelId)
-    const json = await callModel(gen, model, input.bytes, input.mime)
-    return { ...json, modelId }
+  const timeoutMs = resolved.timeoutMs || NVIDIA_DOC_CALL_TIMEOUT_MS
+  const modelIds = modelIdsFor(resolved)
+  let lastError = null
+  for (let index = 0; index < modelIds.length; index += 1) {
+    const modelId = modelIds[index]
+    try {
+      const json = await callModel(gen, resolved.client(modelId), input.bytes, input.mime, timeoutMs)
+      return { ...json, modelId }
+    } catch (err) {
+      lastError = err
+      const hasNext = index < modelIds.length - 1
+      if (!hasNext || !nvidiaCallShouldFallback(err)) throw err
+    }
   }
+  throw lastError
 }
 
 function siblingOf(docType, rows) {

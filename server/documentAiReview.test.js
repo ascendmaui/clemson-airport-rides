@@ -4,9 +4,11 @@ import { readFileSync } from 'node:fs'
 import driverHandler from '../api/driver.js'
 import handleDocumentReview, { listDocumentReviewQueue, reviewDocumentDecision } from './endpoints/documentAiReview.js'
 import {
+  NVIDIA_DOC_CALL_TIMEOUT_MS,
   NVIDIA_DOC_MODEL_DEFAULT,
   NVIDIA_DOC_MODEL_FALLBACK,
-  nvidiaModelNotServed,
+  nvidiaCallShouldFallback,
+  nvidiaDocumentModelIds,
   resolveNvidiaDocumentModel,
 } from './llm.js'
 import { readDocumentOnce } from './documentAiReview.js'
@@ -201,7 +203,7 @@ test('without NVIDIA_API_KEY every document waits for manual review and OpenAI i
   assert.notEqual(sb.state.documents[0].review_status, 'rejected')
 })
 
-test('NVIDIA_DOC_MODEL defaults to Llama 3.2 90B and falls back to the 11B vision model', async () => {
+test('NVIDIA_DOC_MODEL defaults to Llama 3.2 11B and then tries Nemotron', async () => {
   const saved = process.env.NVIDIA_API_KEY
   const savedModel = process.env.NVIDIA_DOC_MODEL
   try {
@@ -211,15 +213,24 @@ test('NVIDIA_DOC_MODEL defaults to Llama 3.2 90B and falls back to the 11B visio
     const resolved = resolveNvidiaDocumentModel({ NVIDIA_API_KEY: 'nvapi-test' })
     assert.equal(resolved.provider, 'nvidia')
     assert.equal(resolved.modelId, NVIDIA_DOC_MODEL_DEFAULT)
-    assert.equal(resolved.modelId, 'meta/llama-3.2-90b-vision-instruct')
+    assert.equal(resolved.modelId, 'meta/llama-3.2-11b-vision-instruct')
     assert.equal(resolved.fallbackModelId, NVIDIA_DOC_MODEL_FALLBACK)
-    assert.equal(resolved.fallbackModelId, 'meta/llama-3.2-11b-vision-instruct')
-    const nemotron = resolveNvidiaDocumentModel({
-      NVIDIA_API_KEY: 'nvapi-test',
-      NVIDIA_DOC_MODEL: 'nvidia/nemotron-nano-12b-v2-vl',
-    })
-    assert.equal(nemotron.modelId, 'nvidia/nemotron-nano-12b-v2-vl')
-    assert.equal(nemotron.fallbackModelId, 'meta/llama-3.2-11b-vision-instruct')
+    assert.equal(resolved.fallbackModelId, 'nvidia/nemotron-nano-12b-v2-vl')
+    assert.equal(resolved.timeoutMs, NVIDIA_DOC_CALL_TIMEOUT_MS)
+    assert.equal(resolved.timeoutMs, 20_000)
+    assert.deepEqual(nvidiaDocumentModelIds(''), [
+      'meta/llama-3.2-11b-vision-instruct',
+      'nvidia/nemotron-nano-12b-v2-vl',
+    ])
+    assert.deepEqual(nvidiaDocumentModelIds('nvidia/nemotron-nano-12b-v2-vl'), [
+      'nvidia/nemotron-nano-12b-v2-vl',
+      'meta/llama-3.2-11b-vision-instruct',
+    ])
+    assert.deepEqual(nvidiaDocumentModelIds('meta/llama-3.2-90b-vision-instruct'), [
+      'meta/llama-3.2-90b-vision-instruct',
+      'meta/llama-3.2-11b-vision-instruct',
+      'nvidia/nemotron-nano-12b-v2-vl',
+    ])
   } finally {
     if (saved === undefined) delete process.env.NVIDIA_API_KEY
     else process.env.NVIDIA_API_KEY = saved
@@ -228,32 +239,85 @@ test('NVIDIA_DOC_MODEL defaults to Llama 3.2 90B and falls back to the 11B visio
   }
 
   const calls = []
+  const timeouts = []
   const seen = await readDocumentOnce({
     bytes: new Uint8Array(20_000),
     mime: 'image/jpeg',
   }, {
     resolveNvidiaDocumentModel: () => ({
-      modelId: 'meta/llama-3.2-90b-vision-instruct',
-      fallbackModelId: 'meta/llama-3.2-11b-vision-instruct',
+      modelIds: [
+        'meta/llama-3.2-11b-vision-instruct',
+        'nvidia/nemotron-nano-12b-v2-vl',
+      ],
+      timeoutMs: 20_000,
       client(modelId) { return { modelId } },
     }),
-    async generateText({ model }) {
+    async generateText({ model, timeout, maxRetries }) {
       calls.push(model.modelId)
-      if (model.modelId === 'meta/llama-3.2-90b-vision-instruct') {
-        const err = new Error('HTTP 410 Gone')
-        err.statusCode = 410
+      timeouts.push(timeout)
+      assert.equal(maxRetries, 0)
+      if (model.modelId === 'meta/llama-3.2-11b-vision-instruct') {
+        const err = new DOMException('total timeout of 20000ms exceeded', 'TimeoutError')
         throw err
       }
       return { text: JSON.stringify({ ...CLEAR, legible: 'yes' }) }
     },
   })
-  assert.equal(nvidiaModelNotServed({ statusCode: 410, message: 'Gone' }), true)
+  assert.equal(nvidiaCallShouldFallback({ statusCode: 410, message: 'Gone' }), true)
+  assert.equal(nvidiaCallShouldFallback({ statusCode: 503, message: 'unavailable' }), true)
+  assert.equal(nvidiaCallShouldFallback(new DOMException('total timeout of 20000ms exceeded', 'TimeoutError')), true)
+  assert.equal(nvidiaCallShouldFallback({ statusCode: 400, message: 'bad request' }), false)
+  assert.deepEqual(timeouts, [20_000, 20_000])
   assert.deepEqual(calls, [
-    'meta/llama-3.2-90b-vision-instruct',
     'meta/llama-3.2-11b-vision-instruct',
+    'nvidia/nemotron-nano-12b-v2-vl',
   ])
-  assert.equal(seen.modelId, 'meta/llama-3.2-11b-vision-instruct')
+  assert.equal(seen.modelId, 'nvidia/nemotron-nano-12b-v2-vl')
   assert.equal(seen.name, 'Ada Driver')
+
+  const serverError = []
+  await readDocumentOnce({
+    bytes: new Uint8Array(20_000),
+    mime: 'image/jpeg',
+  }, {
+    resolveNvidiaDocumentModel: () => ({
+      modelIds: ['meta/llama-3.2-11b-vision-instruct', 'nvidia/nemotron-nano-12b-v2-vl'],
+      timeoutMs: 20_000,
+      client(modelId) { return { modelId } },
+    }),
+    async generateText({ model }) {
+      serverError.push(model.modelId)
+      if (model.modelId === 'meta/llama-3.2-11b-vision-instruct') {
+        const err = new Error('HTTP 502 Bad Gateway')
+        err.statusCode = 502
+        throw err
+      }
+      return { text: JSON.stringify({ ...CLEAR, legible: 'yes' }) }
+    },
+  })
+  assert.deepEqual(serverError, [
+    'meta/llama-3.2-11b-vision-instruct',
+    'nvidia/nemotron-nano-12b-v2-vl',
+  ])
+
+  const clientError = []
+  await assert.rejects(() => readDocumentOnce({
+    bytes: new Uint8Array(20_000),
+    mime: 'image/jpeg',
+  }, {
+    resolveNvidiaDocumentModel: () => ({
+      modelIds: ['meta/llama-3.2-11b-vision-instruct', 'nvidia/nemotron-nano-12b-v2-vl'],
+      timeoutMs: 20_000,
+      client(modelId) { return { modelId } },
+    }),
+    async generateText({ model }) {
+      clientError.push(model.modelId)
+      const err = new Error('HTTP 400 bad request')
+      err.statusCode = 400
+      throw err
+    },
+  }), /400/)
+  assert.deepEqual(clientError, ['meta/llama-3.2-11b-vision-instruct'])
 
   const source = readFileSync(new URL('./llm.js', import.meta.url), 'utf8')
   const documentResolver = source.slice(source.indexOf('export function resolveNvidiaDocumentModel'))
