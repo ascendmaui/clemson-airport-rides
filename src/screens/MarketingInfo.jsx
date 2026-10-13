@@ -7,6 +7,7 @@ import { FeatureBlock } from '../components/FeatureBlock'
 import { messagingGuide } from '../../shared/copy/messaging.js'
 import { HERO_COLLAGE, NIGHT_VENUES } from '../content/images.js'
 import { APP_DOWNLOADS, SUPPORT_EMAIL } from '../../shared/productLinks.js'
+import { RIDE_TYPE_NOTES, RIDE_TYPE_STUDENT_NOTE } from '../../shared/copy/rideTypes.js'
 import { RIDE_OPTION_CATALOG, SCHEDULE_AHEAD_DISCOUNT_PCT } from '../../shared/rideOptions.js'
 import { CARPOOL_DISCOUNT_BPS, STUDENT_DISCOUNT_BPS } from '../lib/fareRates.js'
 import { tigerPassCopy } from '../../shared/tigerPass.js'
@@ -20,13 +21,6 @@ import {
   SAFETY_FEATURES,
   SAFETY_SECTION,
 } from '../content/peaceOfMind.js'
-
-const RIDE_TYPE_NOTES = {
-  standard: 'The base ride. The fare on the booking screen is the price before you confirm.',
-  wait: 'Shown when a driver can serve it. The fare is the quote on that screen. The student discount does not apply.',
-  comfort: 'Newer cars. Only a vehicle marked Extra Comfort can take this ride.',
-  carpool: `${CARPOOL_DISCOUNT_BPS / 100}% off the Standard fare for each seat. Book 1 or 2 seats. Drivers see it labeled Carpool, and it is offered to the same cars as Standard. Two separate carpool requests are not combined into one car.`,
-}
 
 const FAQ = [
   {
@@ -176,10 +170,7 @@ export function RideTypesPage() {
         ))}
         <article className="mkt-card mkt-feature">
           <h2>Student discount</h2>
-          <p>
-            {STUDENT_DISCOUNT_BPS / 100}% off Standard when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu.
-            Other ride types are not included.
-          </p>
+          <p>{RIDE_TYPE_STUDENT_NOTE}</p>
         </article>
         <article className="mkt-card mkt-feature">
           <h2>Schedule ahead</h2>

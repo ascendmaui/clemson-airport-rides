@@ -62,11 +62,12 @@ import { approvalGateMessage, isSyntheticOffer } from 'rides-native/syntheticOff
 import { driverGateView } from 'rides-native/driverGateView'
 import { loadCounterpart } from 'rides-native/partyProfile.js'
 import { offerCardViewModel } from 'rides-native/offerCard'
+import { EXCLUSIVE_SECONDS, exclusiveSecondsLeft, offerHourly, poolSecondsLeft } from 'rides-native/offerLadder.js'
+import { WorthItLegend } from 'rides-native/WorthItLegend'
 import { offerCardGauge } from 'rides-native/offerGauge'
 import { fetchOfferPreview, riderInitials } from 'rides-native/offerPreviewClient'
 import { OfferGauge } from '@/components/OfferGauge'
 import { tipBoostOfferLine } from '../../../../shared/prepaidTip.js'
-import { EXCLUSIVE_SECONDS, exclusiveSecondsLeft, poolSecondsLeft } from 'rides-native/offerLadder.js'
 
 /** Home map overlay grid: screen-edge gutter, spacing between floating pieces, clearance under the status bar. */
 const EDGE = 16
@@ -732,6 +733,7 @@ export function RideCard({
   const secondsLeft = exclusiveLeft ?? poolLeft
   const pulsing = exclusiveLeft != null && exclusiveLeft > 0
   const vm = offerCardViewModel(secondsLeft == null ? card : { ...card, secondsLeft })
+  const hourlyQuote = offerHourly(card, driver)
   const gauge = offerCardGauge(card, driver)
   const [preview, setPreview] = useState<Awaited<ReturnType<typeof fetchOfferPreview>>>(null)
   useEffect(() => {
@@ -841,6 +843,7 @@ export function RideCard({
           <Text style={{ color: colors.inkSecondary }}>
             {vm.pay.subtext}
           </Text>
+          <WorthItLegend hourlyCents={hourlyQuote.hourlyCents} colors={colors} />
           {vm.badges.length > 0 ? (
             <View style={styles.tags}>
               {vm.badges.map((b: { id: string; label: string; tone?: 'orange' | 'purple' }) => (
