@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
   APPROACH_CLOSE_FT,
@@ -7,6 +8,7 @@ import {
   APPROACH_NEAR_FT,
   approachAttention,
   approachDirection,
+  approachPulseMotion,
   approachStage,
   approachStatusLine,
   bearingDegrees,
@@ -18,6 +20,7 @@ import {
   haversineMeters,
   isApproachStatus,
   metersToFeet,
+  proximityTriggerFires,
 } from './approachAlert.ts'
 
 test('haversine is zero at one point and about 111m per 0.001 degree', () => {
@@ -322,6 +325,68 @@ test('crowd-find ping and vibration get faster as the driver gets closer', () =>
   assert.ok(here.intervalMs >= beside.intervalMs)
   assert.ok(beside.flash > edge.flash)
   assert.ok(edge.flash <= 0.7)
+})
+
+test('approach pulse is a soft eased breath, not a 0/1 flash', () => {
+  const moving = approachPulseMotion(false)
+  assert.equal(moving.enabled, true)
+  assert.equal(moving.uiThread, true)
+  assert.equal(moving.easing, 'inOutSin')
+  assert.ok(moving.durationMs >= 800)
+  assert.ok(moving.durationMs * 2 > 1000)
+  for (const frame of [moving.rest, moving.peak]) {
+    assert.ok(frame.opacity > 0 && frame.opacity < 1)
+    assert.notEqual(frame.opacity, 0)
+    assert.notEqual(frame.opacity, 1)
+    assert.ok(frame.scale > 1 && frame.scale < 1.2)
+  }
+  assert.ok(moving.peak.opacity > moving.rest.opacity)
+  assert.ok(moving.peak.scale > moving.rest.scale)
+
+  const still = approachPulseMotion(true)
+  assert.equal(still.enabled, false)
+  assert.equal(still.durationMs, moving.durationMs)
+  assert.deepEqual(still.rest, moving.rest)
+  assert.deepEqual(still.peak, moving.peak)
+
+  const src = readFileSync(new URL('../components/ApproachAlert.tsx', import.meta.url), 'utf8')
+  assert.match(src, /approachPulseMotion/)
+  assert.match(src, /useReducedMotion/)
+  assert.match(src, /if \(!next\.enabled\)/)
+  assert.match(src, /duration: next\.durationMs/)
+  assert.match(src, /Easing\.inOut\(Easing\.sin\)/)
+  assert.match(src, /useAnimatedStyle/)
+  assert.doesNotMatch(src, /setValue\(/)
+  assert.doesNotMatch(src, /toValue:\s*[01]\b/)
+  assert.doesNotMatch(src, /withTiming\(\s*[01]\b/)
+  assert.doesNotMatch(src, /styles\.wash/)
+  assert.doesNotMatch(src, /useNativeDriver:\s*false/)
+})
+
+test('proximity trigger still fires inside 500 ft and when the driver closes in', () => {
+  const entered = approachAttention({ previousFeet: 640, feet: 480 })
+  assert.equal(entered?.stage, 'near')
+  assert.equal(entered?.pulseMode, 'steady')
+  assert.equal(entered?.hapticReason, 'stage')
+  assert.equal(proximityTriggerFires({ previousFeet: 640, feet: 480 }), true)
+
+  const cue = crowdCue(480)
+  assert.ok(cue)
+  assert.equal(cue.haptic, 'light')
+  assert.ok(cue.intervalMs >= 2000 && cue.intervalMs <= 3000)
+
+  assert.equal(proximityTriggerFires({ previousFeet: 140, feet: 90 }), true)
+  assert.equal(crowdCue(90)?.haptic, 'heavy')
+
+  const closingFar = approachAttention({ previousFeet: 2000, feet: 1900 })
+  assert.equal(closingFar?.pulseMode, 'burst')
+  assert.equal(closingFar?.hapticReason, 'closing')
+  assert.equal(proximityTriggerFires({ previousFeet: 2000, feet: 1900 }), true)
+
+  assert.equal(proximityTriggerFires({ previousFeet: 2000, feet: 1990 }), false)
+  assert.equal(crowdCue(1990), null)
+  assert.equal(proximityTriggerFires({ previousFeet: null, feet: Number.NaN }), false)
+  assert.equal(proximityTriggerFires({ previousFeet: 100, feet: null }), false)
 })
 
 test('metersToFeet converts without clamping negatives', () => {
