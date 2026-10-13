@@ -2,6 +2,13 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-13 — Live trip screen keeps chip height and later trip controls
+
+- **What was wrong:** Updating the live-trip polish onto current main collided in `Requested.jsx`. Main sized the map with a fixed 280/220 split and offered Cancel this ride through `isMidrideStatus`, which is only true after the trip is already `canceled_midride`. The polish branch dropped the unread message ids, the lost-item report, and Change driver.
+- **What changed:** The map height comes from `liveTripMapHeight`. Cancel stays on the secondary list and only while the trip is `in_progress`. The message button still receives `tripId` and `userId`. Report a lost item and Change driver stay on the card, and the rider switch sheet still opens. The root test script keeps every main file and adds the two live-trip tests.
+- **Files touched:** `src/screens/Requested.jsx`, `package.json`, `packages/rides-native/liveTripCard.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/liveTripStatusChip.test.js packages/rides-native/liveTripCard.test.js tests/driverCancelUi.test.js tests/webLiveTrackingPolish.test.js` (14/14).
+
 ## 2026-10-07 — [agy] GA97: GA audit & tests - expire-unpaid holds timestamp safety, client guards, and Stripe webhook retryable resilience
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-expire-holds-webhook-hardening-ga97`
@@ -2097,6 +2104,20 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - Wired `tests/gaAuditExpireHoldsSanitization.test.js` into root `package.json` test script.
 - **Files touched:** `server/endpoints/expireUnpaidAirportHolds.js`, `tests/gaAuditExpireHoldsSanitization.test.js`, `package.json`, `docs/FIXES.md`
 - **Verified:** `npm test` passing with 0 failures.
+
+## 2026-10-05 — Live trip status chip labels (pkg-live-trip-ui-polish t1)
+
+- **What was wrong:** The rider live-trip map chip was a hardcoded "Looking for a driver" string on the web search map (`src/screens/Requested.jsx`) and only rendered while the open-pool search theater was up. After a driver was accepted, that chip disappeared. Native tracking (`apps/rider/app/requested.tsx`) has no map chip; the accepted driver shows on the counterpart card and the phase kicker. `tripStatusLabel` covers searching/accepted/arriving/arrived/in_progress/completed, but it has no `en_route` chip key, and `riderLiveCopy` labels `accepted` with the kicker "EN ROUTE", so accepted and en route were the same phrase. No shared pure helper mapped the chip set searching / accepted / en_route / arrived / in_progress / completed.
+- **What changed:** Added `liveTripStatusChipLabel` with a frozen label map. `accepted` is "Driver accepted". `en_route` is "En route". The stored trip status `arriving` (and `enroute` / "en route" / "en-route") uses the en route chip. `offered` keeps the searching chip, matching the current search theater. Unknown, blank, and non-string statuses return null so a chip can hide. Did not change GPS ping or location publish code, and did not restyle the map chrome.
+- **Files touched:** `packages/rides-native/liveTripStatusChip.js`, `packages/rides-native/liveTripStatusChip.test.js`, `package.json`, `docs/FIXES.md`
+- **Verified:** `node --test packages/rides-native/liveTripStatusChip.test.js` (3/3) and `npm test` (2333 pass, 0 fail).
+
+## 2026-10-05 — Live trip card chrome (pkg-live-trip-ui-polish t2)
+
+- **What was wrong:** After a driver was accepted, the web live-trip map dropped the status chip and shrank from 280px to 220px, so the pin sat under a short map. The chip was centered and could crowd the right-hand map control. The route line kept an empty driver prefix once the driver card was on screen. Cancel this ride used `isMidrideStatus`, which is only true for `canceled_midride`, so the secondary action showed up after the trip was already canceled and stayed hidden while the trip was actually in progress. Message, lost-and-found, and rate controls were mixed into the primary button stack even when none of them applied.
+- **What changed:** The map chip now uses `liveTripMapChip` for searching, accepted, en route, arrived, in trip, and completed, with the spinner only while searching. The chip sits in the top-left band and leaves 64px clear on the right. The map stays 280px while a preview, a driver pin, or a status chip is up. The route prefix is omitted when the driver card is showing. Secondary actions render only when the list is non-empty. Cancel is offered only while the trip is `in_progress`. No GPS, location publish, or Arrived-step code was changed.
+- **Files touched:** `packages/rides-native/liveTripCard.js`, `packages/rides-native/liveTripCard.test.js`, `package.json`, `src/screens/Requested.jsx`, `src/index.css`, `src/components/CounterpartChip.jsx`, `docs/FIXES.md`
+- **Verified:** `node --test packages/rides-native/liveTripCard.test.js` (5/5) and `npm test` (2338 pass, 0 fail). Headless Chrome screenshots of the no-trip route and a phone-width chip fixture: chip stays left of the zoom control, accepted and en route labels are distinct, and the card with no secondary actions shows only Share and Back home.
 
 ## 2026-10-07 — [agy] GA97: Stripe webhook retryable 500 classification and dependency injection across tips, credits, and deposits
 
