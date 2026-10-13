@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import { DRIVER_CLICKWRAP_VERSION } from '../shared/driverClickwrap.js'
 import { handleDriverClickwrap, publicAcceptance, saveClickwrapAcceptance } from './driverClickwrap.js'
@@ -144,6 +144,10 @@ test('the migration adds the acceptance table and does not drop existing tables'
   const executable = sql.split('\n').filter((line) => !line.trim().startsWith('--')).join('\n')
   assert.doesNotMatch(executable, /drop table/i)
   assert.doesNotMatch(executable, /delete from/i)
+  const versions = readdirSync(new URL('../supabase/migrations/', import.meta.url))
+    .filter((name) => name.endsWith('.sql'))
+    .map((name) => name.slice(0, 14))
+  assert.equal(versions.filter((version) => version === '20261013140000').length, 1)
 })
 
 function mayProceed(acceptance) {
