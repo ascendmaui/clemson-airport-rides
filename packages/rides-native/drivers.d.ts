@@ -43,6 +43,9 @@ export const PREFERRED_MATCH_COPY: string
 export const PREFERRED_OFFLINE_COPY: string
 export const PREFERRED_CANCELED_COPY: string
 export const OPEN_POOL_COPY: string
+export const EMPTY_FAVORITES_COPY: string
+export const FAVORITE_PERSIST_ERROR: string
+export const FAVORITE_ACCOUNT_SAVE_ERROR: string
 export const CAMPUS_MPH: number
 
 export function preferredTripFields(driverId: string): { preferred_driver_id: string; match: 'preferred' }
@@ -82,7 +85,7 @@ export function saveFavoriteDriverIds(
   storage: KeyValueStorage | null | undefined,
   userId: string | null | undefined,
   ids: string[],
-): Promise<{ ids: string[]; persisted: boolean; note: string }>
+): Promise<{ ids: string[]; persisted: boolean; note: string | null; error: string | null }>
 
 export function pickerVehicleLine(
   vehicleLabel: string | null | undefined,
