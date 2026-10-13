@@ -4,15 +4,15 @@ import * as Location from 'expo-location'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
-  PanResponder,
   Pressable,
   RefreshControl,
   ScrollView,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
 } from 'react-native'
+import { GestureDetector } from 'react-native-gesture-handler'
+import Reanimated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, SheetHandle } from '@/components/Button'
 import { pressStyle, useEnterMotion } from '@/components/enter'
@@ -25,7 +25,7 @@ import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
 import { useAuth } from '@/lib/auth'
 import { setAuthNext } from '@/lib/authNext'
 import { listScheduledTrips, type ScheduledRow } from '@/lib/scheduleApi'
-import { playTigerCue, tapHaptic } from '@/lib/feedback'
+import { playMatchChime, tapHaptic } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { displayFirstName } from 'rides-native/authErrors'
 import { campusOverlays } from 'rides-native/riderShell.js'
@@ -41,6 +41,8 @@ import { RIDER_TRACK_STATUSES, riderLiveView } from 'rides-native/liveTrip'
 import { HEAT_WINDOWS, SHORTCUTS } from 'rides-native/places.js'
 import { hotCatalogPlaces, lookupCatalogPlace, searchCatalogPlaces } from 'rides-native/shared/carpool.js'
 import { lift } from '@/lib/elevation'
+import { HOME_SHEET_BOTTOM_PADDING } from '@/lib/homeSheetSnap'
+import { useHomeSheetSnap } from '@/lib/useHomeSheetSnap'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
@@ -73,7 +75,11 @@ export function RiderHome() {
     ? { tier: presetTier }
     : {}
   const insets = useSafeAreaInsets()
-  const { height: windowH } = useWindowDimensions()
+  const inputRef = useRef<TextInput>(null)
+  const scrollRef = useRef<ScrollView>(null)
+  const sheet = useHomeSheetSnap(() => {
+    inputRef.current?.focus()
+  })
   const { user, configured } = useAuth()
   const { colors, scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
@@ -110,43 +116,15 @@ export function RiderHome() {
   const chromeMotion = useEnterMotion(8)
   const sheetMotion = useEnterMotion(16)
 
+  useEffect(() => {
+    if (sheet.detent !== 'collapsed') return
+    scrollRef.current?.scrollTo({ y: 0, animated: false })
+  }, [sheet.detent])
+
   const name = user
     ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Tiger')
     : 'Tiger'
   const initial = name.slice(0, 1).toUpperCase()
-
-  const minMap = Math.round(windowH * 0.38)
-  const maxMap = Math.round(windowH * 0.64)
-  const mapH = useRef(new Animated.Value(minMap)).current
-  const limits = useRef({ min: minMap, max: maxMap })
-  limits.current = { min: minMap, max: maxMap }
-  const dragStart = useRef(minMap)
-  const pan = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_: any, gesture: { dx: number; dy: number; vy: number }) => Math.abs(gesture.dy) > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
-      onPanResponderGrant: () => {
-        mapH.stopAnimation((value: number) => {
-          dragStart.current = value
-        })
-      },
-      onPanResponderMove: (_: any, gesture: { dx: number; dy: number; vy: number }) => {
-        const { min, max } = limits.current
-        const next = Math.min(max, Math.max(min, dragStart.current + gesture.dy))
-        mapH.setValue(next)
-      },
-      onPanResponderRelease: (_: any, gesture: { dx: number; dy: number; vy: number }) => {
-        const { min, max } = limits.current
-        const current = Math.min(max, Math.max(min, dragStart.current + gesture.dy))
-        const expand = gesture.vy > 0.35 || (gesture.vy >= -0.35 && current > (min + max) / 2)
-        Animated.spring(mapH, {
-          toValue: expand ? max : min,
-          useNativeDriver: false,
-          friction: 7,
-          tension: 80,
-        }).start()
-      },
-    }),
-  ).current
 
   async function reloadSpots(windowId: string) {
     const result = await loadBusySpots(windowId)
@@ -307,12 +285,13 @@ export function RiderHome() {
 
   return (
     <View style={styles.screen}>
-      <Animated.View
+      <View
         ref={(node) => {
           mapSwipe.ref.current = node
         }}
         onLayout={mapSwipe.onLayout}
-        style={[styles.mapSlot, { height: mapH }]}
+        collapsable={false}
+        style={styles.mapSlot}
       >
         <CampusMap
           ref={mapRef}
@@ -389,7 +368,7 @@ export function RiderHome() {
             </Pressable>
           </View>
         </Animated.View>
-      </Animated.View>
+      </View>
 
       <Animated.View
         ref={(node) => {
@@ -398,18 +377,81 @@ export function RiderHome() {
         onLayout={sheetSwipe.onLayout}
         style={[styles.sheetWrap, lift(colors, 'float'), sheetMotion]}
       >
-      <View style={styles.sheet}>
-        <View {...pan.panHandlers} accessibilityLabel="Drag down to expand the map" accessibilityHint="Drag down to make the map taller" accessibilityRole="adjustable">
-          <SheetHandle />
+      <Reanimated.View style={[styles.sheet, sheet.sheetStyle]}>
+        <GestureDetector gesture={sheet.handlePan}>
+          <View
+            onLayout={sheet.onHandleLayout}
+            style={styles.handleBlock}
+            accessible
+            accessibilityRole="adjustable"
+            accessibilityLabel={sheet.detent === 'collapsed' ? 'Home sheet collapsed' : 'Drag down to expand the map'}
+            accessibilityHint={sheet.detent === 'collapsed' ? 'Drag up to show more. Tap the search field to type a destination.' : 'Drag up or down to resize the map'}
+            accessibilityActions={[
+              { name: 'increment', label: 'Expand sheet' },
+              { name: 'decrement', label: 'Collapse sheet' },
+            ]}
+            onAccessibilityAction={(event) => {
+              const action = event.nativeEvent.actionName
+              if (action === 'increment') sheet.nudge(1)
+              else if (action === 'decrement') sheet.nudge(-1)
+            }}
+          >
+            <SheetHandle />
+          </View>
+        </GestureDetector>
+        <Reanimated.View
+          pointerEvents="none"
+          style={sheet.hintStyle}
+          accessibilityElementsHidden={sheet.detent === 'collapsed'}
+        >
           <Text style={styles.dragHint}>Drag down to expand the map</Text>
+        </Reanimated.View>
+        <View onLayout={sheet.onSearchLayout} style={styles.searchBlock}>
+          <Text style={styles.prompt} accessibilityElementsHidden={sheet.detent === 'collapsed'}>Where are you headed, Tiger?</Text>
+          <View
+            style={[styles.search, lift(colors, 'rest')]}
+            accessibilityElementsHidden={sheet.detent === 'collapsed'}
+            importantForAccessibility={sheet.detent === 'collapsed' ? 'no-hide-descendants' : 'auto'}
+          >
+            <View style={styles.searchMark} />
+            <TextInput
+              ref={inputRef}
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Campus, GSP, CLT…"
+              placeholderTextColor={colors.placeholder}
+              style={styles.searchInput}
+              autoCorrect={false}
+              editable={sheet.detent !== 'collapsed'}
+              pointerEvents={sheet.detent === 'collapsed' ? 'none' : 'auto'}
+              accessibilityLabel="Destination"
+              accessibilityHint="Search a campus stop or airport"
+            />
+          </View>
+          {sheet.detent === 'collapsed' ? (
+            <GestureDetector gesture={sheet.searchGesture}>
+              <View
+                collapsable={false}
+                style={styles.searchCover}
+                accessible
+                accessibilityRole="button"
+                accessibilityLabel="Where are you headed, Tiger?"
+                accessibilityHint="Expands the sheet and focuses destination search"
+                onAccessibilityTap={sheet.expandFromSearch}
+              />
+            </GestureDetector>
+          ) : null}
         </View>
         <ScrollView
+          ref={scrollRef}
           style={styles.sheetScroll}
           contentContainerStyle={styles.sheetContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           onScroll={remeasureTabs}
           scrollEventThrottle={32}
+          scrollEnabled={sheet.scrollEnabled}
+          pointerEvents={sheet.scrollEnabled ? 'auto' : 'none'}
           refreshControl={(
             <RefreshControl
               refreshing={refreshing}
@@ -432,24 +474,21 @@ export function RiderHome() {
               <Skeleton height={56} />
             </View>
           ) : (
-            <>
-              <Text style={styles.welcome}>Welcome, {name}</Text>
-              <Text style={styles.prompt}>Where are you headed, Tiger?</Text>
-              {liveTrip ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Live ride. ${riderLiveView(liveTrip.status).title}. Open tracking for ${liveTrip.dropoff_label || 'this trip'}.`}
-                  accessibilityHint="Opens live trip tracking"
-                  onPress={() => router.push({ pathname: '/requested', params: { trip: liveTrip.id, dest: liveTrip.dropoff_label || '' } })}
-                  style={({ pressed }) => [styles.liveCard, lift(colors, 'rest'), pressStyle(pressed)]}
-                >
-                  <Text style={styles.liveKicker}>LIVE RIDE</Text>
-                  <Text style={styles.liveTitle}>{riderLiveView(liveTrip.status).title}</Text>
-                  <Text style={styles.liveBody}>Open tracking for {liveTrip.dropoff_label || 'this trip'}.</Text>
-                </Pressable>
-              ) : null}
-            </>
+            <Text style={styles.welcome}>Welcome, {name}</Text>
           )}
+          {liveTrip ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Live ride. ${riderLiveView(liveTrip.status).title}. Open tracking for ${liveTrip.dropoff_label || 'this trip'}.`}
+              accessibilityHint="Opens live trip tracking"
+              onPress={() => router.push({ pathname: '/requested', params: { trip: liveTrip.id, dest: liveTrip.dropoff_label || '' } })}
+              style={({ pressed }) => [styles.liveCard, lift(colors, 'rest'), pressStyle(pressed)]}
+            >
+              <Text style={styles.liveKicker}>LIVE RIDE</Text>
+              <Text style={styles.liveTitle}>{riderLiveView(liveTrip.status).title}</Text>
+              <Text style={styles.liveBody}>Open tracking for {liveTrip.dropoff_label || 'this trip'}.</Text>
+            </Pressable>
+          ) : null}
           {gameDayExperience.ready && gameDayExperience.model.phase !== 'off' ? (
             <GameDayBanner model={gameDayExperience.model} onPress={() => router.push('/game-day')} />
           ) : !gameDayExperience.ready && gameNotice?.live ? (
@@ -481,19 +520,6 @@ export function RiderHome() {
               <Text style={styles.liveBody}>{item.body}</Text>
             </Pressable>
           ))}
-          <View style={[styles.search, lift(colors, 'rest')]}>
-            <View style={styles.searchMark} />
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Campus, GSP, CLT…"
-              placeholderTextColor={colors.placeholder}
-              style={styles.searchInput}
-              autoCorrect={false}
-              accessibilityLabel="Destination"
-              accessibilityHint="Search a campus stop or airport"
-            />
-          </View>
           <TabSwipeRegion>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
             {suggestions.map((stop: { id: string; label: string }) => (
@@ -661,7 +687,7 @@ export function RiderHome() {
 
           <Pressable
             onPress={() => {
-              void playTigerCue()
+              void playMatchChime()
               router.push('/friends')
             }}
             style={({ pressed }) => [styles.gameday, lift(colors, 'rest'), pressStyle(pressed)]}
@@ -681,7 +707,7 @@ export function RiderHome() {
             </View>
           </Pressable>
         </ScrollView>
-      </View>
+      </Reanimated.View>
       </Animated.View>
     </View>
   )
@@ -694,7 +720,7 @@ export default function RidesRoute() {
 function makeStyles(colors: Palette) {
   return {
     screen: { flex: 1, backgroundColor: colors.background },
-    mapSlot: { backgroundColor: colors.mapFallback, overflow: 'hidden' as const },
+    mapSlot: { flex: 1, minHeight: 0, backgroundColor: colors.mapFallback, overflow: 'hidden' as const },
     mapChrome: {
       position: 'absolute' as const,
       top: 0,
@@ -806,29 +832,30 @@ function makeStyles(colors: Palette) {
     destChipTextOn: { color: colors.onAccent },
     locateNote: { color: colors.danger, fontSize: 12, lineHeight: 17, marginTop: 6 },
     sheetWrap: {
-      flex: 1,
       marginTop: -22,
       borderTopLeftRadius: 28,
       borderTopRightRadius: 28,
     },
     sheet: {
-      flex: 1,
       overflow: 'hidden' as const,
       backgroundColor: colors.elevated,
       borderTopLeftRadius: 28,
       borderTopRightRadius: 28,
       paddingHorizontal: 20,
-      paddingTop: 8,
+      paddingBottom: HOME_SHEET_BOTTOM_PADDING,
     },
+    handleBlock: { paddingTop: 8 },
+    searchBlock: { position: 'relative' as const },
+    searchCover: { position: 'absolute' as const, top: 0, right: 0, bottom: 0, left: 0 },
     dragHint: {
       textAlign: 'center' as const,
       color: colors.placeholder,
       fontSize: 11,
       fontWeight: '600' as const,
       letterSpacing: 0.2,
-      marginBottom: 8,
+      lineHeight: 16,
     },
-    sheetScroll: { flex: 1 },
+    sheetScroll: { flex: 1, minHeight: 0 },
     sheetContent: { paddingBottom: 28 },
     skeletonBlock: { gap: 10, marginBottom: 14 },
     welcome: {

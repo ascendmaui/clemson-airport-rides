@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    
+    <linearGradient id="backgroundBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFC56A"/>
+      <stop offset="46%" stop-color="#FF8A1F"/>
+      <stop offset="100%" stop-color="#F56600"/>
+    </linearGradient>
+    <radialGradient id="backgroundGlow" cx="50%" cy="46%" r="46%">
+      <stop offset="0%" stop-color="#FFE0B0" stop-opacity="0.55"/>
+      <stop offset="58%" stop-color="#FFE0B0" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#FFE0B0" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="backgroundSpec" cx="18%" cy="12%" r="40%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.92"/>
+      <stop offset="32%" stop-color="#FFFFFF" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="backgroundEdge" cx="50%" cy="42%" r="78%">
+      <stop offset="0%" stop-color="#C24100" stop-opacity="0"/>
+      <stop offset="70%" stop-color="#C24100" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#C24100" stop-opacity="0.34"/>
+    </radialGradient>
+    <linearGradient id="backgroundStreak" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="42%" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.85"/>
+      <stop offset="58%" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    
+    <linearGradient id="background-darkBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6B3014"/>
+      <stop offset="46%" stop-color="#3A1608"/>
+      <stop offset="100%" stop-color="#160804"/>
+    </linearGradient>
+    <radialGradient id="background-darkGlow" cx="50%" cy="46%" r="46%">
+      <stop offset="0%" stop-color="#F56600" stop-opacity="0.55"/>
+      <stop offset="58%" stop-color="#F56600" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#F56600" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="background-darkSpec" cx="18%" cy="12%" r="40%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.34"/>
+      <stop offset="32%" stop-color="#FFFFFF" stop-opacity="0.13"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="background-darkEdge" cx="50%" cy="42%" r="78%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="70%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.34"/>
+    </radialGradient>
+    <linearGradient id="background-darkStreak" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="42%" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.85"/>
+      <stop offset="58%" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="pinBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.94"/>
+      <stop offset="42%" stop-color="#FFFFFF" stop-opacity="0.62"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.30"/>
+    </linearGradient>
+    <linearGradient id="pinRim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.98"/>
+      <stop offset="48%" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.22"/>
+    </linearGradient>
+    <radialGradient id="pinGlow" cx="40%" cy="34%" r="62%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.75"/>
+      <stop offset="55%" stop-color="#FFFFFF" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="innerGlow" x="-35%" y="-35%" width="170%" height="170%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+    <clipPath id="pinClip"><path d="M 512.00 804.00 C 488.48 610.32, 319.92 512.32, 316.00 430.00 A 196.00 196.00 0 0 1 708.00 430.00 C 704.08 512.32, 535.52 610.32, 512.00 804.00 Z"/></clipPath>
+    <mask id="pinMono" maskUnits="userSpaceOnUse">
+      <rect width="1024" height="1024" fill="#000000"/>
+      <path d="M 512.00 804.00 C 488.48 610.32, 319.92 512.32, 316.00 430.00 A 196.00 196.00 0 0 1 708.00 430.00 C 704.08 512.32, 535.52 610.32, 512.00 804.00 Z" fill="#FFFFFF"/>
+      <g transform="translate(512 448)" fill="#000000">
+        <path d="M -108 26 C -102 4 -86 -16 -58 -30 L -18 -34 C 8 -36 28 -28 42 -12 L 64 2 C 78 8 92 16 104 28 C 114 36 112 46 98 50 L 74 52 L -78 52 C -102 50 -116 40 -108 26 Z"/>
+        <circle cx="-62" cy="52" r="20"/>
+        <circle cx="64" cy="52" r="20"/>
+      </g>
+    </mask>
+  </defs>
+  
+    <g id="background">
+      <rect width="1024" height="1024" fill="url(#backgroundBase)"/>
+      <rect width="1024" height="1024" fill="url(#backgroundGlow)"/>
+      <rect width="1024" height="1024" fill="url(#backgroundSpec)"/>
+      <rect width="1024" height="1024" fill="url(#backgroundEdge)"/>
+      <g opacity="0.28" transform="rotate(-32 512 280)">
+        <rect x="-80" y="210" width="1280" height="22" rx="11" fill="url(#backgroundStreak)"/>
+      </g>
+    </g>
+  
+    <g id="background-dark">
+      <rect width="1024" height="1024" fill="url(#background-darkBase)"/>
+      <rect width="1024" height="1024" fill="url(#background-darkGlow)"/>
+      <rect width="1024" height="1024" fill="url(#background-darkSpec)"/>
+      <rect width="1024" height="1024" fill="url(#background-darkEdge)"/>
+      <g opacity="0.28" transform="rotate(-32 512 280)">
+        <rect x="-80" y="210" width="1280" height="22" rx="11" fill="url(#background-darkStreak)"/>
+      </g>
+    </g>
+  <g id="background-tinted">
+    <rect width="1024" height="1024" fill="#000000"/>
+  </g>
+  <g id="glyph">
+    <path d="M 512.00 804.00 C 488.48 610.32, 319.92 512.32, 316.00 430.00 A 196.00 196.00 0 0 1 708.00 430.00 C 704.08 512.32, 535.52 610.32, 512.00 804.00 Z" fill="url(#pinBody)"/>
+    <g clip-path="url(#pinClip)">
+      <ellipse cx="430" cy="360" rx="150" ry="90" fill="url(#pinGlow)" filter="url(#innerGlow)"/>
+      <ellipse cx="390" cy="330" rx="120" ry="48" fill="#FFFFFF" fill-opacity="0.55"/>
+    </g>
+    <path d="M 512.00 804.00 C 488.48 610.32, 319.92 512.32, 316.00 430.00 A 196.00 196.00 0 0 1 708.00 430.00 C 704.08 512.32, 535.52 610.32, 512.00 804.00 Z" fill="none" stroke="url(#pinRim)" stroke-width="10"/>
+  </g>
+  <g id="accent" transform="translate(512 448)">
+    <path d="M -108 26 C -102 4 -86 -16 -58 -30 L -18 -34 C 8 -36 28 -28 42 -12 L 64 2 C 78 8 92 16 104 28 C 114 36 112 46 98 50 L 74 52 L -78 52 C -102 50 -116 40 -108 26 Z" fill="#F56600"/>
+    <path d="M -16 -4 C -2 -22 26 -24 46 -6 L 34 14 L -10 12 Z" fill="#FFF6EA"/>
+    <circle cx="-62" cy="52" r="20" fill="#7A2A00"/>
+    <circle cx="64" cy="52" r="20" fill="#7A2A00"/>
+    <circle cx="-62" cy="52" r="8" fill="#FFE0C2"/>
+    <circle cx="64" cy="52" r="8" fill="#FFE0C2"/>
+  </g>
+  <g id="mono">
+    <rect width="1024" height="1024" fill="#FFFFFF" mask="url(#pinMono)"/>
+  </g>
+</svg>

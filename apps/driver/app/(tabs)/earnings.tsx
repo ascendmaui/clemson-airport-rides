@@ -170,9 +170,9 @@ export default function EarningsHub() {
   const pending = Number(wallet?.pendingCents) || 0
   const nextRetry = wallet?.pending?.find((row: unknown) => row && typeof row === 'object' && 'nextRetryAt' in row) as { nextRetryAt?: string } | undefined
   const moneyRows: MenuRow[] = [
-    { icon: 'payout', title: 'Payouts', subtitle: 'Stripe balance and cash out', onPress: () => router.push('/payouts') },
+    { icon: 'payout', title: 'Payout methods', subtitle: 'Bank, debit card, and cash out', onPress: () => router.push('/payouts') },
     { icon: 'tip', title: 'Tips and activity', subtitle: 'Every fare, tip, and boost', onPress: () => router.push('/earnings-activity') },
-    { icon: 'calculator', title: 'Tax info', subtitle: 'W-9 on your application', onPress: () => router.push('/tax') },
+    { icon: 'calculator', title: 'Tax info', subtitle: 'W-9 status and year-end summary', onPress: () => router.push('/tax') },
   ]
   let you = 0
   let platform = 0
@@ -301,9 +301,9 @@ export default function EarningsHub() {
               </Card>
               <Card>
                 <Text style={[styles.kicker, { color: colors.orange }]}>TAXES</Text>
-                <Text style={{ color: colors.title, fontWeight: '800', fontSize: 18 }}>Year-end summary</Text>
+                <Text style={{ color: colors.title, fontWeight: '800', fontSize: 18 }}>Yearly earnings summary</Text>
                 <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-                  Gross earnings, tips, platform fees, payouts, deductible miles, and an estimated mileage deduction.
+                  Gross fares, tips, platform fees, bonuses and perks, net payouts, a monthly breakdown, mileage, and tax estimates.
                 </Text>
                 <Pressable
                   onPress={() => router.push('/tax')}
