@@ -13,6 +13,7 @@ import {
 } from 'rides-native/shared/carpool.js'
 import { EmptyState } from '@/components/carpool/ui'
 import type { Palette } from '@/lib/palette'
+import { addressFromGeocode } from '@/lib/reverseAddress'
 import { suggestSpots, type SpotCandidate } from '@/lib/spotSuggestions'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
@@ -59,27 +60,13 @@ function useDebouncedQuery(value: string, delayMs: number): string {
   return debounced
 }
 
-function formatGeocoded(place: {
-  name?: string | null
-  street?: string | null
-  streetNumber?: string | null
-  city?: string | null
-} | null | undefined): string {
-  if (!place) return ''
-  const street = [place.streetNumber, place.street].filter(Boolean).join(' ').trim()
-  const name = String(place.name || '').trim()
-  const primary = name && name !== street ? name : street
-  const city = String(place.city || '').trim()
-  return [primary, city].filter(Boolean).join(', ')
-}
-
 async function geocodedPlaces(query: string): Promise<SpotCandidate[]> {
   try {
     const hits = await Location.geocodeAsync(query)
     const hit = hits.find((row) => Number.isFinite(row.latitude) && Number.isFinite(row.longitude))
     if (!hit) return []
     const reversed = await Location.reverseGeocodeAsync({ latitude: hit.latitude, longitude: hit.longitude })
-    const label = formatGeocoded(reversed[0])
+    const label = addressFromGeocode(reversed[0])
     if (!label) return []
     return [{
       id: `geo:${hit.latitude.toFixed(5)},${hit.longitude.toFixed(5)}`,
@@ -104,6 +91,7 @@ export function NeighborhoodPicker({
   liveSuggest?: boolean
 }) {
   const [query, setQuery] = useState('')
+  const [editing, setEditing] = useState(false)
   const [group, setGroup] = useState<GroupFilter>('housing')
   const [locating, setLocating] = useState(false)
   const [locateNote, setLocateNote] = useState<string | null>(null)
@@ -117,8 +105,10 @@ export function NeighborhoodPicker({
     () => (liveSuggest && debouncedQuery.trim() ? suggestSpots(debouncedQuery, extraPlaces) : []),
     [liveSuggest, debouncedQuery, extraPlaces],
   )
+  const fieldText = liveSuggest && !editing ? value.label : query
   const dropdownOn = liveSuggest
     && suggestOpen
+    && editing
     && query.trim().length > 0
     && query.trim() === debouncedQuery.trim()
     && suggestions.length > 0
@@ -148,7 +138,15 @@ export function NeighborhoodPicker({
 
   function chooseSuggestion(spot: SpotCandidate) {
     onChange({ label: spot.label, lat: spot.lat, lng: spot.lng })
-    setQuery(spot.label)
+    setEditing(false)
+    setQuery('')
+    setSuggestOpen(false)
+  }
+
+  function chooseChip(spot: { label: string; lat: number; lng: number }) {
+    onChange(placeOf(spot))
+    setEditing(false)
+    setQuery('')
     setSuggestOpen(false)
   }
 
@@ -173,8 +171,17 @@ export function NeighborhoodPicker({
         setLocateNote('Could not read your location.')
         return
       }
-      onChange({ label: 'Current location', lat, lng })
+      let placeLabel = 'Current location'
+      try {
+        const reversed = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng })
+        placeLabel = addressFromGeocode(reversed[0]) || placeLabel
+      } catch {
+        placeLabel = 'Current location'
+      }
+      onChange({ label: placeLabel, lat, lng })
+      setEditing(false)
       setQuery('')
+      setSuggestOpen(false)
     } catch (err) {
       setLocateNote(err instanceof Error ? err.message : 'Could not read your location.')
     } finally {
@@ -188,13 +195,14 @@ export function NeighborhoodPicker({
       <View style={[styles.searchRow, dropdownOn && styles.searchRowOpen]}>
         <View style={styles.searchColumn}>
           <TextInput
-            value={query}
+            value={fieldText}
             onChangeText={(text) => {
+              setEditing(true)
               setQuery(text)
               setSuggestOpen(true)
             }}
             onFocus={() => {
-              if (query.trim()) setSuggestOpen(true)
+              if (editing && query.trim()) setSuggestOpen(true)
             }}
             placeholder="Grand Marc, stadium, GSP…"
             placeholderTextColor={colors.placeholder}
@@ -236,13 +244,19 @@ export function NeighborhoodPicker({
         </Pressable>
       </View>
       {locateNote ? <Text style={styles.locateNote}>{locateNote}</Text> : null}
-      {liveSuggest ? null : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-          {hot.map((spot: { id: string; label: string; lat: number; lng: number }) => (
-            <Chip key={spot.id} spot={spot} selected={value.label === spot.label} onPress={() => onChange(placeOf(spot))} />
-          ))}
-        </ScrollView>
-      )}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {hot.map((spot: { id: string; label: string; lat: number; lng: number }) => (
+          <Chip
+            key={spot.id}
+            spot={spot}
+            selected={value.label === spot.label}
+            onPress={() => {
+              if (liveSuggest) chooseChip(spot)
+              else onChange(placeOf(spot))
+            }}
+          />
+        ))}
+      </ScrollView>
       {liveSuggest ? null : (
         <>
           <View style={styles.filters}>
@@ -278,9 +292,11 @@ export function NeighborhoodPicker({
           )}
         </>
       )}
-      <Text style={styles.cluster}>
-        {cluster ? `Cluster · ${cluster.label}` : 'Outside the named Clemson clusters'}
-      </Text>
+      {liveSuggest ? null : (
+        <Text style={styles.cluster}>
+          {cluster ? `Cluster · ${cluster.label}` : 'Outside the named Clemson clusters'}
+        </Text>
+      )}
     </View>
   )
 }

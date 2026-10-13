@@ -9,6 +9,7 @@ import { haversineMeters } from './riderShell.js'
 import { isSimulatedDriverId } from './simulatedDrivers.js'
 import { favoriteIdsForMatching } from '../../shared/riderFavorites.js'
 import { approvalGateMessage } from './syntheticOffers.js'
+import { rideRequestNote } from './driverNote.js'
 
 /** Straight-line campus pace. A stored road polyline can scale this; live traffic still needs a billed Routes call. */
 export const CAMPUS_MPH = 18
@@ -558,7 +559,7 @@ export async function requestDriverTrip(supabase, {
   const destLng = destPoint?.longitude ?? destPoint?.lng
   const pickupLat = pickupPoint?.latitude ?? pickupPoint?.lat
   const pickupLng = pickupPoint?.longitude ?? pickupPoint?.lng
-  const riderNote = String(note || '').replace(/\s+/g, ' ').trim().slice(0, 280)
+  const riderNote = rideRequestNote(note).note
 
   const data = await authedJson(supabase, '/api/stripe-payment-methods?action=request-driver', {
     method: 'POST',

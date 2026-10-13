@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { neighborhoodsInGroup } from '../../../packages/rides-native/shared/carpool.js'
 import { suggestSpots } from './spotSuggestions.ts'
 
 test('suggestSpots ranks Clemson Stadium, College Avenue, a bar, a typo, and empty input', () => {
@@ -23,6 +24,19 @@ test('suggestSpots ranks Clemson Stadium, College Avenue, a bar, a typo, and emp
 
   assert.deepEqual(suggestSpots(''), [])
   assert.deepEqual(suggestSpots('   '), [])
+})
+
+test('suggestion dataset covers downtown bars, hot spots, and landmarks', () => {
+  const bars = neighborhoodsInGroup('bars')
+  assert.ok(bars.length >= 7 && bars.length <= 12)
+  for (const bar of bars) {
+    assert.equal(suggestSpots(bar.label)[0]?.id, bar.id, bar.label)
+  }
+  assert.equal(suggestSpots("TD's")[0]?.id, 'tiger-town')
+  assert.equal(suggestSpots('Memorial Stadium')[0]?.id, 'memorial-stadium')
+  assert.equal(suggestSpots('College Ave')[0]?.id, 'college-ave')
+  assert.equal(suggestSpots('Grand Marc')[0]?.id, 'grand-marc')
+  assert.equal(suggestSpots('GSP')[0]?.id, 'gsp')
 })
 
 test('suggestSpots merges geocoder or places hits and keeps the catalog copy', () => {
