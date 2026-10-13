@@ -10,6 +10,7 @@ import { lockedOfferEconomics } from './offerLadder.js'
 import { compareBoostedFirst } from '../../shared/scheduledBoost.js'
 import { missingVehicleYearColumn } from '../../shared/vehicleYear.js'
 import { missingTitleStatusColumn } from '../../shared/vehicleTitle.js'
+import { missingLuxuryExceptionColumn } from '../../shared/ownedVehicle.js'
 import { vehicleServesComfort } from '../../shared/rideOptions.js'
 import { headingOrNull, isLiveLocationStatus, speedOrNull } from './liveFix.js'
 import { authedJson } from './apiClient.js'
@@ -107,10 +108,14 @@ export async function loadGameDay(supabase) {
 
 export async function loadVehicle(supabase, driverId) {
   if (!supabase || !driverId) return null
+  const withLuxury = 'id, year, title_status, make, model, color, plate, seats, service_class, autonomous_capable, tier, luxury_exception'
   const withTitle = 'id, year, title_status, make, model, color, plate, seats, service_class, autonomous_capable, tier'
   const withYear = 'id, year, make, model, color, plate, seats, service_class, autonomous_capable, tier'
   const base = 'id, make, model, color, plate, seats, service_class, autonomous_capable, tier'
-  let res = await supabase.from('vehicles').select(withTitle).eq('driver_id', driverId).limit(1)
+  let res = await supabase.from('vehicles').select(withLuxury).eq('driver_id', driverId).limit(1)
+  if (res.error && missingLuxuryExceptionColumn(res.error)) {
+    res = await supabase.from('vehicles').select(withTitle).eq('driver_id', driverId).limit(1)
+  }
   if (res.error && missingTitleStatusColumn(res.error)) {
     res = await supabase.from('vehicles').select(withYear).eq('driver_id', driverId).limit(1)
   }
