@@ -1,4 +1,5 @@
 import { depositReceiptLines } from '../../packages/rides-native/riderMoney.js'
+import { supportEmail } from '../../shared/productLinks.js'
 import { maskCompletedTripForDriver } from './privacyDisplay.js'
 
 export function money(cents) {
@@ -25,6 +26,7 @@ export function buildReceiptText(trip, { forDriver = false } = {}) {
     wait > 0 ? `Wait time: ${money(wait)}` : null,
     `Tip: ${money(tip)}`,
     `Total: ${money(fare + tip + wait)}`,
+    `Questions: ${supportEmail()}`,
   ].filter(Boolean).join('\n')
 }
 

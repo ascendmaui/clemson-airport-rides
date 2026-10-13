@@ -16,6 +16,7 @@ import { selectDriverApplicationQueue, submittedApplicantEmail, withSubmittedApp
 import { loadApplicantVehicles } from '../shared/vehicleYear.js'
 import { driverVehicleStandardIssue } from '../shared/vehicleStandards.js'
 import { loadSubmissionContext } from '../server/driverApproval.js'
+import { emailDriverDecision } from '../server/transactionalMail.js'
 import {
   admin, cors, json, parseBody, userFromAuth,
 } from '../server/friendRideLib.js'
@@ -262,7 +263,7 @@ async function review(sb, res, adminUser, body) {
 
   const { data: target, error: targetErr } = await sb
     .from('profiles')
-    .select('id, role')
+    .select('id, role, email, full_name')
     .eq('id', profileId)
     .maybeSingle()
   if (targetErr) return json(res, 500, { error: targetErr.message })
@@ -354,10 +355,18 @@ async function review(sb, res, adminUser, body) {
     if (error) return json(res, 500, { error: error.message })
   }
 
+  const mailed = await emailDriverDecision({
+    to: target.email,
+    decision,
+    reason,
+    name: target.full_name,
+  })
+
   return json(res, 200, {
     ok: true,
     onboarding_status: next,
     application: app,
+    emailed: Boolean(mailed?.emailed),
     message: decision === 'approve'
       ? 'Driver approved. They can go online and receive rides.'
       : 'Driver rejected. They cannot receive rides until they resubmit and you approve.',
