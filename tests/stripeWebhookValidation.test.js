@@ -791,6 +791,19 @@ test('a throwing applyPaidCheckoutSession returns 400 and the handler settles', 
   assert.deepEqual(calls, ['serviceClient', 'applyPaidCheckoutSession'])
 })
 
+test('a thrown error that includes a stack frame does not leave the trace in the response', async () => {
+  const { deps } = routingDeps({
+    serviceKey: SERVICE_ROLE,
+    onApply() {
+      throw new Error('apply blew up\n    at applyPaidCheckoutSession (api/stripe-webhook.js:12:3)')
+    },
+  })
+  const res = await postEvent(handler, completedEvent('checkout.session.completed', paidSession()), deps)
+  const body = assertJson(res, 400)
+  assert.equal(body.error, 'Webhook error')
+  assert.equal(JSON.stringify(body).includes('stripe-webhook.js'), false)
+})
+
 test('a rejecting applyPaidCheckoutSession on async_payment_succeeded returns 400 and the handler settles', async () => {
   const { deps } = routingDeps({
     serviceKey: '',

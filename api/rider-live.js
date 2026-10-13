@@ -3,6 +3,7 @@
  * High-accuracy pickup stream from the rider to the offered or matched driver.
  */
 import { admin, cors, json, parseBody, userFromAuth } from '../server/friendRideLib.js'
+import { clientErrorMessage } from '../server/clientError.js'
 import { publishRiderPickup } from '../server/endpoints/riderLivePickup.js'
 
 export default async function handler(req, res) {
@@ -21,7 +22,8 @@ export default async function handler(req, res) {
     const result = await publishRiderPickup(sb, user, parsed.body)
     return json(res, result.status, result.body)
   } catch (err) {
-    console.error('[rider-live]', err)
-    return json(res, err.status || 500, { error: err.message || 'Could not update pickup location' })
+    console.error('[rider-live]', err?.message || err)
+    const status = Number(err?.status) >= 400 && Number(err?.status) < 600 ? err.status : 500
+    return json(res, status, { error: clientErrorMessage(err, 'Could not update pickup location') })
   }
 }
