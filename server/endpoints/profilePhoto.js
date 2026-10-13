@@ -10,6 +10,7 @@
 import { cors, json, parseBody, userFromAuth, admin } from '../friendRideLib.js'
 import { latestProfilePhoto, reviewUploadedProfilePhoto } from '../profilePhotoReview.js'
 import { driverProfilePhotoMessage } from '../../shared/profilePhotoReview.js'
+import { clientErrorMessage } from '../clientError.js'
 
 const PENDING = ['pending_admin_review', 'pending_manual_review']
 
@@ -67,7 +68,7 @@ export async function listProfilePhotoQueue(sb) {
     if (/schema cache|does not exist|driver_profile_photos/i.test(pending.error.message || '')) {
       return { status: 200, photos: [], migrationRequired: true }
     }
-    return { status: 500, error: pending.error.message }
+    return { status: 500, error: clientErrorMessage(pending.error, 'Could not load profile photos') }
   }
   const rows = pending.data || []
   const ids = [...new Set(rows.map((row) => row.profile_id).filter(Boolean))]
@@ -132,7 +133,7 @@ export async function reviewProfilePhotoDecision({ sb, adminUser, photoId, decis
     reviewed_at: new Date().toISOString(),
     reviewed_by: adminUser.id,
   }).eq('id', id).select('id, profile_id, review_status, ai_verdict, ai_reason, review_note').maybeSingle()
-  if (updated?.error) return { status: 500, error: updated.error.message }
+  if (updated?.error) return { status: 500, error: clientErrorMessage(updated.error, 'Could not review the photo') }
   if (!updated?.data) return { status: 404, error: 'Profile photo not found' }
   return {
     status: 200,

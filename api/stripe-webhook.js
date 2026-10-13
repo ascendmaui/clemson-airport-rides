@@ -15,6 +15,7 @@ import { applyPaidCheckoutSession, recordDeposit } from '../server/checkoutRecon
 import { activateTigerPassFromCheckout, syncTigerPassFromStripe, tigerPassMeta } from '../server/riderPass.js'
 import { handleAffiliateConnectEvent, isAffiliateConnectEvent } from '../server/affiliateConnect.js'
 import { handleDriverConnectEvent, isDriverConnectEvent } from '../server/driverPayoutMethods.js'
+import { clientErrorMessage } from '../server/clientError.js'
 
 export { recordDeposit, applyPaidCheckoutSession }
 
@@ -321,6 +322,6 @@ export default async function handler(req, res, deps = {}) {
       : (typeof err?.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 600
         ? err.statusCode
         : 400)
-    return sendWebhookJson(res, status, { error: err.message || 'Webhook error' })
+    return sendWebhookJson(res, status, { error: clientErrorMessage(err, 'Webhook error') })
   }
 }

@@ -17,6 +17,7 @@ import {
 } from './lib/friendRides'
 import { RequireAuth } from './components/RequireAuth'
 import { AccessibleAlert, AccessibleErrorBoundary } from './components/AccessibleAlert'
+import { AppDownloadPage } from './screens/AppDownload'
 import { Marketing } from './screens/Marketing'
 import { WhyClemsonRides } from './screens/WhyClemsonRides'
 import { DriveWithUs } from './screens/DriveWithUs'
@@ -114,6 +115,8 @@ const SITE_ROUTES = new Set([
   'faq',
   'support',
   'get-the-app',
+  'download',
+  'driver-download',
   'affiliate',
   'affiliates',
 ])
@@ -153,6 +156,10 @@ function Screen({ path, params }) {
       return <SupportPage />
     case 'get-the-app':
       return <GetTheAppPage />
+    case 'download':
+      return <AppDownloadPage appId="rider" />
+    case 'driver-download':
+      return <AppDownloadPage appId="driver" />
     case 'share':
     case 'live':
       return <LiveShare token={params.token || ''} />

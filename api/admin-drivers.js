@@ -26,6 +26,12 @@ import handleSupportChat from '../server/endpoints/supportChat.js'
 import handleSupportTicket from '../server/endpoints/supportTicket.js'
 import { handleAdminProfilePhotoDecision, handleAdminProfilePhotoQueue } from '../server/endpoints/profilePhoto.js'
 import { handleAdminDocumentDecision, handleAdminDocumentQueue } from '../server/endpoints/documentAiReview.js'
+import { clientErrorMessage } from '../server/clientError.js'
+
+function fail(res, error) {
+  console.error('[admin-drivers]', error?.message || error)
+  return json(res, 500, { error: clientErrorMessage(error, 'Could not complete that request') })
+}
 
 const SUPPORT_HANDLERS = {
   'help-chat': handleHelpChat,
@@ -48,7 +54,10 @@ async function requireAdmin(sb, user) {
     .select('id, email, full_name, role, is_admin')
     .eq('id', user.id)
     .maybeSingle()
-  if (error) return { error: error.message, status: 500 }
+  if (error) {
+    console.error('[admin-drivers] auth', error.message)
+    return { error: clientErrorMessage(error, 'Could not verify admin access'), status: 500 }
+  }
   const ok = serverIsAdmin({
     jwtEmail: user.email,
     profileEmail: profile?.email,
@@ -102,7 +111,7 @@ export default async function handler(req, res) {
     const serviceClass = body.serviceClass === 'comfort' || body.service_class === 'comfort' ? 'comfort' : 'standard'
     const result = await sb.from('vehicles').update({ make, model, service_class: serviceClass, tier: serviceClass })
       .eq('driver_id', body.profileId).select('driver_id')
-    if (result.error) return json(res, 500, { error: result.error.message })
+    if (result.error) return fail(res, result.error)
     if (!result.data?.length) return json(res, 404, { error: 'No vehicle on file' })
     return json(res, 200, { message: 'Vehicle updated' })
   }
@@ -115,7 +124,7 @@ async function queue(sb, res, status) {
     queued = await selectDriverApplicationQueue(sb, APP_COLS, status)
   }
   const { data: apps, error } = queued
-  if (error) return json(res, 500, { error: error.message })
+  if (error) return fail(res, error)
   const ids = (apps || []).map((a) => a.profile_id)
   if (!ids.length) {
     return json(res, 200, { applications: [], email_todo_present: adminResendSetupBanner(process.env) })
@@ -129,7 +138,7 @@ async function queue(sb, res, status) {
     sb.from('driver_agreements').select('profile_id, agreement_version, signature_name, signed_at, agreement_sha256, html_snapshot').in('profile_id', ids),
     sb.from('driver_agreement_packets').select('profile_id, agreement_version, html_sha256, prefill').in('profile_id', ids),
   ])
-  if (vehicleResult.error) return json(res, 500, { error: vehicleResult.error.message })
+  if (vehicleResult.error) return fail(res, vehicleResult.error)
   const vehicles = vehicleResult.data
   const packets = packetRes.error ? [] : (packetRes.data || [])
   const profileById = Object.fromEntries((profiles || []).map((p) => [p.id, p]))
@@ -220,7 +229,7 @@ async function detail(sb, res, profileId) {
       .eq('profile_id', profileId)
   }
   const { data: docs, error } = docsQuery
-  if (error) return json(res, 500, { error: error.message })
+  if (error) return fail(res, error)
 
   const documents = []
   for (const doc of docs || []) {
@@ -234,7 +243,7 @@ async function detail(sb, res, profileId) {
       match_status: doc.match_status || null,
       review_note: doc.review_note || null,
       url: signed.data?.signedUrl || null,
-      error: signed.error?.message || null,
+      error: signed.error ? clientErrorMessage(signed.error, 'Could not open the document') : null,
     })
   }
   const compliance = await loadSubmissionContext(sb, profileId)
@@ -266,7 +275,7 @@ async function review(sb, res, adminUser, body) {
     .select('id, role, email, full_name')
     .eq('id', profileId)
     .maybeSingle()
-  if (targetErr) return json(res, 500, { error: targetErr.message })
+  if (targetErr) return fail(res, targetErr)
   if (!target) return json(res, 404, { error: 'Driver profile not found' })
 
   if (decision === 'approve') {
@@ -317,7 +326,7 @@ async function review(sb, res, adminUser, body) {
     if (ack.error) {
       const message = missingBackgroundColumns(ack.error)
         ? 'Apply the background attestation migration before approving a disclosure.'
-        : ack.error.message
+        : clientErrorMessage(ack.error, 'Could not record the background review')
       return json(res, 500, { error: message })
     }
   }
@@ -334,25 +343,25 @@ async function review(sb, res, adminUser, body) {
     .eq('profile_id', profileId)
     .select('*')
     .maybeSingle()
-  if (appErr) return json(res, 500, { error: appErr.message })
+  if (appErr) return fail(res, appErr)
   if (!app) return json(res, 404, { error: 'Application not found' })
 
   if (decision === 'approve') {
     if (target.role !== 'admin' && target.role !== 'ops') {
       const { error } = await sb.from('profiles').update({ role: 'driver', updated_at: now }).eq('id', profileId)
-      if (error) return json(res, 500, { error: error.message })
+      if (error) return fail(res, error)
     }
   } else {
     if (target.role === 'driver') {
       const { error } = await sb.from('profiles').update({ role: 'rider', updated_at: now }).eq('id', profileId)
-      if (error) return json(res, 500, { error: error.message })
+      if (error) return fail(res, error)
     }
     const { error } = await sb.from('driver_status').upsert({
       driver_id: profileId,
       online: false,
       updated_at: now,
     })
-    if (error) return json(res, 500, { error: error.message })
+    if (error) return fail(res, error)
   }
 
   const mailed = await emailDriverDecision({

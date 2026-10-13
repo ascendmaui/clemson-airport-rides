@@ -12,6 +12,7 @@ import {
 import { adminNotifyRecipients } from './adminRoster.js'
 import { WEB_ORIGIN } from '../shared/productLinks.js'
 import { resendPayload } from './resendMail.js'
+import { clientErrorMessage } from './clientError.js'
 import { assessContractIdentity, pickAgreementRow } from '../shared/contractIdentity.js'
 import { missingApplicantEmailColumn, submittedApplicantEmail } from '../shared/applicantEmail.js'
 import {
@@ -263,6 +264,7 @@ export async function notifyAdminOfApplication({ profile, vehicle }) {
         subject: `Driver application ready for review — ${name}`,
         text,
       })),
+      signal: AbortSignal.timeout(8000),
     })
     const body = await res.json().catch(() => ({}))
     if (!res.ok) {
@@ -272,7 +274,7 @@ export async function notifyAdminOfApplication({ profile, vehicle }) {
     }
     return { emailed: true, id: body.id || null, to }
   } catch (err) {
-    const todo = `Resend request failed: ${err.message || err}. ${EMAIL_TODO}`
+    const todo = `Resend request failed: ${clientErrorMessage(err, 'email not sent')}. ${EMAIL_TODO}`
     console.warn('[driver-onboarding]', todo)
     return { emailed: false, todo, to }
   }
