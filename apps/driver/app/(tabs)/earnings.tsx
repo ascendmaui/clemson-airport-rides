@@ -36,6 +36,7 @@ import {
 } from 'rides-native/earningsDashboard.js'
 import { carpoolPayFromTrip, tripEarnedCents } from 'rides-native/tripTags'
 import { driverBoostShareCents, readBoostCents } from '../../../../shared/scheduledBoost.js'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { CASHOUT_COPY } from '../../../../shared/cashout.js'
 import { readPrepaidTipCents } from '../../../../shared/prepaidTip.js'
 
@@ -379,7 +380,7 @@ function selectedReport(
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   list: { padding: 16, paddingBottom: 40, gap: 0 },
-  kicker: { fontWeight: '800', letterSpacing: 1.1, fontSize: 12 },
-  amount: { fontSize: 34, fontWeight: '800', letterSpacing: -0.6 },
-  cash: { borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  kicker: { ...typeScale.kicker },
+  amount: { ...typeScale.amount },
+  cash: { borderRadius: radius.lg, paddingVertical: 16, alignItems: 'center' },
 })

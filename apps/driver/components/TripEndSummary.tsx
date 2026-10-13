@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { tripEndSummary } from 'rides-native/tripEndSummary'
 import type { DriverCard } from 'rides-native/tripTags'
 import { useTheme } from '@/lib/theme'
@@ -46,16 +47,16 @@ export function TripEndSummary({ card }: { card: DriverCard }) {
 }
 
 const styles = StyleSheet.create({
-  box: { borderRadius: 18, borderWidth: 2, padding: 14, gap: 4 },
-  kicker: { fontWeight: '800', letterSpacing: 1, fontSize: 12 },
-  net: { fontSize: 36, fontWeight: '900' },
+  box: { borderRadius: radius.lg, borderWidth: 2, padding: 14, gap: 4 },
+  kicker: { ...typeScale.kicker },
+  net: { fontSize: 36, fontWeight: '800', letterSpacing: -0.6 },
   netLabel: { fontSize: 13, fontWeight: '700' },
   lines: { gap: 6, paddingTop: 8 },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   total: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 6 },
   label: { fontSize: 14, fontWeight: '700' },
   value: { fontSize: 14, fontWeight: '700' },
-  strong: { fontWeight: '900' },
+  strong: { fontWeight: '800' },
   note: { fontSize: 12, lineHeight: 17 },
-  tipHeadline: { fontSize: 15, fontWeight: '900' },
+  tipHeadline: { fontSize: 15, fontWeight: '800', letterSpacing: -0.2 },
 })

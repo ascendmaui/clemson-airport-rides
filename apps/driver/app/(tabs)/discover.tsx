@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   list: { padding: 16, gap: 12, paddingBottom: 32 },
   kicker: { fontWeight: '800', letterSpacing: 1.1, fontSize: 12 },
-  title: { fontSize: 28, fontWeight: '800' },
+  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.4 },
   chips: { gap: 8 },
   chip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
   cardTitle: { fontWeight: '800', fontSize: 16 },

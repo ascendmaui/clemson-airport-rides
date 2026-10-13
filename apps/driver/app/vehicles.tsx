@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { loadVehicle, type VehicleRow } from 'rides-native/driverDesk'
 import { saveRegisteredVehicle } from 'rides-native/shared/vehicle.js'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { COMFORT_FLEET_NOTICE, comfortFleetNotice } from 'rides-native/tripTags'
 
 const PAINT: Record<string, string> = {
@@ -225,7 +226,7 @@ function Spec({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  hero: { height: 132, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  hero: { height: 132, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },
   swatch: {
     position: 'absolute',
     top: 14,
@@ -236,7 +237,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  name: { fontSize: 24, fontWeight: '800', letterSpacing: -0.3 },
+  name: { fontSize: 24, fontWeight: typeScale.title.fontWeight, letterSpacing: typeScale.headline.letterSpacing },
   specs: { flexDirection: 'row', gap: 8 },
-  spec: { flex: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 10, gap: 4 },
+  spec: { flex: 1, borderRadius: radius.lg, paddingHorizontal: 10, paddingVertical: 10, gap: 4 },
 })

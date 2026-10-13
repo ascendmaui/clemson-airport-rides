@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
+import { motion, radius, type as typeScale } from './shared/theme.js'
 import * as ImagePicker from 'expo-image-picker'
 import {
   failRecording,
@@ -52,14 +53,14 @@ export function VideoCaptureCard({ status, colors }) {
         onPress={onPress}
         style={{
           backgroundColor: colors.purple,
-          borderRadius: 14,
-          minHeight: 48,
+          borderRadius: radius.lg,
+          minHeight: 52,
           alignItems: 'center',
           justifyContent: 'center',
-          opacity: blocked ? 0.45 : 1,
+          opacity: blocked ? motion.disabledOpacity : 1,
         }}
       >
-        <Text style={{ color: colors.onAccent, fontWeight: '800' }}>Record video</Text>
+        <Text style={{ color: colors.onAccent, ...typeScale.button }}>Record video</Text>
       </Pressable>
       {session.note ? <Text style={{ color: colors.inkSecondary, fontSize: 13, lineHeight: 18 }}>{session.note}</Text> : null}
     </View>

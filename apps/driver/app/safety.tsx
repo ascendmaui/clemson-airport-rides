@@ -12,14 +12,17 @@ import { SosButton, SosSheet, type SosTrip } from '@/components/SosSheet'
 import { SAFETY_FEATURE_IDS, driverTrackingCopy } from '../../../shared/safetyHub.js'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
+import { useCardShadow } from '@/components/chrome'
 
 export default function DriverSafetyScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
   const { colors } = useTheme()
+  const shadow = useCardShadow()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const [feature, setFeature] = useState<(typeof SAFETY_FEATURE_IDS)[number]>('sos')
   const [trip, setTrip] = useState<SosTrip | null>(null)
@@ -91,7 +94,7 @@ export default function DriverSafetyScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={styles.back}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={[styles.back, shadow]}>
           <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
         </Pressable>
         <View style={{ flex: 1 }}>
@@ -145,13 +148,13 @@ function makeStyles(colors: Palette) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
     header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
-    back: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
+    back: { width: 40, height: 40, borderRadius: radius.control, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
     backLabel: { fontSize: 18, color: colors.title, fontWeight: '700' as const },
-    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
-    title: { color: colors.title, fontSize: 22, fontWeight: '800' as const },
+    kicker: { color: colors.orange, ...typeScale.kickerSm },
+    title: { color: colors.title, ...typeScale.headline },
     list: { padding: 16, gap: 14, paddingBottom: 32 },
-    body: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
-    action: { minHeight: 48, borderRadius: 14, alignItems: 'center' as const, justifyContent: 'center' as const },
-    actionText: { color: colors.onAccent, fontWeight: '800' },
+    body: { color: colors.inkSecondary, ...typeScale.body },
+    action: { minHeight: 52, borderRadius: radius.lg, alignItems: 'center' as const, justifyContent: 'center' as const },
+    actionText: { color: colors.onAccent, ...typeScale.button },
   })
 }

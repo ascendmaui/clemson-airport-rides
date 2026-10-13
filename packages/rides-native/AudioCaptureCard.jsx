@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
+import { useReduceMotion } from './shared/reduceMotion.js'
+import { motion, radius, type as typeScale } from './shared/theme.js'
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from 'expo-audio'
 import {
   beginRecording,
@@ -18,9 +20,11 @@ export function AudioCaptureCard({ status, colors }) {
   const blocked = recordingBlockReason({ status, permission, mode: 'audio' })
   const recording = session.phase === 'recording'
 
+  const reduceMotion = useReduceMotion()
+
   useEffect(() => {
-    if (!recording) {
-      pulse.setValue(0.4)
+    if (!recording || reduceMotion) {
+      pulse.setValue(reduceMotion ? 1 : 0.4)
       return undefined
     }
     const loop = Animated.loop(Animated.sequence([
@@ -29,7 +33,7 @@ export function AudioCaptureCard({ status, colors }) {
     ]))
     loop.start()
     return () => loop.stop()
-  }, [pulse, recording])
+  }, [pulse, recording, reduceMotion])
 
   useEffect(() => () => {
     try { recorder.stop() } catch { /* already stopped */ }
@@ -90,14 +94,14 @@ export function AudioCaptureCard({ status, colors }) {
         onPress={onPress}
         style={{
           backgroundColor: recording ? colors.purple : colors.orange,
-          borderRadius: 14,
-          minHeight: 48,
+          borderRadius: radius.lg,
+          minHeight: 52,
           alignItems: 'center',
           justifyContent: 'center',
-          opacity: blocked && !recording ? 0.45 : 1,
+          opacity: blocked && !recording ? motion.disabledOpacity : 1,
         }}
       >
-        <Text style={{ color: colors.onAccent, fontWeight: '800' }}>{label}</Text>
+        <Text style={{ color: colors.onAccent, ...typeScale.button }}>{label}</Text>
       </Pressable>
       {session.note ? <Text style={{ color: colors.inkSecondary, fontSize: 13 }}>{session.note}</Text> : null}
     </View>

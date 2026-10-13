@@ -1,6 +1,7 @@
 import { Image, StyleSheet, Text, View } from 'react-native'
 import { riderConfirmCopy } from 'rides-native/swipeConfirm'
 import { useTheme } from '@/lib/theme'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { SwipeToStart } from '@/components/SwipeToStart'
 
 /** Shown at pickup (status arrived): the rider's first name and photo, then swipe to start. */
@@ -39,12 +40,12 @@ export function RiderConfirmCard({
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 2, borderRadius: 18, padding: 14, gap: 12 },
+  card: { borderWidth: 2, borderRadius: radius.lg, padding: 16, gap: 12 },
   row: { flexDirection: 'row', gap: 14, alignItems: 'center' },
   photo: { width: 88, height: 88, borderRadius: 44 },
   initial: { alignItems: 'center', justifyContent: 'center' },
   initialText: { fontSize: 36, fontWeight: '900' },
   text: { flex: 1, gap: 4 },
-  title: { fontSize: 24, fontWeight: '900' },
-  body: { fontSize: 14, lineHeight: 20 },
+  title: { fontSize: 24, fontWeight: typeScale.title.fontWeight, letterSpacing: typeScale.headline.letterSpacing },
+  body: { ...typeScale.body },
 })

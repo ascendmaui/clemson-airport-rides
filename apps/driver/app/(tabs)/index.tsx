@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router'
 import * as Location from 'expo-location'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, Animated, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { AccessibilityInfo, Animated, Easing, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
 import { FarePanel } from '@/components/FarePanel'
@@ -55,6 +55,8 @@ import { etaHoldLine } from 'rides-native/liveTrip'
 import { followEtaLine } from 'rides-native/roadFollow'
 import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { useReduceMotion } from 'rides-native/shared/reduceMotion.js'
+import { motion } from 'rides-native/shared/theme.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { GameDaySurgeLine } from 'rides-native/GameDayBoard.jsx'
 import { useGameDayExperience } from 'rides-native/useGameDayExperience.js'
@@ -750,7 +752,8 @@ export function RideCard({
   const prepaidTipCents = Number((card as { prepaidTipCents?: number }).prepaidTipCents) || 0
   const tipBoostLine = tipBoostOfferLine(vm.pay.netCents + prepaidTipCents, prepaidTipCents)
   const preferredNote = preferredRequestNote(card)
-  const opacity = useState(() => new Animated.Value(0))[0]
+  const reduceMotion = useReduceMotion()
+  const opacity = useState(() => new Animated.Value(reduceMotion ? 1 : 0))[0]
   const glow = useRef(new Animated.Value(0.35)).current
   const scrollRef = useRef<ScrollView>(null)
   const [viewport, setViewport] = useState(0)
@@ -761,10 +764,22 @@ export function RideCard({
     return () => clearInterval(timer)
   }, [card.id])
   useEffect(() => {
-    Animated.timing(opacity, { toValue: 1, duration: 280, useNativeDriver: true }).start()
-  }, [opacity])
+    if (reduceMotion) {
+      opacity.setValue(1)
+      return undefined
+    }
+    opacity.setValue(0)
+    const enter = Animated.timing(opacity, {
+      toValue: 1,
+      duration: motion.enterFadeMs,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    })
+    enter.start()
+    return () => enter.stop()
+  }, [opacity, reduceMotion])
   useEffect(() => {
-    if (!pulsing) {
+    if (!pulsing || reduceMotion) {
       glow.setValue(1)
       return undefined
     }
@@ -774,7 +789,7 @@ export function RideCard({
     ]))
     loop.start()
     return () => loop.stop()
-  }, [glow, pulsing])
+  }, [glow, pulsing, reduceMotion])
   useEffect(() => {
     // Hint that the breakdown scrolls when the card had to shrink to fit.
     if (overflows) scrollRef.current?.flashScrollIndicators()
@@ -943,9 +958,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'transparent',
   },
   heatChipOn: {
-    backgroundColor: '#522D80',
+    backgroundColor: PURPLE,
     borderColor: 'rgba(255,255,255,0.16)',
-    shadowColor: '#522D80', shadowOpacity: 0.22, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+    shadowColor: PURPLE, shadowOpacity: 0.22, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
   hotspotRow: { flexGrow: 0, marginTop: 10 },
@@ -957,7 +972,7 @@ const styles = StyleSheet.create({
   dock: { position: 'absolute', left: EDGE, right: EDGE, gap: GAP, justifyContent: 'flex-end' },
   cardTitle: { fontWeight: '800', fontSize: 18 },
   live: { alignSelf: 'stretch', borderRadius: 18, padding: 14, gap: 4 },
-  liveKicker: { fontWeight: '800', fontSize: 11, letterSpacing: 1 },
+  liveKicker: { fontWeight: '800', fontSize: 11, letterSpacing: 1.1 },
   liveTitle: { fontWeight: '800', fontSize: 18 },
   controls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   bottomCluster: { gap: GAP },
@@ -992,7 +1007,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
   },
-  declineText: { fontWeight: '700', fontSize: 15 },
+  declineText: { fontWeight: '700', fontSize: 15, letterSpacing: -0.1 },
   offerWrap: { flexShrink: 1 },
   offerCard: { flexShrink: 1, gap: 0, paddingBottom: 12 },
   offerScroll: { flexGrow: 0, flexShrink: 1 },
