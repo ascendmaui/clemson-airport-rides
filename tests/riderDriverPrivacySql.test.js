@@ -7,6 +7,11 @@ const migration = readFileSync(
   new URL('../supabase/migrations/20261013200000_rider_driver_privacy.sql', import.meta.url),
   'utf8',
 )
+const anonRevoke = readFileSync(
+  new URL('../supabase/migrations/20261013210000_rider_driver_cards_anon_revoke.sql', import.meta.url),
+  'utf8',
+)
+
 
 const DRIVER = '11111111-1111-4111-8111-111111111111'
 const RIDER = '22222222-2222-4222-8222-222222222222'
@@ -64,6 +69,7 @@ async function harness() {
   `)
   await db.exec(migration)
   await db.exec(migration)
+  await db.exec(anonRevoke)
   await db.exec(`
     insert into public.profiles (id, full_name, phone, email, role, bio)
     values
