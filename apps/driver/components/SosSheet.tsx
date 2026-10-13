@@ -12,6 +12,7 @@ export type SosTrip = {
   status: string
   pickupLabel?: string | null
   dropoffLabel?: string | null
+  riderId?: string | null
 }
 
 export function SosButton({ onPress }: { onPress: () => void }) {

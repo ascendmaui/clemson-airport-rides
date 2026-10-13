@@ -3,7 +3,7 @@
  * the queued status and stop taps applied in order. Pure; never persisted.
  */
 import { applyStopOp, tripOpForStop } from '../../shared/carpoolStops.js'
-import { TERMINAL_TRIP_STATUSES, projectTripStatus, waitingForSignalLabel } from './actionQueue.js'
+import { displayedStatusAfterOp, TERMINAL_TRIP_STATUSES, projectTripStatus, waitingForSignalLabel } from './actionQueue.js'
 
 const STATUS_AFTER_TRIP_OP = { arrive: 'arrived', start: 'in_progress' }
 
@@ -28,7 +28,7 @@ export function projectQueuedTrip(card, actions = []) {
       const applied = applyStopOp(stops, { index: action.stopIndex, op: action.op, at: action.queuedAt })
       if (applied.error) continue
       stops = applied.stops
-      if (tripOp) status = STATUS_AFTER_TRIP_OP[tripOp] || status
+      if (tripOp) status = displayedStatusAfterOp(status, STATUS_AFTER_TRIP_OP[tripOp])
     }
   }
   return { ...card, status, stops, queuedTaps: mine.length, waitingForSignal: waitingForSignalLabel(mine.length) }

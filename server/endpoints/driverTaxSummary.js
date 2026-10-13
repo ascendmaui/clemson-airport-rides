@@ -17,6 +17,7 @@ import {
   buildYearEndPacket,
   TAX_TIME_ZONE,
 } from '../../shared/driverTaxMileage.js'
+import { buildYearlyEarningsSummary } from '../../shared/yearlyEarnings.js'
 
 const TRIP_COLUMNS = [
   'id',
@@ -77,7 +78,7 @@ export async function loadTaxInputs(sb, driverId) {
   if (tripsRes.error) throw new Error(tripsRes.error.message || 'Could not load trips')
   const trips = tripsRes.data || []
   const ids = trips.map((trip) => trip.id).filter(Boolean)
-  const [payments, bills, logs, rates, payouts] = await Promise.all([
+  const [payments, bills, logs, rates, payouts, bonuses] = await Promise.all([
     ids.length
       ? optionalRows(sb.from('payments').select('trip_id, kind, amount_cents, status, metadata').in('trip_id', ids))
       : [],
@@ -87,8 +88,9 @@ export async function loadTaxInputs(sb, driverId) {
     optionalRows(sb.from('driver_mileage_logs').select('trip_id, tax_year, on_trip_miles, on_trip_source, enroute_miles, enroute_source, deductible_miles, completed_at').eq('driver_id', driverId)),
     optionalRows(sb.from('driver_mileage_rates').select('tax_year, starts_on, ends_on, cents_per_mile, label, source_note')),
     optionalRows(sb.from('driver_payouts').select('trip_id, driver_id, amount_cents, status').eq('driver_id', driverId)),
+    optionalRows(sb.from('driver_bonus_ledger').select('amount_cents, status, created_at, paid_at, kind').eq('driver_id', driverId)),
   ])
-  return { trips, payments, bills, logs, rates, payouts }
+  return { trips, payments, bills, logs, rates, payouts, bonuses }
 }
 
 function groupByTrip(rows, pick) {
@@ -109,6 +111,7 @@ export function packetFromInputs({
   logs = [],
   rates = null,
   payouts = [],
+  bonuses = [],
   year = null,
   timeZone = TAX_TIME_ZONE,
   now = new Date(),
@@ -172,9 +175,23 @@ export function packetFromInputs({
     driverNetCents: tax.driverNetCents,
     earningsTripCount: tax.tripCount,
   })
+  const yearly = buildYearlyEarningsSummary({
+    year: selected,
+    timeZone,
+    now,
+    trips: sanitized,
+    bonuses,
+    mileageDeductionCents: packet.estimatedDeductionCents,
+    payoutsCents: packet.payoutsCents,
+  })
   return {
     ...packet,
     years,
+    grossFareCents: yearly.grossFareCents,
+    bonusPerkCents: yearly.bonusPerkCents,
+    netPayoutCents: yearly.netPayoutCents,
+    months: yearly.months,
+    taxEstimate: yearly.taxEstimate,
     trips: packet.trips.map((trip) => ({
       id: trip.id,
       status: trip.status,
