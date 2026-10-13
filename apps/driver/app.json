@@ -85,6 +85,15 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Clemson RIDES uses the camera for driver documents and for a video clip you start during a ride. Ride clips stay on this phone.",
+          "microphonePermission": "Clemson RIDES uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone.",
+          "recordAudioAndroid": true,
+          "barcodeScannerEnabled": false
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Clemson RIDES uses your photo library for license, insurance, and vehicle documents.",

@@ -14,8 +14,9 @@ test('crowd loop interval is throttled to 2-3 s across the whole 500 ft zone', a
 test('GPS updates cannot restart the loop or fire extra buzzes', () => {
   const src = read('apps/rider/components/ApproachAlert.tsx')
   assert.match(src, /if \(now - lastSpike\.current < current\.intervalMs\) return/)
-  assert.match(src, /\}, \[active, flash, inCrowd, paused\]\)/)
-  assert.doesNotMatch(src, /cue\?\.intervalMs, flash, paused\]/)
+  assert.match(src, /\}, \[active, inCrowd, paused\]\)/)
+  assert.doesNotMatch(src, /cue\?\.intervalMs/)
+  assert.doesNotMatch(src, /setValue\(/)
 })
 
 test('arrival fires one stronger cue instead of the plain stage buzz', () => {

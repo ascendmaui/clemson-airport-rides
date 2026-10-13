@@ -12,6 +12,7 @@ import {
   buildYearEndPacket,
   taxYearOf,
 } from '../../../shared/driverTaxMileage.js'
+import { buildYearlyEarningsSummary, estimateDriverTaxes } from '../../../shared/yearlyEarnings.js'
 import { driverNetCents, platformFeeCents } from '../../../shared/platformFee.js'
 import { coarseAreaLabel } from '../../../src/lib/privacyDisplay.js'
 
@@ -86,8 +87,31 @@ export type YearEndView = {
   form1099InfoUrl: string
   stripeTaxReportingUrl: string
   trips: MileageTripLine[]
+  grossFareCents: number | null
+  bonusPerkCents: number
+  netPayoutCents: number
+  months: YearMonthLine[]
+  taxEstimate: TaxEstimate | null
   source: TaxSource
   sourceNote: string | null
+}
+
+export type YearMonthLine = {
+  month: number
+  label: string
+  grossFareCents: number
+  tipsCents: number
+  platformFeeCents: number
+  bonusPerkCents: number
+  netCents: number
+}
+
+export type TaxEstimate = {
+  taxableEarningsCents: number
+  mileageDeductionCents: number | null
+  selfEmploymentTaxCents: number
+  quarterlySetAsideCents: number
+  note: string
 }
 
 type TripRow = {
@@ -126,6 +150,39 @@ function nullableNumber(value: unknown): number | null {
   if (value == null || value === '') return null
   const n = Number(value)
   return Number.isFinite(n) ? n : null
+}
+
+function monthLine(row: unknown): YearMonthLine | null {
+  if (!row || typeof row !== 'object') return null
+  const month = row as Record<string, unknown>
+  const index = finiteNumber(month.month)
+  if (index < 1 || index > 12) return null
+  return {
+    month: index,
+    label: String(month.label || ''),
+    grossFareCents: finiteNumber(month.grossFareCents),
+    tipsCents: finiteNumber(month.tipsCents),
+    platformFeeCents: finiteNumber(month.platformFeeCents),
+    bonusPerkCents: finiteNumber(month.bonusPerkCents),
+    netCents: finiteNumber(month.netCents),
+  }
+}
+
+function estimateLine(row: unknown, fallbackNet: number, fallbackDeduction: number | null): TaxEstimate {
+  if (row && typeof row === 'object') {
+    const estimate = row as Record<string, unknown>
+    return {
+      taxableEarningsCents: finiteNumber(estimate.taxableEarningsCents),
+      mileageDeductionCents: estimate.mileageDeductionCents == null ? null : finiteNumber(estimate.mileageDeductionCents),
+      selfEmploymentTaxCents: finiteNumber(estimate.selfEmploymentTaxCents),
+      quarterlySetAsideCents: finiteNumber(estimate.quarterlySetAsideCents),
+      note: String(estimate.note || ''),
+    }
+  }
+  return estimateDriverTaxes({
+    netEarningsCents: fallbackNet,
+    mileageDeductionCents: fallbackDeduction,
+  }) as TaxEstimate
 }
 
 function tripLine(row: unknown): MileageTripLine | null {
@@ -187,6 +244,20 @@ export function viewFromServer(packet: Record<string, unknown>): YearEndView {
     form1099InfoUrl: String(packet.form1099InfoUrl || FORM_1099_INFO_URL),
     stripeTaxReportingUrl: String(packet.stripeTaxReportingUrl || STRIPE_TAX_REPORTING_URL),
     trips,
+    grossFareCents: packet.grossFareCents == null ? null : finiteNumber(packet.grossFareCents),
+    bonusPerkCents: finiteNumber(packet.bonusPerkCents),
+    netPayoutCents: packet.netPayoutCents == null ? finiteNumber(packet.payoutsCents) : finiteNumber(packet.netPayoutCents),
+    months: Array.isArray(packet.months)
+      ? packet.months.flatMap((row) => {
+        const line = monthLine(row)
+        return line ? [line] : []
+      })
+      : [],
+    taxEstimate: estimateLine(
+      packet.taxEstimate,
+      finiteNumber(packet.driverNetCents),
+      packet.estimatedDeductionCents == null ? null : finiteNumber(packet.estimatedDeductionCents),
+    ),
     source: 'server',
     sourceNote: null,
   }
@@ -330,7 +401,22 @@ export function snapshotYearEnd({
     driverNetCents: net,
     earningsTripCount: count,
   }) as Record<string, unknown>
-  const view = viewFromServer({ ...packet, years })
+  const yearly = buildYearlyEarningsSummary({
+    year: selected,
+    now,
+    trips: owned,
+    mileageDeductionCents: packet.estimatedDeductionCents == null ? null : finiteNumber(packet.estimatedDeductionCents),
+    payoutsCents: finiteNumber(packet.payoutsCents),
+  })
+  const view = viewFromServer({
+    ...packet,
+    years,
+    grossFareCents: yearly.grossFareCents,
+    bonusPerkCents: yearly.bonusPerkCents,
+    netPayoutCents: yearly.netPayoutCents,
+    months: yearly.months,
+    taxEstimate: yearly.taxEstimate,
+  })
   return { ...view, source: 'trip-records', sourceNote: TRIP_RECORD_NOTE }
 }
 
