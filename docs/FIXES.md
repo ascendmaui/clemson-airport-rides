@@ -6,7 +6,8 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
 
 - **What was wrong:** Updating the matching-edge branch onto current main split the driver home. The newer home hid the offer card behind trip reconciliation and the pass-offer decline, and the older branch hid an offline offer without the shift pulse or the end-trip sheet. British spelling `cancelled` no longer shared a headline with `canceled`.
 - **What changed:** `canceled` and `cancelled` share the canceled headline and detail. Decline uses `declineDriverOffer` and still shows the pass sentence when the rider stays searching. Going offline still uses the shift pulse and, when a searching or offered card was up, the offline-while-offered sentence. The offer card stays hidden while the driver is offline. Favorites, the driving ETA, and the end-trip sheet stay on the card. Demo and synthetic offers stay out of the live offer list. An expired exclusive offer now opens the pool instead of jumping to a third driver, and the edge test follows that.
-- **Files touched:** `packages/rides-native/tripTags.js`, `src/screens/DriverHome.jsx`, `apps/driver/app/(tabs)/index.tsx`, `apps/driver/app/queue.tsx`, `package.json`, `docs/FIXES.md`
+- **Files touched:** `packages/rides-native/tripTags.js`, `src/screens/DriverHome.jsx`, `apps/driver/app/(tabs)/index.tsx`, `apps/driver/app/queue.tsx`, `server/matchingEdge.test.js`, `package.json`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/matchingEdge.test.js tests/driverTerminalTrip.test.js` and `npm test` (3579 pass, 0 fail).
 
 ## 2026-10-07 — [agy] GA97: GA audit & tests - expire-unpaid holds timestamp safety, client guards, and Stripe webhook retryable resilience
 
