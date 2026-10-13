@@ -37,6 +37,7 @@ import {
 import { extractReadableText, licensePendingCopy, matchRegistration, reviewLicenseImage } from 'rides-native/documentReview'
 import { loadDriverProfile, loadVehicle } from 'rides-native/driverDesk'
 import { modelsForMake, VEHICLE_COLORS, VEHICLE_MAKES } from 'rides-native/vehicleCatalog'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { useTheme } from '@/lib/theme'
 import { WEB_DRIVER_RENTALS_URL, WEB_DRIVER_SIGNUP_URL } from '../../../shared/productLinks.js'
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
@@ -1106,9 +1107,9 @@ function useOnboardingStyles() {
   return useMemo(() => StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
     scroll: { padding: 16, paddingBottom: 48, gap: 12 },
-    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12, marginTop: 12 },
-    title: { fontSize: 28, fontWeight: '800' as const, color: colors.title, letterSpacing: -0.4 },
-    copy: { color: colors.inkSecondary, fontSize: 15, lineHeight: 21 },
+    kicker: { color: colors.orange, ...typeScale.kicker, marginTop: 12 },
+    title: { ...typeScale.title, color: colors.title },
+    copy: { color: colors.inkSecondary, ...typeScale.body },
     link: { color: colors.purple, fontSize: 14, fontWeight: '800' as const, lineHeight: 20 },
     progressTrack: { height: 8, borderRadius: 999, backgroundColor: colors.track, overflow: 'hidden' as const },
     progressFill: { height: '100%' as const, backgroundColor: colors.orange, borderRadius: 999 },
@@ -1118,13 +1119,13 @@ function useOnboardingStyles() {
     stepChipOn: { backgroundColor: colors.fill },
     stepChipText: { color: colors.title, fontWeight: '700' as const, fontSize: 12 },
     stepChipTextOn: { color: colors.onAccent },
-    cardTitle: { fontSize: 20, fontWeight: '800' as const, color: colors.title },
+    cardTitle: { fontSize: 20, fontWeight: '800' as const, letterSpacing: -0.3, color: colors.title },
     question: { gap: 8 },
     questionLabel: { color: colors.ink, fontWeight: '700' as const, fontSize: 14 },
     yesNo: { flexDirection: 'row' as const, gap: 8, flexWrap: 'wrap' as const },
     choices: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
-    choice: { borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.input },
-    choiceOn: { borderColor: accent, backgroundColor: colors.track },
+    choice: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.input },
+    choiceOn: { borderColor: accent, backgroundColor: colors.purpleSoft },
     choiceText: { color: colors.ink, fontWeight: '700' as const },
     choiceTextOn: { color: colors.title },
     checkRow: { flexDirection: 'row' as const, gap: 10, alignItems: 'flex-start' as const },
@@ -1133,13 +1134,13 @@ function useOnboardingStyles() {
     checkCopy: { flex: 1, color: colors.ink, fontSize: 14, lineHeight: 20 },
     hint: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18 },
     saved: { color: colors.title, fontWeight: '700' as const, fontSize: 13 },
-    agreement: { maxHeight: 180, backgroundColor: colors.input, borderRadius: 14, padding: 12 },
-    agreementTall: { maxHeight: 280, backgroundColor: colors.input, borderRadius: 14, padding: 12 },
+    agreement: { maxHeight: 180, backgroundColor: colors.input, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 12 },
+    agreementTall: { maxHeight: 280, backgroundColor: colors.input, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 12 },
     agreementText: { color: colors.ink, fontSize: 13, lineHeight: 19 },
     blocker: { color: colors.danger, fontSize: 13 },
     doc: { gap: 6, paddingTop: 8 },
-    scrim: { flex: 1, backgroundColor: 'rgba(11,18,32,0.45)', justifyContent: 'flex-end' as const },
-    sheet: { backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 16, gap: 8 },
+    scrim: { flex: 1, backgroundColor: colors.scrim, justifyContent: 'flex-end' as const },
+    sheet: { backgroundColor: colors.card, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, padding: 16, gap: 8 },
     sheetRow: { paddingVertical: 12 },
   }), [colors, accent])
 }

@@ -100,8 +100,8 @@ function fleetStyles(colors: Palette) {
     screen: { flex: 1, backgroundColor: colors.background },
     list: { padding: 16, gap: 12, paddingBottom: 40 },
     kicker: { color: colors.orange, fontWeight: '800', letterSpacing: 1.1, fontSize: 12, marginTop: 8 },
-    title: { fontSize: 28, fontWeight: '800', color: colors.title },
-    cardTitle: { color: colors.title, fontWeight: '800', fontSize: 18 },
+    title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.4, color: colors.title },
+    cardTitle: { color: colors.title, fontWeight: '800', fontSize: 18, letterSpacing: -0.2 },
     name: { color: colors.ink, fontWeight: '800', fontSize: 20 },
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
   })

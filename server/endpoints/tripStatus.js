@@ -7,6 +7,7 @@ import { WOMEN_ONLY_ACCEPT_ERROR } from '../../shared/womenOnlyMatch.js'
 import { applyTripWait } from '../tripWait.js'
 import { settleTrip } from '../tripSettle.js'
 import { cancelDriverTrip } from '../driverCancel.js'
+import { endDriverTrip, recordTripHeartbeat } from '../driverEndTrip.js'
 import { insertTripEvent } from '../tripEvents.js'
 import { withActionReceipts } from '../actionReceipts.js'
 
@@ -26,13 +27,25 @@ async function runTripStatus(req, res, deps = {}) {
   if (error) return fail(400, 'invalid_body', error)
   const { tripId, op } = body
   if (typeof tripId !== 'string' || !tripId.trim()) return fail(400, 'trip_id_required', 'tripId required')
-  if (resolveDriverTransition({ op }).error === 'invalid_op') return fail(400, 'invalid_op', 'Unknown trip action')
+  if (op !== 'heartbeat' && op !== 'end-trip' && resolveDriverTransition({ op }).error === 'invalid_op') {
+    return fail(400, 'invalid_op', 'Unknown trip action')
+  }
 
   try {
     const read = await sb.from('trips').select('*').eq('id', tripId).maybeSingle()
     if (read.error) throw read.error
     const trip = read.data
     if (!trip) return fail(404, 'trip_not_found', 'Trip not found')
+    if (op === 'heartbeat' || op === 'end-trip') {
+      const result = op === 'heartbeat'
+        ? await recordTripHeartbeat(sb, user, trip, { now: deps.now })
+        : await endDriverTrip(sb, user, trip, body, {
+          now: deps.now,
+          stripe: deps.stripe !== undefined ? deps.stripe : (deps.stripeClient || stripeClient)(),
+          releaseHold: deps.releaseHold,
+        })
+      return json(res, result.status, result.body)
+    }
     // Driver cancel authenticates its recorded actor on replay after assignment is cleared.
     if (op === 'driver-cancel') {
       const result = await cancelDriverTrip(sb, user, trip, body, deps)

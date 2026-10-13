@@ -1,14 +1,13 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native'
-import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, STADIUM } from 'rides-native/places.js'
 import { SIMULATED_FLEET_BADGE, refuseSimulatedDriverTap, simulatedFleetPercent } from 'rides-native/simulatedDrivers.js'
 import { demoCarPaint, SEARCH_MAP_DELTA_END, SEARCH_MAP_DELTA_START, SEARCH_MAP_ZOOM_MS } from 'rides-native/searchPreview.js'
 import { useSimulatedFleet } from 'rides-native/useSimulatedFleet.js'
 import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
 import type { TigerHeatZone } from 'rides-native/tigerHeat.js'
+import { DemandHeatLayer } from '@/components/DemandHeatLayer'
 import { mapKindLabel, type CampusMapHandle, type CampusMapProps, type MapPin } from '@/components/mapTypes'
-import type { BusySpot } from '@/lib/busySpots'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
@@ -17,7 +16,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
   { spots, showHeat, heatWindow = 'now', mapType = 'standard', theater = false, searchMotion = false, gameDay = false, gameDayLabel = null, surge = false, userCoordinate = null, pins = [], showSimulatedFleet = false },
   ref: any,
 ) {
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const simulatedFleet = useSimulatedFleet(showSimulatedFleet || searchMotion)
   const zoom = useRef(new Animated.Value(1)).current
@@ -102,25 +101,8 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
       {searchMotion ? null : (
       <>
       <View style={styles.wash} />
+      <DemandHeatLayer spots={spots} zones={tigerZones} scheme={scheme} enabled={showHeat} />
       <Text style={styles.kind}>{mapKindLabel(mapType)}</Text>
-      {showHeat
-        ? spots.slice(0, 8).map((spot: BusySpot, index: number) => (
-            <View
-              key={spot.id}
-              style={[
-                styles.blob,
-                {
-                  backgroundColor: heatColor(spot.intensity),
-                  opacity: 0.28 + spot.intensity * 0.35,
-                  width: 36 + spot.intensity * 48,
-                  height: 36 + spot.intensity * 48,
-                  left: 24 + (index % 4) * 70,
-                  top: 48 + (index % 3) * 54,
-                },
-              ]}
-            />
-          ))
-        : null}
       {theater ? (
         <View style={styles.theaterRow}>
           <View style={[styles.car, { backgroundColor: colors.orange }]} />
@@ -208,7 +190,6 @@ function makeStyles(colors: Palette) {
     },
     wash: { ...StyleSheet.absoluteFill, backgroundColor: colors.orangeSoft },
     kind: { position: 'absolute' as const, top: 12, left: 12, color: colors.link, fontWeight: '800' as const, fontSize: 11 },
-    blob: { position: 'absolute' as const, borderRadius: 999 },
     theaterRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 8 },
     car: { width: 18, height: 12, borderRadius: 4 },
     preview: { color: colors.link, fontSize: 11, fontWeight: '700' as const },
