@@ -4,6 +4,7 @@
  */
 import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
 import { awardBonuses, loadDriverTrips, loadPerkConfig } from '../perks.js'
+import { firstRideDaily } from '../../shared/perks/firstRide.js'
 import { streakProgress } from '../../shared/perks/streaks.js'
 import { claimReferral, referralSummary } from '../driverReferral.js'
 import { setLeaderboardOptOut, weeklyLeaderboard } from '../leaderboard.js'
@@ -12,12 +13,17 @@ import { partyQueueSummary, setPartyQueueOptIn } from '../partyQueue.js'
 import { driverSafetyScore } from '../safetyScore.js'
 import { driverScorecard, setMapMarker } from '../scorecard.js'
 
-export const PERK_CONFIG_KEYS = ['streaks', 'referral', 'leaderboard', 'priority_dispatch', 'game_day_surge', 'party_queue', 'safety_score', 'scorecard']
+export const PERK_CONFIG_KEYS = ['streaks', 'first_ride_daily', 'referral', 'leaderboard', 'priority_dispatch', 'game_day_surge', 'party_queue', 'safety_score', 'scorecard']
 
 export async function buildPerks(sb, driverId, { now = new Date(), firstName = null } = {}) {
   const trips = await loadDriverTrips(sb, driverId)
-  const streaks = streakProgress(trips, driverId, await loadPerkConfig(sb, 'streaks', {}), now)
-  await awardBonuses(sb, driverId, streaks.awards).catch((err) => console.error('[perks] award', err.message))
+  const [streakCfg, firstCfg] = await Promise.all([
+    loadPerkConfig(sb, 'streaks', {}),
+    loadPerkConfig(sb, 'first_ride_daily', {}),
+  ])
+  const streaks = streakProgress(trips, driverId, streakCfg, now)
+  const firstRide = firstRideDaily(trips, driverId, firstCfg, now)
+  await awardBonuses(sb, driverId, [...streaks.awards, ...firstRide.awards]).catch((err) => console.error('[perks] award', err.message))
   const ledger = await sb.from('driver_bonus_ledger').select('kind, amount_cents, status, created_at')
     .eq('driver_id', driverId).order('created_at', { ascending: false }).limit(20)
   const referral = await referralSummary(sb, driverId, firstName).catch((err) => ({ error: err.message }))
@@ -31,6 +37,13 @@ export async function buildPerks(sb, driverId, { now = new Date(), firstName = n
   const leaderboard = await weeklyLeaderboard(sb, driverId, { now }).catch((err) => ({ error: err.message }))
   return {
     streaks: { trips: streaks.trips, days: streaks.days },
+    firstRide: {
+      enabled: firstRide.enabled,
+      bonusCents: firstRide.bonusCents,
+      earned: firstRide.earned,
+      available: firstRide.available,
+      today: firstRide.today,
+    },
     referral,
     leaderboard,
     surge,
@@ -49,7 +62,7 @@ export default async function handleDriverPerks(req, res, deps = {}) {
   const user = deps.user !== undefined ? deps.user : await userFromAuth(req, sb)
   if (!user) return json(res, 401, { error: 'Sign in required' })
   try {
-    if (req.method === 'GET') return json(res, 200, await buildPerks(sb, user.id, { firstName: String(user.user_metadata?.full_name || '').split(/\s+/)[0] || null }))
+    if (req.method === 'GET') return json(res, 200, await buildPerks(sb, user.id, { now: deps.now, firstName: String(user.user_metadata?.full_name || '').split(/\s+/)[0] || null }))
     if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
     const { body, error } = parseBody(req)
     if (error) return json(res, 400, { error })

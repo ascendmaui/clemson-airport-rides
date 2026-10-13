@@ -142,12 +142,21 @@ export function advanceResultTrip(result: any): (DriverTripRow & { settle?: { re
 export function driverCancelTrip(supabase: unknown, tripId: string, reason: string, note?: string): Promise<{ ok: boolean; idempotent?: boolean }>
 
 export type StreakView = { enabled: boolean; current: number; target: number; toNext: number; progress: number; bonusCents: number }
+export type FirstRideView = {
+  enabled: boolean
+  bonusCents: number
+  earned: boolean
+  available: boolean
+  today: string | null
+}
 export type DriverPerks = {
   streaks?: { trips: StreakView; days: StreakView }
+  firstRide?: FirstRideView
   bonuses?: { kind: string; amountCents: number; status: string; at: string }[]
   [key: string]: unknown
 }
 export function loadDriverPerks(supabase: unknown): Promise<DriverPerks>
+export function firstRideChipCopy(view: FirstRideView | null | undefined): { title: string; line: string; tone: 'orange' | 'purple' } | null
 export type ReferralSummary = { code: string; link: string; targetTrips: number; bonusCents: number; enabled: boolean; referrals: { status: string; trips: number; target: number }[]; error?: string }
 export function claimDriverReferral(supabase: unknown, code: string): Promise<{ ok: boolean; error?: string }>
 export type LeaderRow = { rank: number; name: string; trips: number; earningsCents: number; you: boolean }
