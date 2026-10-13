@@ -121,6 +121,10 @@ exports[`Driver Offer Card snapshot 1`] = `
               "children": []
             },
             {
+              "name": "WorthItLegend",
+              "children": []
+            },
+            {
               "type": "Conditional",
               "branches": [
                 {
