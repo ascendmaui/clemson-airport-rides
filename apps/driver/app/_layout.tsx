@@ -128,8 +128,8 @@ export default function RootLayout() {
               <OfferBridge />
               <DriverAgreementPrompt>
                 <ThemedStack />
+                <ActiveTripResume />
               </DriverAgreementPrompt>
-              <ActiveTripResume />
               <ToastMount />
               <DriverMoments />
             </Gate>
