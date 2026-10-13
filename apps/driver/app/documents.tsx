@@ -26,7 +26,7 @@ import {
   type DocumentCategoryId,
   type DocumentRow,
 } from 'rides-native/documentCategories'
-import { attentionRequiredItems } from 'rides-native/goPress'
+import { attentionScreenItems } from 'rides-native/goPress'
 import {
   INSPECTION_FORM_TYPE,
   INSPECTION_OVERDUE_COPY,
@@ -224,7 +224,7 @@ export default function DocumentsScreen() {
   const sectionLabel = inspectionOpen ? INSPECTION_TAB_LABEL : active.label
   const sectionKicker = inspectionOpen || active.id === 'vehicle' ? 'VEHICLE CHECK' : String(active.label).toUpperCase()
   const inspectionReminder = inspectionCountdown({ documents, dueAt: inspectionDueAt, now: new Date() })?.message || ''
-  const attentionItems = attentionRequiredItems({ documents, dueAt: inspectionDueAt, now: new Date() }).items
+  const attentionItems = attentionScreenItems({ documents, dueAt: inspectionDueAt, now: new Date() }).items
   const inspectionGate = inspectionGoOnlineGate({ documents, dueAt: inspectionDueAt, now: new Date() })
   const inspectionInReview = inspectionSubmitted(documents) && !sectionStatus.approved
 

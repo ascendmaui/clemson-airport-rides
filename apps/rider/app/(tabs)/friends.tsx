@@ -1,7 +1,7 @@
 import { useFocusEffect, usePathname, useRouter } from 'expo-router'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ScrollView, Share, Switch, Text, TextInput, View } from 'react-native'
+import { Platform, ScrollView, Share, Switch, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
@@ -24,6 +24,7 @@ import {
 } from '@/lib/friendsApi'
 import { supabase } from '@/lib/supabase'
 import { useRegisteredVehicle } from '@/lib/useRegisteredVehicle'
+import { nativeGlassAvailable } from 'rides-native/glass'
 import { ambassadorSavedCopy } from 'rides-native/shared/ambassadorAttribution.js'
 import {
   apiErrorMessage,
@@ -571,5 +572,6 @@ function makeStyles(colors: Palette) {
 }
 
 export default function FriendsRoute() {
+  if (Platform.OS === 'ios' && nativeGlassAvailable()) return <CarpoolHubScreen />
   return null
 }

@@ -8,11 +8,10 @@ import {
   demandPointsToHeat,
   heatBreathFrame,
   HEAT_BREATH_FRAMES,
+  placeHeatLabels,
   renderDemandHeatFrames,
 } from '@/lib/demandHeatMap'
 import type { Scheme } from '@/lib/palette'
-
-const LABEL_OFFSET_LAT = 0.00065
 
 function useHeatBreathFrame(active: boolean): number {
   const [frame, setFrame] = useState(0)
@@ -46,29 +45,42 @@ export function DemandHeatLayer({
   const glowing = model.areas.some((area) => area.label !== 'Quiet')
   const frames = useMemo(() => renderDemandHeatFrames(model), [model])
   const frame = useHeatBreathFrame(glowing)
+  const labels = placeHeatLabels(model.areas)
   if (!model.areas.length) return null
   const image = frames[frame] ?? frames[frames.length - 1]
   return (
     <>
       {image ? <Overlay image={{ uri: image.uri }} bounds={image.bounds} /> : null}
-      {model.areas.map((area, index) => (
-        <Marker
-          key={`heat-area-${index}`}
-          coordinate={{ latitude: area.latitude + LABEL_OFFSET_LAT, longitude: area.longitude }}
-          anchor={{ x: 0.5, y: 1 }}
-          tracksViewChanges={false}
-          tappable={false}
-        >
-          <Text style={[styles.label, area.label === 'Quiet' ? styles.quiet : null, { color: busynessInk(area.label) }]}>
-            {area.label}
-          </Text>
-        </Marker>
-      ))}
+      {model.areas.map((area, index) => {
+        const label = labels[index]
+        if (!label) return null
+        return (
+          <Marker
+            key={`heat-area-${index}`}
+            coordinate={label}
+            anchor={{ x: 0.5, y: 1 }}
+            tracksViewChanges={false}
+            tappable={false}
+          >
+            <View style={styles.chip}>
+              <Text style={[styles.label, area.label === 'Quiet' ? styles.quiet : null, { color: busynessInk(area.label) }]}>
+                {area.label}
+              </Text>
+            </View>
+          </Marker>
+        )
+      })}
     </>
   )
 }
 
 const styles = StyleSheet.create({
+  chip: {
+    backgroundColor: 'rgba(255,252,248,0.94)',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
   label: {
     fontSize: 11,
     fontWeight: '700',

@@ -4,6 +4,7 @@ import * as Location from 'expo-location'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -28,6 +29,7 @@ import { listScheduledTrips, type ScheduledRow } from '@/lib/scheduleApi'
 import { playMatchChime, tapHaptic } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { displayFirstName } from 'rides-native/authErrors'
+import { nativeGlassAvailable } from 'rides-native/glass'
 import { campusOverlays } from 'rides-native/riderShell.js'
 import { loadGameDay } from 'rides-native/driverDesk'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
@@ -37,11 +39,12 @@ import { studentSurfaceCopy } from 'rides-native/riderMoney.js'
 import { dueScheduleReminders } from '../../../../src/lib/scheduledRideModel.js'
 import { supabase } from '@/lib/supabase'
 import { useStudentStatus } from '@/lib/useStudentStatus'
-import { RIDER_TRACK_STATUSES, riderLiveView } from 'rides-native/liveTrip'
+import { liveRideDistanceLine, riderLiveView } from 'rides-native/liveTrip'
+import { useHomeLiveTrip } from '@/lib/useHomeLiveTrip'
 import { HEAT_WINDOWS, SHORTCUTS } from 'rides-native/places.js'
 import { hotCatalogPlaces, lookupCatalogPlace, searchCatalogPlaces } from 'rides-native/shared/carpool.js'
 import { lift } from '@/lib/elevation'
-import { HOME_SHEET_BOTTOM_PADDING } from '@/lib/homeSheetSnap'
+import { HOME_SHEET_BOTTOM_PADDING, homeTabClearance } from '@/lib/homeSheetSnap'
 import { useHomeSheetSnap } from '@/lib/useHomeSheetSnap'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -77,16 +80,18 @@ export function RiderHome() {
   const insets = useSafeAreaInsets()
   const inputRef = useRef<TextInput>(null)
   const scrollRef = useRef<ScrollView>(null)
+  const { user, configured } = useAuth()
+  const liveTrip = useHomeLiveTrip(user?.id)
+  const [liveCardH, setLiveCardH] = useState(120)
+  const nativeTabs = Platform.OS === 'ios' && nativeGlassAvailable()
   const sheet = useHomeSheetSnap(() => {
     inputRef.current?.focus()
-  })
-  const { user, configured } = useAuth()
+  }, liveTrip ? liveCardH + 12 : 0)
   const { colors, scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const mapRef = useRef<CampusMapHandle>(null)
   const [query, setQuery] = useState('')
   const [destError, setDestError] = useState<string | null>(null)
-  const [liveTrip, setLiveTrip] = useState<{ id: string; status: string | null; dropoff_label: string | null } | null>(null)
   const suggestions = useMemo(() => {
     const found = searchCatalogPlaces(query)
     if (query.trim().length >= 2) return found.slice(0, 6)
@@ -113,6 +118,15 @@ export function RiderHome() {
   const gameDay = Boolean(gameNotice?.live)
   const gameDayExperience = useGameDayExperience(supabase)
   const reminders = useMemo(() => dueScheduleReminders(scheduledRows, clock), [scheduledRows, clock])
+  const liveDistance = liveTrip
+    ? liveRideDistanceLine(
+      liveTrip.status,
+      liveTrip.driverLat != null && liveTrip.driverLng != null
+        ? { lat: liveTrip.driverLat, lng: liveTrip.driverLng }
+        : null,
+      liveTrip,
+    )
+    : null
   const chromeMotion = useEnterMotion(8)
   const sheetMotion = useEnterMotion(16)
 
@@ -159,32 +173,6 @@ export function RiderHome() {
       setScheduledRows([])
     }
   }
-
-  useEffect(() => {
-    if (!user?.id || !supabase) {
-      setLiveTrip(null)
-      return undefined
-    }
-    let alive = true
-    async function loadLive() {
-      const { data } = await supabase!
-        .from('trips')
-        .select('id, status, dropoff_label')
-        .eq('rider_id', user!.id)
-        .in('status', [...RIDER_TRACK_STATUSES])
-        .order('requested_at', { ascending: false })
-        .limit(1)
-      if (!alive) return
-      const row = Array.isArray(data) ? data[0] : data
-      setLiveTrip(row ? { id: row.id, status: row.status, dropoff_label: row.dropoff_label } : null)
-    }
-    void loadLive()
-    const timer = setInterval(() => { void loadLive() }, 8000)
-    return () => {
-      alive = false
-      clearInterval(timer)
-    }
-  }, [user?.id])
 
   useEffect(() => {
     let alive = true
@@ -284,7 +272,7 @@ export function RiderHome() {
   }
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, nativeTabs ? { paddingBottom: homeTabClearance(insets.bottom) } : null]}>
       <View
         ref={(node) => {
           mapSwipe.ref.current = node
@@ -442,6 +430,23 @@ export function RiderHome() {
             </GestureDetector>
           ) : null}
         </View>
+        {liveTrip ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Live ride. ${riderLiveView(liveTrip.status).title}. ${liveDistance || `Open tracking for ${liveTrip.dropoff_label || 'this trip'}.`}`}
+            accessibilityHint="Opens live trip tracking"
+            onLayout={(event) => {
+              const next = Math.ceil(event.nativeEvent.layout.height)
+              setLiveCardH((current) => (next > 0 && next !== current ? next : current))
+            }}
+            onPress={() => router.push({ pathname: '/requested', params: { trip: liveTrip.id, dest: liveTrip.dropoff_label || '' } })}
+            style={({ pressed }) => [styles.liveCard, lift(colors, 'rest'), pressStyle(pressed)]}
+          >
+            <Text style={styles.liveKicker}>LIVE RIDE</Text>
+            <Text style={styles.liveTitle}>{riderLiveView(liveTrip.status).title}</Text>
+            <Text style={styles.liveBody}>{liveDistance || `Open tracking for ${liveTrip.dropoff_label || 'this trip'}.`}</Text>
+          </Pressable>
+        ) : null}
         <ScrollView
           ref={scrollRef}
           style={styles.sheetScroll}
@@ -476,19 +481,6 @@ export function RiderHome() {
           ) : (
             <Text style={styles.welcome}>Welcome, {name}</Text>
           )}
-          {liveTrip ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Live ride. ${riderLiveView(liveTrip.status).title}. Open tracking for ${liveTrip.dropoff_label || 'this trip'}.`}
-              accessibilityHint="Opens live trip tracking"
-              onPress={() => router.push({ pathname: '/requested', params: { trip: liveTrip.id, dest: liveTrip.dropoff_label || '' } })}
-              style={({ pressed }) => [styles.liveCard, lift(colors, 'rest'), pressStyle(pressed)]}
-            >
-              <Text style={styles.liveKicker}>LIVE RIDE</Text>
-              <Text style={styles.liveTitle}>{riderLiveView(liveTrip.status).title}</Text>
-              <Text style={styles.liveBody}>Open tracking for {liveTrip.dropoff_label || 'this trip'}.</Text>
-            </Pressable>
-          ) : null}
           {gameDayExperience.ready && gameDayExperience.model.phase !== 'off' ? (
             <GameDayBanner model={gameDayExperience.model} onPress={() => router.push('/game-day')} />
           ) : !gameDayExperience.ready && gameNotice?.live ? (
@@ -714,6 +706,7 @@ export function RiderHome() {
 }
 
 export default function RidesRoute() {
+  if (Platform.OS === 'ios' && nativeGlassAvailable()) return <RiderHome />
   return null
 }
 

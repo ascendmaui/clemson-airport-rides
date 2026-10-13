@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { Modal, Pressable, Text, View } from 'react-native'
+import { riderModalClosed, riderModalOpened } from '@/lib/afterModal'
 import { PrimaryButton } from '@/components/Button'
 import { useAuth } from '@/lib/auth'
 import { fetchMatchNotice } from '@/lib/scheduleApi'
@@ -20,7 +21,10 @@ type Notice = {
   distanceLabel: string | null
   etaLabel: string | null
   pickupLabel: string | null
+  holdFailed: boolean
 }
+
+type RideHref = { pathname: '/requested'; params: { trip: string } } | { pathname: '/billing' }
 
 /**
  * Full-screen pop-up when a driver matches: name, distance, and pickup time.
@@ -33,6 +37,48 @@ export function RiderMatchPopup() {
   const seen = useRef(new Map<string, string | null>())
   const primed = useRef(false)
   const [notice, setNotice] = useState<Notice | null>(null)
+  const pending = useRef<RideHref | null>(null)
+  const modalOpen = useRef(false)
+  const fallback = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function holdFailed(row: { metadata?: { fare_authorization?: { status?: string } } | null }) {
+    return row?.metadata?.fare_authorization?.status === 'failed'
+  }
+
+  function closeGate() {
+    if (!modalOpen.current) return
+    modalOpen.current = false
+    riderModalClosed()
+  }
+
+  function flushPending() {
+    const next = pending.current
+    if (!next) return
+    pending.current = null
+    router.push(next)
+  }
+
+  // The push waits until the modal has finished dismissing. Doing both in the
+  // same tick crashes UIKit ("present while already presenting"), worse under iOS 26 NativeTabs.
+  function dismissThen(href: RideHref | null) {
+    pending.current = href
+    setNotice(null)
+    if (fallback.current) clearTimeout(fallback.current)
+    fallback.current = setTimeout(() => {
+      fallback.current = null
+      closeGate()
+      flushPending()
+    }, 450)
+  }
+
+  function onModalDismiss() {
+    if (fallback.current) {
+      clearTimeout(fallback.current)
+      fallback.current = null
+    }
+    closeGate()
+    flushPending()
+  }
 
   useEffect(() => {
     if (!supabase || !user?.id) return undefined
@@ -45,14 +91,20 @@ export function RiderMatchPopup() {
       let next: Notice
       try {
         const fetched = await fetchMatchNotice(row.id)
-        next = { ...fetched, tripId: row.id }
+        next = { ...fetched, tripId: row.id, holdFailed: holdFailed(row) }
       } catch {
-        const fallback = buildRiderMatchNotice({
+        const fallbackNotice = buildRiderMatchNotice({
           pickupAt: row.pickup_at || row.scheduled_for || row.metadata?.scheduled_pickup_at,
         })
-        next = { ...fallback, tripId: row.id }
+        next = { ...fallbackNotice, tripId: row.id, holdFailed: holdFailed(row) }
       }
-      if (alive) setNotice(next)
+      if (alive) {
+        if (!modalOpen.current) {
+          modalOpen.current = true
+          riderModalOpened()
+        }
+        setNotice(next)
+      }
     }
 
     function consider(row: { id?: string; status?: string | null; driver_id?: string | null; rider_id?: string | null; pickup_at?: string | null; scheduled_for?: string | null; metadata?: { scheduled_pickup_at?: string } | null }) {
@@ -98,8 +150,8 @@ export function RiderMatchPopup() {
     }
   }, [user?.id])
 
-  return (
-    <Modal visible={Boolean(notice)} transparent animationType="fade" onRequestClose={() => setNotice(null)}>
+    return (
+    <Modal visible={Boolean(notice)} transparent animationType="fade" onDismiss={onModalDismiss} onRequestClose={() => dismissThen(null)}>
       <View style={styles.backdrop}>
         <View style={styles.card} accessibilityRole="alert" accessibilityLabel={notice?.body || 'Driver matched'}>
           <Text style={styles.kicker}>MATCHED</Text>
@@ -110,15 +162,20 @@ export function RiderMatchPopup() {
           </Text>
           {notice?.etaLabel ? <Text style={styles.copy}>About {notice.etaLabel} out</Text> : null}
           <Text style={styles.pickup}>{notice?.pickupLabel ? `Pickup ${notice.pickupLabel}` : 'Pickup time follows their ETA.'}</Text>
+          {notice?.holdFailed ? (
+            <PrimaryButton
+              label="Add a payment method"
+              onPress={() => dismissThen({ pathname: '/billing' })}
+            />
+          ) : null}
           <PrimaryButton
             label="View ride"
             onPress={() => {
               const id = notice?.tripId
-              setNotice(null)
-              if (id) router.push({ pathname: '/requested', params: { trip: id } })
+              dismissThen(id ? { pathname: '/requested', params: { trip: id } } : null)
             }}
           />
-          <Pressable onPress={() => setNotice(null)} accessibilityRole="button" accessibilityLabel="Dismiss match">
+          <Pressable onPress={() => dismissThen(null)} accessibilityRole="button" accessibilityLabel="Dismiss match">
             <Text style={[styles.dismiss, { color: colors.purple }]}>Dismiss</Text>
           </Pressable>
         </View>

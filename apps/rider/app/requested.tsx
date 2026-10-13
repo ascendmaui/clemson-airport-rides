@@ -22,6 +22,7 @@ import { loadLiveTrip, subscribeLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 import { useTripById } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, listEmergencyContacts, type EmergencyContact } from 'rides-native/safety.js'
 import { driverCancelNotice, etaHoldLine, liveDriverTitle, orderedLiveStops, RIDER_SEARCH_MOTION_COPY, riderLiveView, showSearchTheater, type LiveStopPin } from 'rides-native/liveTrip'
+import { failedHoldPrompt } from 'rides-native/rideMoments'
 import { followEtaLine, followMapCoordinates } from 'rides-native/roadFollow'
 import { holdAirportCode, isOpenUnpaidAirportHold, isUnpaidHoldTtlCancel } from 'rides-native/holdExpiryNotice.js'
 import { LivePhase } from 'rides-native/LivePhase'
@@ -224,7 +225,12 @@ export default function Requested() {
   const phase = ttlCanceled
     ? { ...basePhase, kicker: 'HOLD EXPIRED', title: 'Deposit hold expired', body: '', steps: [], stepIndex: -1 }
     : basePhase
-  const locationIssue = trackingIssue(shown?.status, live?.driverLocationAt, trackingNow)
+  const locationIssue = trackingIssue(shown?.status, live?.driverLocationAt, trackingNow, live?.driverHeartbeatAt)
+  const holdPrompt = failedHoldPrompt({
+    metadata: live?.metadata ?? trip?.metadata ?? null,
+    payment_status: null,
+    payment: null,
+  })
   const driverFix = live?.driverLat != null && live.driverLng != null ? { lat: live.driverLat, lng: live.driverLng } : null
   const driverEta = followEtaLine(shown?.status || null, driverFix, live)
   const heldEta = etaHoldLine(shown?.status || null, driverEta)
@@ -333,6 +339,17 @@ export default function Requested() {
               router.push(code ? { pathname: '/schedule', params: { airport: code } } : '/schedule')
             }}
           />
+        ) : null}
+        {holdPrompt ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${holdPrompt.title}. ${holdPrompt.body}`}
+            onPress={() => router.push('/billing')}
+            style={{ padding: 14, borderRadius: 14, backgroundColor: colors.orangeSoft }}
+          >
+            <Text style={styles.body} accessibilityLiveRegion="polite">{holdPrompt.title}</Text>
+            <Text style={styles.body}>{holdPrompt.body}</Text>
+          </Pressable>
         ) : null}
         {cancelNotice?.tripId === tripId && shown?.status === 'searching' ? (
           <View style={{ padding: 14, borderRadius: 14, backgroundColor: colors.orangeSoft }}>

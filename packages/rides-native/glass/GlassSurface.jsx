@@ -71,13 +71,16 @@ export function GlassSurface({
   const showBlur = Boolean(BlurView) && Platform.OS !== 'web'
   const paintStreak = showStreak !== false && glassShowsStreak({ variant, accent: recipe.accent })
   const filled = variant === 'fab' || variant === 'primary' || variant === 'secondary' || variant === 'chip' || variant === 'ghost'
+  const opaquePlate = variant === 'offer'
+  const [plateR, plateG, plateB] = recipe.plate.rgb
+  const opaqueFill = `rgba(${plateR},${plateG},${plateB},${Math.max(recipe.plate.alpha, 0.98)})`
   if (nativeGlassAvailable()) {
     const strong = variant === 'primary' || variant === 'fab'
     const tinted = strong || variant === 'chip' || variant === 'secondary' || variant === 'ghost'
     return (
       <GlassView
-        glassEffectStyle={strong ? 'regular' : 'clear'}
-        tintColor={tinted ? recipe.tint : undefined}
+        glassEffectStyle={strong || opaquePlate ? 'regular' : 'clear'}
+        tintColor={opaquePlate ? opaqueFill : tinted ? recipe.tint : undefined}
         isInteractive={filled}
         colorScheme={dark ? 'dark' : 'light'}
         accessibilityRole={accessibilityRole}
@@ -86,6 +89,7 @@ export function GlassSurface({
         pointerEvents={pointerEvents}
         style={[rest, radii]}
       >
+        {opaquePlate ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, radii, { backgroundColor: opaqueFill }]} /> : null}
         <View style={[filled ? styles.fill : styles.content, flow, pad]}>{children}</View>
       </GlassView>
     )
@@ -99,10 +103,11 @@ export function GlassSurface({
       style={[rest, radii, layeredShadow(dark, recipe.tint)]}
     >
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.clip, radii]}>
+        {opaquePlate ? <View style={[StyleSheet.absoluteFill, { backgroundColor: opaqueFill }]} /> : null}
         {showBlur
-          ? <BlurView intensity={recipe.blur} tint={dark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-          : <View style={[StyleSheet.absoluteFill, styles.fallback, { backgroundColor: fill }]} />}
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: fill }]} />
+          ? <BlurView intensity={opaquePlate ? 80 : recipe.blur} tint={dark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+          : <View style={[StyleSheet.absoluteFill, styles.fallback, { backgroundColor: opaquePlate ? opaqueFill : fill }]} />}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: opaquePlate ? opaqueFill : fill }]} />
         <GlassSheen scheme={scheme} radius={radius} selected={selected} tint={recipe.tint} specular={recipe.specular} streak={recipe.streak} showStreak={paintStreak} edges={edges} />
       </View>
       <View style={[filled ? styles.fill : styles.content, flow, pad]}>{children}</View>

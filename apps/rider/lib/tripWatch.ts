@@ -17,6 +17,7 @@ export type LiveTrip = {
   driverLng: number | null
   driverHeading: number | null
   driverLocationAt: string | null
+  driverHeartbeatAt: string | null
   requested_at: string | null
   created_at: string | null
   deposit_cents: number | null
@@ -27,6 +28,12 @@ export type LiveTrip = {
 }
 
 const ACTIVE = new Set(['searching', 'offered', 'accepted', 'arriving', 'arrived', 'in_progress'])
+
+const TRIP_COLUMNS = 'id, status, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, driver_id, requested_at, created_at, deposit_cents, fare_cents, rider_note, stops, metadata'
+
+function missingHeartbeatColumn(message: string) {
+  return /driver_heartbeat_at/i.test(message) && /column|schema cache/i.test(message)
+}
 
 export function isLiveStatus(status: string | null) {
   return ACTIVE.has(String(status || ''))
@@ -61,13 +68,19 @@ export function subscribeLiveTrip(tripId: string, driverId: string | null, onCha
 
 export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
   if (!supabase || !tripId) return null
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('trips')
-    .select('id, status, pickup_label, dropoff_label, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, driver_id, requested_at, created_at, deposit_cents, fare_cents, rider_note, stops, metadata')
+    .select(`${TRIP_COLUMNS}, driver_heartbeat_at`)
     .eq('id', tripId)
     .maybeSingle()
+  if (error && missingHeartbeatColumn(error.message || '')) {
+    const plain = await supabase.from('trips').select(TRIP_COLUMNS).eq('id', tripId).maybeSingle()
+    data = plain.data
+    error = plain.error
+  }
   if (error) throw new Error(error.message)
   if (!data) return null
+  const heartbeat = typeof data.driver_heartbeat_at === 'string' ? data.driver_heartbeat_at : null
   let driverName: string | null = null
   let driverLat: number | null = null
   let driverLng: number | null = null
@@ -146,6 +159,7 @@ export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
     driverLng,
     driverHeading,
     driverLocationAt,
+    driverHeartbeatAt: heartbeat,
     requested_at: data.requested_at || null,
     created_at: data.created_at ?? null,
     deposit_cents: data.deposit_cents ?? null,

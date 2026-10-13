@@ -74,7 +74,7 @@ export async function loadAdminInbox(sb, now = new Date()) {
     return result.rows || []
   }
 
-  const [documents, photos, applications, deadlines, lostItems, tickets, trips, payoutEvents, approvedDrivers] = await Promise.all([
+  const [documents, photos, applications, deadlines, lostItems, tickets, trips, payoutEvents, approvedDrivers, agentDraftRows] = await Promise.all([
     firstRows([
       () => sb.from('driver_documents')
         .select('id, profile_id, doc_type, review_status, match_status, review_note, created_at')
@@ -141,6 +141,13 @@ export async function loadAdminInbox(sb, now = new Date()) {
         .eq('onboarding_status', 'approved')
         .limit(80),
     ]),
+    firstRows([
+      () => sb.from('agent_drafts')
+        .select('id, created_at, kind, status, subject, body, source, mailbox, slot')
+        .eq('status', 'draft_ready')
+        .order('created_at', { ascending: false })
+        .limit(50),
+    ]),
   ])
 
   const docs = note('documents', documents).filter((row) => isManualDocumentStatus(row.review_status))
@@ -152,6 +159,7 @@ export async function loadAdminInbox(sb, now = new Date()) {
   const tripRows = note('trips', trips)
   const failedPayouts = note('payouts', payoutEvents)
   const approved = note('w9', approvedDrivers)
+  const drafts = note('agent drafts', agentDraftRows)
 
   const inspectionIds = deadlineRows.map((row) => row.profile_id).filter(Boolean)
   const approvedIds = approved.map((row) => row.profile_id).filter(Boolean)
@@ -217,6 +225,7 @@ export async function loadAdminInbox(sb, now = new Date()) {
     approvedDrivers: approved,
     taxRows: taxes,
     w9Rows: w9,
+    agentDrafts: drafts,
     profiles,
   }, now)
 

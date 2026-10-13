@@ -11,6 +11,7 @@ export function isMidrideStatus(status) {
 export function isTerminalTripStatus(status) {
   return status === 'completed'
     || status === 'canceled'
+    || status === 'cancelled'
     || status === 'cancelled_wait'
     || status === MIDRIDE_STATUS
 }
@@ -41,6 +42,7 @@ export function tripStatusLabel(status) {
     case 'completed':
       return 'Trip completed'
     case 'canceled':
+    case 'cancelled':
       return 'Trip canceled'
     case 'cancelled_wait':
       return 'Canceled at pickup'

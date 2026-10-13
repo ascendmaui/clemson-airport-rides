@@ -177,6 +177,27 @@ function inbox(extra = {}) {
       { profile_id: 'taxed', legal_name: 'Kim Example', tin_last4: '6789' },
     ],
     w9Rows: [],
+    agentDrafts: [
+      {
+        id: 'draft-1',
+        kind: 'marketing',
+        status: 'draft_ready',
+        subject: 'Campus week',
+        body: 'A draft for approval',
+        source: 'schedule',
+        slot: 'content',
+        created_at: ago(3600000),
+      },
+      {
+        id: 'draft-sent',
+        kind: 'outreach',
+        status: 'sent',
+        subject: 'Should stay out',
+        body: 'Already handled',
+        source: 'schedule',
+        created_at: ago(3600000),
+      },
+    ],
     ...extra,
   }, NOW)
 }
@@ -195,6 +216,11 @@ test('inbox lists every attention queue, with age, sorted by urgency then age', 
   assert.equal(data.counts.failed_hold, 1)
   assert.equal(data.counts.stuck_trip, 2)
   assert.ok(data.counts.payout_w9 >= 3)
+  assert.equal(data.counts.agent_draft, 1)
+  const draft = data.items.find((item) => item.kind === 'agent_draft')
+  assert.equal(draft.title, 'Marketing · Campus week')
+  assert.equal(draft.body, 'A draft for approval')
+  assert.equal(draft.actions.length, 0)
   assert.equal(data.items[0].kind, 'failed_hold')
   assert.match(data.items[0].ageLabel, /m$/)
   const docs = data.items.filter((item) => item.kind === 'document_review')
@@ -218,6 +244,10 @@ test('every inbox action uses an existing admin endpoint', () => {
   const data = inbox()
   assert.ok(data.items.length > 0)
   for (const item of data.items) {
+    if (item.kind === 'agent_draft') {
+      assert.equal(item.actions.length, 0, item.id)
+      continue
+    }
     assert.ok(item.actions.length > 0, item.id)
     for (const action of item.actions) {
       assert.ok(action.path === '/api/admin' || action.path === '/api/admin-drivers', action.path)

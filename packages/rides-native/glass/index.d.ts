@@ -3,7 +3,7 @@ import type { AccessibilityRole, AccessibilityState, StyleProp, ViewStyle } from
 
 export type GlassApp = 'rider' | 'driver'
 export type GlassScheme = 'light' | 'dark'
-export type GlassVariant = 'primary' | 'secondary' | 'chip' | 'fab' | 'surface' | 'sheet' | 'header' | 'ghost'
+export type GlassVariant = 'primary' | 'secondary' | 'chip' | 'fab' | 'surface' | 'sheet' | 'header' | 'ghost' | 'offer'
 export type GlassAccent = 'orange' | 'purple' | 'green'
 
 export type GlassRecipeOptions = {
@@ -30,6 +30,7 @@ export type GlassRecipe = {
 }
 
 export declare const GLASS_ORANGE: '#F56600'
+export declare const OFFER_PLATE_ALPHA: number
 export declare const GLASS_PURPLE: '#522D80'
 export declare const GLASS_GREEN: '#1F8A4C'
 export declare const GLASS_INK: string
@@ -91,5 +92,5 @@ export declare function GlassButton(props: GlassFrame & {
   onPressOut?: (event: unknown) => void
 }): ReactNode
 
-export declare function GlassCard(props: GlassFrame & { selected?: boolean }): ReactNode
+export declare function GlassCard(props: GlassFrame & { selected?: boolean; variant?: 'surface' | 'offer' }): ReactNode
 export declare function GlassSheet(props: GlassFrame): ReactNode

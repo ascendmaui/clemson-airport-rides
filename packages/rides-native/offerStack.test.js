@@ -10,6 +10,8 @@ import {
   documentBannersCollapsed,
   homeIsShowingOffer,
   offerAcceptSeconds,
+  offerSheetBottomInset,
+  offerSheetOwnsBottom,
   setHomeOfferId,
 } from './offerStack.js'
 
@@ -48,6 +50,20 @@ test('document banners collapse while an offer is showing or the driver is onlin
   assert.equal(documentBannersCollapsed({ online: true, offerId: null }), true)
   assert.equal(documentBannersCollapsed({ online: false, offerId: 'trip-1' }), true)
   assert.equal(documentBannersCollapsed({ online: true, offerId: 'trip-1' }), true)
+})
+
+test('an offer sheet takes the bottom and clears the home indicator and tab bar', () => {
+  assert.equal(offerSheetOwnsBottom({ offerId: null, activeTrip: false }), false)
+  assert.equal(offerSheetOwnsBottom({ offerId: 'trip-1', activeTrip: true }), false)
+  assert.equal(offerSheetOwnsBottom({ offerId: 'trip-1', activeTrip: false }), true)
+  assert.equal(offerSheetBottomInset(34), 106)
+  assert.equal(offerSheetBottomInset(0), 72)
+  assert.equal(offerSheetBottomInset(Number.NaN), 72)
+  const home = readFileSync(new URL('../../apps/driver/app/(tabs)/index.tsx', import.meta.url), 'utf8')
+  assert.match(home, /offerSheetOwnsBottom/)
+  assert.match(home, /offerSheetBottomInset/)
+  assert.match(home, /variant="offer"/)
+  assert.match(home, /offerOwnsBottom \? null :/)
 })
 
 test('the offer card stacks above document banners', () => {

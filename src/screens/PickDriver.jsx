@@ -19,6 +19,9 @@ import {
   fetchOnlineDrivers,
   filterDriversForFleet,
   groupDriversForPicker,
+  EMPTY_FAVORITES_COPY,
+  FAVORITE_ACCOUNT_SAVE_ERROR,
+  FAVORITE_PERSIST_ERROR,
   loadFavoriteDriverIds,
   OPEN_POOL_COPY,
   PREFERRED_OFFLINE_COPY,
@@ -30,6 +33,9 @@ import { SignInToBookModal, useRequireAuthForAction } from '../components/SignIn
 import { resolveDriverPortrait } from '../../shared/driverPortrait.js'
 import { setFavoriteDrivers } from '../../packages/rides-native/tigerPassClient.js'
 import { PREPAID_TIP_PRESETS_CENTS, formatTipDollars, parsePrepaidTipDollars } from '../../shared/prepaidTip.js'
+import { paymentMethodRequiredError, riderPaymentMethodReady } from '../../shared/ridePaymentReady.js'
+import { saveRideRequestDraft } from '../lib/rideRequestDraft.js'
+import { webApplePaySetUp } from '../lib/applePayReady.js'
 
 const browserStorage = {
   async getItem(key) {
@@ -59,6 +65,8 @@ export function PickDriver({
   destLat = '',
   destLng = '',
   billing = '',
+  driver = '',
+  tip = '',
 }) {
   const { user } = useAuth()
   const student = useStudentStatus()
@@ -73,7 +81,10 @@ export function PickDriver({
   const [selected, setSelected] = useState(null)
   const [tripFlash, setTripFlash] = useState(null)
   const [requesting, setRequesting] = useState(false)
-  const [prepaidTipCents, setPrepaidTipCents] = useState(0)
+  const [prepaidTipCents, setPrepaidTipCents] = useState(() => {
+    const cents = Number(tip)
+    return Number.isFinite(cents) && cents > 0 ? Math.round(cents) : 0
+  })
   const [customTip, setCustomTip] = useState('')
   const [tipError, setTipError] = useState(null)
   const [promptOpen, setPromptOpen] = useState(false)
@@ -103,7 +114,7 @@ export function PickDriver({
       approachPickup,
     )
     setDrivers(merged)
-    setSelected((current) => merged.find((driver) => driver.id === current?.id) || null)
+    setSelected((current) => merged.find((row) => row.id === current?.id) || merged.find((row) => row.id === driver) || null)
     setFavoriteIds(fav.ids)
     setFavNote(fav.note)
     setError(extra.error || err)
@@ -117,7 +128,13 @@ export function PickDriver({
       load()
     })
     return unsub
-  }, [user?.id, tier])
+  }, [user?.id, tier, driver])
+
+  useEffect(() => {
+    const cents = Number(tip)
+    if (tip === '' || tip == null || !Number.isFinite(cents) || cents < 0) return
+    setPrepaidTipCents(Math.round(cents))
+  }, [tip])
 
   const toggleFavorite = async (driverId) => {
     if (!user?.id) {
@@ -132,18 +149,63 @@ export function PickDriver({
       ? favoriteIds.filter((id) => id !== driverId)
       : [...favoriteIds, driverId]
     setFavoriteIds(next)
-    const saved = await saveFavoriteDriverIds(supabase, browserStorage, user.id, next)
-    setFavoriteIds(saved.ids)
-    setFavNote(saved.note)
     try {
-      const remote = await setFavoriteDrivers(supabase, saved.ids)
-      if (Array.isArray(remote?.favoriteDriverIds)) {
-        setFavoriteIds(remote.favoriteDriverIds)
-        if (remote.demoDriversIgnored) setFavNote(remote.demoNote || 'Preview cars were not saved.')
+      const saved = await saveFavoriteDriverIds(supabase, browserStorage, user.id, next)
+      setFavoriteIds(saved.error && !saved.note ? favoriteIds : saved.ids)
+      setFavNote(saved.note)
+      if (saved.error) setError(saved.error)
+      else setError((current) => (
+        current === FAVORITE_PERSIST_ERROR || current === FAVORITE_ACCOUNT_SAVE_ERROR ? null : current
+      ))
+      if (!saved.error || saved.note) {
+        try {
+          const remote = await setFavoriteDrivers(supabase, saved.ids)
+          if (Array.isArray(remote?.favoriteDriverIds)) {
+            setFavoriteIds(remote.favoriteDriverIds)
+            if (remote.demoDriversIgnored) setFavNote(remote.demoNote || 'Preview cars were not saved.')
+            if (saved.error === FAVORITE_ACCOUNT_SAVE_ERROR) {
+              setError((current) => (current === FAVORITE_ACCOUNT_SAVE_ERROR ? null : current))
+            }
+          }
+        } catch {
+          /* profile row remains the matching source when the API is down */
+        }
       }
-    } catch {
-      /* profile row remains the matching source when the API is down */
+    } catch (err) {
+      setFavoriteIds(favoriteIds)
+      setError(err instanceof Error ? err.message : FAVORITE_PERSIST_ERROR)
     }
+  }
+
+  function rememberRequest() {
+    saveRideRequestDraft({
+      dest,
+      pickup,
+      tier,
+      passengers,
+      listCents,
+      pickupLat,
+      pickupLng,
+      destLat,
+      destLng,
+      billing,
+      driverId: selected?.id || driver || '',
+      tip: prepaidTipCents,
+    })
+    navigate('account', { tab: 'billing', setup: 'card' })
+  }
+
+  async function paymentForRequest() {
+    const applePay = webApplePaySetUp()
+    if (!supabase || !user?.id) return { ready: false, source: null }
+    const { data, error: lookupError } = await supabase
+      .from('profiles')
+      .select('stripe_default_pm_id, stripe_card_brand')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (lookupError) return { ready: true, source: applePay ? 'apple_pay' : null }
+    const ready = riderPaymentMethodReady(data, { applePay })
+    return { ready: ready.ok, source: ready.source }
   }
 
   const onRequest = async () => {
@@ -163,6 +225,11 @@ export function PickDriver({
     setRequesting(true)
     setError(null)
     try {
+      const gate = await paymentForRequest()
+      if (!gate.ready) {
+        rememberRequest()
+        return
+      }
       const trip = await requestDriverTrip({
         riderId: user.id,
         ...(selected ? { driverId: selected.id } : { autoAssign: true }),
@@ -178,9 +245,14 @@ export function PickDriver({
         listCents,
         billingChoice: billing || null,
         prepaidTipCents,
+        ...(gate.source === 'apple_pay' ? { applePay: true } : {}),
       })
       navigate('requested', { dest, trip: trip.id, driver: selected?.name || 'Next driver' })
     } catch (err) {
+      if (paymentMethodRequiredError(err)) {
+        rememberRequest()
+        return
+      }
       const redirect = scheduleRedirectForRequestError(err, dest)
       if (redirect) {
         navigate('schedule', {
@@ -220,6 +292,11 @@ export function PickDriver({
         {favNote && (
           <p style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: 'var(--purple)' }}>{favNote}</p>
         )}
+        {!loading && favoriteIds.length === 0 ? (
+          <p role="status" aria-live="polite" style={{ marginTop: 8, fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
+            {EMPTY_FAVORITES_COPY}
+          </p>
+        ) : null}
       </div>
 
       <div style={{ flex: 1, padding: '8px 16px 24px', overflowY: 'auto' }}>
@@ -316,12 +393,16 @@ export function PickDriver({
                         <button
                           type="button"
                           className="pressable"
+                          aria-pressed={saved}
+                          aria-label={saved ? `Remove ${d.name || 'this driver'} from saved drivers` : `Save ${d.name || 'this driver'}`}
                           onClick={(event) => {
                             event.stopPropagation()
                             toggleFavorite(d.id)
                           }}
-                          style={{ fontSize: 12, fontWeight: 800, color: saved ? '#fff' : 'var(--orange)', background: saved ? 'var(--purple)' : 'transparent', borderRadius: 999, padding: '4px 10px' }}
+                          style={{ fontSize: 12, fontWeight: 800, color: saved ? '#fff' : 'var(--orange)', background: saved ? 'var(--purple)' : 'transparent', borderRadius: 999, padding: '4px 10px', minHeight: 44 }}
                         >
+                          <span aria-hidden="true">{saved ? '★' : '☆'}</span>
+                          {' '}
                           {saved ? 'Saved' : 'Save'}
                         </button>
                       </div>

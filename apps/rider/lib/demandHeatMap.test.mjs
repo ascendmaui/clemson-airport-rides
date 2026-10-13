@@ -16,6 +16,9 @@ import {
   demandPointsToHeat,
   fieldPlacement,
   framePercents,
+  HEAT_LABEL_LIFT_DEG,
+  placeHeatLabelPercents,
+  placeHeatLabels,
   heatBloom,
   heatBreath,
   heatBreathFrame,
@@ -336,6 +339,27 @@ test('the heat breathes slowly from a soft rest to full intensity', () => {
   const full = renderDemandHeatImage(hot)
   const decoded = decodePng(full.uri)
   assert.deepEqual([...decoded.rgba.subarray(offset, offset + 4)], [...peak.rgba.subarray(offset, offset + 4)])
+})
+
+test('busyness labels sit above their pins and do not stack on each other', () => {
+  const areas = [
+    { latitude: 34.68, longitude: -82.84 },
+    { latitude: 34.6804, longitude: -82.8402 },
+  ]
+  const labels = placeHeatLabels(areas)
+  assert.equal(labels.length, 2)
+  assert.ok(labels[0].latitude >= areas[0].latitude + HEAT_LABEL_LIFT_DEG - 1e-9)
+  assert.ok(labels[1].latitude >= areas[1].latitude + HEAT_LABEL_LIFT_DEG - 1e-9)
+  const gap = Math.hypot(labels[0].latitude - labels[1].latitude, labels[0].longitude - labels[1].longitude)
+  assert.ok(gap >= 0.0016)
+  const percents = placeHeatLabelPercents([{ left: 50, top: 50 }, { left: 52, top: 48 }])
+  assert.ok(percents[0].top <= 40)
+  assert.ok(Math.hypot(percents[0].left - percents[1].left, percents[0].top - percents[1].top) >= 12)
+  const nativeLayer = read('../components/DemandHeatLayer.native.tsx')
+  const webLayer = read('../components/DemandHeatLayer.tsx')
+  assert.match(nativeLayer, /placeHeatLabels/)
+  assert.match(webLayer, /placeHeatLabelPercents/)
+  assert.equal(nativeLayer.includes('LABEL_OFFSET_LAT'), false)
 })
 
 test('the rider map heat layer does not read demo cars or paint demand circles', () => {

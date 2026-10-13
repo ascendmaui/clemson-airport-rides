@@ -40,7 +40,7 @@ test('onboarding and the next launch both stop until this version is accepted', 
   const prompt = read('apps/driver/components/DriverAgreementPrompt.tsx')
   assert.match(onboarding, /<DriverAgreementPrompt/)
   assert.match(layout, /<DriverAgreementPrompt>/)
-  assert.match(layout, /<ThemedStack \/>\s*<ActiveTripResume \/>\s*<\/DriverAgreementPrompt>/)
+  assert.match(layout, /<ThemedStack \/>\s*<ActiveTripResume \/>\s*<PickupBeaconHost \/>\s*<\/DriverAgreementPrompt>/)
   assert.match(prompt, /resolveDriverClickwrap/)
   assert.match(prompt, /submitDriverClickwrap/)
   assert.match(prompt, /if \(phase === 'required'\)/)

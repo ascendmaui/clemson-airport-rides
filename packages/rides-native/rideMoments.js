@@ -67,15 +67,42 @@ export function paymentFailedMoment(prevHold, row, role = 'rider') {
   if (!row?.id || prevHold === undefined) return null
   const hold = fareHoldStatus(row)
   if (hold !== 'failed' || prevHold === 'failed') return null
+  const code = row.metadata?.fare_authorization?.code || row.metadata?.outstanding_balance?.code || null
   const amount = row.metadata?.fare_authorization?.amountCents ?? row.metadata?.fare_authorization?.amount_cents
+  const needsMethod = role !== 'driver' && code === 'no_payment_method'
   return {
     key: `payment-failed:${row.id}`,
     tone: 'error',
-    title: role === 'driver' ? 'Rider payment hold failed' : 'Payment hold failed',
+    title: role === 'driver'
+      ? 'Rider payment hold failed'
+      : (needsMethod ? 'Add a payment method' : 'Payment hold failed'),
     body: role === 'driver'
       ? 'The rider’s card was declined. Wait for an update before you drive to pickup.'
-      : `We could not hold ${amount ? money(amount) : 'the fare'} on your card. Update your payment method to keep this ride.`,
+      : (needsMethod
+        ? 'Add a card or Apple Pay in Billing. This ride stays matched.'
+        : `We could not hold ${amount ? money(amount) : 'the fare'} on your card. Update your payment method in Billing.`),
     cue: 'error',
+    action: role === 'driver' ? null : 'billing',
+  }
+}
+
+/**
+ * Live ride screen copy for a failed hold. A null payment row is expected and
+ * must not throw. The prompt is the same Billing link as the match sheet.
+ */
+export function failedHoldPrompt(trip) {
+  const auth = trip?.metadata?.fare_authorization
+  if (!auth || typeof auth !== 'object' || auth.status !== 'failed') return null
+  const paymentStatus = trip.payment_status ?? null
+  const payment = trip.payment ?? null
+  const code = auth.code || trip.metadata?.outstanding_balance?.code || null
+  const needsMethod = code === 'no_payment_method' || paymentStatus == null || payment == null
+  return {
+    title: 'Add a payment method',
+    body: needsMethod
+      ? 'Add a card or Apple Pay in Billing. This ride stays matched.'
+      : 'The fare hold did not go through. Add a payment method in Billing.',
+    pathname: '/billing',
   }
 }
 

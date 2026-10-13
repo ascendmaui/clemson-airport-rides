@@ -1,9 +1,25 @@
 export const LOCATION_STALE_MS = 30000
-export function trackingIssue(status, timestamp, now = Date.now()) {
+
+function freshStamp(value, now) {
+  const time = Date.parse(value || '')
+  if (!Number.isFinite(time)) return false
+  return now - time <= LOCATION_STALE_MS && time <= now + LOCATION_STALE_MS
+}
+
+/**
+ * A missing or old pin is stalled only when the driver heartbeat is stale too.
+ * A stationary driver who is still heartbeating keeps the last pin without the stalled line.
+ */
+export function trackingIssue(status, timestamp, now = Date.now(), heartbeatAt = null) {
   if (!['accepted', 'arriving', 'arrived', 'in_progress'].includes(status)) return null
+  const beatFresh = freshStamp(heartbeatAt, now)
   const time = Date.parse(timestamp || '')
-  if (!Number.isFinite(time)) return 'Waiting for driver location. Retrying automatically.'
+  if (!Number.isFinite(time)) {
+    if (beatFresh) return null
+    return 'Waiting for driver location. Retrying automatically.'
+  }
   if (now - time > LOCATION_STALE_MS || time > now + LOCATION_STALE_MS) {
+    if (beatFresh) return null
     return 'Location updates stalled. Last known pin shown. Retrying automatically.'
   }
   return null

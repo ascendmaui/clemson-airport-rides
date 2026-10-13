@@ -1,5 +1,6 @@
 import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 import { zonedCivilToUtc } from '../../shared/rideTime.js'
+import { passengerCount, passengerCountLabel } from './schedulePartyCopy.js'
 import {
   LOOKING_FOR_BACKUP_LABEL,
   backupBonusLabel,
@@ -123,6 +124,16 @@ export function pickupAtFromLocal(date, time) {
   const d = zonedCivilToUtc(y, m, day, h, min)
   if (Number.isNaN(d.getTime())) return null
   return d
+}
+
+/**
+ * Pickup instant for the weekend-window sentence on the schedule form.
+ * Blank until both date and time are filled. "invalid" when they do not parse.
+ */
+export function weekendHelperIso(date, time) {
+  if (!date || !time) return ''
+  const at = pickupAtFromLocal(date, time)
+  return at ? at.toISOString() : 'invalid'
 }
 
 export function validateSchedule({ date, time, pickup, dropoff, now = new Date() }) {
@@ -292,6 +303,8 @@ export function toRiderScheduleCard(row) {
     boostCents,
     depositCents: Math.max(0, Math.round(Number(row.deposit_cents) || 0)),
     purpose: purposeLabel(row.metadata?.purpose) || row.rider_note || '',
+    passengers: passengerCount(row),
+    passengerLabel: passengerCountLabel(row),
     estimate: Boolean(row.metadata?.fare_is_estimate),
     approxPin: pinForDisplay(row),
     canCancel: ['scheduled', 'searching', 'offered', 'accepted'].includes(row.status),
