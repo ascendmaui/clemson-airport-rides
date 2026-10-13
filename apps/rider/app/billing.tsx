@@ -30,6 +30,7 @@ import {
 import { nativePaymentSheetAvailable, presentNativeSetupSheet } from '@/lib/nativePaymentSheet'
 import type { NativeSetupResult } from '@/lib/nativePaymentSheetTypes'
 import { formatCents } from 'rides-native/tripTags.js'
+import { riderStatusPhrase } from 'rides-native/liveTrip.js'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -61,7 +62,7 @@ const MONEY_SHORTCUTS: { href: '/promo' | '/tiger-pass' | '/student' | '/history
   { href: '/promo', label: 'Promos', icon: 'promo', tone: 'orange' },
   { href: '/tiger-pass', label: 'Tiger Pass', icon: 'pass', tone: 'purple' },
   { href: '/student', label: 'Student', icon: 'student', tone: 'purple' },
-  { href: '/history', label: 'Tips', icon: 'tip', tone: 'orange' },
+  { href: '/history', label: 'History', icon: 'history', tone: 'orange' },
 ]
 
 function paymentGlyph(type: string): string {
@@ -419,7 +420,7 @@ function BillingScreen() {
           <View key={row.id} style={[styles.card, lift(colors, 'rest')]}>
             <Text style={styles.rowTitle}>{row.dropoff_label || 'Ride'}</Text>
             <Text style={styles.copy}>
-              {row.pickup_label || 'Pickup'} · {row.status || 'requested'}
+              {row.pickup_label || 'Pickup'} · {riderStatusPhrase(row.status)}
             </Text>
             <Text style={styles.copy}>
               Fare {formatCents(row.fare_cents || 0)}
