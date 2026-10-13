@@ -931,7 +931,7 @@ export function RideCard({
   return (
     // flexShrink lets the dock squeeze the card to the room left above the controls;
     // only the details scroll — Accept / Decline stay pinned and visible.
-    <Animated.View style={[styles.offerWrap, { transform: [{ translateY: rise }], zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION }]}>
+    <Animated.View style={[styles.offerWrap, { transform: [{ translateY: rise }], zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION, flex: 1, minHeight: 0 }]}>
       <Card
         variant="offer"
         style={[styles.offerCard, pulsing ? { borderColor: colors.orange, borderWidth: 2 } : null]}
@@ -1154,9 +1154,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   declineText: { fontWeight: '700', fontSize: 15, letterSpacing: -0.1 },
-  offerWrap: { flexShrink: 1, zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION },
-  offerCard: { flexShrink: 1, gap: 0, paddingBottom: 12 },
-  offerScroll: { flexGrow: 0, flexShrink: 1 },
+  offerWrap: { flex: 1, flexShrink: 1, minHeight: 0, zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION },
+  offerCard: { flex: 1, flexShrink: 1, minHeight: 0, gap: 0, paddingBottom: 12 },
+  offerScroll: { flexGrow: 1, flexShrink: 1, minHeight: 0 },
   offerBody: { gap: 10, paddingBottom: 2 },
   offerNotice: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
   offerActions: { gap: 8, paddingTop: 10, flexShrink: 0 },

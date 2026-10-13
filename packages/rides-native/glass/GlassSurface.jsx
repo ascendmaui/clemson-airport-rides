@@ -32,6 +32,7 @@ const PAD_KEYS = [
   'paddingTop', 'paddingBottom', 'paddingLeft', 'paddingRight',
 ]
 const FLOW_KEYS = ['alignItems', 'justifyContent', 'flexDirection', 'gap', 'flexWrap']
+const LAYOUT_KEYS = ['flex', 'flexGrow', 'flexShrink', 'minHeight', 'maxHeight']
 
 /**
  * Frosted glass plate: blur (or a milky fallback), brand tint, top specular
@@ -56,10 +57,12 @@ export function GlassSurface({
   const flat = StyleSheet.flatten(style) || {}
   const pad = {}
   const flow = {}
+  const layout = {}
   const rest = {}
   for (const [key, value] of Object.entries(flat)) {
     if (PAD_KEYS.includes(key)) pad[key] = value
     else if (FLOW_KEYS.includes(key)) flow[key] = value
+    else if (LAYOUT_KEYS.includes(key)) layout[key] = value
     else if (!STRIPPED.has(key)) rest[key] = value
   }
   const radius = Number(flat.borderRadius ?? recipe.radius)
@@ -87,10 +90,10 @@ export function GlassSurface({
         accessibilityLabel={accessibilityLabel}
         accessibilityState={accessibilityState}
         pointerEvents={pointerEvents}
-        style={[rest, radii]}
+        style={[rest, layout, radii]}
       >
         {opaquePlate ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, radii, { backgroundColor: opaqueFill }]} /> : null}
-        <View style={[filled ? styles.fill : styles.content, flow, pad]}>{children}</View>
+        <View style={[filled ? styles.fill : styles.content, flow, pad, layout]}>{children}</View>
       </GlassView>
     )
   }
@@ -100,7 +103,7 @@ export function GlassSurface({
       accessibilityLabel={accessibilityLabel}
       accessibilityState={accessibilityState}
       pointerEvents={pointerEvents}
-      style={[rest, radii, layeredShadow(dark, recipe.tint)]}
+      style={[rest, layout, radii, layeredShadow(dark, recipe.tint)]}
     >
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.clip, radii]}>
         {opaquePlate ? <View style={[StyleSheet.absoluteFill, { backgroundColor: opaqueFill }]} /> : null}
@@ -110,7 +113,7 @@ export function GlassSurface({
         <View style={[StyleSheet.absoluteFill, { backgroundColor: opaquePlate ? opaqueFill : fill }]} />
         <GlassSheen scheme={scheme} radius={radius} selected={selected} tint={recipe.tint} specular={recipe.specular} streak={recipe.streak} showStreak={paintStreak} edges={edges} />
       </View>
-      <View style={[filled ? styles.fill : styles.content, flow, pad]}>{children}</View>
+      <View style={[filled ? styles.fill : styles.content, flow, pad, layout]}>{children}</View>
     </View>
   )
 }
