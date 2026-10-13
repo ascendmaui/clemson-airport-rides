@@ -6,9 +6,10 @@ import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { AdminAccessDenied } from '../components/AdminAccessDenied'
 import { AdminEventsPanel } from '../components/AdminEventsPanel'
-import { isAdminIdentity } from '../lib/driverOnboarding'
+import { AdminInboxPanel } from '../components/AdminInboxPanel'
 import { rideOptionLabel } from '../../shared/rideOptions.js'
 import {
+  fetchAdminInbox,
   fetchAdminNotifications,
   fetchAdminOverview,
   fetchAdminPeople,
@@ -20,6 +21,7 @@ import {
 } from '../lib/adminDesk'
 
 const TABS = [
+  ['inbox', 'To-do'],
   ['notifications', 'Notifications'],
   ['applications', 'Applicants'],
   ['people', 'People'],
@@ -40,19 +42,25 @@ const TICKET_FILTERS = [
 
 function readTab() {
   const tab = getHashRoute().params.tab
-  return TABS.some(([id]) => id === tab) ? tab : 'notifications'
+  return TABS.some(([id]) => id === tab) ? tab : 'inbox'
 }
 
 export function AdminDesk() {
   const { user, loading } = useAuth()
   const [allowed, setAllowed] = useState(null)
+  const [gateError, setGateError] = useState('')
   const [tab, setTab] = useState(readTab)
   const [overview, setOverview] = useState(null)
+  const [inbox, setInbox] = useState(null)
 
   useEffect(() => {
     const sync = () => setTab(readTab())
     window.addEventListener('hashchange', sync)
-    return () => window.removeEventListener('hashchange', sync)
+    window.addEventListener('popstate', sync)
+    return () => {
+      window.removeEventListener('hashchange', sync)
+      window.removeEventListener('popstate', sync)
+    }
   }, [])
 
   useEffect(() => {
@@ -62,15 +70,22 @@ export function AdminDesk() {
       return undefined
     }
     let alive = true
-    supabase.from('profiles').select('role, is_admin, email').eq('id', user.id).maybeSingle()
-      .then(({ data }) => {
+    fetchAdminInbox()
+      .then((data) => {
         if (!alive) return
-        const adminOk = isAdminIdentity({
-          jwtEmail: user.email || data?.email,
-          role: data?.role,
-          isAdmin: data?.is_admin,
-        })
-        setAllowed(Boolean(adminOk))
+        setInbox(data)
+        setAllowed(true)
+        setGateError('')
+      })
+      .catch((err) => {
+        if (!alive) return
+        if (err.status === 401 || err.status === 403) {
+          setAllowed(false)
+          setGateError('')
+          return
+        }
+        setAllowed(false)
+        setGateError(err.message || 'Could not check admin access')
       })
     return () => { alive = false }
   }, [user, loading])
@@ -85,7 +100,11 @@ export function AdminDesk() {
     return <div style={{ padding: 40, color: 'var(--ink-secondary)' }}>Loading admin dashboard…</div>
   }
 
-  if (!allowed) return <AdminAccessDenied />
+  if (!allowed) {
+    return gateError
+      ? <div style={{ padding: 40, color: 'var(--danger)' }}>{gateError}</div>
+      : <AdminAccessDenied />
+  }
 
   return (
     <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 20px 48px' }}>
@@ -98,10 +117,11 @@ export function AdminDesk() {
       </p>
       <div style={{ display: 'flex', gap: 8, marginTop: 14, overflowX: 'auto' }}>
         {TABS.map(([id, label]) => {
-          const badge = id === 'notifications' ? overview?.unreadNotifications
-            : id === 'applications' ? overview?.pendingApplications
-              : id === 'support' ? overview?.escalatedTickets
-                : 0
+          const badge = id === 'inbox' ? inbox?.total
+            : id === 'notifications' ? overview?.unreadNotifications
+              : id === 'applications' ? overview?.pendingApplications
+                : id === 'support' ? overview?.escalatedTickets
+                  : 0
           return (
             <button
               key={id}
@@ -124,6 +144,12 @@ export function AdminDesk() {
           )
         })}
       </div>
+      {tab === 'inbox' && (
+        <AdminInboxPanel
+          inbox={inbox}
+          onChanged={() => fetchAdminInbox().then(setInbox).catch(() => {})}
+        />
+      )}
       {tab === 'notifications' && <NotificationsPanel onChanged={() => fetchAdminOverview().then(setOverview).catch(() => {})} />}
       {tab === 'applications' && <AdminDrivers embedded />}
       {tab === 'people' && <PeoplePanel />}

@@ -46,6 +46,7 @@ export declare function glassTextColor(opts?: GlassRecipeOptions): string
 export declare function glassCatalog(): Array<{ app: GlassApp; scheme: GlassScheme; variant: GlassVariant; accent: GlassAccent; recipe: GlassRecipe }>
 export declare function glassContrastFailures(): unknown[]
 export declare function glassShowsStreak(opts?: { variant?: GlassVariant; accent?: GlassAccent }): boolean
+export declare function nativeGlassAvailable(): boolean
 
 type GlassFrame = {
   children?: ReactNode

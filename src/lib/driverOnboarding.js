@@ -1,4 +1,5 @@
 import { serviceClassFromBody } from '../../shared/rideOptions.js'
+import { isAiReviewedDocument } from '../../shared/documentAiReview.js'
 import { supabase } from './supabase'
 import {
   EMAIL_TODO,
@@ -172,9 +173,9 @@ export async function fetchMyDriverDocuments(userId) {
   if (!supabase || !userId) return []
   let result = await supabase
     .from('driver_documents')
-    .select('id, doc_type, storage_path, created_at, match_status, review_status, review_note')
+    .select('id, doc_type, storage_path, created_at, match_status, review_status, review_note, ai_reason, ai_verdict, ai_confidence')
     .eq('profile_id', userId)
-  if (result.error && /match_status|review_status|review_note|schema cache/i.test(result.error.message || '')) {
+  if (result.error && /match_status|review_status|review_note|ai_reason|ai_verdict|ai_confidence|schema cache/i.test(result.error.message || '')) {
     result = await supabase.from('driver_documents').select('id, doc_type, storage_path, created_at').eq('profile_id', userId)
   }
   if (result.error) throw new Error(result.error.message)
@@ -231,8 +232,27 @@ export async function uploadDriverDocument(userId, docType, file) {
     await supabase.storage.from('driver-documents').remove([previous.storage_path])
   }
 
+  let review = null
+  if (isAiReviewedDocument(docType)) {
+    try {
+      review = await postJson('/api/driver?action=review-document', {
+        docType,
+        storagePath: path,
+      })
+    } catch {
+      review = null
+    }
+  }
+
   const signed = await supabase.storage.from('driver-documents').createSignedUrl(path, 60 * 20)
-  return { doc_type: docType, storage_path: path, url: signed.data?.signedUrl || null }
+  return {
+    doc_type: docType,
+    storage_path: path,
+    url: signed.data?.signedUrl || null,
+    reviewStatus: review?.reviewStatus || null,
+    aiReason: review?.aiReason || null,
+    driverMessage: review?.driverMessage || null,
+  }
 }
 
 async function saveDriverInfoDirect(userId, payload, email) {
@@ -808,6 +828,23 @@ export async function reviewProfilePhoto({ photoId, decision, reason }) {
   return postJson('/api/admin-drivers', {
     action: 'review-profile-photo',
     photoId,
+    decision,
+    reason,
+  })
+}
+
+export async function fetchDocumentReviewQueue() {
+  const headers = await authHeaders()
+  const res = await fetch('/api/admin-drivers?queue=documents', { headers })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`)
+  return data
+}
+
+export async function reviewDriverDocument({ documentId, decision, reason }) {
+  return postJson('/api/admin-drivers', {
+    action: 'review-document',
+    documentId,
     decision,
     reason,
   })

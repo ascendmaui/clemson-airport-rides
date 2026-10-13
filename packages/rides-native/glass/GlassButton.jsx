@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
 import { useReduceMotion } from '../shared/reduceMotion.js'
 import { type as typeScale } from '../shared/theme.js'
-import { GlassSurface } from './GlassSurface.jsx'
+import { GlassSurface, nativeGlassAvailable } from './GlassSurface.jsx'
 import { GLASS_PRESS, glassRecipe } from './tokens.js'
 
 const SPRING = Object.freeze({ damping: 16, stiffness: 260, mass: 0.7 })
@@ -38,7 +38,9 @@ function pressLayout(style, variant) {
 }
 
 /**
- * Pressable glass control. Scale and opacity run on the UI thread.
+ * Pressable glass control. Scale runs on the UI thread.
+ * The blur fallback also dips opacity. Native Liquid Glass never animates
+ * opacity, because opacity 0 leaves UIGlassEffect blank.
  * Reduced motion snaps the press state instead of springing it.
  */
 export function GlassButton({
@@ -67,10 +69,12 @@ export function GlassButton({
   useEffect(() => {
     disabledSv.value = disabled ? 1 : 0
   }, [disabled, disabledSv])
+  const nativeGlass = nativeGlassAvailable()
   const anim = useAnimatedStyle(() => {
     const down = pressed.value
     const off = disabledSv.value
     const scale = off ? 1 : 1 - down * (1 - GLASS_PRESS.scale)
+    if (nativeGlass) return { transform: [{ scale }] }
     const opacity = (off ? GLASS_PRESS.disabledOpacity : 1) * (1 - down * GLASS_PRESS.opacityDip)
     return { transform: [{ scale }], opacity }
   })
