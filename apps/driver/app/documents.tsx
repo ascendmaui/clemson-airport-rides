@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Card, ErrorText, Primary } from '@/components/chrome'
 import { StackPage } from '@/components/shell'
 import { useAuth } from '@/lib/auth'
+import { openDriverApplication } from '@/lib/openApplication'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { loadVehicle, type VehicleRow } from 'rides-native/driverDesk'
@@ -283,6 +284,12 @@ export default function DocumentsScreen() {
           ))}
         </Card>
       )}
+      <Primary
+        label="Open application"
+        onPress={() => openDriverApplication(router)}
+        tone="purple"
+        accessibilityHint="Opens your driver application"
+      />
     </StackPage>
   )
 }

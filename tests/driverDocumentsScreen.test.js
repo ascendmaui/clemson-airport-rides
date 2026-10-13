@@ -25,6 +25,11 @@ test('documents screen splits uploads into four status tabs and reuses the uploa
   assert.match(screen, /status\.label/)
   assert.match(screen, /categoryAttention\(/)
   assert.match(screen, /uploadDriverDocument\(/)
+  assert.match(screen, /label="Open application"/)
+  assert.match(screen, /onPress=\{\(\) => openDriverApplication\(router\)\}/)
+  assert.match(read('apps/driver/lib/openApplication.ts'), /router\.push\(DRIVER_APPLICATION_HREF\)/)
+  assert.match(read('apps/driver/app/onboarding.tsx'), /setStepId\(next\.stepId\)/)
+  assert.doesNotMatch(read('apps/driver/app/onboarding.tsx'), /Redirect href="\/\(tabs\)"/)
   assert.match(screen, /colors\.orange/)
   assert.match(screen, /tone=\{slot\.action === 'replace' \? 'purple' : 'orange'\}/)
   assert.doesNotMatch(screen, /review_status\s*===?\s*['"]approved['"]/)
@@ -36,6 +41,7 @@ test('documents screen splits uploads into four status tabs and reuses the uploa
   for (const file of [
     'packages/rides-native/documentCategories.test.js',
     'tests/driverDocumentsScreen.test.js',
+    'apps/driver/lib/openApplication.test.mjs',
   ]) {
     assert.match(npmTest, new RegExp(file.replace(/\./g, '\\.')))
   }
