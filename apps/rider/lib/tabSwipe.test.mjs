@@ -2,10 +2,13 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   RIDER_MAIN_TABS,
+  TAB_SWIPE_DISTANCE_RATIO,
   TAB_SWIPE_EDGE_PX,
+  TAB_SWIPE_VELOCITY,
   applyTabNavigation,
   nextTabIndex,
   prevTabIndex,
+  swipeDirection,
   tabIndexForPath,
   tabRequiresAuth,
   tabSwipeAllowed,
@@ -61,6 +64,30 @@ test('swipe and tap both update the same active index', () => {
   assert.equal(applyTabNavigation(0, { type: 'swipe', direction: 'prev' }, COUNT), 0)
   assert.equal(applyTabNavigation(2, { type: 'swipe', direction: 'stay' }, COUNT), 2)
   assert.equal(applyTabNavigation(1, { type: 'tap', index: 8 }, COUNT), 3)
+})
+
+test('a flick and a long drag resolve to the same tab as a tap', () => {
+  const width = 400
+  const distance = width * TAB_SWIPE_DISTANCE_RATIO
+  for (let index = 0; index < COUNT; index += 1) {
+    const next = swipeDirection(-distance, 0, width)
+    const prev = swipeDirection(distance, 0, width)
+    assert.equal(next, 'next')
+    assert.equal(prev, 'prev')
+    assert.equal(
+      applyTabNavigation(index, { type: 'swipe', direction: next }, COUNT),
+      applyTabNavigation(index, { type: 'tap', index: nextTabIndex(index, COUNT) }, COUNT),
+    )
+    assert.equal(
+      applyTabNavigation(index, { type: 'swipe', direction: prev }, COUNT),
+      applyTabNavigation(index, { type: 'tap', index: prevTabIndex(index, COUNT) }, COUNT),
+    )
+  }
+  assert.equal(swipeDirection(-10, -TAB_SWIPE_VELOCITY, width), 'next')
+  assert.equal(swipeDirection(10, TAB_SWIPE_VELOCITY, width), 'prev')
+  assert.equal(swipeDirection(-distance + 1, 0, width), 'stay')
+  assert.equal(swipeDirection(Number.NaN, 0, width), 'stay')
+  assert.equal(swipeDirection(40, 0, 0), 'stay')
 })
 
 test('paths land on the matching tab', () => {
