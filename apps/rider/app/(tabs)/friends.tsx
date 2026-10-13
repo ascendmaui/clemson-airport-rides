@@ -1,4 +1,4 @@
-import { useFocusEffect, useRouter } from 'expo-router'
+import { useFocusEffect, usePathname, useRouter } from 'expo-router'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ScrollView, Share, Switch, Text, TextInput, View } from 'react-native'
@@ -8,7 +8,8 @@ import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { CarpoolCompare } from '@/components/carpool/CarpoolCompare'
 import { NeighborhoodPicker } from '@/components/carpool/NeighborhoodPicker'
 import { Card, EmptyState, ErrorText, Field, SkeletonBlock } from '@/components/carpool/ui'
-import { MainTabs } from '@/components/MainTabs'
+import { TabSwipeRegion, useTabSwipeRemeasure } from '@/components/MainTabPager'
+import { normalizeTabPath } from '@/lib/tabSwipe'
 import { loadAmbassadorCode } from '@/lib/ambassadorCode'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
@@ -57,7 +58,8 @@ const START = defaultCarpoolEnds()
 const FRIEND_START = placeFromStop(lookupCatalogPlace('White C')) || START.pickup
 const FRIEND_END = placeFromStop(lookupCatalogPlace('College Avenue')) || START.dropoff
 
-export default function CarpoolHubScreen() {
+export function CarpoolHubScreen() {
+  const remeasureTabs = useTabSwipeRemeasure()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
@@ -110,9 +112,13 @@ export default function CarpoolHubScreen() {
   const [friendError, setFriendError] = useState<string | null>(null)
   const [friendNote, setFriendNote] = useState<string | null>(null)
   const [promptOpen, setPromptOpen] = useState(false)
+  const pathname = usePathname()
   useFocusEffect(useCallback(() => {
     void vehicleState.reload()
   }, [vehicleState.reload]))
+  useEffect(() => {
+    if (normalizeTabPath(pathname) === '/friends') void vehicleState.reload()
+  }, [pathname, vehicleState.reload])
 
   useEffect(() => {
     let alive = true
@@ -307,7 +313,7 @@ export default function CarpoolHubScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled" onScroll={remeasureTabs} scrollEventThrottle={32}>
         <LinearGradient
           colors={[colors.orange, colors.purple]}
           start={{ x: 0, y: 0 }}
@@ -458,10 +464,10 @@ export default function CarpoolHubScreen() {
             </Text>
             <NeighborhoodPicker label="Pickup" value={friendPickup} onChange={setFriendPickup} />
             <NeighborhoodPicker label="Drop-off" value={friendDropoff} onChange={setFriendDropoff} />
-            <View style={styles.friendPills}>
+            <TabSwipeRegion style={styles.friendPills}>
               <Pill label="Split evenly" active={splitMode === 'even'} onPress={() => { void tapHaptic(); setSplitMode('even') }} />
               <Pill label="Split by distance" active={splitMode === 'by_distance'} onPress={() => { void tapHaptic(); setSplitMode('by_distance') }} />
-            </View>
+            </TabSwipeRegion>
             <Text style={styles.note}>
               {splitMode === 'even'
                 ? 'Even split divides the server route fare. The lobby shows each person’s share, with this route alone struck, before anyone is charged.'
@@ -486,7 +492,6 @@ export default function CarpoolHubScreen() {
           </Card>
         </View>
       </ScrollView>
-      <MainTabs active="friends" />
       <SignInToBookSheet
         open={promptOpen}
         onClose={() => setPromptOpen(false)}
@@ -563,4 +568,8 @@ function makeStyles(colors: Palette) {
     },
     friendPills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 8, marginBottom: 8 },
   }
+}
+
+export default function FriendsRoute() {
+  return null
 }

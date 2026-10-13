@@ -33,7 +33,7 @@ test('driver offers explain the worth-it gauge with theme colors', () => {
 test('rider ride pickers open the ride type sheet', () => {
   const sheet = read('packages/rides-native/RideTypeSheet.jsx')
   const tiers = read('apps/rider/app/tiers.tsx')
-  const schedule = read('apps/rider/app/schedule.tsx')
+  const schedule = read('apps/rider/app/(tabs)/schedule.tsx')
   const near = read('apps/rider/components/NearTermSlots.tsx')
   const marketing = read('src/screens/MarketingInfo.jsx')
   assert.match(sheet, /RIDE_TYPE_GUIDE/)
