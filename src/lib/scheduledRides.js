@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 import { api, createServerScheduledTrip } from './payments'
 import { fetchRideQuote } from './rideBilling'
-import { partyCapacityMessage, passengerCount, passengerCountLabel } from './schedulePartyCopy'
+import { partyCapacityMessage, passengerCount, passengerCountLabel } from './schedulePartyCopy.js'
 import {
   DRIVER_QUEUE_SELECT,
   formatPickupAt,
