@@ -10,6 +10,11 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
+      "icon": {
+        "light": "./assets/images/ios-icon-light.png",
+        "dark": "./assets/images/ios-icon-dark.png",
+        "tinted": "./assets/images/ios-icon-tinted.png"
+      },
       "buildNumber": "19",
       "bundleIdentifier": "com.ascendmaui.clemsonrides.driver",
       "infoPlist": {
@@ -82,6 +87,15 @@
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Clemson RIDES uses the camera for driver documents and for a video clip you start during a ride. Ride clips stay on this phone.",
+          "microphonePermission": "Clemson RIDES uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone.",
+          "recordAudioAndroid": true,
+          "barcodeScannerEnabled": false
         }
       ],
       [

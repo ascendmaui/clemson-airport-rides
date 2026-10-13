@@ -37,7 +37,7 @@ test('web clears canceled trips from realtime, polling and wait updates and gate
 
 test('native stops tracking every terminal trip and offers a Home exit after cancellation', () => {
   const source = readFileSync(new URL('../apps/driver/app/trip.tsx', import.meta.url), 'utf8')
-  assert.match(source, /const terminalTrip = Boolean\(trip && \['completed', 'canceled', 'canceled_midride', 'cancelled_wait'\]\.includes\(trip\.status\)\)/)
+  assert.match(source, /const terminalTrip = Boolean\(trip && \['completed', 'canceled', 'canceled_midride', 'cancelled_wait', 'expired'\]\.includes\(trip\.status\)\)/)
   assert.match(source, /useDriverLocation\(Boolean\(user && trip && !terminalTrip\)/)
   assert.match(source, /const action = trip && !terminalTrip \? statusActionLabel\(trip\.status\) : null/)
   // Canceled, ended-early, and no-show trips get the "Back to queue" card; anything else keeps Back to Home.

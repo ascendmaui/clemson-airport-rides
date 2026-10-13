@@ -5,21 +5,25 @@ import { AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AudioCaptureCard } from 'rides-native/AudioCaptureCard'
 import { SafetyDeck } from 'rides-native/SafetyDeck'
-import { VideoCaptureCard } from 'rides-native/VideoCaptureCard'
 import { ACTIVE_RIDE_STATUSES, CUPD_PHONE_DISPLAY, CUPD_PHONE_E164 } from 'rides-native/safety.js'
 import { subscribeTrips } from 'rides-native/driverDesk'
+import { DashcamCard } from '@/components/DashcamCard'
 import { SosButton, SosSheet, type SosTrip } from '@/components/SosSheet'
-import { SAFETY_FEATURE_IDS, driverTrackingCopy } from '../../../shared/safetyHub.js'
+import { TripTrackingCard } from '@/components/TripTrackingCard'
+import { SAFETY_FEATURE_IDS } from '../../../shared/safetyHub.js'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
+import { useCardShadow } from '@/components/chrome'
 
 export default function DriverSafetyScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
   const { colors } = useTheme()
+  const shadow = useCardShadow()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const [feature, setFeature] = useState<(typeof SAFETY_FEATURE_IDS)[number]>('sos')
   const [trip, setTrip] = useState<SosTrip | null>(null)
@@ -45,7 +49,7 @@ export default function DriverSafetyScreen() {
       loading = true
       try {
         const [ride, location] = await Promise.all([
-          client!.from('trips').select('id, status, pickup_label, dropoff_label')
+          client!.from('trips').select('id, status, pickup_label, dropoff_label, rider_id')
             .eq('driver_id', driverId!).in('status', [...ACTIVE_RIDE_STATUSES])
             .order('accepted_at', { ascending: false }).limit(1).maybeSingle(),
           client!.from('driver_status').select('lat, lng').eq('driver_id', driverId!).maybeSingle(),
@@ -56,6 +60,7 @@ export default function DriverSafetyScreen() {
           status: ride.data.status,
           pickupLabel: ride.data.pickup_label,
           dropoffLabel: ride.data.dropoff_label,
+          riderId: ride.data.rider_id,
         } : null)
         if (!location.error) setFix(Number.isFinite(location.data?.lat) && Number.isFinite(location.data?.lng)
           ? { lat: location.data!.lat, lng: location.data!.lng } : null)
@@ -91,7 +96,7 @@ export default function DriverSafetyScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={styles.back}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={[styles.back, shadow]}>
           <Glyph name="back" size={20} color={colors.title} accessibilityLabel="Back" />
         </Pressable>
         <View style={{ flex: 1 }}>
@@ -104,15 +109,24 @@ export default function DriverSafetyScreen() {
           Audio, video, live location, and SOS are together here. Recording stays on this phone and is not uploaded.
         </Text>
         {!user ? <Text style={styles.body}>Sign in to use recording on an active ride.</Text> : null}
-        <SafetyDeck colors={colors} activeId={feature} onChange={setFeature}>
+        <SafetyDeck
+          colors={colors}
+          activeId={feature}
+          onChange={setFeature}
+          description={feature === 'video'
+            ? 'Record a dashcam clip from this phone’s camera during an active ride. A timer stays on screen. The clip stays on the device and is not uploaded.'
+            : feature === 'tracking'
+              ? 'Share a live trip link with someone you trust. Check background location so your rider can still see the car while you use Maps.'
+              : undefined}
+        >
           <View style={{ display: feature === 'audio' ? 'flex' : 'none' }}>
             <AudioCaptureCard status={status} colors={colors} />
           </View>
           <View style={{ display: feature === 'video' ? 'flex' : 'none' }}>
-            <VideoCaptureCard status={status} colors={colors} />
+            <DashcamCard status={status} active={feature === 'video'} />
           </View>
           <View style={{ display: feature === 'tracking' ? 'flex' : 'none' }}>
-            <Text style={styles.body}>{driverTrackingCopy()}</Text>
+            <TripTrackingCard trip={trip} />
           </View>
           <View style={{ display: feature === 'sos' ? 'flex' : 'none', gap: 8 }}>
             {trip ? (
@@ -145,13 +159,13 @@ function makeStyles(colors: Palette) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
     header: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
-    back: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
+    back: { width: 40, height: 40, borderRadius: radius.control, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
     backLabel: { fontSize: 18, color: colors.title, fontWeight: '700' as const },
-    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
-    title: { color: colors.title, fontSize: 22, fontWeight: '800' as const },
+    kicker: { color: colors.orange, ...typeScale.kickerSm },
+    title: { color: colors.title, ...typeScale.headline },
     list: { padding: 16, gap: 14, paddingBottom: 32 },
-    body: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
-    action: { minHeight: 48, borderRadius: 14, alignItems: 'center' as const, justifyContent: 'center' as const },
-    actionText: { color: colors.onAccent, fontWeight: '800' },
+    body: { color: colors.inkSecondary, ...typeScale.body },
+    action: { minHeight: 52, borderRadius: radius.lg, alignItems: 'center' as const, justifyContent: 'center' as const },
+    actionText: { color: colors.onAccent, ...typeScale.button },
   })
 }

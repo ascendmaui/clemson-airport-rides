@@ -199,9 +199,9 @@ export const SAFETY_FEATURES = [
     id: 'orange-screen',
     status: 'live',
     imageId: 'night-orange-screen',
-    title: 'Blinking orange screen',
-    what: 'The rider app flashes orange as your driver gets close.',
-    how: 'After a driver has accepted, the screen shows the distance in feet and pulses orange as they get closer. It can also buzz.',
+    title: 'Driver getting close',
+    what: 'The rider app shows how near your driver is, in feet.',
+    how: 'After a driver has accepted, the distance stays on screen and a soft glow breathes around that card as they get closer. It can also buzz.',
     why: 'You can spot the car when it is near, even on a busy street.',
   },
   {

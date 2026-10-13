@@ -166,16 +166,25 @@ export async function notifyAcceptedRide(card: {
   dropoffLabel: string
 }) {
   await ensureRideChannel()
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'Ride accepted',
-      body: `${card.pickupLabel} → ${card.dropoffLabel}`,
-      data: { tripId: card.id },
-      sound: 'accept.wav',
-      ...androidChannelFields(),
-    },
-    trigger: null,
-  })
+  const content = {
+    title: 'Ride accepted',
+    body: `${card.pickupLabel} → ${card.dropoffLabel}`,
+    data: { tripId: card.id },
+    sound: 'accept.wav',
+    ...androidChannelFields(),
+  }
+  try {
+    await Notifications.scheduleNotificationAsync({ content, trigger: null })
+  } catch {
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: { ...content, sound: 'default' },
+        trigger: null,
+      })
+    } catch {
+      /* a missing custom sound must not reject the ride-accepted alert */
+    }
+  }
 }
 
 export async function notifyScheduledBoard(card: {

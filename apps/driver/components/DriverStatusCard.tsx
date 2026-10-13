@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Card, ErrorText, Primary, Tag } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
 import { useTheme } from '@/lib/theme'
+import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import type { DriverGateView } from 'rides-native/driverGateView'
 
 export type DriverStatusCardProps = {
@@ -203,13 +204,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '800',
+    ...typeScale.cardTitle,
     flex: 1,
   },
   body: {
-    fontSize: 13,
-    lineHeight: 18,
+    ...typeScale.body,
   },
   nextStepsSection: {
     gap: 8,
@@ -225,7 +224,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 10,
-    borderRadius: 14,
+    borderRadius: radius.lg,
     gap: 10,
   },
   stepIconWrap: {

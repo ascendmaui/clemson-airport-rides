@@ -2,18 +2,20 @@ import { Glyph, PressScale } from 'rides-native/icons'
 import type { ReactNode } from 'react'
 import { useMemo } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native'
+import { motion, radius, shadowStyle, type as typeScale, type ElevationLevel } from 'rides-native/shared/theme.js'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
 
-export function useCardShadow() {
+export function useLift(level: ElevationLevel = 'rest') {
   const { colors, scheme } = useTheme()
-  return useMemo(() => ({
-    shadowColor: colors.shadow,
-    shadowOpacity: scheme === 'dark' ? 0.28 : 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
-  }), [colors.shadow, scheme])
+  return useMemo(
+    () => shadowStyle(colors.shadow, level, scheme),
+    [colors.shadow, level, scheme],
+  )
+}
+
+export function useCardShadow() {
+  return useLift('rest')
 }
 
 export function BackButton({ onPress }: { onPress: () => void }) {
@@ -61,11 +63,11 @@ export function Primary({
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel || label}
       accessibilityState={{ disabled: Boolean(disabled) }}
-      scaleTo={disabled ? 1 : 0.97}
+      scaleTo={disabled ? 1 : motion.pressScale}
       style={[
         styles.primary,
         tone === 'ghost' ? null : shadow,
-        { backgroundColor: background, opacity: disabled ? 0.55 : 1, flexDirection: 'row', gap: 8 },
+        { backgroundColor: background, opacity: disabled ? motion.disabledOpacity : 1, flexDirection: 'row', gap: 8 },
       ]}
     >
       {icon ? <Glyph name={icon} size={20} color={color} /> : null}
@@ -78,7 +80,7 @@ export function Tag({ label, tone = 'purple' }: { label: string; tone?: 'purple'
   const { colors } = useTheme()
   const on = tone === 'orange'
   return (
-    <View style={[styles.tag, { backgroundColor: on ? 'rgba(245,102,0,0.16)' : colors.track }]}>
+    <View style={[styles.tag, { backgroundColor: on ? colors.orangeSoft : colors.purpleSoft }]}>
       <Text style={[styles.tagLabel, { color: on ? colors.orange : colors.title }]}>{label}</Text>
     </View>
   )
@@ -120,6 +122,7 @@ export function Field({
           {
             backgroundColor: colors.input,
             color: colors.ink,
+            borderColor: colors.border,
             minHeight: multiline ? 96 : undefined,
             textAlignVertical: multiline ? 'top' : 'center',
           },
@@ -171,9 +174,9 @@ export function ErrorText({ children }: { children: string }) {
 export function screenColors(colors: Palette) {
   return {
     screen: { flex: 1, backgroundColor: colors.background },
-    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12 },
-    title: { fontSize: 28, fontWeight: '800' as const, color: colors.title, letterSpacing: -0.4 },
-    copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    kicker: { color: colors.orange, ...typeScale.kicker },
+    title: { ...typeScale.title, color: colors.title },
+    copy: { color: colors.inkSecondary, ...typeScale.body },
   }
 }
 
@@ -181,30 +184,35 @@ const styles = StyleSheet.create({
   back: {
     width: 40,
     height: 40,
-    borderRadius: 14,
+    borderRadius: radius.control,
     alignItems: 'center',
     justifyContent: 'center',
   },
   backLabel: { fontSize: 18, fontWeight: '700' },
   primary: {
-    borderRadius: 16,
-    minHeight: 48,
-    paddingVertical: 14,
+    borderRadius: radius.lg,
+    minHeight: 52,
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
   },
-  primaryLabel: { fontWeight: '700', fontSize: 16 },
-  tag: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  tagLabel: { fontSize: 11, fontWeight: '800' },
+  primaryLabel: {
+    fontWeight: typeScale.button.fontWeight,
+    fontSize: typeScale.button.fontSize,
+    letterSpacing: typeScale.button.letterSpacing,
+  },
+  tag: { borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  tagLabel: { fontSize: typeScale.kickerSm.fontSize, fontWeight: '800', letterSpacing: 0.2 },
   field: { gap: 6 },
-  fieldLabel: { fontSize: 13, fontWeight: '700' },
+  fieldLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 0.1 },
   input: {
-    borderRadius: 14,
+    borderRadius: radius.lg,
+    borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
   },
-  card: { borderRadius: 22, padding: 16, gap: 10 },
+  card: { borderRadius: radius.xl, padding: 16, gap: 10 },
   error: { fontSize: 13, lineHeight: 18 },
 })

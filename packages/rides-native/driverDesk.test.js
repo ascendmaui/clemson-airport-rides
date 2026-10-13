@@ -559,6 +559,38 @@ test('loadVehicle returns vehicle row for driver', async () => {
   assert.equal(vehicle.model, 'Camry')
 })
 
+test('loadVehicle falls back when luxury_exception is not a column yet', async () => {
+  const selects = []
+  const supabase = {
+    from() {
+      return {
+        select(cols) {
+          selects.push(cols)
+          return {
+            eq() {
+              return {
+                limit() {
+                  if (String(cols).includes('luxury_exception')) {
+                    return Promise.resolve({
+                      data: null,
+                      error: { message: "Could not find the 'luxury_exception' column of 'vehicles' in the schema cache" },
+                    })
+                  }
+                  return Promise.resolve({ data: [{ id: 'v-1', make: 'Honda', service_class: 'standard' }], error: null })
+                },
+              }
+            },
+          }
+        },
+      }
+    },
+  }
+  const vehicle = await loadVehicle(supabase, 'driver-1')
+  assert.equal(vehicle.make, 'Honda')
+  assert.match(selects[0], /luxury_exception/)
+  assert.equal(String(selects[1]).includes('luxury_exception'), false)
+})
+
 test('loadVehicle returns null when client or driverId is missing or vehicle not found', async () => {
   const supabase = createFakeSupabase()
   assert.equal(await loadVehicle(null, 'driver-123'), null)
