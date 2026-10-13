@@ -169,6 +169,7 @@ export default function ConfirmPickup() {
         <Text style={styles.hint}>Drag the map to set your pickup pin, or type a campus or airport stop below.</Text>
         {locateNote ? <Text style={styles.locateNote}>{locateNote}</Text> : null}
         <NeighborhoodPicker
+          liveSuggest
           label="Pickup address"
           value={pickup}
           onChange={(place) => {
@@ -177,6 +178,7 @@ export default function ConfirmPickup() {
           }}
         />
         <NeighborhoodPicker
+          liveSuggest
           label="Drop-off address"
           value={dropoff}
           onChange={(place) => {
