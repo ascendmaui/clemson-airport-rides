@@ -24,6 +24,9 @@ import { STUDENT_DISCOUNT_LABEL } from 'rides-native/riderMoney.js'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import {
   describeDriver,
+  EMPTY_FAVORITES_COPY,
+  FAVORITE_ACCOUNT_SAVE_ERROR,
+  FAVORITE_PERSIST_ERROR,
   fetchDriversByIds,
   canFavoriteDriver,
   fetchOnlineDrivers,
@@ -173,18 +176,32 @@ export default function PickDriver() {
       ? favoriteIds.filter((id: string) => id !== driverId)
       : [...favoriteIds, driverId]
     setFavoriteIds(next)
-    const saved = await saveFavoriteDriverIds(supabase, authStorage, user.id, next)
-    setFavoriteIds(saved.ids)
-    setFavNote(saved.note)
     try {
-      const remote = await setFavoriteDrivers(supabase, saved.ids)
-      if (Array.isArray(remote?.favoriteDriverIds)) {
-        setFavoriteIds(remote.favoriteDriverIds)
-        setPassPreferredIds(remote.active ? remote.preferredDriverIds || [] : [])
-        if (remote.demoDriversIgnored) setFavNote(remote.demoNote || 'Preview cars were not saved.')
+      const saved = await saveFavoriteDriverIds(supabase, authStorage, user.id, next)
+      setFavoriteIds(saved.error && !saved.note ? favoriteIds : saved.ids)
+      setFavNote(saved.note)
+      if (saved.error) setError(saved.error)
+      else setError((current) => (
+        current === FAVORITE_PERSIST_ERROR || current === FAVORITE_ACCOUNT_SAVE_ERROR ? null : current
+      ))
+      if (!saved.error || saved.note) {
+        try {
+          const remote = await setFavoriteDrivers(supabase, saved.ids)
+          if (Array.isArray(remote?.favoriteDriverIds)) {
+            setFavoriteIds(remote.favoriteDriverIds)
+            setPassPreferredIds(remote.active ? remote.preferredDriverIds || [] : [])
+            if (remote.demoDriversIgnored) setFavNote(remote.demoNote || 'Preview cars were not saved.')
+            if (saved.error === FAVORITE_ACCOUNT_SAVE_ERROR) {
+              setError((current) => (current === FAVORITE_ACCOUNT_SAVE_ERROR ? null : current))
+            }
+          }
+        } catch {
+          /* the profile row is already the matching source when the API is down */
+        }
       }
-    } catch {
-      /* the profile row is already the matching source when the API is down */
+    } catch (err) {
+      setFavoriteIds(favoriteIds)
+      setError(err instanceof Error ? err.message : FAVORITE_PERSIST_ERROR)
     }
     await tapHaptic()
   }
@@ -229,10 +246,11 @@ export default function PickDriver() {
             onPress={() => { void toggleFavorite(driver.id) }}
             hitSlop={16}
             accessibilityRole="button"
-            accessibilityLabel={saved ? 'Remove preferred driver' : 'Save preferred driver'}
+            accessibilityLabel={saved ? `Remove ${driver.name || 'this driver'} from saved drivers` : `Save ${driver.name || 'this driver'}`}
             accessibilityHint={saved ? 'Removes this driver from your preferred list' : 'Saves this driver as preferred'}
+            accessibilityState={{ selected: saved }}
           >
-            <Text style={saved ? styles.saveOn : styles.saveOff}>{saved ? 'Saved' : 'Save'}</Text>
+            <Text style={saved ? styles.saveOn : styles.saveOff}>{saved ? '★ Saved' : '☆ Save'}</Text>
           </Pressable>
         </View>
       </Pressable>
@@ -395,6 +413,9 @@ export default function PickDriver() {
           <Text style={styles.meta}>{TIGER_PASS_NAME} offers preferred drivers first, then your other saved drivers.</Text>
         ) : null}
         {favNote ? <Text style={styles.meta}>{favNote}</Text> : null}
+        {phase === 'results' && favoriteIds.length === 0 ? (
+          <Text style={styles.sub}>{EMPTY_FAVORITES_COPY}</Text>
+        ) : null}
         {phase === 'results' ? renderGroups() : null}
         {/* Busy roster: display only; kept outside real driver sections. */}
         {busy.length > 0 ? (
@@ -431,7 +452,9 @@ export default function PickDriver() {
           <Text style={styles.student}>Student pricing is 10% off Standard. This tier stays full price.</Text>
         ) : null}
         <TipBoostPicker cents={prepaidTipCents} onChange={setPrepaidTipCents} />
-        {error && drivers.some((driver: OnlineDriver) => driver.online) ? <Text style={styles.error}>{error}</Text> : null}
+        {error && drivers.some((driver: OnlineDriver) => driver.online) ? (
+          <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="assertive">{error}</Text>
+        ) : null}
         <PrimaryButton
           label={requesting ? 'Requesting…' : selectedDriver ? `Request ${selectedDriver.name}` : (anyOnline ? 'Request next driver' : 'Select a driver')}
           onPress={onRequest}
