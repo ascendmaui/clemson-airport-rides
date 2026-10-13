@@ -26,6 +26,14 @@ import { carpoolSeatCount, resolveOfferedTier, scheduleDiscountMetadata } from '
 import { tigerPassBpsForRider } from '../riderPass.js'
 import { tigerPassMetadata } from '../../shared/tigerPass.js'
 import { assertTierAvailable } from '../rideAvailability.js'
+import {
+  PARTY_FARE_COPY,
+  WEEKEND_WINDOW_COPY,
+  partyCapacityMessage,
+  passengerCount,
+  passengerCountLabel,
+  weekendWindowNote,
+} from '../../src/lib/schedulePartyCopy.js'
 import { loadNearTermOffer } from '../nearTermAvailability.js'
 import { notifyScheduledBoard } from '../scheduledBoardAlerts.js'
 import { isNearTermRequest, matchRequestedSlot } from '../../shared/nearTermSlots.js'
@@ -34,15 +42,18 @@ import { authorizeRideRequest } from '../fareAuthorization.js'
 import { boostMetadata, parseBoostCents } from '../../shared/scheduledBoost.js'
 import { insertTripRow } from '../scheduledBoostStore.js'
 
-
-/** Integer passenger count from the request; default 1. Prefer passengers over partySize. */
-function passengerCount(body) {
-  const raw = body?.passengers ?? body?.partySize ?? body?.party_size
-  if (raw == null || raw === '') return 1
-  const n = Math.round(Number(raw))
-  if (!Number.isFinite(n) || n < 1) return 1
-  return n
-}
+export {
+  PARTY_FARE_COPY,
+  SCHEDULE_PARTY_SEAT_CAP,
+  WEEKEND_WINDOW_COPY,
+  isScheduleWeekendWindow,
+  partyCapacityMessage,
+  partyFareCopy,
+  passengerCount,
+  passengerCountLabel,
+  weekendWindowCopy,
+  weekendWindowNote,
+} from '../../src/lib/schedulePartyCopy.js'
 
 const PURPOSES = new Set(['game_day', 'early_class', 'airport', 'planned', 'party_weekend', 'recurring'])
 
@@ -204,6 +215,7 @@ export default async function handler(req, res, deps = {}) {
     user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0],
     'Rider',
   )
+  const passengers = passengerCount(body)
   const metadata = {
     kind: scheduledFor ? 'scheduled' : 'airport',
     purpose: priced.airport ? 'airport' : purpose,
@@ -253,7 +265,7 @@ export default async function handler(req, res, deps = {}) {
       fare_source: 'server',
       rider_pays_cents: priced.fareCents,
     },
-    passengers: tier === 'carpool' ? carpoolSeatCount(tier, passengerCount(body)) : passengerCount(body),
+    passengers: tier === 'carpool' ? carpoolSeatCount(tier, passengers) : passengers,
     pickup_at: scheduledFor,
     scheduled_for: scheduledFor,
     rider_note: purpose,
@@ -330,6 +342,12 @@ export default async function handler(req, res, deps = {}) {
     scheduleDiscountPct: priced.scheduleDiscountPct || 0,
     scheduleDiscountCents: priced.scheduleDiscountCents || 0,
     scheduleDiscountApplied: Boolean(priced.scheduleDiscountApplied),
+    passengers: tier === 'carpool' ? carpoolSeatCount(tier, passengers) : passengers,
+    passengerLabel: passengerCountLabel(tier === 'carpool' ? carpoolSeatCount(tier, passengers) : passengers),
+    partyCapacityMessage: partyCapacityMessage(tier === 'carpool' ? carpoolSeatCount(tier, passengers) : passengers),
+    partyFareCopy: PARTY_FARE_COPY,
+    weekendWindowCopy: purpose === 'party_weekend' ? WEEKEND_WINDOW_COPY : null,
+    weekendWindowNote: scheduledFor ? weekendWindowNote(scheduledFor) : null,
     backupBonusCents: backupBonusCents || 0,
     backupBooked: Boolean(backupQueue),
     boostCents,
