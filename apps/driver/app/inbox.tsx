@@ -2,7 +2,7 @@ import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Card, Primary, Tag } from '@/components/chrome'
+import { BackButton, Card, Primary, Tag } from '@/components/chrome'
 import { DayHeader, EmptyState, FadeIn, SoftNote } from '@/components/day'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
@@ -82,6 +82,7 @@ export default function InboxScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top + 12 }]}>
       <View style={styles.head}>
+        <BackButton onPress={() => router.back()} />
         <DayHeader
           kicker="CLEMSON RIDES"
           title="Inbox"

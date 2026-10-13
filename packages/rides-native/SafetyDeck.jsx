@@ -7,24 +7,18 @@ import { radius, type as typeScale } from './shared/theme.js'
 export function SafetyDeck({ colors, activeId, onChange, children, description }) {
   const active = SAFETY_FEATURES.find((feature) => feature.id === activeId) || SAFETY_FEATURES[0]
   const reduceMotion = useReduceMotion()
-  const fade = useRef(new Animated.Value(1)).current
   const rise = useRef(new Animated.Value(0)).current
 
   useEffect(() => {
     if (reduceMotion) {
-      fade.setValue(1)
       rise.setValue(0)
       return undefined
     }
-    fade.setValue(0)
     rise.setValue(8)
-    const anim = Animated.parallel([
-      Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }),
-      Animated.spring(rise, { toValue: 0, friction: 8, tension: 80, useNativeDriver: true }),
-    ])
+    const anim = Animated.spring(rise, { toValue: 0, friction: 8, tension: 80, useNativeDriver: true })
     anim.start()
     return () => anim.stop()
-  }, [active.id, fade, reduceMotion, rise])
+  }, [active.id, reduceMotion, rise])
 
   return (
     <View style={{ gap: 12 }}>
@@ -70,7 +64,6 @@ export function SafetyDeck({ colors, activeId, onChange, children, description }
       <Animated.View
         accessibilityLabel={active.title}
         style={{
-          opacity: fade,
           transform: [{ translateY: rise }],
           backgroundColor: colors.card,
           borderRadius: radius.panel,
