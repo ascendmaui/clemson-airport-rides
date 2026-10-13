@@ -198,7 +198,7 @@ function InboxTabButton({
   const { colors } = useTheme()
   return (
     <Pressable onPress={onPress} style={styles.tab} accessibilityRole="tab" accessibilityState={{ selected: active }}>
-      <Text style={{ color: active ? colors.orange : colors.inkSecondary, fontWeight: '800' }}>{label}</Text>
+      <Text style={{ color: active ? colors.orange : colors.inkSecondary, fontWeight: '800', letterSpacing: -0.1 }}>{label}</Text>
       {active ? <View style={[styles.underline, { backgroundColor: colors.orange }]} /> : <View style={styles.underlineSpacer} />}
     </Pressable>
   )
