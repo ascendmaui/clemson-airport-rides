@@ -67,6 +67,7 @@ test('gesture and cluster logic stay in place', () => {
   assert.match(home, /styles\.bottomCluster/)
   assert.match(home, /translateY: clusterY/)
   assert.match(home, /toValue: bottomClusterTranslateY\(online\), duration: 280, useNativeDriver: true/)
+  // Gesture-handler pan, not a tap. The knob logic stays with the slider.
   assert.match(swipe, /Gesture\.Pan\(\)/)
   assert.match(swipe, /onUpdate/)
   assert.doesNotMatch(swipe, /onPress=/)
