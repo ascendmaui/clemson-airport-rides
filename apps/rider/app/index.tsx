@@ -25,7 +25,7 @@ import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
 import { useAuth } from '@/lib/auth'
 import { setAuthNext } from '@/lib/authNext'
 import { listScheduledTrips, type ScheduledRow } from '@/lib/scheduleApi'
-import { playTigerCue, tapHaptic } from '@/lib/feedback'
+import { playMatchChime, tapHaptic } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { displayFirstName } from 'rides-native/authErrors'
 import { campusOverlays } from 'rides-native/riderShell.js'
@@ -663,7 +663,7 @@ export default function RiderHome() {
 
           <Pressable
             onPress={() => {
-              void playTigerCue()
+              void playMatchChime()
               router.push('/friends')
             }}
             style={({ pressed }) => [styles.gameday, lift(colors, 'rest'), pressStyle(pressed)]}
