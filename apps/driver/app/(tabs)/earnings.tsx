@@ -101,7 +101,7 @@ export default function EarningsHub() {
   const moneyRows: MenuRow[] = [
     { icon: 'payout', title: 'Payouts', subtitle: 'Stripe balance and cash out', onPress: () => router.push('/payouts') },
     { icon: 'tip', title: 'Tips and activity', subtitle: 'Every fare, tip, and boost', onPress: () => router.push('/earnings-activity') },
-    { icon: 'calculator', title: 'Tax info', subtitle: 'W-9 on your application', onPress: () => router.push('/tax') },
+    { icon: 'calculator', title: 'Tax info', subtitle: 'W-9 status and year-end summary', onPress: () => router.push('/tax') },
   ]
   const week = weekNetCents(data?.trips || [])
   const pending = Number(payouts?.pendingCents) || 0
@@ -226,9 +226,9 @@ export default function EarningsHub() {
               </Card>
               <Card>
                 <Text style={[styles.kicker, { color: colors.orange }]}>TAXES</Text>
-                <Text style={{ color: colors.title, fontWeight: '800', fontSize: 18 }}>Year-end summary</Text>
+                <Text style={{ color: colors.title, fontWeight: '800', fontSize: 18 }}>Yearly earnings summary</Text>
                 <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-                  Gross earnings, tips, platform fees, payouts, deductible miles, and an estimated mileage deduction.
+                  Gross fares, tips, platform fees, bonuses and perks, net payouts, a monthly breakdown, mileage, and tax estimates.
                 </Text>
                 <Pressable
                   onPress={() => router.push('/tax')}
