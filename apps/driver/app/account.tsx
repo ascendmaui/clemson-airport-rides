@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth'
 import { registerDriverPush, type PushState } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { displayFirstName } from 'rides-native/authErrors'
+import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
 import { WomenOnlyCard } from 'rides-native/WomenOnlyCard'
 import { loadComfortPreference, saveComfortPreference } from 'rides-native/comfortPreference.js'
 import { radius, type as typeScale } from 'rides-native/shared/theme.js'
@@ -93,6 +94,7 @@ export default function AccountScreen() {
       </Text>
       {push?.detail ? <Text style={styles.copy}>{push.detail}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      <AdminAccountRow supabase={supabase} colors={colors} onPress={() => router.push('/admin')} />
       {user ? (
         <>
           <Pressable

@@ -79,10 +79,14 @@ export function AdminDrivers({ embedded = false }) {
   })
 
   useEffect(() => {
-    if (loading) return
+    if (embedded) {
+      setAllowed(true)
+      return undefined
+    }
+    if (loading) return undefined
     if (!user?.id || !supabase) {
       setAllowed(false)
-      return
+      return undefined
     }
     let alive = true
     supabase
@@ -101,7 +105,7 @@ export function AdminDrivers({ embedded = false }) {
     return () => {
       alive = false
     }
-  }, [user, loading])
+  }, [embedded, user, loading])
 
   async function load() {
     setError(null)

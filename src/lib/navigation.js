@@ -27,10 +27,13 @@ export function getHashRoute() {
     return { path: 'landing', params: {}, segments: [] }
   }
 
-  const hashRaw = (typeof window !== 'undefined' ? window.location.hash : '').replace(/^#\/?/, '')
-  const pathRaw = (typeof window !== 'undefined' ? window.location.pathname : '').replace(/^\//, '')
+  const loc = typeof window !== 'undefined' ? window.location : null
+  const hashRaw = String(loc?.hash || '').replace(/^#\/?/, '')
+  const pathRaw = String(loc?.pathname || '').replace(/^\//, '')
+  const search = String(loc?.search || '')
   // Prefer hash when present; otherwise fall back to pathname.
-  const raw = hashRaw || pathRaw || 'landing'
+  // Path form keeps ?tab= on /admin. A bare /?code= OAuth return stays on landing.
+  const raw = hashRaw || (pathRaw ? `${pathRaw}${pathRaw.includes('?') ? '' : search}` : '') || 'landing'
   const [pathPart, qs] = raw.split('?')
   const segments = pathPart.split('/').filter(Boolean)
   const path = segments[0] || 'landing'
@@ -114,6 +117,17 @@ export function navigate(path, params = {}) {
     return
   }
   const qs = new URLSearchParams(params).toString()
+  if (path === 'admin' || path === 'admin-dashboard') {
+    const next = `/admin${qs ? `?${qs}` : ''}`
+    window.location.pathname = '/admin'
+    window.location.search = qs ? `?${qs}` : ''
+    window.location.hash = ''
+    if (typeof window.history?.pushState === 'function') {
+      try { window.history.pushState({ screen: 'admin' }, '', next) } catch { /* test doubles */ }
+    }
+    if (typeof window.dispatchEvent === 'function') window.dispatchEvent(new Event('popstate'))
+    return
+  }
   if ((path === 'share' || path === 'live' || path === 'friends' || path === 'carpool' || path === 'party-night') && params.token) {
     const url = `${window.location.origin}/${path}/${encodeURIComponent(params.token)}`
     window.location.assign(url)
