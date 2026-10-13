@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { registerHooks } from 'node:module'
 import path from 'node:path'
 import test from 'node:test'
@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const MATCH = 481516
+const OLD_SOUND_FILE = 'tiger' + '.wav'
 const KEY = '__riderMatchChime'
 
 function dataUrl(source) {
@@ -16,14 +17,13 @@ function dataUrl(source) {
 const audioUrl = dataUrl(`
   const key = ${JSON.stringify(KEY)}
   export function createAudioPlayer(source) {
-    const state = globalThis[key]
     const player = {
       source,
       volume: 1,
-      async seekTo(position) { state.seeks.push({ source, position }) },
-      play() { state.plays.push(source) },
+      async seekTo(position) { globalThis[key].seeks.push({ source, position }) },
+      play() { globalThis[key].plays.push(source) },
     }
-    state.players.push(player)
+    globalThis[key].players.push(player)
     return player
   }
   export async function setAudioModeAsync(options) {
@@ -168,13 +168,48 @@ test('match chime asset exists, is at most two seconds, and replaces the old cue
   assert.ok(seconds > 0.8 && seconds <= 2, `match chime is ${seconds}s`)
   assert.ok(wav.seconds > 0.8 && wav.seconds <= 2, `wav master is ${wav.seconds}s`)
   assert.ok(wav.peak > 0 && wav.peak < 32767, `wav peak ${wav.peak} is outside the safe 16-bit range`)
-  assert.equal(existsSync(path.join(ROOT, 'apps/rider/assets/sounds/tiger.wav')), false)
+  assert.equal(existsSync(path.join(ROOT, 'apps/rider/assets/sounds', OLD_SOUND_FILE)), false)
   const feedback = readFileSync(path.join(ROOT, 'apps/rider/lib/feedback.ts'), 'utf8')
   const screen = readFileSync(path.join(ROOT, 'apps/rider/app/pick-driver.tsx'), 'utf8')
   assert.match(feedback, /match-chime\.m4a/)
-  assert.doesNotMatch(feedback, /tiger\.wav/)
+  assert.equal(feedback.includes(OLD_SOUND_FILE), false)
+  assert.match(screen, /await playDriverBrowseCue\(\)/)
   assert.match(screen, /await playDriverFoundCue\(\)/)
-  assert.doesNotMatch(screen, /playTigerCue|tiger\.wav/)
+  assert.equal(screen.includes('playTigerCue'), false)
+  assert.equal(screen.includes(OLD_SOUND_FILE), false)
+})
+
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'coverage', '.expo', '__pycache__'])
+const TEXT_EXT = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.json', '.md', '.yml', '.yaml', '.html', '.css', '.toml', '.txt', '.py', '.svg'])
+
+function oldSoundReferences() {
+  const hits = []
+  function walk(dir) {
+    let entries = []
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (SKIP_DIRS.has(entry.name)) continue
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+        continue
+      }
+      if (entry.name === OLD_SOUND_FILE) hits.push(path.relative(ROOT, full))
+      if (!TEXT_EXT.has(path.extname(entry.name))) continue
+      const text = readFileSync(full, 'utf8')
+      if (text.includes(OLD_SOUND_FILE)) hits.push(path.relative(ROOT, full))
+    }
+  }
+  walk(ROOT)
+  return hits
+}
+
+test('no code references the old sound file', () => {
+  assert.deepEqual(oldSoundReferences(), [])
 })
 
 test('driver-found event plays the match chime and a success haptic', async () => {
@@ -187,6 +222,24 @@ test('driver-found event plays the match chime and a success haptic', async () =
   assert.equal(state.modes.length, 1)
   assert.equal(state.modes[0].playsInSilentMode, false)
   assert.deepEqual(state.notifications, ['success'])
+})
+
+test('browsing available drivers plays the match chime and a light haptic', async () => {
+  const state = freshState()
+  const { playDriverBrowseCue } = await import('./feedback.ts')
+  await playDriverBrowseCue()
+  assert.deepEqual(state.plays, [MATCH])
+  assert.deepEqual(state.impacts, ['light'])
+  assert.deepEqual(state.notifications, [])
+})
+
+test('browsing available drivers stays quiet when sounds are off and still taps lightly', async () => {
+  const state = freshState()
+  const { playDriverBrowseCue, setSoundsEnabled } = await import('./feedback.ts')
+  await setSoundsEnabled(false)
+  await playDriverBrowseCue()
+  assert.deepEqual(state.plays, [])
+  assert.deepEqual(state.impacts, ['light'])
 })
 
 test('driver-found stays quiet when sounds are off and still taps a success haptic', async () => {

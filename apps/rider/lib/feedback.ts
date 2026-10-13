@@ -154,9 +154,15 @@ export async function playMatchChime() {
   }
 }
 
-/** Driver found: match chime plus a light success haptic. Each part honors its own setting. */
+/** Driver found: match chime plus a success haptic. Each part honors its own setting. */
 export async function playDriverFoundCue() {
   await successHaptic()
+  await playMatchChime()
+}
+
+/** Looking at available drivers: the same match chime plus a light tap. */
+export async function playDriverBrowseCue() {
+  await tapHaptic()
   await playMatchChime()
 }
 

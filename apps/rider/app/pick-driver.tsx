@@ -16,7 +16,7 @@ import { mapKindLabel } from '@/components/mapTypes'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
-import { playDriverFoundCue, tapHaptic } from '@/lib/feedback'
+import { playDriverBrowseCue, playDriverFoundCue, tapHaptic } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { authStorage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
@@ -143,7 +143,7 @@ export default function PickDriver() {
       setError(extra.error || result.error)
       setPhase('results')
       if (merged.some((driver) => driver.online)) {
-        await playDriverFoundCue()
+        await playDriverBrowseCue()
       }
     })
     return () => {
