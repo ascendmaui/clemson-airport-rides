@@ -4,13 +4,29 @@ import test from 'node:test'
 import {
   DEMAND_HEAT_COLORS,
   DEMAND_HEAT_STARTS,
+  HEAT_BREATH_FRAMES,
+  HEAT_BREATH_LOW,
+  HEAT_BREATH_MS,
+  QUIET_BELOW,
+  VERY_BUSY_FROM,
+  busiestGlowColor,
+  busiestOutline,
+  busynessColor,
+  busynessInk,
+  busynessLabel,
   demandPointsToHeat,
+  fieldPlacement,
   framePercents,
   heatBloom,
+  heatBreath,
+  heatBreathFrame,
+  heatBreathOpacity,
   heatRgbaAt,
+  hotAreas,
   nativeDemandHeatSupported,
   paintDemandHeat,
   rasterPixel,
+  renderDemandHeatFrames,
   renderDemandHeatImage,
 } from './demandHeatMap.ts'
 
@@ -75,8 +91,10 @@ test('empty demand returns no heat points and the Clemson gradient stops', () =>
     assert.equal(heat.gradient.startPoints[0], 0)
     assert.equal(heat.gradient.startPoints.at(-1), 1)
     assert.equal(heat.gradient.colorMapSize, 256)
+    assert.deepEqual(heat.areas, [])
     assert.equal(paintDemandHeat(heat), null)
     assert.equal(renderDemandHeatImage(heat), null)
+    assert.deepEqual(renderDemandHeatFrames(heat), [])
   }
 })
 
@@ -138,6 +156,8 @@ test('demo, simulated, theater, and busy cars never feed the heat', () => {
     { id: 'memorial-stadium', lat: 34.6788, lng: -82.843, intensity: 0.4, source: 'preview', preview: true },
   ])
   assert.deepEqual(heat.points.map((point) => point.weight).sort(), [0.2, 0.4])
+  assert.equal(heat.areas.length, 2)
+  assert.equal(heat.areas.some((area) => area.latitude === 34.679), false)
   assert.equal(heat.points.some((point) => point.latitude === 34.679), false)
   assert.notEqual(heat.gradient.colors.at(-1), '#522D80')
   assert.deepEqual(demandPointsToHeat([
@@ -205,6 +225,123 @@ test('a single demand point sits in the middle of the preview frame', () => {
   assert.equal(frames[0].left < frames[1].left, true)
 })
 
+test('busyness labels follow density thresholds and move from soft orange to purple', () => {
+  assert.equal(busynessLabel(0), 'Quiet')
+  assert.equal(busynessLabel(QUIET_BELOW - 0.001), 'Quiet')
+  assert.equal(busynessLabel(QUIET_BELOW), 'Busy')
+  assert.equal(busynessLabel(0.5), 'Busy')
+  assert.equal(busynessLabel(VERY_BUSY_FROM - 0.001), 'Busy')
+  assert.equal(busynessLabel(VERY_BUSY_FROM), 'Very busy')
+  assert.equal(busynessLabel(1), 'Very busy')
+  assert.equal(busynessLabel(4), 'Very busy')
+  assert.equal(busynessLabel(Number.NaN), 'Quiet')
+  assert.equal(busynessLabel(-0.2), 'Quiet')
+  assert.equal(busynessColor('Quiet'), '#F8A15A')
+  assert.equal(busynessColor('Busy'), '#F56600')
+  assert.equal(busynessColor('Very busy'), '#522D80')
+  assert.equal(busynessInk('Quiet'), '#1F1208')
+  assert.equal(busynessInk('Busy'), '#1F1208')
+  assert.equal(busynessInk('Very busy'), '#FFFFFF')
+  const quiet = busynessColor('Quiet')
+  const busy = busynessColor('Busy')
+  const very = busynessColor('Very busy')
+  assert.equal(quiet.startsWith('#F'), true)
+  assert.equal(busy, '#F56600')
+  assert.equal(very, '#522D80')
+  const rest = busiestGlowColor('Very busy', 0, 'tight')
+  const peak = busiestGlowColor('Very busy', 1, 'tight')
+  const wide = busiestGlowColor('Very busy', 1, 'wide')
+  assert.equal(rest, 'rgba(82,45,128,0.28)')
+  assert.equal(peak, 'rgba(82,45,128,0.64)')
+  assert.equal(wide, 'rgba(82,45,128,0.28)')
+  assert.equal(busiestGlowColor('Quiet', 0, 'wide'), 'rgba(248,161,90,0.1)')
+  assert.equal(busiestGlowColor('Busy', 1, 'tight'), 'rgba(245,102,0,0.64)')
+})
+
+test('hot areas keep the hotter reading, outline only the busiest, and skip demo cars', () => {
+  const merged = hotAreas([
+    { latitude: 34.68, longitude: -82.84, weight: 0.3 },
+    { latitude: 34.681, longitude: -82.8404, weight: 0.8 },
+  ])
+  assert.equal(merged.length, 1)
+  assert.equal(merged[0].label, 'Very busy')
+  assert.equal(merged[0].weight, 0.8)
+  assert.equal(merged[0].busiest, true)
+  assert.ok(merged[0].spanLat > 0.0017)
+  const split = hotAreas([
+    { latitude: 34.68, longitude: -82.84, weight: 0.5 },
+    { latitude: 34.683, longitude: -82.84, weight: 0.2 },
+  ])
+  assert.equal(split.length, 2)
+  assert.equal(split[0].label, 'Busy')
+  assert.equal(split[0].busiest, true)
+  assert.equal(split[1].label, 'Quiet')
+  assert.equal(split[1].busiest, false)
+  const alone = hotAreas([{ latitude: 1, longitude: 2, weight: 0.2 }])
+  const ring = busiestOutline(alone[0])
+  assert.equal(ring.length, 36)
+  const latRadius = Math.max(...ring.map((point) => Math.abs(point.latitude - alone[0].latitude)))
+  const lngRadius = Math.max(...ring.map((point) => Math.abs(point.longitude - alone[0].longitude)))
+  assert.ok(latRadius > 0.001)
+  assert.ok(lngRadius > 0.001)
+  assert.equal(ring[0].latitude, alone[0].latitude)
+  assert.ok(ring[0].longitude > alone[0].longitude)
+  const wide = busiestOutline(alone[0], 1.28)
+  const wideRadius = Math.max(...wide.map((point) => Math.abs(point.latitude - alone[0].latitude)))
+  assert.ok(wideRadius > latRadius)
+  const heat = demandPointsToHeat([
+    { lat: 34.68, lng: -82.84, intensity: QUIET_BELOW },
+    { lat: 34.7, lng: -82.8, intensity: VERY_BUSY_FROM },
+    { id: 'demo-marcus', lat: 34.66, lng: -82.86, intensity: 1, source: 'demo', simulated: true },
+  ])
+  assert.deepEqual(heat.areas.map((area) => area.label), ['Very busy', 'Busy'])
+  assert.equal(heat.areas[0].busiest, true)
+  assert.equal(heat.points.length, 2)
+  assert.equal(heat.areas.some((area) => area.latitude === 34.66), false)
+})
+
+test('the heat breathes slowly from a soft rest to full intensity', () => {
+  assert.ok(Math.abs(heatBreath(0)) < 1e-9)
+  assert.ok(Math.abs(heatBreath(HEAT_BREATH_MS / 2) - 1) < 1e-9)
+  assert.ok(Math.abs(heatBreath(HEAT_BREATH_MS)) < 1e-9)
+  assert.ok(Math.abs(heatBreath(HEAT_BREATH_MS / 4) - 0.5) < 1e-9)
+  assert.equal(heatBreath(Number.NaN), 0)
+  assert.equal(heatBreathFrame(0), 0)
+  assert.equal(heatBreathFrame(HEAT_BREATH_MS / 2), HEAT_BREATH_FRAMES - 1)
+  assert.equal(heatBreathFrame(HEAT_BREATH_MS), 0)
+  assert.ok(HEAT_BREATH_MS >= 4000)
+  assert.equal(heatBreathOpacity(0.34, 0), 0.245)
+  assert.equal(heatBreathOpacity(0.34, 1), 0.34)
+  assert.ok(heatBreathOpacity(0.34, 0) < heatBreathOpacity(0.34, 0.5))
+  assert.ok(heatBreathOpacity(0.34, 0.5) < heatBreathOpacity(0.34, 1))
+  assert.equal(heatBreathOpacity(0.42, 1), 0.42)
+  assert.ok(heatBreathOpacity(0.42, 1) <= 0.5)
+  assert.equal(HEAT_BREATH_LOW, 0.72)
+  const hot = demandPointsToHeat([{ lat: 34.6788, lng: -82.843, intensity: 1 }], { scheme: 'light' })
+  const frames = renderDemandHeatFrames(hot)
+  assert.equal(frames.length, HEAT_BREATH_FRAMES)
+  const place = fieldPlacement(hot.areas[0], frames[0].bounds)
+  assert.ok(place.left > 40 && place.left < 60)
+  assert.ok(place.top > 40 && place.top < 60)
+  assert.ok(place.width >= 18)
+  assert.ok(place.height >= 14)
+  const rest = decodePng(frames[0].uri)
+  const peak = decodePng(frames[frames.length - 1].uri)
+  const north = frames[0].bounds[0][0]
+  const east = frames[0].bounds[0][1]
+  const south = frames[0].bounds[1][0]
+  const west = frames[0].bounds[1][1]
+  const x = Math.round(((-82.843 - west) / (east - west)) * (rest.width - 1))
+  const y = Math.round(((north - 34.6788) / (north - south)) * (rest.height - 1))
+  const offset = (y * rest.width + x) * 4
+  assert.ok(rest.rgba[offset + 3] > 0)
+  assert.ok(rest.rgba[offset + 3] < peak.rgba[offset + 3])
+  assert.deepEqual([...rest.rgba.subarray(offset, offset + 3)], [...peak.rgba.subarray(offset, offset + 3)])
+  const full = renderDemandHeatImage(hot)
+  const decoded = decodePng(full.uri)
+  assert.deepEqual([...decoded.rgba.subarray(offset, offset + 4)], [...peak.rgba.subarray(offset, offset + 4)])
+})
+
 test('native heatmap is the Google layer, which this app has on Android', () => {
   assert.equal(nativeDemandHeatSupported('android'), true)
   assert.equal(nativeDemandHeatSupported('ios'), false)
@@ -222,7 +359,17 @@ test('the rider map heat layer does not read demo cars or paint demand circles',
   assert.equal(webMap.includes('heatColor'), false)
   assert.equal(webMap.includes('styles.blob'), false)
   assert.match(nativeLayer, /<Heatmap/)
-  assert.match(nativeLayer, /renderDemandHeatImage/)
+  assert.match(nativeLayer, /renderDemandHeatFrames/)
+  assert.match(nativeLayer, /busiestOutline/)
+  assert.match(nativeLayer, /heatBreathOpacity/)
+  assert.match(nativeLayer, /area\.label/)
+  assert.equal(nativeLayer.includes('<Circle'), false)
+  assert.equal(webLayer.includes('<Circle'), false)
+  assert.match(webLayer, /renderDemandHeatImage/)
+  assert.match(webLayer, /busynessColor/)
+  assert.match(webLayer, /HEAT_BREATH_MS/)
+  assert.match(webLayer, /fill="none"/)
+  assert.match(webLayer, /area\.label/)
   for (const src of [nativeLayer, webLayer]) {
     assert.equal(src.includes('useSimulatedFleet'), false)
     assert.equal(src.includes('simulatedFleet'), false)

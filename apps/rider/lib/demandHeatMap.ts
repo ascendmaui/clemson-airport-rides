@@ -5,6 +5,10 @@
  * transparent, soft orange #F56600, purple #522D80 at the hottest demand.
  * Demo, simulated, and theater cars are dropped before any weight is read.
  *
+ * Nearby points collapse into hot areas. Each area is Quiet, Busy, or Very
+ * busy from its density, and the single hottest area carries a soft outline.
+ * The field breathes on a slow sine so the wash pulses instead of sitting still.
+ *
  * react-native-maps Heatmap is the Google heatmap. Android's default provider
  * is Google, so the native layer can mount it. iOS defaults to Apple Maps,
  * which throws if Heatmap is mounted, so that platform paints the same points
@@ -15,6 +19,14 @@ export const DEMAND_HEAT_COLORS = ['rgba(245,102,0,0)', '#F56600', '#522D80'] as
 export const DEMAND_HEAT_STARTS = [0, 0.42, 1] as const
 export const DEMAND_HEAT_RADIUS = 46
 
+/** Density below this is Quiet. From here up to VERY_BUSY_FROM is Busy. */
+export const QUIET_BELOW = 0.4
+/** Density at or above this is Very busy. */
+export const VERY_BUSY_FROM = 0.72
+export const HEAT_BREATH_MS = 5600
+export const HEAT_BREATH_LOW = 0.72
+export const HEAT_BREATH_FRAMES = 8
+
 /** Live demand in loadBusySpots uses intensity = min(1, weight / 8). */
 const DEMAND_WEIGHT_SCALE = 8
 const LIGHT_OPACITY = 0.34
@@ -23,6 +35,8 @@ const DARK_OPACITY = 0.42
 const RASTER_SIZE = 256
 const SIGMA_DEG = 0.0022
 const SIGMA_PAD = 3.4
+const AREA_MERGE_DEG = 0.0024
+const BUSY_GLOW_MIN_DEG = 0.0017
 
 const DEMO_SOURCES = new Set([
   'demo',
@@ -58,6 +72,25 @@ export type WeightedHeatPoint = {
   weight: number
 }
 
+export type BusynessLabel = 'Quiet' | 'Busy' | 'Very busy'
+
+export type HotArea = {
+  latitude: number
+  longitude: number
+  weight: number
+  label: BusynessLabel
+  busiest: boolean
+  spanLat: number
+  spanLng: number
+}
+
+export type FieldPlacement = {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
 export type DemandHeatGradient = {
   colors: string[]
   startPoints: number[]
@@ -66,6 +99,7 @@ export type DemandHeatGradient = {
 
 export type DemandHeatModel = {
   points: WeightedHeatPoint[]
+  areas: HotArea[]
   gradient: DemandHeatGradient
   opacity: number
   radius: number
@@ -231,6 +265,123 @@ function demandWeight(point: DemandPoint): number | null {
   return clamp01(raw / DEMAND_WEIGHT_SCALE)
 }
 
+export function busynessLabel(density: number): BusynessLabel {
+  const value = typeof density === 'number' && Number.isFinite(density) ? density : 0
+  if (value >= VERY_BUSY_FROM) return 'Very busy'
+  if (value >= QUIET_BELOW) return 'Busy'
+  return 'Quiet'
+}
+
+export function busynessColor(label: BusynessLabel): string {
+  switch (label) {
+    case 'Quiet':
+      return '#F8A15A'
+    case 'Busy':
+      return '#F56600'
+    case 'Very busy':
+      return '#522D80'
+    default: {
+      const unexpected: never = label
+      return unexpected
+    }
+  }
+}
+
+export function busynessInk(label: BusynessLabel): string {
+  switch (label) {
+    case 'Quiet':
+    case 'Busy':
+      return '#1F1208'
+    case 'Very busy':
+      return '#FFFFFF'
+    default: {
+      const unexpected: never = label
+      return unexpected
+    }
+  }
+}
+
+function degreesApart(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }): number {
+  return Math.hypot(a.latitude - b.latitude, a.longitude - b.longitude)
+}
+
+export function hotAreas(points: WeightedHeatPoint[]): HotArea[] {
+  const seeds = [...points].sort((a, b) => b.weight - a.weight || a.latitude - b.latitude || a.longitude - b.longitude)
+  const groups: Array<{ center: WeightedHeatPoint; spanLat: number; spanLng: number }> = []
+  for (const point of seeds) {
+    const group = groups.find((item) => degreesApart(item.center, point) <= AREA_MERGE_DEG)
+    if (!group) {
+      groups.push({ center: point, spanLat: BUSY_GLOW_MIN_DEG, spanLng: BUSY_GLOW_MIN_DEG })
+      continue
+    }
+    group.spanLat = roundWeight(Math.max(group.spanLat, Math.abs(point.latitude - group.center.latitude) * 2.2))
+    group.spanLng = roundWeight(Math.max(group.spanLng, Math.abs(point.longitude - group.center.longitude) * 2.2))
+  }
+  return groups.map((group, index) => ({
+    latitude: group.center.latitude,
+    longitude: group.center.longitude,
+    weight: group.center.weight,
+    label: busynessLabel(group.center.weight),
+    busiest: index === 0,
+    spanLat: group.spanLat,
+    spanLng: group.spanLng,
+  }))
+}
+
+export function busiestOutline(area: HotArea, scale = 1, steps = 36): Array<{ latitude: number; longitude: number }> {
+  const count = Math.max(12, Math.floor(steps))
+  const lat = area.spanLat * (scale > 0 ? scale : 1)
+  const lng = area.spanLng * (scale > 0 ? scale : 1)
+  const ring: Array<{ latitude: number; longitude: number }> = []
+  for (let step = 0; step < count; step += 1) {
+    const theta = (step / count) * Math.PI * 2
+    ring.push({
+      latitude: roundWeight(area.latitude + Math.sin(theta) * lat),
+      longitude: roundWeight(area.longitude + Math.cos(theta) * lng),
+    })
+  }
+  return ring
+}
+
+export function busiestGlowColor(label: BusynessLabel, breath: number, band: 'wide' | 'tight' = 'tight'): string {
+  const [red, green, blue] = parseColor(busynessColor(label))
+  const wave = clamp01(breath)
+  let alpha: number
+  switch (band) {
+    case 'wide':
+      alpha = 0.1 + 0.18 * wave
+      break
+    case 'tight':
+      alpha = 0.28 + 0.36 * wave
+      break
+    default: {
+      const unexpected: never = band
+      return unexpected
+    }
+  }
+  return `rgba(${red},${green},${blue},${roundOpacity(alpha)})`
+}
+
+/** 0 at the rest of the breath, 1 at the peak. One full cycle is HEAT_BREATH_MS. */
+export function heatBreath(elapsedMs: number): number {
+  if (typeof elapsedMs !== 'number' || !Number.isFinite(elapsedMs)) return 0
+  const turns = elapsedMs / HEAT_BREATH_MS
+  const wrapped = turns - Math.floor(turns)
+  return 0.5 - 0.5 * Math.cos(wrapped * Math.PI * 2)
+}
+
+export function heatBreathFrame(elapsedMs: number, frames = HEAT_BREATH_FRAMES): number {
+  const count = Math.max(1, Math.floor(frames))
+  if (count === 1) return 0
+  const index = Math.round(heatBreath(elapsedMs) * (count - 1))
+  return Math.min(count - 1, Math.max(0, index))
+}
+
+export function heatBreathOpacity(base: number, breath: number): number {
+  const scale = HEAT_BREATH_LOW + (1 - HEAT_BREATH_LOW) * clamp01(breath)
+  return roundOpacity(base * scale)
+}
+
 export function demandPointsToHeat(input: unknown, options?: { scheme?: Scheme }): DemandHeatModel {
   const scheme: Scheme = options?.scheme === 'dark' ? 'dark' : 'light'
   const rows = Array.isArray(input) ? input : []
@@ -254,6 +405,7 @@ export function demandPointsToHeat(input: unknown, options?: { scheme?: Scheme }
   const peak = points.reduce((max, point) => Math.max(max, point.weight), 0)
   return {
     points,
+    areas: hotAreas(points),
     gradient: gradientForPeak(peak),
     opacity: opacityFor(scheme),
     radius: DEMAND_HEAT_RADIUS,
@@ -289,6 +441,25 @@ export function framePercents(points: WeightedHeatPoint[]): Array<{ left: number
       top: Math.round(clamp(y) * 1000) / 10,
     }
   })
+}
+
+export function fieldPlacement(
+  area: Pick<HotArea, 'latitude' | 'longitude' | 'spanLat' | 'spanLng'>,
+  bounds: [[number, number], [number, number]],
+): FieldPlacement {
+  const north = bounds[0][0]
+  const east = bounds[0][1]
+  const south = bounds[1][0]
+  const west = bounds[1][1]
+  const latSpan = Math.max(1e-6, north - south)
+  const lngSpan = Math.max(1e-6, east - west)
+  const round = (value: number) => Math.round(value * 10) / 10
+  return {
+    left: round(((area.longitude - west) / lngSpan) * 100),
+    top: round(((north - area.latitude) / latSpan) * 100),
+    width: round(Math.max(18, ((area.spanLng * 2) / lngSpan) * 100)),
+    height: round(Math.max(14, ((area.spanLat * 2) / latSpan) * 100)),
+  }
 }
 
 export function heatBloom(weight: number, opacity: number): HeatBloom {
@@ -374,16 +545,46 @@ export function rasterPixel(raster: HeatRaster, latitude: number, longitude: num
   return [raster.rgba[offset], raster.rgba[offset + 1], raster.rgba[offset + 2], raster.rgba[offset + 3]]
 }
 
-export function renderDemandHeatImage(model: DemandHeatModel): DemandHeatImage | null {
-  const raster = paintDemandHeat(model)
-  if (!raster) return null
+function heatImage(raster: HeatRaster, rgba: Uint8Array): DemandHeatImage {
   return {
-    uri: `data:image/png;base64,${encodePngBase64(raster.width, raster.height, raster.rgba)}`,
+    uri: `data:image/png;base64,${encodePngBase64(raster.width, raster.height, rgba)}`,
     bounds: [
       [raster.north, raster.east],
       [raster.south, raster.west],
     ],
   }
+}
+
+function scaleHeatAlpha(rgba: Uint8Array, breath: number): Uint8Array {
+  const wave = clamp01(breath)
+  if (wave >= 0.999) return rgba
+  const scale = HEAT_BREATH_LOW + (1 - HEAT_BREATH_LOW) * wave
+  const next = new Uint8Array(rgba.length)
+  for (let index = 0; index < rgba.length; index += 4) {
+    next[index] = rgba[index]
+    next[index + 1] = rgba[index + 1]
+    next[index + 2] = rgba[index + 2]
+    next[index + 3] = Math.round(rgba[index + 3] * scale)
+  }
+  return next
+}
+
+export function renderDemandHeatImage(model: DemandHeatModel): DemandHeatImage | null {
+  const raster = paintDemandHeat(model)
+  if (!raster) return null
+  return heatImage(raster, raster.rgba)
+}
+
+export function renderDemandHeatFrames(model: DemandHeatModel, frames = HEAT_BREATH_FRAMES): DemandHeatImage[] {
+  const raster = paintDemandHeat(model)
+  if (!raster) return []
+  const count = Math.max(1, Math.floor(frames))
+  const images: DemandHeatImage[] = []
+  for (let frame = 0; frame < count; frame += 1) {
+    const breath = count === 1 ? 1 : frame / (count - 1)
+    images.push(heatImage(raster, scaleHeatAlpha(raster.rgba, breath)))
+  }
+  return images
 }
 
 const PNG_SIGNATURE = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10])
