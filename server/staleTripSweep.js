@@ -1,7 +1,9 @@
 /**
- * Abandoned active trips: no rider heartbeat or location AND no driver
- * heartbeat or location for STALE_TRIP_MS. A rider-app crash with the driver
- * still reporting does not qualify — the passenger may be in the car.
+ * Abandoned active trips. A lost driver heartbeat and location for
+ * STALE_TRIP_MS selects the trip even when the rider app is still open —
+ * that is the driver-app crash with the passenger still in the car.
+ * A fresh driver heartbeat or location keeps the trip, so a rider-app crash
+ * alone does not cancel a ride the driver is still reporting.
  * Selected trips are canceled, the pre-auth hold is released, and nothing is captured.
  */
 import { releaseOpenFareHold } from './fareAuthorization.js'
@@ -33,8 +35,9 @@ function silent(at, nowMs) {
 }
 
 /**
- * Why this trip must be left alone, or null when both sides have been silent
- * long enough to cancel without charging.
+ * Why this trip must be left alone, or null when the driver has been silent
+ * long enough to cancel without charging. Rider signals do not keep a trip
+ * whose driver heartbeat and location are both gone.
  */
 export function staleTripSkip(trip, signals = {}, now = new Date()) {
   if (!trip || !STALE_ACTIVE_STATUSES.includes(trip.status)) return 'not_active'
@@ -43,20 +46,13 @@ export function staleTripSkip(trip, signals = {}, now = new Date()) {
   const nowMs = new Date(now).getTime()
   const anchor = ms(trip.accepted_at) ?? ms(trip.created_at)
   if (anchor == null || nowMs - anchor < STALE_TRIP_MS) return 'too_new'
-  const riderAt = latestSignalMs(
-    signals.riderHeartbeatAt,
-    signals.riderLocationAt,
-    trip.rider_heartbeat_at,
-    meta.rider_location?.updated_at,
-    meta.rider_location?.at,
-  )
   const driverAt = latestSignalMs(
     signals.driverHeartbeatAt,
     signals.driverLocationAt,
     signals.driverPresenceAt,
     trip.driver_heartbeat_at,
   )
-  if (!silent(riderAt, nowMs) || !silent(driverAt, nowMs)) return 'signal_fresh'
+  if (!silent(driverAt, nowMs)) return 'signal_fresh'
   return null
 }
 

@@ -54,3 +54,16 @@ export function reconcileActiveTrip(local, server) {
   if (reason) return { action: 'clear', reason, trip: server }
   return { action: 'keep', reason: null, trip: server }
 }
+
+/**
+ * Cold start after the driver app crashes. Trip UI stays hidden until this
+ * launch has finished a server read. The server row is the trip to show; a
+ * remembered en-route card is not.
+ */
+export function driverColdStartView({ confirmed, server } = {}) {
+  if (confirmed !== true) return { phase: 'pending', trip: null, reason: null }
+  if (!server?.id) return { phase: 'missing', trip: null, reason: 'expired' }
+  const reason = tripTerminalClearReason(server)
+  if (reason) return { phase: 'clear', trip: server, reason }
+  return { phase: 'live', trip: server, reason: null }
+}

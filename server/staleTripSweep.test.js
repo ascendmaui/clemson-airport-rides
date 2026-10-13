@@ -70,15 +70,17 @@ test('stale-trips is on the trip sweep list and the dispatch tick', () => {
   assert.equal(SWEEPS.some((sweep) => sweep.name === 'stale-trips'), true)
 })
 
-test('selection requires both the rider and the driver to be silent', () => {
+test('selection treats a lost driver heartbeat as abandoned even if the rider is still reporting', () => {
   const live = trip('live')
   assert.equal(staleTripSkip(live, { driverLocationAt: ago(1) }, now), 'signal_fresh')
   assert.equal(staleTripSkip(live, { driverHeartbeatAt: ago(2), riderHeartbeatAt: ago(30) }, now), 'signal_fresh')
-  assert.equal(staleTripSkip(live, { riderLocationAt: ago(1) }, now), 'signal_fresh')
+  assert.equal(staleTripSkip(live, { riderLocationAt: ago(1), riderHeartbeatAt: ago(1) }, now), null)
+  assert.equal(staleTripSkip(live, { driverHeartbeatAt: ago(20), riderHeartbeatAt: ago(1) }, now), null)
   assert.equal(staleTripSkip(live, { driverPresenceAt: ago(1) }, now), 'signal_fresh')
   assert.equal(staleTripSkip(live, {
-    riderHeartbeatAt: ago(16),
+    riderHeartbeatAt: ago(1),
     driverLocationAt: ago(16),
+    driverHeartbeatAt: ago(16),
   }, now), null)
   assert.equal(staleTripSkip(live, {}, now), null)
   assert.equal(staleTripSkip({ ...live, accepted_at: ago(5) }, {}, now), 'too_new')
@@ -86,6 +88,25 @@ test('selection requires both the rider and the driver to be silent', () => {
   assert.equal(staleTripSkip({ ...live, status: 'completed' }, {}, now), 'not_active')
   assert.equal(staleTripSkip({ ...live, metadata: { e2e_test: true } }, {}, now), 'e2e_test')
   assert.equal(STALE_TRIP_MS, 15 * 60 * 1000)
+})
+
+test('a lost driver heartbeat cancels an in-progress ride the rider is still reporting', async () => {
+  const { sb, trip: row } = seedHold('requires_capture')
+  row.status = 'in_progress'
+  row.accepted_at = ago(40)
+  row.rider_heartbeat_at = ago(1)
+  row.driver_heartbeat_at = ago(20)
+  const stripe = fakeStripe()
+  stripe.paymentIntents.capture = async () => { throw new Error('must not capture') }
+  const result = await sweepStaleTrips(sb, { now, stripe })
+  assert.equal(row.status, 'canceled')
+  assert.equal(row.payment_status, 'no_charge')
+  assert.equal(row.metadata.expired, true)
+  assert.equal(row.metadata.fare_authorization.status, 'canceled')
+  assert.equal(stripe.calls.some((call) => call.op === 'capture'), false)
+  assert.equal(stripe.calls.some((call) => call.op === 'cancel'), true)
+  assert.deepEqual(result.ids.canceled, ['trip-1'])
+  assert.deepEqual(result.ids.released, ['trip-1'])
 })
 
 test('a rider crash does not select an in-progress ride the driver is still reporting', async () => {

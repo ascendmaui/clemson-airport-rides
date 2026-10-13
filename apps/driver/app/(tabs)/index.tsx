@@ -67,7 +67,7 @@ import { fetchOfferPreview, riderInitials } from 'rides-native/offerPreviewClien
 import { OfferGauge } from '@/components/OfferGauge'
 import { tipBoostOfferLine } from '../../../../shared/prepaidTip.js'
 import { EXCLUSIVE_SECONDS, exclusiveSecondsLeft, poolSecondsLeft } from 'rides-native/offerLadder.js'
-import { ACTIVE_TRIP_RECONCILE_MS } from 'rides-native/activeTripReconcile'
+import { ACTIVE_TRIP_RECONCILE_MS, reconcileActiveTrip } from 'rides-native/activeTripReconcile'
 import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
 import { canDriverEnd } from '../../../../shared/driverEndTrip.js'
 
@@ -108,6 +108,7 @@ export default function DriverHome() {
   const { user, configured } = useAuth()
   const { pulse } = useFeedback()
   const [desk, setDesk] = useState<DriverDesk | null>(null)
+  const [tripReconciled, setTripReconciled] = useState(false)
   const [todayCents, setTodayCents] = useState(0)
   const [weekCents, setWeekCents] = useState(0)
   const [lastTrip, setLastTrip] = useState<string | null>(null)
@@ -184,7 +185,12 @@ export default function DriverHome() {
     if (currentGate.canSeeOffers) {
       const loaded = await loadDriverDesk(supabase, user.id)
       if (loaded.online) markSearchingOffers(supabase, loaded.offers).catch(() => {})
-      setDesk(loaded)
+      const active = loaded.active
+      const decision = active
+        ? reconcileActiveTrip({ id: active.id, status: active.status }, { id: active.id, status: active.status })
+        : null
+      setDesk(decision?.action === 'clear' ? { ...loaded, active: null } : loaded)
+      setTripReconciled(true)
       if (loaded.lat != null && loaded.lng != null) {
         setSelf({ latitude: Number(loaded.lat), longitude: Number(loaded.lng) })
       }
@@ -197,6 +203,7 @@ export default function DriverHome() {
       }
     } else {
       setDesk(null)
+      setTripReconciled(true)
     }
   }, [user])
 
@@ -640,7 +647,7 @@ export default function DriverHome() {
               />
             </ScrollView>
           ) : null}
-          {desk?.active ? (
+          {tripReconciled && desk?.active ? (
             <Pressable
               onPress={() => router.push({ pathname: '/trip', params: { id: desk.active!.id } })}
               accessibilityRole="button"
@@ -655,7 +662,7 @@ export default function DriverHome() {
               {riderLine ? <Text style={{ color: colors.onAccent, fontWeight: '700' }}>{riderLine}</Text> : null}
             </Pressable>
           ) : null}
-          {desk?.active && canDriverEnd(desk.active.status) ? (
+          {tripReconciled && desk?.active && canDriverEnd(desk.active.status) ? (
             <DriverEndTripSheet
               supabase={supabase}
               tripId={desk.active.id}

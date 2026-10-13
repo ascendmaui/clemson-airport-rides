@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { reconcileActiveTrip, tripTerminalClearReason } from './activeTripReconcile.js'
+import { driverColdStartView, reconcileActiveTrip, tripTerminalClearReason } from './activeTripReconcile.js'
+import { projectQueuedTrip } from './queuedTrip.js'
 import { bindRealtimeChannel, REALTIME_DROP_STATUSES } from './realtimeReconnect.js'
 
 const local = { id: 'trip-1', status: 'in_progress' }
@@ -42,6 +43,32 @@ test('reconcile clears a trip the server no longer has, and ignores an empty loc
   assert.equal(reconcileActiveTrip(local, { id: 'other', status: 'in_progress' }).action, 'clear')
   assert.deepEqual(reconcileActiveTrip(null, local), { action: 'none', reason: null, trip: null })
   assert.deepEqual(reconcileActiveTrip({}, { id: 'trip-1', status: 'canceled' }), { action: 'none', reason: null, trip: null })
+})
+
+test('cold start hides trip UI until the server read, then shows that row', () => {
+  const remembered = { id: 'trip-1', status: 'arriving' }
+  assert.deepEqual(driverColdStartView({ confirmed: false, server: remembered }), {
+    phase: 'pending',
+    trip: null,
+    reason: null,
+  })
+  assert.deepEqual(driverColdStartView({ confirmed: false, server: null }), {
+    phase: 'pending',
+    trip: null,
+    reason: null,
+  })
+  const server = { id: 'trip-1', status: 'in_progress' }
+  assert.deepEqual(driverColdStartView({ confirmed: true, server }), {
+    phase: 'live',
+    trip: server,
+    reason: null,
+  })
+  assert.equal(reconcileActiveTrip(remembered, server).trip.status, 'in_progress')
+  const canceled = { id: 'trip-1', status: 'canceled' }
+  assert.equal(driverColdStartView({ confirmed: true, server: canceled }).phase, 'clear')
+  assert.equal(driverColdStartView({ confirmed: true, server: null }).phase, 'missing')
+  const shown = projectQueuedTrip(server, [{ id: 'k', tripId: 'trip-1', kind: 'status', op: 'arriving' }])
+  assert.equal(shown.status, 'in_progress')
 })
 
 test('a dropped realtime channel asks for a refetch and subscribes again', async () => {
