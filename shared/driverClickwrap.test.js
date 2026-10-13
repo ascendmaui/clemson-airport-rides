@@ -100,6 +100,9 @@ test('the clickwrap fine print acknowledges accident responsibility and the TNC 
   assert.match(DRIVER_CLICKWRAP_SUMMARY, /\$50,000 for property damage/)
   assert.match(DRIVER_CLICKWRAP_SUMMARY, /\$1,000,000/)
   assert.match(DRIVER_CLICKWRAP_SUMMARY, /uninsured-motorist coverage/)
+  assert.match(DRIVER_CLICKWRAP_SUMMARY, /standard commercial general liability policy/)
+  assert.match(DRIVER_CLICKWRAP_SUMMARY, /except as otherwise required by applicable law/i)
+  assert.match(DRIVER_CLICKWRAP_SUMMARY, /does not cover a Ride or a Driver or Rider incident, accident, injury, or interaction/)
 })
 
 test('the clickwrap links open the Driver Agreement, Terms, and Privacy', () => {

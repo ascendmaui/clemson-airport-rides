@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import * as nativeLegal from './legalCopy.js'
 import {
@@ -345,6 +346,10 @@ test('terms limit liability and privacy states the platform data limits', () => 
   assert.match(driverAgreementText, /automobile insurance carrier\(s\) are solely responsible for any accidents/)
   assert.match(driverAgreementText, /fifty thousand dollars for death and bodily injury per person/)
   assert.match(driverAgreementText, /one million dollars for death, bodily injury, and property damage/)
+  assert.match(driverAgreementText, /standard commercial general liability policy for its own business operations/)
+  assert.match(driverAgreementText, /does not extend to or cover, any Ride, Driver, or Rider incident, accident, injury, or interaction, except as otherwise required by applicable law/)
+  assert.match(termsText, /standard commercial general liability policy for its own business operations/)
+  assert.match(readFileSync(new URL('../../shared/legalCopy.js', import.meta.url), 'utf8'), /ATTORNEY CONFIRMATION: S\.C\. Code Ann\. § 58-23-1630\(D\)/)
   assert.match(termsText, /statutorily required TNC insurance coverage, not to the Company/)
   assert.match(termsText, /report an accident promptly through the app/)
   assert.match(privacyText, /under 18/)
