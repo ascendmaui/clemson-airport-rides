@@ -795,3 +795,20 @@ export async function reviewDriverApplication({ profileId, decision, reason, ack
     return { ok: true, onboarding_status: decision === 'approve' ? 'approved' : 'rejected', application: data, direct: true }
   }
 }
+
+export async function fetchProfilePhotoQueue() {
+  const headers = await authHeaders()
+  const res = await fetch('/api/admin-drivers?queue=profile-photos', { headers })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`)
+  return data
+}
+
+export async function reviewProfilePhoto({ photoId, decision, reason }) {
+  return postJson('/api/admin-drivers', {
+    action: 'review-profile-photo',
+    photoId,
+    decision,
+    reason,
+  })
+}

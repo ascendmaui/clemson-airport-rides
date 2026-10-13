@@ -1,4 +1,4 @@
-import { Redirect, useFocusEffect, useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import * as DocumentPicker from 'expo-document-picker'
 import * as ImagePicker from 'expo-image-picker'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -194,6 +194,7 @@ export default function OnboardingScreen() {
     if (!user || !supabase) return
     const next = await loadOnboarding(supabase, user.id)
     setBundle(next)
+    setStepId(next.stepId)
     if (next.application?.onboarding_status === 'approved') return
     const [profile, vehicle] = await Promise.all([
       loadDriverProfile(supabase, user.id).catch(() => null),
@@ -571,8 +572,6 @@ export default function OnboardingScreen() {
       </View>
     )
   }
-
-  if (status === 'approved') return <Redirect href="/(tabs)" />
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
