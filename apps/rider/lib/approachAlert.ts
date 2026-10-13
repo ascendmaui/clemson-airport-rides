@@ -18,6 +18,47 @@ export type ApproachStage = 'far' | 'near' | 'close' | 'here'
 export type ApproachHapticLevel = 'light' | 'medium' | 'heavy'
 export type ApproachPulseMode = 'off' | 'burst' | 'steady'
 
+/**
+ * Card-ring breath that replaced the full-screen orange flash.
+ * Opacities stay strictly between 0 and 1. One half is at least 800ms,
+ * eased with a sine in-out, so the ring never hard-toggles.
+ * Reduce motion turns `enabled` off; the ring holds `rest`.
+ */
+export const APPROACH_PULSE_DURATION_MS = 1400
+
+export type ApproachPulseEasing = 'inOutSin'
+
+export type ApproachPulseKeyframe = {
+  opacity: number
+  scale: number
+}
+
+export type ApproachPulseMotion = {
+  /** False when the OS asks for reduced motion. */
+  enabled: boolean
+  /** Half of one breath. The full cycle is twice this. */
+  durationMs: number
+  easing: ApproachPulseEasing
+  /** Reanimated runs opacity and scale on the UI thread. */
+  uiThread: true
+  rest: ApproachPulseKeyframe
+  peak: ApproachPulseKeyframe
+}
+
+const PULSE_REST: ApproachPulseKeyframe = { opacity: 0.28, scale: 1.015 }
+const PULSE_PEAK: ApproachPulseKeyframe = { opacity: 0.62, scale: 1.06 }
+
+export function approachPulseMotion(reduceMotion: boolean): ApproachPulseMotion {
+  return {
+    enabled: reduceMotion !== true,
+    durationMs: APPROACH_PULSE_DURATION_MS,
+    easing: 'inOutSin',
+    uiThread: true,
+    rest: PULSE_REST,
+    peak: PULSE_PEAK,
+  }
+}
+
 export type ApproachReading = {
   feet: number
   meters: number
@@ -209,6 +250,21 @@ export function approachAttention(input: {
   return { stage, decreasing, pulseMode, washPeak, brightPeak, haptic, hapticReason }
 }
 
+/**
+ * The September 2026 proximity cue: a steady pulse inside 500 ft, a short
+ * burst when the driver closes in from farther out, and the crowd loop
+ * (buzz + ping) while they are inside 500 ft.
+ */
+export function proximityTriggerFires(input: {
+  previousFeet: number | null
+  feet: number | null
+  previousStage?: ApproachStage | null
+}): boolean {
+  const attention = approachAttention(input)
+  if (attention?.pulseMode === 'steady' || attention?.pulseMode === 'burst') return true
+  return crowdCue(input.feet) != null
+}
+
 function approachPhrase(stage: ApproachStage | null, decreasing: boolean): string {
   if (stage == null) return 'Locating'
   if (decreasing && stage !== 'here') return 'Getting closer'
@@ -309,8 +365,9 @@ export function approachDirection(
 }
 
 /**
- * Crowd-find cadence inside 500 ft. Closer means a (throttled, 2-3 s) faster ping, a stronger
- * buzz, and a brighter orange flash. Outside 500 ft there is no loop.
+ * Crowd-find cadence inside 500 ft. Closer means a (throttled, 2-3 s) faster ping and a stronger
+ * buzz. `flash` is the retired full-screen peak (still under 1) and is not painted; the card
+ * ring uses approachPulseMotion. Outside 500 ft there is no loop.
  */
 export function crowdCue(feet: number | null | undefined): CrowdCue | null {
   const whole = wholeApproachFeet(feet)
