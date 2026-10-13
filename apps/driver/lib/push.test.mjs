@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { existsSync, readFileSync } from 'node:fs'
 import { registerHooks } from 'node:module'
 import test from 'node:test'
 
@@ -599,6 +600,18 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
     ])
   })
 
+  await t.test('notifyAcceptedRide falls back to the default sound when scheduling throws', async () => {
+    state().scheduleError = new Error('invalid sound')
+    await push.notifyAcceptedRide(CARD)
+    assert.equal(state().scheduled.length, 2)
+    assert.equal(state().scheduled[0].content.sound, 'accept.wav')
+    assert.equal(state().scheduled[1].content.sound, 'default')
+    assert.equal(state().scheduled[1].content.title, 'Ride accepted')
+    assert.equal(state().scheduled[1].content.body, 'White C → GSP')
+    assert.deepEqual(state().scheduled[1].content.data, { tripId: 'trip-1' })
+    assert.equal(state().scheduled[1].trigger, null)
+  })
+
   await t.test('notifyNewRequest copies the trip into a local notification', async () => {
     await push.notifyNewRequest({
       ...CARD,
@@ -686,4 +699,21 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
     const stacked = await rejectionOf(push.notifyNewRequest(CARD))
     assert.equal(stacked.message, RAW_STACK)
   })
+})
+
+test('push notification sound filenames are bundled in the driver app', () => {
+  const root = new URL('../../../', import.meta.url)
+  const source = readFileSync(new URL('./push.ts', import.meta.url), 'utf8')
+  const app = JSON.parse(readFileSync(new URL('../app.json', import.meta.url), 'utf8'))
+  const plugin = app.expo.plugins.find((entry) => Array.isArray(entry) && entry[0] === 'expo-notifications')
+  const bundled = plugin[1].sounds
+  const names = [...new Set([...source.matchAll(/sound:\s*'([^']+)'/g)].map((match) => match[1]))]
+  assert.ok(names.includes('accept.wav'))
+  for (const name of names) {
+    if (!name.endsWith('.wav')) continue
+    const listed = `./assets/sounds/${name}`
+    assert.ok(bundled.includes(listed), `${name} missing from expo-notifications sounds`)
+    assert.equal(existsSync(new URL(`../assets/sounds/${name}`, import.meta.url)), true, name)
+    assert.equal(existsSync(new URL(`apps/driver/assets/sounds/${name}`, root)), true, name)
+  }
 })
