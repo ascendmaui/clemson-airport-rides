@@ -14,7 +14,7 @@ test('party night migration version is unique and starts at 20261013110000', () 
   const versions = names.map((name) => name.slice(0, 14))
   assert.equal(versions.filter((version) => version === '20261013110000').length, 1)
   assert.equal(names.includes(fileName), true)
-  assert.ok(versions.filter((version) => version >= '20261013110000').every((version) => version === '20261013110000'))
+  assert.equal(fileName.startsWith('20261013110000'), true)
 })
 
 test('party night migration only adds tables and stores a pre-auth hold', () => {
