@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { coordsFromRow, isLiveLocationStatus, liveFixFromReads } from 'rides-native/liveFix.js'
+import { riderDriverFirstName } from '../../../shared/riderDriverPrivacy.js'
 
 export type LiveTrip = {
   id: string
@@ -73,8 +74,14 @@ export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
   let driverHeading: number | null = null
   let driverLocationAt: string | null = null
   if (data.driver_id) {
-    const profile = await supabase.from('profiles').select('full_name').eq('id', data.driver_id).maybeSingle()
-    driverName = profile.data?.full_name || null
+    const card = await supabase.rpc('rider_driver_profile', { target: data.driver_id })
+    const row = Array.isArray(card.data) ? card.data[0] : card.data
+    if (!card.error && row) {
+      driverName = riderDriverFirstName(row.first_name || row.full_name, '') || null
+    } else {
+      const profile = await supabase.from('profiles').select('full_name').eq('id', data.driver_id).maybeSingle()
+      driverName = riderDriverFirstName(profile.data?.full_name, '') || null
+    }
     let tripRow: { lat?: unknown; lng?: unknown; heading?: unknown; speed?: unknown; updated_at?: string | null } | null = null
     let tripError: { message?: string } | null = null
     if (isLiveLocationStatus(data.status)) {

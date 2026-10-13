@@ -26,7 +26,6 @@ export type VehicleRow = {
 
 export type FacingCard = {
   name: string
-  phone: string | null
   ratingAvg: number | null
   ratingCount: number
   studentVerified: boolean

@@ -5,6 +5,7 @@
  * best-effort and ignored when those relations are absent.
  */
 import { readDriverPushToken } from './driverPushToken.js'
+import { riderDriverFirstName } from '../shared/riderDriverPrivacy.js'
 import { unchangedOfferQuery } from '../shared/driverOrder.js'
 import { insertTripEvent } from './tripEvents.js'
 import { sendExpoPush } from './expoPush.js'
@@ -142,7 +143,7 @@ export async function publicDriverCard(sb, driverId) {
     const profile = await sb.from('profiles').select('id, full_name, avatar_url, rating_avg, rating_count').eq('id', driverId).maybeSingle()
     const row = profile.data
     if (row) {
-      card.name = row.full_name || card.name
+      card.name = riderDriverFirstName(row.full_name, card.name)
       card.avatarUrl = row.avatar_url || null
       card.ratingAvg = row.rating_avg != null ? Number(row.rating_avg) : null
       card.ratingCount = Math.max(0, Math.round(Number(row.rating_count) || 0))

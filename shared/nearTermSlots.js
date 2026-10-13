@@ -1,3 +1,5 @@
+import { riderDriverFirstName } from './riderDriverPrivacy.js'
+
 /**
  * Near-term schedule (rider batch 2 item 9).
  *
@@ -221,12 +223,9 @@ export function isNearTermTrip(trip) {
 }
 
 export function driverFirstName(fullName, fallback = 'Your driver') {
-  const raw = String(fullName || '').trim()
-  if (!raw) return fallback
-  const token = raw.split(/\s+/)[0] || ''
-  const cleaned = (token.includes('@') ? token.split('@')[0] : token).replace(/[^a-zA-Z'-]/g, '')
-  if (!cleaned) return fallback
-  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1)
+  const first = riderDriverFirstName(fullName, '')
+  if (!first) return fallback
+  return first.charAt(0).toUpperCase() + first.slice(1)
 }
 
 export function scheduledBoardCopy(trip) {

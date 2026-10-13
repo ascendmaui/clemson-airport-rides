@@ -4,7 +4,7 @@
  * before they accept, so this is the narrow preview.
  */
 import { admin, cors, json, parseBody, userFromAuth } from '../friendRideLib.js'
-import { displayFirstName } from '../../src/lib/privacyDisplay.js'
+import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 import { standingFromRatings } from '../../src/lib/standing.js'
 import { approvalGateMessage } from '../../packages/rides-native/syntheticOffers.js'
 import { receivableDriverIds } from '../driverApproval.js'
@@ -75,7 +75,7 @@ export default async function handler(req, res, deps = {}) {
   const standing = rider?.standing || standingFromRatings(rider?.rating_avg, rider?.rating_count)
 
   return json(res, 200, {
-    riderFirstName: displayFirstName(rider?.full_name, 'Rider'),
+    riderFirstName: riderDriverFirstName(rider?.full_name, 'Rider') || 'Rider',
     riderAvatarUrl: typeof rider?.avatar_url === 'string' && /^https:\/\//.test(rider.avatar_url) ? rider.avatar_url : null,
     ratingAvg: rider?.rating_avg != null ? Number(rider.rating_avg) : null,
     ratingCount: Number(rider?.rating_count) || 0,
