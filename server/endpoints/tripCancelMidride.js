@@ -9,6 +9,7 @@
 import {
   admin, cors, json, parseBody, userFromAuth,
 } from '../friendRideLib.js'
+import { releaseOpenFareHold } from '../fareAuthorization.js'
 import { collectMidrideCharge } from '../collectTripCharge.js'
 import {
   MIDRIDE_STATUS,
@@ -150,14 +151,14 @@ async function loadTrip(sb, tripId) {
   return { trip: data }
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const sb = admin()
+  const sb = deps.sb || admin()
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
 
-  const user = await userFromAuth(req)
+  const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
 
   const { body, error: pe } = parseBody(req)
@@ -177,6 +178,7 @@ export default async function handler(req, res) {
     if (trip.rider_id !== user.id) return json(res, 403, { error: 'Only the rider can cancel this trip' })
 
     if (trip.status === MIDRIDE_STATUS) {
+      await releaseOpenFareHold({ sb, stripe: deps.stripe, trip, reason: 'midride_cancel' })
       const stored = trip.metadata?.midride_cancel || null
       return json(res, 200, {
         ok: true,
@@ -259,6 +261,7 @@ export default async function handler(req, res) {
     if (!locked) {
       const again = await loadTrip(sb, trip.id)
       if (again.trip?.status === MIDRIDE_STATUS) {
+        await releaseOpenFareHold({ sb, stripe: deps.stripe, trip: again.trip, reason: 'midride_cancel' })
         return json(res, 200, {
           ok: true,
           alreadyCanceled: true,
@@ -270,6 +273,10 @@ export default async function handler(req, res) {
       return json(res, 409, { error: 'Trip status changed. Refresh and try again.', code: 'status_changed' })
     }
 
+    // The trip has ended even if its separate partial-fare charge fails.
+    const endedTrip = { ...trip, status: MIDRIDE_STATUS, metadata }
+    await releaseOpenFareHold({ sb, stripe: deps.stripe, trip: endedTrip, reason: 'midride_cancel' })
+    Object.assign(metadata, endedTrip.metadata)
     await endLocationShares(sb, trip.id)
 
     let paymentStatus = 'uncollected'
@@ -292,7 +299,7 @@ export default async function handler(req, res) {
         .maybeSingle()
       // collectMidrideCharge never throws. A decline ends as payment_required
       // while the trip stays canceled_midride.
-      const charged = await collectMidrideCharge({
+      const charged = await (deps.collectMidrideCharge || collectMidrideCharge)({
         sb,
         profile,
         amountCents: quote.toCollectCents,

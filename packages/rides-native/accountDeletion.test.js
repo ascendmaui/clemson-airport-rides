@@ -586,7 +586,7 @@ test('supportTicketRequest throws on rate limit 429 error', async () => {
   globalThis.fetch = async () => ({
     ok: false,
     status: 429,
-    json: async () => ({ error: 'Too many tickets. Wait a few minutes or email rides@clemson.edu.' }),
+    json: async () => ({ error: 'Too many tickets. Wait a few minutes or email rides@clemsonrides.com.' }),
   })
 
   try {

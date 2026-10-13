@@ -1,3 +1,4 @@
+import { Glyph } from './icons/index.js'
 import { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
@@ -26,13 +27,10 @@ import { DANGER, INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from './places.js
 import { SIGNUP_PROFILE_DRAFT_KEY, isProfileComplete, profileFieldError } from './partyProfile.js'
 import { RideStyleChips } from './PartyScreens.jsx'
 
-function AuthShell({ title, subtitle, mark, onBack, children }) {
-  return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+function AuthShell({ title, subtitle, mark, onBack, embedded = false, children }) {
+  const body = (
+    <>
+      {embedded ? null : (
         <Pressable
           onPress={onBack}
           style={styles.back}
@@ -41,16 +39,27 @@ function AuthShell({ title, subtitle, mark, onBack, children }) {
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityHint="Returns to the previous screen"
         >
-          <Text style={styles.backLabel}>←</Text>
+          <Glyph name="back" size={20} color={PURPLE} accessibilityLabel="Back" />
         </Pressable>
-        <View style={styles.card}>
+      )}
+      <View style={styles.card}>
           <View style={styles.mark}>
             <Text style={styles.markLabel}>{mark}</Text>
           </View>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.subtitle}>{subtitle}</Text>
           {children}
-        </View>
+      </View>
+    </>
+  )
+  if (embedded) return <View style={styles.embedded}>{body}</View>
+  return (
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {body}
       </ScrollView>
     </KeyboardAvoidingView>
   )
@@ -138,6 +147,7 @@ export function SignInScreen({
   resetPassword,
   onOpenLegal,
   ownerRequest = false,
+  embedded = false,
 }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -263,7 +273,7 @@ export function SignInScreen({
   const showRequesting = ownerRequest && (busy || socialId || holdingRequest || genericHidden)
 
   return (
-    <AuthShell title="Welcome back" subtitle={subtitle} mark={mark} onBack={onBack}>
+    <AuthShell title="Welcome back" subtitle={subtitle} mark={mark} onBack={onBack} embedded={embedded}>
       <SocialButtons
         providers={effectiveProviders}
         busyId={socialId}
@@ -850,6 +860,7 @@ export function ResetPasswordScreen({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: SURFACE },
+  embedded: { alignSelf: 'stretch' },
   scroll: { flexGrow: 1, padding: 24, paddingTop: 56, justifyContent: 'center' },
   back: {
     width: 44,

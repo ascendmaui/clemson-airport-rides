@@ -4,11 +4,18 @@
  *
  * in_app is the existing driver-screen chime. It plays only while that screen
  * is open, so this module records the channel and does not play audio.
- * push has a stored Expo token path and no server sender.
+ * push posts to the Expo push API with or without EXPO_ACCESS_TOKEN.
+ * The token is optional while Enhanced Security for Push is off; when set,
+ * the request sends Authorization: Bearer. Lock-screen delivery still needs
+ * APNs (iOS) or FCM (Android) on the Expo project. The client still shows
+ * an in-app alert while online.
  * SMS and email delivery are delegated to driverOfferChannels.js.
  */
+import { readDriverPushToken } from './driverPushToken.js'
 import { dispatchDriverOfferChannels } from './driverOfferChannels.js'
+import { sendExpoPush, PUSH_CREDENTIAL_GAP } from './expoPush.js'
 import { quietFromPrefs } from '../src/lib/quietHours.js'
+import { isQuietAt } from '../shared/quietWindow.js'
 
 export const DRIVER_OFFER_ALERT_CHANNELS = Object.freeze(['in_app', 'push', 'sms', 'email'])
 
@@ -26,37 +33,9 @@ function assertChannel(channel) {
   }
 }
 
-function minutesInNewYork(now) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(now)
-  const hour = Number(parts.find((part) => part.type === 'hour')?.value)
-  const minute = Number(parts.find((part) => part.type === 'minute')?.value)
-  const normalizedHour = hour === 24 ? 0 : hour
-  if (!Number.isFinite(normalizedHour) || !Number.isFinite(minute)) return 0
-  return normalizedHour * 60 + minute
-}
-
-function toMinutes(hhmmValue) {
-  const [h, m] = String(hhmmValue).split(':').map((n) => Number(n))
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return 0
-  return h * 60 + m
-}
-
-/** Quiet hours follow Clemson local time, not the server's UTC clock. */
+/** Quiet hours follow Clemson local time (America/New_York), not the server's UTC clock. Wraps midnight. */
 export function isQuietForDriverOffer(prefs, now = new Date()) {
-  const quiet = quietFromPrefs(prefs)
-  if (quiet.dnd) return true
-  if (!quiet.scheduleEnabled) return false
-  const mins = minutesInNewYork(now)
-  const start = toMinutes(quiet.start)
-  const end = toMinutes(quiet.end)
-  if (start === end) return true
-  if (start < end) return mins >= start && mins < end
-  return mins >= start || mins < end
+  return isQuietAt(quietFromPrefs(prefs), now)
 }
 
 export function offerAlertCopy(trip) {
@@ -87,8 +66,9 @@ export function buildOfferAlertPlan({
     in_app: { sent: false, reason: 'open_driver_screen_only' },
     push: {
       sent: false,
-      reason: pushTokenPresent ? 'push_sender_missing' : 'push_token_missing',
+      reason: pushTokenPresent ? 'push_not_sent' : 'push_token_missing',
       tokenPresent: Boolean(pushTokenPresent),
+      gap: pushTokenPresent ? PUSH_CREDENTIAL_GAP : undefined,
     },
     sms: { sent: false, reason: 'sms_provider_missing', phoneOnFile: Boolean(phoneOnFile) },
     email: { sent: false, reason: emailOnFile ? 'live_send_disabled' : 'driver_email_missing' },
@@ -97,23 +77,17 @@ export function buildOfferAlertPlan({
   return channels
 }
 
-function tokenPresent(statusRow, tokenRow) {
-  const statusToken = String(statusRow?.expo_push_token || '').trim()
-  const tableToken = String(tokenRow?.token || '').trim()
-  return Boolean(statusToken || tableToken)
-}
-
 async function loadDriverContact(sb, driverId) {
   const profile = await sb.from('profiles').select('email, phone, notification_prefs').eq('id', driverId).maybeSingle()
-  const status = await sb.from('driver_status').select('expo_push_token').eq('driver_id', driverId).maybeSingle()
-  const token = await sb.from('driver_push_tokens').select('token, platform').eq('driver_id', driverId).maybeSingle()
+  const push = await readDriverPushToken(sb, driverId)
   return {
     email: String(profile.data?.email || '').trim(),
     phone: String(profile.data?.phone || '').trim(),
     phoneOnFile: Boolean(String(profile.data?.phone || '').trim()),
     prefs: profile.data?.notification_prefs || null,
-    pushTokenPresent: tokenPresent(status.data, token.data),
-    error: profile.error || status.error || token.error || null,
+    pushToken: push.token,
+    pushTokenPresent: Boolean(push.token),
+    error: profile.error || null,
   }
 }
 
@@ -156,6 +130,9 @@ export async function dispatchDriverOfferAlert(sb, {
     emailOnFile: Boolean(contact.email),
   })
 
+  const tokenKind = contact.pushToken ? (/^Expo(nent)?PushToken\[/.test(contact.pushToken) ? 'expo' : 'raw') : null
+  if (tokenKind) channels.push.tokenKind = tokenKind
+
   const alerts = sb.from('driver_offer_alerts')
   const inserted = typeof alerts.insert === 'function'
     ? await alerts.insert({
@@ -168,6 +145,35 @@ export async function dispatchDriverOfferAlert(sb, {
   if (inserted?.error) {
     const raced = await existingAlert(sb, tripId, driverId, offerMarker)
     if (raced) return { ok: true, tripId, driverId, offerMarker, channels: raced, recorded: true, duplicate: true }
+  }
+
+  if (!inserted?.error && !suppressed && contact.pushToken) {
+    const tier = trip?.tier || trip?.metadata?.ride_option || 'standard'
+    const prefs = contact.prefs?.ride_alerts
+    const mode = prefs && typeof prefs === 'object' ? prefs[tier] || prefs.standard : null
+    const sound = mode === 'silent' || mode === 'vibrate' ? null : 'default'
+    const pushed = tokenKind === 'raw'
+      ? { sent: false, reason: 'raw_device_token_unsupported' }
+      : await sendExpoPush({
+        to: contact.pushToken,
+        title: offerAlertCopy(trip).title,
+        body: offerAlertCopy(trip).body,
+        sound,
+        data: { tripId, tier },
+      }, deps)
+    channels.push = {
+      sent: Boolean(pushed.sent),
+      reason: pushed.reason,
+      tokenPresent: true,
+      tokenKind,
+      ...(pushed.gap ? { gap: pushed.gap } : {}),
+    }
+  }
+
+  if (channels.push.reason === 'device_not_registered') {
+    try {
+      await sb.from('driver_push_tokens').delete().eq('driver_id', driverId).eq('token', contact.pushToken)
+    } catch { /* Best effort; avoid removing a concurrently refreshed token. */ }
   }
 
   if (!inserted?.error && !suppressed) {

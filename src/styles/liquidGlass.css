@@ -1,0 +1,1311 @@
+/* Liquid glass layer for the marketing site.
+   The stadium photo stays. Cards, bars, and buttons pick up a frosted
+   off-white field, orange #F56600 and purple #522D80, and a soft highlight.
+   luxury.css keeps the locked base rules; this file only refines them. */
+
+body .mkt-home::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  left: 0;
+  right: 0;
+  top: 100svh;
+  bottom: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(80% 36% at 0% 0%, rgba(245, 102, 0, 0.16), transparent 52%),
+    radial-gradient(70% 32% at 100% 0%, rgba(82, 45, 128, 0.14), transparent 48%),
+    #f6f3f8;
+}
+
+body .mkt-info::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(246, 243, 248, 0.82) 0%, #f6f3f8 280px),
+    radial-gradient(90% 42% at 0% 0%, rgba(245, 102, 0, 0.28), transparent 46%),
+    radial-gradient(80% 38% at 100% 0%, rgba(82, 45, 128, 0.24), transparent 44%);
+}
+
+body .mkt-home .mkt-stage-copy {
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.48),
+    0 18px 40px rgba(20, 8, 32, 0.28);
+  backdrop-filter: blur(18px) saturate(1.35);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+}
+
+body .mkt-home .mkt-stage-copy::before {
+  inset: 0;
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 46%),
+    linear-gradient(155deg, rgba(82, 45, 128, 0.5), rgba(20, 8, 32, 0.58));
+}
+
+body .mkt-hero-brand .mkt-brand-mark {
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 0;
+  border-radius: 22%;
+  background: transparent;
+  box-shadow: 0 12px 24px rgba(20, 8, 32, 0.28);
+  object-fit: cover;
+}
+
+.mkt-brand-icon,
+.mkt-app-icon {
+  display: block;
+  flex: none;
+  object-fit: cover;
+  border-radius: 22%;
+  box-shadow: 0 8px 16px rgba(82, 45, 128, 0.22);
+}
+
+.mkt-brand-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.mkt-app-icon {
+  width: 72px;
+  height: 72px;
+  margin-bottom: 12px;
+}
+
+.mkt-glass-glyph {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 0 12px;
+  overflow: hidden;
+  border-radius: 14px;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  background:
+    radial-gradient(120% 80% at 18% 0%, rgba(255, 255, 255, 0.9), transparent 42%),
+    linear-gradient(145deg, #ffe0c2 0%, #ff7a1a 34%, #f56600 62%, #522d80 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 8px 16px rgba(82, 45, 128, 0.18);
+}
+
+.mkt-glass-glyph--purple {
+  background:
+    radial-gradient(120% 80% at 18% 0%, rgba(255, 255, 255, 0.88), transparent 42%),
+    linear-gradient(145deg, #f4ebff 0%, #7a4eae 36%, #522d80 68%, #f56600 140%);
+}
+
+.dp-icon-wrap {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: 16px;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  background:
+    radial-gradient(120% 80% at 18% 0%, rgba(255, 255, 255, 0.9), transparent 42%),
+    linear-gradient(145deg, #ffe0c2 0%, #ff7a1a 34%, #f56600 62%, #522d80 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 8px 16px rgba(82, 45, 128, 0.18);
+}
+
+.dp-grid .dp-card:nth-child(even) .dp-icon-wrap {
+  background:
+    radial-gradient(120% 80% at 18% 0%, rgba(255, 255, 255, 0.88), transparent 42%),
+    linear-gradient(145deg, #f4ebff 0%, #7a4eae 36%, #522d80 68%, #f56600 140%);
+}
+
+body .mkt-home .mkt-card,
+body .mkt-info .mkt-card,
+body .mkt .dp-card,
+body .mkt .dp-offer,
+body .mkt .dp-legend,
+body .mkt .dp-compare,
+body .mkt .dp-rental {
+  background:
+    radial-gradient(42% 38% at 0% 0%, rgba(245, 102, 0, 0.16), transparent 70%),
+    radial-gradient(40% 36% at 100% 100%, rgba(82, 45, 128, 0.12), transparent 72%),
+    linear-gradient(180deg, rgba(255, 252, 248, 0.86), rgba(255, 255, 255, 0.7));
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  color: #1a1028;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 16px 28px rgba(255, 255, 255, 0.28),
+    0 12px 28px rgba(82, 45, 128, 0.1);
+  backdrop-filter: blur(16px) saturate(1.45);
+  -webkit-backdrop-filter: blur(16px) saturate(1.45);
+}
+
+body .mkt-home .mkt-feature-section .mkt-section-head,
+body .mkt-info .mkt-section-head,
+body .mkt-note,
+body .mkt-release {
+  background: rgba(255, 252, 248, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.84);
+  color: #1a1028;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 10px 24px rgba(82, 45, 128, 0.08);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+}
+
+body .mkt-home .mkt-feature h3,
+body .mkt-info .mkt-feature h3,
+body .mkt-info h1,
+body .mkt-info .mkt-section-head h2,
+body .mkt-home .mkt-feature-section .mkt-section-head h2,
+body .mkt-info .mkt-section-head p,
+body .mkt-home .mkt-feature p,
+body .mkt-info .mkt-feature p,
+body .mkt-home .mkt-guide,
+body .mkt-info .mkt-guide,
+body .mkt-note,
+body .dp-hero h1,
+body .dp-group > h2,
+body .dp-card h3,
+body .dp-legend h3,
+body .dp-rental h2,
+body .dp-offer-top strong {
+  color: #1a1028;
+  text-shadow: none;
+}
+
+body .dp-lede,
+body .dp-sub,
+body .dp-card p,
+body .dp-fine,
+body .dp-offer-meta,
+body .dp-rental p,
+body .dp-tier-range,
+body .dp-tier-note,
+body .dp-compare-head,
+body .mkt-home .mkt-feature .mkt-part .mkt-kicker,
+body .mkt-info .mkt-feature .mkt-part .mkt-kicker,
+body .mkt-how summary {
+  color: #3a3148;
+  text-shadow: none;
+}
+
+body .mkt-home .mkt-feature .mkt-part .mkt-kicker,
+body .mkt-info .mkt-feature .mkt-part .mkt-kicker,
+body .mkt-how summary,
+body .mkt-how summary::after {
+  color: #ba4700;
+}
+
+body .mkt-night-title {
+  color: #1a1028;
+  text-shadow: none;
+}
+
+body .mkt-home .mkt-nav.mkt-nav--scrolled,
+body .mkt-info .mkt-nav,
+body .mkt-info .mkt-nav.mkt-nav--scrolled,
+body .mkt-info .mkt-menu-bar,
+body .mkt-home .mkt-footer {
+  background: rgba(246, 243, 248, 0.82);
+  color: #1a1028;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: 0 8px 24px rgba(82, 45, 128, 0.08);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+
+body .mkt-home .mkt-nav.mkt-nav--scrolled .mkt-brand,
+body .mkt-home .mkt-nav.mkt-nav--scrolled .mkt-nav-links button,
+body .mkt-info .mkt-brand,
+body .mkt-info .mkt-nav-links button,
+body .mkt-info .mkt-menu button,
+body .mkt-home .mkt-footer button {
+  color: #522d80;
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(82, 45, 128, 0.16);
+}
+
+body .mkt-nav-links .mkt-nav-cta,
+body .mkt-home .mkt-nav.mkt-nav--scrolled .mkt-nav-links .mkt-nav-cta,
+body .mkt-info .mkt-nav-links .mkt-nav-cta {
+  background: rgba(245, 102, 0, 0.92) !important;
+  color: #141414 !important;
+  border: 1px solid rgba(255, 255, 255, 0.55) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 8px 18px rgba(245, 102, 0, 0.24) !important;
+}
+
+body .mkt-menu button[aria-current="page"] {
+  background: rgba(245, 102, 0, 0.92);
+  color: #141414;
+}
+
+body .mkt-reach .mkt-text,
+body .mkt-close .mkt-choice,
+body .mkt-section-end .mkt-choice,
+body .mkt-info .mkt-card .mkt-text {
+  background: rgba(82, 45, 128, 0.92);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 8px 18px rgba(82, 45, 128, 0.18);
+}
+
+body .dp-btn-primary {
+  background: #f56600;
+  color: #141414;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 8px 18px rgba(245, 102, 0, 0.24);
+}
+
+body .dp-btn-ghost {
+  background: rgba(82, 45, 128, 0.92);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+body .dp-card-highlight {
+  background: linear-gradient(160deg, rgba(245, 102, 0, 0.16), rgba(255, 252, 248, 0.9) 58%);
+  border-color: rgba(245, 102, 0, 0.4);
+}
+
+body .dp-compare-row {
+  border-top-color: rgba(82, 45, 128, 0.1);
+}
+
+body .dp-yes {
+  color: #156938;
+}
+
+body .dp-mini-arc path {
+  stroke: rgba(82, 45, 128, 0.18);
+}
+
+body .dp-path {
+  background: rgba(255, 255, 255, 0.45) !important;
+}
+
+body .lux-legal {
+  background:
+    radial-gradient(80% 40% at 0% 0%, rgba(245, 102, 0, 0.18), transparent 52%),
+    radial-gradient(70% 36% at 100% 0%, rgba(82, 45, 128, 0.16), transparent 48%),
+    #f6f3f8 !important;
+  color: #1a1028;
+}
+
+body .lux-legal h1,
+body .lux-legal-section h2 {
+  color: #1a1028;
+}
+
+body .lux-legal-body,
+body .lux-legal-section p,
+body .lux-legal-section li {
+  color: #2c2438;
+}
+
+body .lux-legal-meta,
+body .lux-legal .lux-kicker {
+  color: #ba4700;
+}
+
+body .lux-legal-back {
+  color: #522d80;
+}
+
+body .lux-legal-section {
+  background: rgba(255, 252, 248, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.84);
+  border-radius: 20px;
+  padding: 16px 18px 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 10px 24px rgba(82, 45, 128, 0.08);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+}
+
+body .lux-legal-bar {
+  background: linear-gradient(180deg, rgba(246, 243, 248, 0), #f6f3f8 32%);
+}
+
+body .lux-agree {
+  background: #f56600;
+  color: #141414;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 10px 24px rgba(245, 102, 0, 0.24);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  body .mkt-home .mkt-card,
+  body .mkt-info .mkt-card,
+  body .mkt .dp-card,
+  body .mkt .dp-offer,
+  body .mkt .dp-legend,
+  body .mkt .dp-compare,
+  body .mkt .dp-rental,
+  body .mkt-home .mkt-feature-section .mkt-section-head,
+  body .mkt-info .mkt-section-head,
+  body .mkt-note,
+  body .lux-legal-section,
+  body .mkt-home .mkt-nav.mkt-nav--scrolled,
+  body .mkt-info .mkt-nav,
+  body .mkt-info .mkt-menu-bar,
+  body .mkt-home .mkt-footer {
+    background: #f7f4f2;
+  }
+
+  body .mkt-home .mkt-stage-copy,
+  body .mkt-home .mkt-stage-copy::before {
+    background: #2a1840;
+  }
+}
+
+/* Motion. Transform and opacity only. Blur-in is a small scale, not a filter. */
+
+@keyframes glass-rise {
+  from { opacity: 0; transform: translate3d(0, 18px, 0) scale(0.975); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes glass-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes glass-sweep {
+  0% { transform: translate3d(-150%, 0, 0); opacity: 0; }
+  2% { opacity: 1; }
+  14% { transform: translate3d(240%, 0, 0); opacity: 0; }
+  100% { transform: translate3d(240%, 0, 0); opacity: 0; }
+}
+
+@keyframes glass-pass {
+  0% { transform: translate3d(-150%, 0, 0); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translate3d(240%, 0, 0); opacity: 0; }
+}
+
+.mkt-glass-glyph svg,
+.dp-icon-wrap svg {
+  position: relative;
+  z-index: 1;
+}
+
+.mkt-glass-glyph::after,
+.dp-icon-wrap::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  left: -30%;
+  top: -40%;
+  width: 55%;
+  height: 180%;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.85), transparent);
+  opacity: 0.55;
+  transform: rotate(-28deg) translate3d(0, 0, 0);
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body .mkt-home .mkt-stage-copy {
+  overflow: hidden;
+  animation: glass-rise 680ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+body .mkt-home .mkt-stage-copy::before {
+  z-index: 0;
+}
+
+body .mkt-home .mkt-stage-copy > * {
+  position: relative;
+  z-index: 1;
+}
+
+body .mkt-home .mkt-stage-copy::after,
+body .mkt-stage .mkt-book.primary-cta::after,
+body .mkt-nav-links .mkt-nav-cta::after,
+body .mkt .dp-btn-primary::after,
+body .lux-agree::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 42%;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: glass-sweep 8.5s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+body .mkt-stage .mkt-book.primary-cta,
+body .mkt-nav-links .mkt-nav-cta,
+body .mkt .dp-btn-primary,
+body .lux-agree {
+  position: relative;
+  overflow: hidden;
+}
+
+body .mkt-hero-shot {
+  animation: glass-fade 720ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+body .mkt-hero-shot--request {
+  animation-delay: 90ms;
+}
+
+body .mkt-hero-shot--backseat {
+  animation-delay: 170ms;
+}
+
+body .dp-hero-copy,
+body .lux-legal h1,
+body .mkt-info .mkt-page > section:first-child .mkt-section-head {
+  animation: glass-rise 680ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+body .mkt-home .mkt-card,
+body .mkt-info .mkt-card,
+body .mkt .dp-card,
+body .lux-legal-section,
+body .mkt-note {
+  position: relative;
+  overflow: hidden;
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body .mkt-home .mkt-card > *,
+body .mkt-info .mkt-card > *,
+body .mkt .dp-card > *,
+body .lux-legal-section > * {
+  position: relative;
+  z-index: 1;
+}
+
+body .mkt-home .mkt-card::before,
+body .mkt-info .mkt-card::before,
+body .mkt .dp-card::before,
+body .lux-legal-section::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 42%;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0));
+  opacity: 0.38;
+  transform: translate3d(0, 0, 0);
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body .mkt-home .mkt-card::after,
+body .mkt-info .mkt-card::after,
+body .mkt .dp-card::after,
+body .lux-legal-section::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 38%;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.42), transparent);
+  opacity: 0;
+  transform: translate3d(-150%, 0, 0);
+}
+
+body .glass-motion .mkt-reveal {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0) scale(0.975);
+  transition: none;
+}
+
+body .glass-motion .mkt-reveal.is-in {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  animation: glass-rise 680ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: var(--mkt-delay, 0ms);
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body .mkt .mkt-brand,
+body .mkt .mkt-nav-links button,
+body .mkt .mkt-menu button,
+body .mkt .mkt-footer button,
+body .mkt .mkt-choice,
+body .mkt .mkt-text,
+body .mkt .mkt-ghost,
+body .mkt .primary-cta,
+body .mkt .dp-btn,
+body .mkt .dp-chip,
+body .lux-legal .lux-agree,
+body .lux-legal .lux-legal-back,
+[data-route="partners"] button,
+[data-route="drivers"] button,
+[data-route="rentals"] button,
+[data-route="affiliates"] button,
+[data-route="affiliate"] button,
+[data-route="r"] button,
+[data-route="affiliates"] [role="tab"],
+[data-route="affiliate"] [role="tab"] {
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-route="partners"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+[data-route="partners"] textarea,
+[data-route="partners"] select,
+[data-route="drivers"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+[data-route="drivers"] textarea,
+[data-route="drivers"] select,
+[data-route="rentals"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+[data-route="rentals"] textarea,
+[data-route="rentals"] select,
+[data-route="affiliates"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+[data-route="affiliates"] textarea,
+[data-route="affiliates"] select,
+[data-route="affiliate"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+[data-route="affiliate"] textarea,
+[data-route="affiliate"] select {
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-route="partners"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):focus,
+[data-route="partners"] textarea:focus,
+[data-route="partners"] select:focus,
+[data-route="drivers"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):focus,
+[data-route="drivers"] textarea:focus,
+[data-route="drivers"] select:focus,
+[data-route="rentals"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):focus,
+[data-route="rentals"] textarea:focus,
+[data-route="rentals"] select:focus,
+[data-route="affiliates"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):focus,
+[data-route="affiliates"] textarea:focus,
+[data-route="affiliates"] select:focus,
+[data-route="affiliate"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):focus,
+[data-route="affiliate"] textarea:focus,
+[data-route="affiliate"] select:focus {
+  transform: translate3d(0, -1px, 0);
+}
+
+body .mkt-home .mkt-card:active,
+body .mkt-info .mkt-card:active,
+body .mkt .dp-card:active,
+body .lux-legal-section:active,
+body .glass-motion .mkt-reveal.is-in:active {
+  transform: scale(0.992);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  body .mkt .mkt-brand:hover,
+  body .mkt .mkt-nav-links button:hover,
+  body .mkt .mkt-menu button:hover,
+  body .mkt .mkt-footer button:hover,
+  body .mkt .mkt-choice:hover,
+  body .mkt .mkt-text:hover,
+  body .mkt .mkt-ghost:hover,
+  body .mkt .primary-cta:hover,
+  body .mkt .dp-btn:hover,
+  body .mkt .dp-chip:hover,
+  body .lux-legal .lux-agree:hover,
+  body .lux-legal .lux-legal-back:hover,
+  [data-route="partners"] button:hover,
+  [data-route="drivers"] button:hover,
+  [data-route="rentals"] button:hover,
+  [data-route="affiliates"] button:hover,
+  [data-route="affiliate"] button:hover,
+  [data-route="r"] button:hover,
+  [data-route="affiliates"] [role="tab"]:hover,
+  [data-route="affiliate"] [role="tab"]:hover {
+    transform: translate3d(0, -2px, 0);
+  }
+
+  body .mkt .mkt-brand:active,
+  body .mkt .mkt-nav-links button:active,
+  body .mkt .mkt-menu button:active,
+  body .mkt .mkt-footer button:active,
+  body .mkt .mkt-choice:active,
+  body .mkt .mkt-text:active,
+  body .mkt .mkt-ghost:active,
+  body .mkt .primary-cta:active,
+  body .mkt .dp-btn:active,
+  body .lux-legal .lux-agree:active,
+  body .lux-legal .lux-legal-back:active,
+  [data-route="partners"] button:active,
+  [data-route="drivers"] button:active,
+  [data-route="rentals"] button:active,
+  [data-route="affiliates"] button:active,
+  [data-route="affiliate"] button:active,
+  [data-route="r"] button:active {
+    transform: scale(0.96);
+  }
+
+  body .mkt-home .mkt-card:hover,
+  body .mkt-info .mkt-card:hover,
+  body .mkt .dp-card:hover,
+  body .lux-legal-section:hover,
+  body .glass-motion .mkt-reveal.is-in:hover {
+    transform: translate3d(0, -4px, 0);
+  }
+
+  body .mkt-home .mkt-card:hover,
+  body .mkt-info .mkt-card:hover,
+  body .mkt .dp-card:hover,
+  body .glass-motion .mkt-home .mkt-card.mkt-reveal.is-in:hover,
+  body .glass-motion .mkt-info .mkt-card.mkt-reveal.is-in:hover,
+  body .glass-motion .mkt .dp-card.mkt-reveal.is-in:hover {
+    border-color: rgba(255, 255, 255, 0.82);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.92),
+      inset 0 16px 28px rgba(255, 255, 255, 0.28),
+      0 12px 28px rgba(82, 45, 128, 0.1);
+  }
+
+  body .mkt-home .mkt-card:active,
+  body .mkt-info .mkt-card:active,
+  body .mkt .dp-card:active,
+  body .lux-legal-section:active,
+  body .glass-motion .mkt-reveal.is-in:active {
+    transform: scale(0.992);
+  }
+
+  body .mkt-home .mkt-card:hover::before,
+  body .mkt-info .mkt-card:hover::before,
+  body .mkt .dp-card:hover::before,
+  body .lux-legal-section:hover::before {
+    opacity: 0.62;
+    transform: translate3d(8%, 0, 0);
+  }
+
+  body .mkt-home .mkt-card:hover::after,
+  body .mkt-info .mkt-card:hover::after,
+  body .mkt .dp-card:hover::after,
+  body .lux-legal-section:hover::after {
+    animation: glass-pass 780ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  body .mkt-card:hover .mkt-glass-glyph::after,
+  body .mkt .dp-card:hover .dp-icon-wrap::after {
+    transform: rotate(-28deg) translate3d(8px, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body .mkt.fade-in,
+  body .mkt-home .mkt-stage-copy,
+  body .mkt-hero-shot,
+  body .mkt-hero-shot--request,
+  body .mkt-hero-shot--backseat,
+  body .dp-hero-copy,
+  body .lux-legal h1,
+  body .mkt-info .mkt-section-head,
+  body .mkt-home .mkt-card,
+  body .mkt-info .mkt-card,
+  body .mkt-note,
+  body .dp-card,
+  body .dp-btn,
+  body .mkt .primary-cta,
+  body .mkt-nav-links .mkt-nav-cta,
+  body .mkt-choice,
+  body .mkt-glass-glyph,
+  body .mkt-glass-glyph::after,
+  body .dp-icon-wrap,
+  body .dp-icon-wrap::after,
+  body .mkt-home .mkt-card::before,
+  body .mkt-info .mkt-card::before,
+  body .mkt .dp-card::before,
+  body .lux-legal-section::before,
+  body .lux-legal-section,
+  body .lux-agree,
+  body .glass-motion .mkt-reveal,
+  body .glass-motion .mkt-reveal.is-in {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  body .glass-motion .mkt-reveal,
+  body .glass-motion .mkt-reveal.is-in {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  body .mkt-home .mkt-stage-copy::after,
+  body .mkt-stage .mkt-book.primary-cta::after,
+  body .mkt-nav-links .mkt-nav-cta::after,
+  body .mkt .dp-btn-primary::after,
+  body .lux-agree::after,
+  body .mkt-home .mkt-card::after,
+  body .mkt-info .mkt-card::after,
+  body .mkt .dp-card::after,
+  body .lux-legal-section::after,
+  body .mkt-home .mkt-card:hover::after,
+  body .mkt-info .mkt-card:hover::after,
+  body .mkt .dp-card:hover::after,
+  body .lux-legal-section:hover::after {
+    opacity: 0 !important;
+    animation: none !important;
+  }
+}
+
+/* Rider sheet. Tokens from packages/rides-native/shared/theme.js and the
+   rider home sheet in apps/rider/app/index.tsx. React Native uses the
+   system font; Inter is only the web fallback. */
+
+body .mkt,
+body .lux-legal,
+body [data-route="partners"],
+body [data-route="drivers"],
+body [data-route="rentals"],
+body [data-route="affiliate"],
+body [data-route="affiliates"],
+body [data-route="r"] {
+  --rider-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+  --rider-ink: #0b1220;
+  --rider-ink-secondary: #5c6570;
+  --rider-title: #522d80;
+  --rider-orange: #f56600;
+  --rider-on-accent: #ffffff;
+  --rider-surface: #f7f4f0;
+  --rider-shadow: rgba(26, 16, 51, 0.08);
+  font-family: var(--rider-font);
+  color: var(--rider-ink-secondary);
+}
+
+body .mkt-home::after {
+  background: #f7f4f0;
+}
+
+body .mkt-info::before {
+  background: linear-gradient(180deg, rgba(247, 244, 240, 0.62) 0%, #f7f4f0 240px);
+}
+
+body .mkt-stage-shade {
+  background: linear-gradient(180deg, rgba(11, 18, 32, 0.16) 0%, rgba(11, 18, 32, 0.04) 42%, rgba(247, 244, 240, 0.2) 100%);
+}
+
+body .mkt-home .mkt-stage {
+  justify-content: flex-end;
+  align-items: center;
+}
+
+body .mkt-home .mkt-stage-copy {
+  width: min(560px, calc(100% - 32px));
+  margin: 0 auto 16px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #5c6570;
+  border: 1px solid rgba(82, 45, 128, 0.12);
+  border-radius: 28px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 1px 2px rgba(26, 16, 51, 0.04),
+    0 10px 18px rgba(26, 16, 51, 0.14);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+}
+
+body .mkt-home .mkt-stage-copy::before {
+  inset: 0;
+  z-index: 0;
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0) 46%);
+}
+
+body .mkt,
+body .mkt :is(h1, h2, h3, p, li, label, button, a, input, textarea, select, summary),
+body .lux-legal,
+body .lux-legal :is(h1, h2, h3, p, li, label, button, a),
+body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) :is(h1, h2, h3, p, li, label, button, a, input, textarea, select) {
+  font-family: var(--rider-font) !important;
+}
+
+body .mkt h1,
+body .lux-legal h1,
+body .mkt .dp-hero h1,
+body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) h1 {
+  color: #522d80 !important;
+  font-size: 26px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.6px !important;
+  line-height: 32px !important;
+  text-shadow: none !important;
+}
+
+body .mkt h2,
+body .lux-legal h2,
+body .mkt .dp-group > h2,
+body .mkt .dp-rental h2,
+body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) h2 {
+  color: #522d80 !important;
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.2px !important;
+  line-height: 22px !important;
+  text-shadow: none !important;
+}
+
+body .mkt h3,
+body .lux-legal h3,
+body .mkt .dp-card h3,
+body .mkt .dp-legend h3,
+body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) h3 {
+  color: #0b1220 !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.2px !important;
+  line-height: 20px !important;
+  text-shadow: none !important;
+}
+
+body .mkt p,
+body .mkt li,
+body .lux-legal p,
+body .lux-legal li,
+body .mkt .dp-lede,
+body .mkt .dp-sub,
+body .mkt .dp-card p,
+body .mkt .dp-fine,
+body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) :is(p, li) {
+  color: #5c6570 !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  line-height: 20px !important;
+  text-shadow: none !important;
+}
+
+body .mkt-home .mkt-lede {
+  color: #5c6570 !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 18px !important;
+}
+
+body .mkt p.mkt-hero-name {
+  color: #522d80 !important;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.3px !important;
+  line-height: 20px !important;
+}
+
+body .mkt-hero-name,
+body .mkt .mkt-brand {
+  color: #522d80 !important;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.3px !important;
+  text-shadow: none !important;
+}
+
+body .mkt .mkt-kicker,
+body .mkt .mkt-kicker--light,
+body .lux-legal .lux-kicker,
+body .lux-legal p.lux-legal-meta,
+body .lux-legal-meta,
+body .mkt-home .mkt-feature .mkt-part .mkt-kicker,
+body .mkt-info .mkt-feature .mkt-part .mkt-kicker {
+  color: #f56600 !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: 1.1px !important;
+  text-shadow: none !important;
+}
+
+body .mkt-orange-word {
+  color: #f56600 !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  letter-spacing: inherit !important;
+}
+
+body .mkt-how summary {
+  color: #0b1220 !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.2px !important;
+}
+
+body .mkt-how summary::after {
+  color: #f56600 !important;
+}
+
+body .mkt-home .mkt-feature-section .mkt-section-head,
+body .mkt-info .mkt-section-head,
+body .mkt-note,
+body .mkt-release {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+body .mkt-home .mkt-card,
+body .mkt-info .mkt-card,
+body .mkt .dp-card,
+body .mkt .dp-offer,
+body .mkt .dp-legend,
+body .mkt .dp-compare,
+body .mkt .dp-rental,
+body .rider-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(82, 45, 128, 0.12) !important;
+  border-radius: 18px !important;
+  color: #5c6570 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(26, 16, 51, 0.04),
+    0 6px 12px rgba(26, 16, 51, 0.08) !important;
+}
+
+body .lux-legal {
+  background: #f7f4f0 !important;
+  color: #5c6570;
+}
+
+body .lux-legal-section {
+  background: #ffffff;
+  border: 1px solid rgba(82, 45, 128, 0.12);
+  border-radius: 18px;
+  box-shadow:
+    0 1px 2px rgba(26, 16, 51, 0.04),
+    0 6px 12px rgba(26, 16, 51, 0.08);
+}
+
+body .mkt-home .mkt-nav.mkt-nav--scrolled,
+body .mkt-info .mkt-nav,
+body .mkt-info .mkt-nav.mkt-nav--scrolled,
+body .mkt-info .mkt-menu-bar,
+body .mkt-home .mkt-footer,
+body [data-route="partners"],
+body [data-route="drivers"],
+body [data-route="rentals"],
+body [data-route="affiliate"],
+body [data-route="affiliates"],
+body [data-route="r"] {
+  background: rgba(247, 244, 240, 0.9);
+  color: #522d80;
+}
+
+body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"]) > main,
+body :is([data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) > div {
+  background: #f7f4f0 !important;
+  color: #5c6570;
+}
+
+body .rider-card--invert {
+  background:
+    radial-gradient(120% 80% at 18% 0%, rgba(255, 255, 255, 0.42), transparent 42%),
+    linear-gradient(160deg, #6d3d9e 0%, #522d80 72%) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+body .rider-card--invert :is(h1, h2, p) {
+  color: #ffffff !important;
+}
+
+body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) :is(input, textarea, select):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]) {
+  font-size: 17px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.2px !important;
+  color: #0b1220 !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(82, 45, 128, 0.12) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 1px 2px rgba(26, 16, 51, 0.04);
+}
+
+body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) :is(input, textarea)::placeholder {
+  color: #8b939e;
+  font-weight: 400;
+}
+
+/* Every marketing button is liquid glass: frost, specular sweep, press scale. */
+
+body .mkt :is(button, a.pressable, a.mkt-text, a.dp-btn),
+body .lux-legal :is(button, a.pressable),
+body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) :is(button, a.pressable, label.mkt-glass-primary, label.mkt-glass-secondary, label.mkt-glass-quiet) {
+  position: relative !important;
+  overflow: hidden !important;
+  isolation: isolate;
+  border-radius: 18px !important;
+  border: 1px solid rgba(255, 255, 255, 0.72) !important;
+  background:
+    radial-gradient(120% 80% at 18% 0%, rgba(255, 255, 255, 0.96), transparent 46%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.66)) !important;
+  color: #522d80 !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.2px !important;
+  line-height: 1.2 !important;
+  text-decoration: none !important;
+  text-shadow: none !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(26, 16, 51, 0.04),
+    0 6px 12px rgba(26, 16, 51, 0.08) !important;
+  backdrop-filter: blur(16px) saturate(1.45) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.45) !important;
+  transition: transform 120ms cubic-bezier(0.22, 1, 0.36, 1), opacity 120ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+body .mkt button.mkt-brand {
+  flex: none;
+  gap: 6px;
+  padding: 4px 8px 4px 4px !important;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.3px !important;
+  color: #522d80 !important;
+  white-space: nowrap;
+}
+
+body .mkt .mkt-nav {
+  gap: 6px;
+}
+
+body .mkt .mkt-nav-links {
+  gap: 4px;
+}
+
+body .mkt .mkt-nav-links button {
+  padding: 6px 8px !important;
+}
+
+body .mkt .mkt-nav-links button.mkt-nav-cta {
+  padding: 6px 10px !important;
+}
+
+body .mkt :is(.mkt-nav-links button, .mkt-menu button, .mkt-footer button, .mkt-why-link, .dp-chip),
+body .lux-legal .lux-legal-back,
+body :is([data-route="affiliate"], [data-route="affiliates"]) :is(button[aria-pressed], [role="tab"]) {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.1px !important;
+  border-radius: 999px !important;
+}
+
+body .mkt button.mkt-choice,
+body .mkt button.mkt-choice:hover,
+body .mkt button.mkt-choice:active,
+body .mkt button.mkt-ghost,
+body .mkt button.mkt-ghost:hover,
+body .mkt button.mkt-ghost:active,
+body .mkt button.mkt-text,
+body .mkt a.mkt-text,
+body .mkt button.mkt-text:hover,
+body .mkt a.mkt-text:hover,
+body .mkt button.mkt-text:active,
+body .mkt a.mkt-text:active,
+body .mkt button.dp-btn-ghost,
+body .mkt a.dp-btn-ghost,
+body .mkt button.dp-btn-ghost:hover,
+body .mkt a.dp-btn-ghost:hover,
+body .mkt button.dp-btn-ghost:active,
+body .mkt a.dp-btn-ghost:active,
+body button.mkt-glass-secondary,
+body a.mkt-glass-secondary,
+body button.mkt-glass-secondary:hover,
+body a.mkt-glass-secondary:hover,
+body button.mkt-glass-secondary:active,
+body a.mkt-glass-secondary:active,
+body :is(.mkt, .lux-legal, [data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) .primary-cta.variant-purple,
+body :is(.mkt, .lux-legal, [data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) .primary-cta.variant-purple:hover,
+body :is(.mkt, .lux-legal, [data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) .primary-cta.variant-purple:active {
+  background:
+    radial-gradient(120% 80% at 18% 0%, rgba(255, 255, 255, 0.55), transparent 42%),
+    linear-gradient(160deg, #6d3d9e 0%, #522d80 58%, #3d1d62 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+}
+
+body .mkt .primary-cta,
+body .mkt .primary-cta:hover,
+body .mkt .primary-cta:active,
+body .mkt button.primary-cta,
+body .mkt button.primary-cta:hover,
+body .mkt button.primary-cta:active,
+body .mkt-stage .mkt-book.primary-cta,
+body .mkt-stage .mkt-book.primary-cta:hover,
+body .mkt-stage .mkt-book.primary-cta:active,
+body .mkt-nav-links .mkt-nav-cta,
+body .mkt-nav-links .mkt-nav-cta:hover,
+body .mkt-nav-links .mkt-nav-cta:active,
+body .mkt .mkt-nav-links button.mkt-nav-cta,
+body .mkt .mkt-nav-links button.mkt-nav-cta:hover,
+body .mkt .mkt-nav-links button.mkt-nav-cta:active,
+body .mkt .dp-btn-primary,
+body .mkt .dp-btn-primary:hover,
+body .mkt .dp-btn-primary:active,
+body .mkt button.dp-btn-primary,
+body .mkt a.dp-btn-primary,
+body .mkt button.dp-btn-primary:hover,
+body .mkt a.dp-btn-primary:hover,
+body .mkt button.dp-btn-primary:active,
+body .mkt a.dp-btn-primary:active,
+body .lux-legal button.lux-agree,
+body .lux-legal button.lux-agree:hover,
+body .lux-legal button.lux-agree:active,
+body .lux-agree,
+body .lux-agree:hover,
+body .lux-agree:active,
+body .mkt-glass-primary,
+body .mkt-glass-primary:hover,
+body .mkt-glass-primary:active,
+html body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) button.mkt-glass-primary,
+html body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) button.mkt-glass-primary:hover,
+html body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) button.mkt-glass-primary:active,
+body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) .primary-cta:not(.variant-purple),
+body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) .primary-cta:not(.variant-purple):hover,
+body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) .primary-cta:not(.variant-purple):active,
+body .mkt-menu button[aria-current="page"] {
+  background:
+    radial-gradient(110% 80% at 18% 0%, rgba(255, 255, 255, 0.5), transparent 40%),
+    linear-gradient(155deg, #ff9a3c 0%, #e85d04 26%, #b84300 64%, #522d80 140%) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.62) !important;
+  border-radius: 18px !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.2px !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 1px 2px rgba(26, 16, 51, 0.04),
+    0 6px 12px rgba(26, 16, 51, 0.08) !important;
+  backdrop-filter: blur(16px) saturate(1.45) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.45) !important;
+}
+
+body :is([data-route="affiliate"], [data-route="affiliates"]) button[aria-pressed="true"] {
+  background: rgba(245, 102, 0, 0.12) !important;
+  color: #f56600 !important;
+  border-color: #f56600 !important;
+}
+
+body .mkt :is(button, a.pressable, a.mkt-text, a.dp-btn)::after,
+body .lux-legal :is(button, a.pressable)::after,
+body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) :is(button, a.pressable, label.mkt-glass-primary, label.mkt-glass-secondary, label.mkt-glass-quiet)::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 42%;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.72), transparent);
+  animation: glass-sweep 8.5s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+body .mkt :is(button, a.pressable, a.mkt-text, a.dp-btn):focus-visible,
+body .lux-legal :is(button, a.pressable):focus-visible,
+body .mkt .primary-cta:focus-visible,
+body .mkt-nav-links .mkt-nav-cta:focus-visible,
+body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) :is(button, a.pressable):focus-visible {
+  outline: 2px solid #f56600 !important;
+  outline-offset: 3px;
+}
+
+body .mkt :is(button, a.pressable, a.mkt-text, a.dp-btn):disabled,
+body .lux-legal button:disabled,
+body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) button:disabled {
+  opacity: 0.55 !important;
+  transform: none !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  body .mkt :is(button, a.pressable, a.mkt-text, a.dp-btn):hover,
+  body .lux-legal :is(button, a.pressable):hover,
+  body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) :is(button, a.pressable):hover {
+    transform: translate3d(0, -2px, 0);
+  }
+}
+
+body .mkt :is(button, a.pressable, a.mkt-text, a.dp-btn):active,
+body .lux-legal :is(button, a.pressable):active,
+body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) :is(button, a.pressable, label.mkt-glass-primary, label.mkt-glass-secondary, label.mkt-glass-quiet):active {
+  transform: scale(0.985) !important;
+  opacity: 0.92 !important;
+}
+
+@media (max-width: 520px) {
+  body .mkt .mkt-nav {
+    padding-inline: 6px !important;
+    gap: 4px;
+  }
+
+  body .mkt .mkt-nav-links button.mkt-nav-cta {
+    font-size: 13px !important;
+    letter-spacing: -0.1px !important;
+    padding: 6px 6px !important;
+  }
+}
+
+@media (min-width: 960px) {
+  body .mkt-stage-shade {
+    background: linear-gradient(90deg, rgba(11, 18, 32, 0.2) 0%, rgba(11, 18, 32, 0.05) 52%, rgba(11, 18, 32, 0.02) 100%);
+  }
+
+  body .mkt-home {
+    position: relative;
+  }
+
+  body .mkt-home .mkt-stage {
+    justify-content: flex-end;
+    width: min(1180px, calc(100% - 64px));
+    margin-inline: auto;
+    padding-right: min(540px, 44vw);
+    box-sizing: border-box;
+  }
+
+  body .mkt-home .mkt-stage-copy {
+    width: min(520px, 100%);
+    margin: 0 0 36px;
+  }
+
+  body .mkt-home .mkt-hero-collage.mkt-home-hero {
+    position: absolute;
+    top: 128px;
+    right: max(32px, calc((100% - 1180px) / 2));
+    width: min(520px, 42vw);
+    height: 480px;
+    margin: 0;
+    z-index: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body .mkt :is(button, a.pressable, a.mkt-text, a.dp-btn),
+  body .lux-legal :is(button, a.pressable),
+  body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) :is(button, a.pressable, label.mkt-glass-primary, label.mkt-glass-secondary, label.mkt-glass-quiet),
+  body .mkt :is(button, a.pressable, a.mkt-text, a.dp-btn)::after,
+  body .lux-legal :is(button, a.pressable)::after,
+  body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) :is(button, a.pressable, label.mkt-glass-primary, label.mkt-glass-secondary, label.mkt-glass-quiet)::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  body .mkt :is(button, a.pressable, a.mkt-text, a.dp-btn)::after,
+  body .lux-legal :is(button, a.pressable)::after,
+  body :is([data-route="partners"], [data-route="drivers"], [data-route="rentals"], [data-route="affiliate"], [data-route="affiliates"], [data-route="r"]) :is(button, a.pressable, label.mkt-glass-primary, label.mkt-glass-secondary, label.mkt-glass-quiet)::after {
+    opacity: 0 !important;
+  }
+}

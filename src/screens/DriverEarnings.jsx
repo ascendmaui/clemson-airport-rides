@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { EarningsAreaMap } from '../components/EarningsAreaMap'
 import { useAuth } from '../lib/auth'
 import {
-  annualTaxCsvFilename,
-  buildAnnualTaxCsv,
   buildAnnualTaxSummary,
   earningsProgressCopy,
   fetchDriverEarningsReport,
@@ -12,8 +10,23 @@ import {
   formatTripWhen,
   localTimeZone,
   taxYears,
-  TAX_DISCLAIMER,
 } from '../lib/driverEarnings'
+import {
+  buildYearEndCsv,
+  buildYearEndPacket,
+  buildYearEndPdf,
+  FORM_1099_INFO_URL,
+  STRIPE_1099_NOTE,
+  STRIPE_CONNECT_1099_URL,
+  STRIPE_TAX_REPORTING_URL,
+  TAX_NOT_ADVICE,
+  yearEndCsvFilename,
+  yearEndPdfFilename,
+} from '../../shared/driverTaxMileage.js'
+import { buildYearlyEarningsSummary } from '../../shared/yearlyEarnings.js'
+import { w9StatusLabel } from '../../shared/driverW9.js'
+import { loadDriverW9 } from '../../packages/rides-native/driverW9Client.js'
+import { supabase } from '../lib/supabase'
 import { navigate, getHashRoute } from '../lib/navigation'
 import { formatUsdFromCents } from '../lib/pricing'
 
@@ -46,17 +59,23 @@ function trackedMoney(cents) {
   return money(cents)
 }
 
-function downloadCsv(summary) {
-  const csv = buildAnnualTaxCsv(summary)
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+function downloadBlob(filename, blob) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = annualTaxCsvFilename(summary.year)
+  link.download = filename
   document.body.appendChild(link)
   link.click()
   link.remove()
   URL.revokeObjectURL(url)
+}
+
+function downloadCsv(packet) {
+  downloadBlob(yearEndCsvFilename(packet.year), new Blob([buildYearEndCsv(packet)], { type: 'text/csv;charset=utf-8' }))
+}
+
+function downloadPdf(packet) {
+  downloadBlob(yearEndPdfFilename(packet.year), new Blob([buildYearEndPdf(packet)], { type: 'application/pdf' }))
 }
 
 function TripDetail({ trip }) {
@@ -64,17 +83,19 @@ function TripDetail({ trip }) {
     <div style={{ marginTop: 10, paddingTop: 4 }} data-testid="trip-breakdown">
       <Line label="Fare" value={money(trip.fareCents)} />
       {trip.refundCents > 0 ? <Line label="Refund" value={`−${money(trip.refundCents)}`} /> : null}
-      {trip.tipCents != null ? <Line label="Tip" value={money(trip.tipCents)} /> : null}
-      {trip.waitFeeCents != null ? <Line label="Wait fee" value={money(trip.waitFeeCents)} /> : null}
+      {trip.tipCents != null ? <Line label="Tip" value={money(trip.tipCents)} hint="100% yours" /> : null}
+      {trip.prepaidTipCents > 0 ? <Line label="Tip boost (prepaid)" value={money(trip.prepaidTipCents)} hint="100% yours" /> : null}
+      {trip.boostCents > 0 ? <Line label="Boost" value={money(trip.boostCents)} hint="100% to you · not in the platform fee" /> : null}
+      {trip.driverWaitEarningsCents > 0 ? <Line label="Wait time" value={money(trip.driverWaitEarningsCents)} /> : null}
       {trip.cancelFeeCents != null ? <Line label="Cancel fee" value={money(trip.cancelFeeCents)} /> : null}
       <Line label="Gross" value={money(trip.grossCents)} />
-      <Line label="Platform fee" value={`−${money(trip.platformFeeCents)}`} hint="20% of fares, tips, wait, and cancel fees" />
-      <Line label="Your net" value={money(trip.earnedCents)} hint="80%" strong />
+      <Line label="Platform fee" value={`−${money(trip.platformFeeCents)}`} hint="20% of fares, wait, and cancel fees. Tips are not cut." />
+      <Line label="Your net" value={money(trip.earnedCents)} hint={trip.boostCents > 0 ? 'Fare share plus boost' : '80%'} strong />
       <Line label="Distance" value={formatMiles(trip.distanceM, { approximate: trip.distanceApproximate })} />
       <Line label="Duration" value={formatDuration(trip.durationS, { approximate: trip.durationApproximate })} />
       {trip.fareParts?.length > 0 && (
         <div style={{ marginTop: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-tertiary)', textTransform: 'uppercase' }}>Included in the fare</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-tertiary)', textTransform: 'uppercase' }}>{trip.status === 'cancelled_wait' ? 'No-show earnings' : 'Included in the fare'}</div>
           {trip.fareParts.map((part) => (
             <Line key={part.label} label={part.label} value={money(part.cents)} />
           ))}
@@ -102,12 +123,36 @@ export function DriverEarningsView({
   loading,
   error,
   timeZone,
+  mileageLogs,
+  mileageRates,
+  bonuses,
+  w9Desk,
 }) {
   const [openId, setOpenId] = useState(null)
   const tax = useMemo(
     () => buildAnnualTaxSummary(trips, { year, timeZone }),
     [trips, year, timeZone],
   )
+  const yearEnd = useMemo(() => buildYearEndPacket({
+    year,
+    timeZone,
+    trips,
+    logs: mileageLogs,
+    rates: mileageRates,
+    grossEarningsCents: tax.grossCents,
+    tipsCents: tax.tipsCents,
+    platformFeeCents: tax.platformFeeCents,
+    driverNetCents: tax.driverNetCents,
+    earningsTripCount: tax.tripCount,
+  }), [trips, year, timeZone, tax, mileageLogs, mileageRates])
+  const yearly = useMemo(() => buildYearlyEarningsSummary({
+    year,
+    timeZone,
+    trips,
+    bonuses,
+    mileageDeductionCents: yearEnd.estimatedDeductionCents,
+    payoutsCents: yearEnd.payoutsCents,
+  }), [year, timeZone, trips, bonuses, yearEnd])
   const maxDay = Math.max(...summary.days.map((day) => day.earningsCents), 1)
   const progress = earningsProgressCopy(summary)
 
@@ -126,8 +171,16 @@ export function DriverEarningsView({
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--orange)', letterSpacing: 0.3 }}>Your net</div>
         <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: -0.6, color: 'var(--purple)', marginTop: 2 }}>Earnings</h1>
         <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4, lineHeight: 1.45 }}>
-          Your 80% after the 20% platform fee on fares, tips, wait, and cancel fees.
+          Your 80% after the 20% platform fee on fares, wait, and cancel fees, plus 100% of tips.
         </p>
+        <button
+          type="button"
+          className="pressable"
+          onClick={() => navigate('driver-payouts')}
+          style={{ marginTop: 10, fontWeight: 800, color: 'var(--purple)' }}
+        >
+          Payout methods
+        </button>
 
         {error ? (
           <p role="alert" style={{ marginTop: 12, color: 'var(--danger)', fontWeight: 600, fontSize: 13 }}>{error}</p>
@@ -143,6 +196,7 @@ export function DriverEarningsView({
               <div style={{ marginTop: 6, fontSize: 13, color: 'var(--ink-secondary)' }}>
                 {summary.weekTripCount} {summary.weekTripCount === 1 ? 'trip' : 'trips'}
                 {summary.weekTipsCents != null ? ` · Tips ${money(summary.weekTipsCents)}` : ''}
+                {summary.weekBoostCents > 0 ? ` · Boost ${money(summary.weekBoostCents)}` : ''}
               </div>
               <div style={{ marginTop: 4, fontSize: 12, color: 'var(--ink-tertiary)' }}>
                 Gross {money(summary.weekGrossCents)} · platform cut {money(summary.weekPlatformFeeCents)}
@@ -167,7 +221,7 @@ export function DriverEarningsView({
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }} data-testid="daily-summary">
-          <Stat label="Today" value={money(summary.todayEarningsCents)} hint={summary.todayTipsCents != null ? `Tips ${money(summary.todayTipsCents)}` : 'Net after fee'} testId="today-net" />
+          <Stat label="Today" value={money(summary.todayEarningsCents)} hint={summary.todayBoostCents > 0 ? `Boost ${money(summary.todayBoostCents)}` : (summary.todayTipsCents != null ? `Tips ${money(summary.todayTipsCents)}` : 'Net after fee')} testId="today-net" />
           <Stat label="Trips today" value={String(summary.todayTripCount)} hint="Completed" />
         </div>
 
@@ -219,7 +273,7 @@ export function DriverEarningsView({
                     <strong style={{ color: 'var(--orange)' }}>{money(trip.earnedCents)}</strong>
                   </div>
                   <div style={{ marginTop: 4, fontSize: 14, fontWeight: 700, color: 'var(--ink)' }}>
-                    {trip.status === 'canceled' ? 'Canceled · ' : ''}{trip.routeLabel}
+                    {trip.status === 'cancelled_wait' ? 'No-show fee · ' : trip.status === 'canceled' ? 'Canceled · ' : ''}{trip.routeLabel}
                   </div>
                   {trip.riderFirstName ? (
                     <div style={{ marginTop: 2, fontSize: 12, color: 'var(--ink-secondary)' }}>{trip.riderFirstName}</div>
@@ -233,24 +287,34 @@ export function DriverEarningsView({
 
         <TaxSummary
           tax={{ ...tax, capped: trips.length >= 1000 }}
+          yearEnd={{ ...yearEnd, ...yearly }}
+          yearly={yearly}
           years={years}
           year={year}
           onYear={onYear}
-          onDownload={() => downloadCsv(tax)}
+          w9Desk={w9Desk}
+          onDownload={() => downloadCsv({ ...yearEnd, ...yearly })}
+          onPdf={() => downloadPdf({ ...yearEnd, ...yearly })}
         />
       </div>
-      <TaxPrintSheet tax={tax} timeZone={timeZone} />
+      <TaxPrintSheet tax={tax} yearEnd={yearEnd} timeZone={timeZone} />
     </div>
   )
 }
 
-function TaxSummary({ tax, years, year, onYear, onDownload }) {
+function milesText(value) {
+  if (value == null) return '—'
+  return `${Number(value).toFixed(2)} mi`
+}
+
+function TaxSummary({ tax, yearEnd, yearly, years, year, onYear, onDownload, onPdf, w9Desk }) {
+  const deduction = yearEnd.estimatedDeductionCents == null ? 'Rate not configured' : money(yearEnd.estimatedDeductionCents)
   return (
     <section id="tax-summary" className="glass-panel glass-panel--purple" style={{ marginTop: 22, padding: 16, borderRadius: 22 }} data-testid="tax-summary">
       <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.4, textTransform: 'uppercase', color: 'var(--orange)' }}>Year-end</div>
-      <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--purple)', marginTop: 4 }}>Tax summary</h2>
+      <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--purple)', marginTop: 4 }}>Yearly earnings summary</h2>
       <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4, lineHeight: 1.45 }}>
-        A yearly snapshot of your net, tips, and the 20% platform fee.
+        Gross earnings, tips, platform fees, payouts, and deductible miles for the year. The mileage deduction is an estimate.
       </p>
       <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
         {years.map((item) => (
@@ -273,18 +337,62 @@ function TaxSummary({ tax, years, year, onYear, onDownload }) {
         ))}
       </div>
       <div style={{ marginTop: 8 }}>
-        <Line label="Gross fares" value={money(tax.grossFareCents)} />
+        <Line label="Gross fares" value={money(yearly.grossFareCents)} />
         {tax.refundCents > 0 ? <Line label="Refunds" value={`−${money(tax.refundCents)}`} /> : null}
-        <Line label="Tips" value={trackedMoney(tax.tipsCents)} />
+        <Line label="Tips" value={trackedMoney(yearly.tipsCents ?? tax.tipsCents)} hint="100% yours" />
         <Line label="Wait fees" value={trackedMoney(tax.waitFeeCents)} />
         <Line label="Cancel fees" value={trackedMoney(tax.cancelFeeCents)} />
         <Line label="Gross" value={money(tax.grossCents)} />
-        <Line label="Platform fees" value={`−${money(tax.platformFeeCents)}`} hint="20% of fares, tips, wait, and cancel fees" />
-        <Line label="Driver net" value={money(tax.driverNetCents)} hint="80%" strong />
+        <Line label="Platform fees" value={`−${money(tax.platformFeeCents)}`} hint="20% of fares, wait, and cancel fees. Tips are not cut." />
+        <Line label="Bonuses and perks" value={money(yearly.bonusPerkCents)} hint="100% to you · not in the platform fee" />
+        <Line label="Driver net" value={money(tax.driverNetCents)} hint={yearly.bonusPerkCents > 0 ? 'Fare share plus bonuses and perks' : '80%'} strong />
+        <Line label="Net payouts" value={money(yearly.netPayoutCents)} hint="Paid transfers for this year's trips" />
+        <Line label="Payouts" value={money(yearEnd.payoutsCents)} hint="Paid transfers for this year's trips" />
+        <Line label="On-trip miles" value={milesText(yearEnd.onTripMiles)} />
+        <Line label="En route to pickup" value={milesText(yearEnd.enrouteMiles)} hint={yearEnd.enrouteUntrackedTrips ? `Not tracked on ${yearEnd.enrouteUntrackedTrips} completed ${yearEnd.enrouteUntrackedTrips === 1 ? 'trip' : 'trips'}` : 'When accept location or a pickup route was saved'} />
+        <Line label="Deductible miles" value={milesText(yearEnd.deductibleMiles)} />
+        <Line label="Estimated deduction" value={deduction} hint={yearEnd.rateLabel} strong />
         <Line label="Trips" value={String(tax.tripCount)} />
       </div>
+      <div style={{ marginTop: 12 }} data-testid="yearly-months">
+        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--purple)' }}>Monthly breakdown</div>
+        {yearly.months.length === 0 ? (
+          <p style={{ fontSize: 13, color: 'var(--ink-secondary)' }}>No months in this year yet.</p>
+        ) : yearly.months.map((month) => (
+          <Line
+            key={month.month}
+            label={month.label}
+            value={money(month.netCents)}
+            hint={`Fares ${money(month.grossFareCents)} · Tips ${money(month.tipsCents)} · Fees ${money(month.platformFeeCents)} · Bonuses ${money(month.bonusPerkCents)}`}
+          />
+        ))}
+      </div>
+      {yearly.taxEstimate ? (
+        <p style={{ marginTop: 12, fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }} data-testid="tax-estimate">
+          Tax estimate: taxable after mileage {money(yearly.taxEstimate.taxableEarningsCents)}. Estimated self-employment tax {money(yearly.taxEstimate.selfEmploymentTaxCents)}. Quarterly set-aside {money(yearly.taxEstimate.quarterlySetAsideCents)}. {yearly.taxEstimate.note}
+        </p>
+      ) : null}
+      <p style={{ marginTop: 12, fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }} data-testid="w9-status">
+        W-9: {w9StatusLabel(w9Desk)}
+      </p>
+      <button
+        type="button"
+        className="pressable"
+        onClick={() => navigate('driver-w9')}
+        style={{ marginTop: 8, fontWeight: 800, color: 'var(--purple)' }}
+      >
+        Update W-9
+      </button>
       <p style={{ marginTop: 12, fontSize: 12, color: 'var(--ink-secondary)', lineHeight: 1.45 }} data-testid="tax-disclaimer">
-        {TAX_DISCLAIMER}
+        {TAX_NOT_ADVICE} {yearEnd.mileageEstimateNote}
+      </p>
+      <p style={{ marginTop: 8, fontSize: 12, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
+        {STRIPE_1099_NOTE}{' '}
+        <a href={STRIPE_CONNECT_1099_URL} target="_blank" rel="noreferrer" style={{ color: 'var(--purple)', fontWeight: 800 }}>Open 1099 forms in Stripe</a>
+        {' · '}
+        <a href={FORM_1099_INFO_URL} target="_blank" rel="noreferrer" style={{ color: 'var(--purple)', fontWeight: 800 }}>1099 info</a>
+        {' · '}
+        <a href={STRIPE_TAX_REPORTING_URL} target="_blank" rel="noreferrer" style={{ color: 'var(--purple)', fontWeight: 800 }}>How Stripe files them</a>
       </p>
       {tax.capped ? (
         <p style={{ marginTop: 6, fontSize: 12, color: 'var(--ink-tertiary)' }}>
@@ -303,32 +411,42 @@ function TaxSummary({ tax, years, year, onYear, onDownload }) {
         <button
           type="button"
           className="pressable"
-          onClick={() => window.print()}
+          onClick={onPdf}
           style={{ flex: 1, padding: 12, borderRadius: 14, fontWeight: 800, color: 'var(--purple)', background: 'rgba(255,255,255,0.72)', border: '1.5px solid rgba(82,45,128,0.25)' }}
         >
-          Print
+          Download PDF
         </button>
       </div>
     </section>
   )
 }
 
-function TaxPrintSheet({ tax, timeZone }) {
+function TaxPrintSheet({ tax, yearEnd, timeZone }) {
   return (
     <article className="tax-print-sheet" aria-hidden="true">
-      <h1>Clemson RIDES · {tax.year} driver earnings summary</h1>
+      <h1>Clemson RIDES · {tax.year} driver earnings and mileage summary</h1>
+      <p>{TAX_NOT_ADVICE}</p>
+      <p>{yearEnd.mileageEstimateNote} {yearEnd.rateLabel}</p>
+      <p>{STRIPE_1099_NOTE} {STRIPE_CONNECT_1099_URL}</p>
+      <p>1099 info: {FORM_1099_INFO_URL}</p>
       <p>{tax.disclaimer}</p>
-      <p>Timezone: {timeZone}. Platform fee is 20% of fares, tips, wait fees, and cancel fees. Driver net is the remaining 80%.</p>
+      <p>Timezone: {timeZone}. Platform fee is 20% of fares, wait fees, and cancel fees. Driver net is the remaining 80%, plus 100% of tips.</p>
       <table>
         <tbody>
           <tr><th>Gross fares</th><td>{money(tax.grossFareCents)}</td></tr>
           <tr><th>Refunds</th><td>{money(tax.refundCents)}</td></tr>
           <tr><th>Tips</th><td>{trackedMoney(tax.tipsCents)}</td></tr>
+          <tr><th>Boost</th><td>{money(tax.boostCents || 0)}</td></tr>
           <tr><th>Wait fees</th><td>{trackedMoney(tax.waitFeeCents)}</td></tr>
           <tr><th>Cancel fees</th><td>{trackedMoney(tax.cancelFeeCents)}</td></tr>
           <tr><th>Gross</th><td>{money(tax.grossCents)}</td></tr>
           <tr><th>Platform fees (20%)</th><td>{money(tax.platformFeeCents)}</td></tr>
           <tr><th>Driver net (80%)</th><td>{money(tax.driverNetCents)}</td></tr>
+          <tr><th>Payouts</th><td>{money(yearEnd.payoutsCents)}</td></tr>
+          <tr><th>On-trip miles</th><td>{milesText(yearEnd.onTripMiles)}</td></tr>
+          <tr><th>En route to pickup</th><td>{milesText(yearEnd.enrouteMiles)}</td></tr>
+          <tr><th>Deductible miles</th><td>{milesText(yearEnd.deductibleMiles)}</td></tr>
+          <tr><th>Estimated mileage deduction</th><td>{yearEnd.estimatedDeductionCents == null ? 'Not estimated' : money(yearEnd.estimatedDeductionCents)}</td></tr>
           <tr><th>Trip count</th><td>{tax.tripCount}</td></tr>
         </tbody>
       </table>
@@ -359,6 +477,7 @@ export function DriverEarnings() {
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [year, setYear] = useState(() => new Date().getFullYear())
+  const [w9Desk, setW9Desk] = useState(null)
 
   useEffect(() => {
     if (authLoading) return undefined
@@ -380,6 +499,13 @@ export function DriverEarnings() {
       .finally(() => {
         if (alive) setLoading(false)
       })
+    loadDriverW9(supabase, user.id)
+      .then((desk) => {
+        if (alive) setW9Desk(desk)
+      })
+      .catch(() => {
+        if (alive) setW9Desk(null)
+      })
     return () => {
       alive = false
     }
@@ -400,9 +526,11 @@ export function DriverEarnings() {
     weekPlatformFeeCents: 0,
     weekTripCount: 0,
     weekTipsCents: null,
+    weekBoostCents: 0,
     todayEarningsCents: 0,
     todayTripCount: 0,
     todayTipsCents: null,
+    todayBoostCents: 0,
     projectedWeekCents: 0,
     projectedRemainderCents: 0,
     remainingDays: 0,
@@ -429,6 +557,10 @@ export function DriverEarnings() {
       loading={loading || authLoading}
       error={error}
       timeZone={timeZone}
+      mileageLogs={report?.mileageLogs || []}
+      mileageRates={report?.mileageRates || null}
+      bonuses={report?.bonuses || []}
+      w9Desk={w9Desk}
     />
   )
 }

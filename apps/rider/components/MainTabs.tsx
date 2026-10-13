@@ -1,83 +1,80 @@
-import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
-import { Pressable, Text, View } from 'react-native'
+import { useCallback } from 'react'
+import { usePathname, useRouter, type Href } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { lift } from '@/lib/elevation'
-import type { Palette } from '@/lib/palette'
+import { GlassTabBar } from 'rides-native/icons'
 import { useTheme } from '@/lib/theme'
-import { useThemedStyles } from '@/lib/useThemedStyles'
 import { tapHaptic } from '@/lib/feedback'
 import { useAuth } from '@/lib/auth'
 import { setAuthNext } from '@/lib/authNext'
+import {
+  RIDER_MAIN_TABS,
+  applyTabNavigation,
+  normalizeTabPath,
+  tabIndexForPath,
+  tabRequiresAuth,
+  type RiderMainTabId,
+} from '@/lib/tabSwipe'
 
-const TABS = [
-  { id: 'home', href: '/', label: 'Rides', icon: 'car-outline' as const },
-  { id: 'schedule', href: '/schedule', label: 'Schedule', icon: 'calendar-outline' as const },
-  { id: 'friends', href: '/friends', label: 'Friends', icon: 'people-outline' as const },
-  { id: 'account', href: '/account', label: 'Account', icon: 'person-outline' as const },
-]
+export const RIDER_TABS = RIDER_MAIN_TABS
 
-export function MainTabs({ active }: { active: 'schedule' | 'friends' | 'account' | 'home' }) {
-  const router = useRouter()
-  const { user } = useAuth()
-  const insets = useSafeAreaInsets()
-  const { colors } = useTheme()
-  const styles = useThemedStyles(makeStyles)
-  return (
-    <View style={[styles.bar, lift(colors, 'bar'), { paddingBottom: Math.max(insets.bottom, 10) }]}>
-      {TABS.map((tab) => {
-        const on = tab.id === active
-        const color = on ? colors.orange : colors.tabInactive
-        return (
-          <Pressable
-            key={tab.id}
-            accessibilityRole="button"
-            accessibilityLabel={tab.label}
-            accessibilityHint={on ? undefined : `Opens ${tab.label}`}
-            accessibilityState={{ selected: on }}
-            onPress={() => {
-              if (on) return
-              void tapHaptic()
-              if (tab.id === 'account' && !user) {
-                setAuthNext('/account')
-                router.push('/sign-in')
-                return
-              }
-              router.replace(tab.href)
-            }}
-            style={styles.item}
-          >
-            <View style={[styles.iconWrap, on && styles.iconOn]}>
-              <Ionicons name={tab.icon} size={21} color={color} />
-            </View>
-            <Text style={[styles.label, on && styles.labelOn, { color }]}>{tab.label}</Text>
-          </Pressable>
-        )
-      })}
-    </View>
-  )
+export type RiderTab = RiderMainTabId
+/** Call sites from before Schedule and Friends were their own tabs. */
+type LegacyTab = 'home' | 'money' | 'schedule' | 'friends'
+
+function tabFor(active: RiderTab | LegacyTab): RiderTab {
+  switch (active) {
+    case 'home':
+      return 'rides'
+    case 'money':
+      return 'account'
+    case 'rides':
+    case 'schedule':
+    case 'friends':
+    case 'account':
+      return active
+    default: {
+      const exhaustive: never = active
+      return exhaustive
+    }
+  }
 }
 
-function makeStyles(colors: Palette) {
-  return {
-    bar: {
-      flexDirection: 'row' as const,
-      backgroundColor: colors.tabBar,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-      paddingTop: 8,
-      paddingHorizontal: 6,
-    },
-    item: { flex: 1, alignItems: 'center' as const, gap: 2, paddingVertical: 2 },
-    iconWrap: {
-      width: 48,
-      height: 28,
-      borderRadius: 14,
-      alignItems: 'center' as const,
-      justifyContent: 'center' as const,
-    },
-    iconOn: { backgroundColor: colors.orangeSoft },
-    label: { fontSize: 11, fontWeight: '600' as const, letterSpacing: 0.1 },
-    labelOn: { fontWeight: '700' as const },
-  }
+/** Tap and swipe both end here, so the highlighted tab and the route stay the same. */
+export function useOpenRiderTab() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const { user } = useAuth()
+  return useCallback((next: number) => {
+    const tab = RIDER_MAIN_TABS[next]
+    if (!tab) return
+    if (tabRequiresAuth(tab.id) && !user) {
+      setAuthNext(tab.href as Href)
+      router.push('/sign-in')
+      return
+    }
+    if (normalizeTabPath(pathname) === tab.href) return
+    void tapHaptic()
+    router.replace(tab.href as Href)
+  }, [pathname, router, user])
+}
+
+export function MainTabs({ active }: { active: RiderTab | LegacyTab }) {
+  const open = useOpenRiderTab()
+  const insets = useSafeAreaInsets()
+  const { scheme } = useTheme()
+  const current = tabFor(active)
+  const index = RIDER_TABS.findIndex((tab) => tab.id === current)
+  return (
+    <GlassTabBar
+      tabs={RIDER_TABS.map((tab) => ({ id: tab.id, label: tab.label, icon: tab.icon }))}
+      activeIndex={index < 0 ? 0 : index}
+      scheme={scheme}
+      app="rider"
+      bottomInset={insets.bottom}
+      onSelect={(_tab: { id: string }, selected: number) => {
+        const next = applyTabNavigation(index < 0 ? tabIndexForPath('/') : index, { type: 'tap', index: selected })
+        open(next)
+      }}
+    />
+  )
 }

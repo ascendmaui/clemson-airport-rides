@@ -1,3 +1,4 @@
+import { bindRealtimeChannel } from '../../packages/rides-native/realtimeReconnect.js'
 import { createClient } from '@supabase/supabase-js'
 import { fetchOnlineDrivers as fetchSharedOnlineDrivers } from '../../packages/rides-native/drivers.js'
 
@@ -54,19 +55,10 @@ export async function fetchOnlineDrivers() {
 /** Subscribe to trips Realtime changes. Returns unsubscribe fn. */
 export function subscribeTrips(onChange) {
   if (!supabase) return () => {}
-  const channel = supabase
-    .channel('trips-realtime')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'trips' },
-      (payload) => {
-        onChange?.(payload)
-      },
-    )
-    .subscribe()
-  return () => {
-    supabase.removeChannel(channel)
-  }
+  return bindRealtimeChannel(supabase, {
+    topic: 'trips-realtime',
+    onChange,
+  })
 }
 
 export async function upsertDriverOnboarding() {

@@ -16,7 +16,7 @@ export const STUDY_NOTES = [
   {
     id: 'fare',
     title: 'Your 80%',
-    body: 'You net 80% of the fare. Clemson RIDES keeps 20%. Airport trips can collect a 25% deposit before the ride and the rest on complete.',
+    body: 'You net 80% of the fare. Clemson RIDES keeps 20%. The rider’s card is authorized for the estimate when they request the ride, and the final fare is charged when you complete the trip.',
   },
   {
     id: 'gameday',
@@ -61,7 +61,7 @@ export const KNOWLEDGE_QUIZ = [
   },
   {
     id: 'fare',
-    prompt: 'How do fares and airport deposits work?',
+    prompt: 'How do fares work?',
     choices: [
       {
         id: 'cash',
@@ -69,15 +69,15 @@ export const KNOWLEDGE_QUIZ = [
       },
       {
         id: 'split',
-        label: 'You net 80% of the fare. Clemson RIDES keeps 20%. Airport trips can collect a 25% deposit before the ride and the rest when you complete.',
+        label: 'You net 80% of the fare. Clemson RIDES keeps 20%. The final fare is charged when you complete the trip.',
       },
       {
         id: 'reversed',
-        label: 'You keep 20%. The 25% deposit is your payout.',
+        label: 'You keep 20%. A card hold placed at request is your payout.',
       },
       {
         id: 'half',
-        label: 'The split is 50/50, and the deposit is collected only after the trip.',
+        label: 'The split is 50/50, and the rider pays you in cash at the curb.',
       },
     ],
     answerId: 'split',

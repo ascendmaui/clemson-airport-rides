@@ -47,6 +47,7 @@ function mockTrips(trips) {
   const query = {
     select() { return query },
     eq() { return query },
+    in() { return query },
     order() { return query },
     limit: async () => ({ data: trips, error: null }),
   }

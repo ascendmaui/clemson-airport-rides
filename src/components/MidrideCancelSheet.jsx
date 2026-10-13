@@ -101,7 +101,7 @@ export function MidrideCancelSheet({ tripId, onClose, onCanceled }) {
             <Row label="Distance and time" value={formatMidrideMoney(quote.ridePortionCents)} />
             <Row label="Mid-ride cancel fee" value={formatMidrideMoney(quote.cancelFeeCents)} />
             {(quote.depositPaidCents || 0) > 0 && (
-              <Row label="Deposit already paid" value={`−${formatMidrideMoney(Math.min(quote.depositPaidCents, quote.obligationCents))}`} />
+              <Row label="Already paid" value={`−${formatMidrideMoney(Math.min(quote.depositPaidCents, quote.obligationCents))}`} />
             )}
             <Row label="Charge now" value={formatMidrideMoney(quote.toCollectCents)} strong />
             <p style={{ fontSize: 13, color: 'var(--ink-secondary)', margin: '8px 0 0', lineHeight: 1.4 }}>

@@ -5,6 +5,7 @@
  * Client fare, deposit, amount, total, and isStudent are ignored.
  * Recording a choice does not spend credits and does not charge a card.
  */
+import { isE2ETestUser } from '../../shared/e2eTestAccounts.js'
 import {
   admin, cors, json, parseBody, userFromAuth, computeRoutes,
 } from '../friendRideLib.js'
@@ -24,6 +25,8 @@ import {
   readRideCreditBalance,
 } from '../rideBilling.js'
 import { resolveOfferedTier, scheduleDiscountMetadata } from '../../shared/rideOptions.js'
+import { tigerPassQuoteFields } from '../../shared/tigerPass.js'
+import { tigerPassBpsForRider } from '../riderPass.js'
 import { assertTierAvailable } from '../rideAvailability.js'
 
 const CLIENT_MONEY_KEYS = [
@@ -80,6 +83,7 @@ async function priceBody(sb, user, body, compute, now) {
     return { error: error.message, status: error.status || 400, code: error.code }
   }
   const scheduled = Boolean(clean.date || clean.pickupAt || clean.scheduled_for || clean.scheduledFor)
+  const tigerPassBps = await tigerPassBpsForRider(sb, user?.id, now)
   const priced = priceScheduledRequest({
     pickup,
     dropoff,
@@ -92,6 +96,7 @@ async function priceBody(sb, user, body, compute, now) {
     durationS: distance.durationS,
     scheduleAhead: scheduled,
     now,
+    tigerPassBps,
   })
   return { priced, pickup, dropoff, when, clean, tier, scheduled }
 }
@@ -122,6 +127,7 @@ function quotePayload(priced, balance) {
     scheduleDiscountPct: priced.scheduleDiscountPct || 0,
     scheduleDiscountCents: priced.scheduleDiscountCents || 0,
     scheduleDiscountApplied: Boolean(priced.scheduleDiscountApplied),
+    ...tigerPassQuoteFields(priced),
     tier: priced.tier,
   }
 }
@@ -149,7 +155,7 @@ export default async function handler(req, res, deps = {}) {
   }
   const { priced, pickup, dropoff, when, tier, scheduled } = pricedResult
   try {
-    await assertTierAvailable(sb, tier, { scheduledFor: scheduled ? when : null, now })
+    await assertTierAvailable(sb, tier, { scheduledFor: scheduled ? when : null, now, riderIsE2E: isE2ETestUser(user) })
   } catch (error) {
     return json(res, error.status || 409, { error: error.message, code: error.code || 'ride_option_unavailable' })
   }

@@ -552,10 +552,8 @@ test('the stripe webhook releases expired checkouts and restores a paid deposit'
   assert.match(webhook, /checkout_deposit/)
   const checkout = readFileSync(new URL('../api/create-checkout-session.js', import.meta.url), 'utf8')
   const airport = readFileSync(new URL('./endpoints/airportCheckout.js', import.meta.url), 'utf8')
-  assert.match(checkout, /rememberCheckoutSession/)
-  assert.match(checkout, /cancelUnopenedCheckoutTrip/)
-  assert.match(airport, /rememberCheckoutSession/)
-  assert.match(airport, /cancelUnopenedCheckoutTrip/)
+  assert.doesNotMatch(checkout, /rememberCheckoutSession|checkout\.sessions\.create/)
+  assert.doesNotMatch(airport, /rememberCheckoutSession|checkout\.sessions\.create/)
 })
 
 const HOLD_NOW = Date.parse('2026-09-24T15:00:00.000Z')

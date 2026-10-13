@@ -140,7 +140,7 @@ export default function InboxScreen() {
           ) : (
             <>
               <SoftNote>
-                Tickets filed from Bug Reporter. Email rides@clemson.edu if the ticket service is down.
+                Tickets filed from Bug Reporter. Email rides@clemsonrides.com if the ticket service is down.
               </SoftNote>
               {!user ? (
                 <EmptyState
@@ -198,7 +198,7 @@ function InboxTabButton({
   const { colors } = useTheme()
   return (
     <Pressable onPress={onPress} style={styles.tab} accessibilityRole="tab" accessibilityState={{ selected: active }}>
-      <Text style={{ color: active ? colors.orange : colors.inkSecondary, fontWeight: '800' }}>{label}</Text>
+      <Text style={{ color: active ? colors.orange : colors.inkSecondary, fontWeight: '800', letterSpacing: -0.1 }}>{label}</Text>
       {active ? <View style={[styles.underline, { backgroundColor: colors.orange }]} /> : <View style={styles.underlineSpacer} />}
     </Pressable>
   )

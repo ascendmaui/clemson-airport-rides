@@ -50,8 +50,8 @@ test('account deletion ticket matches the support validator', () => {
 })
 
 test('legal copy is shared and the install links are the current apps', () => {
-  assert.ok(PRIVACY_SECTIONS.some((section) => section.heading === 'Your choices'))
-  assert.ok(TERMS_SECTIONS.some((section) => section.heading === 'Payments & earnings'))
+  assert.ok(PRIVACY_SECTIONS.some((section) => section.heading.includes('Your Rights and Choices')))
+  assert.ok(TERMS_SECTIONS.some((section) => section.heading.includes('Payments & earnings')))
   assert.equal(WEB_BOOK_URL, 'https://clemsonrides.com/#/home')
   assert.equal(WEB_DRIVER_URL, 'https://clemsonrides.com/#/driver')
   assert.doesNotMatch(`${WEB_BOOK_URL} ${WEB_DRIVER_URL}`, /expo\.dev|expo\.go|exp:\/\//)
@@ -60,14 +60,19 @@ test('legal copy is shared and the install links are the current apps', () => {
 
 test('the marketing page does not install the frozen 1.0.0 binary', () => {
   const source = readFileSync(new URL('../../src/screens/Marketing.jsx', import.meta.url), 'utf8')
+  const chrome = readFileSync(new URL('../../src/components/MarketingChrome.jsx', import.meta.url), 'utf8')
+  const drive = readFileSync(new URL('../../src/screens/DriveWithUs.jsx', import.meta.url), 'utf8')
   assert.doesNotMatch(source, /ae9bb5b6|a9cfec15/)
   assert.doesNotMatch(source, /projects\/clemson-airport-rides\/builds/)
   assert.doesNotMatch(source, /expo\.dev|expo\.go|exp:\/\/|RIDER_EXPO_PROJECT|DRIVER_EXPO_PROJECT/)
+  assert.doesNotMatch(chrome, /ae9bb5b6|a9cfec15|expo\.dev|expo\.go|exp:\/\//)
   assert.match(source, /Book a ride/)
-  assert.match(source, /WEB_BOOK_URL/)
-  assert.match(source, /WEB_DRIVER_URL/)
-  assert.match(source, /APP_DOWNLOADS/)
-  assert.doesNotMatch(source, /const DOWNLOADS/)
+  assert.match(source, /navigate\('home'\)/)
+  assert.match(source, /navigate\('home', \{ tier: 'carpool' \}\)/)
+  assert.match(chrome, /Get the App/)
+  assert.match(chrome, /navigate\('drive'\)/)
+  assert.match(drive, /navigate\('driver-signup'\)/)
+  assert.doesNotMatch(source, /WEB_BOOK_URL|WEB_DRIVER_URL|APP_DOWNLOADS|const DOWNLOADS/)
 })
 
 test('lost-and-found and ride chat reject empty text before any network call', async () => {

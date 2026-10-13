@@ -1,6 +1,7 @@
 import { PrimaryButton } from '../components/PrimaryButton'
 import { navigate } from '../lib/navigation'
 import { onboardingLabel } from '../lib/driverOnboarding'
+import { driverRouteForOnboarding } from '../../shared/driverRoute.js'
 
 const COPY = {
   pending_info: {
@@ -66,8 +67,8 @@ export function DriverApprovalGate({ application }) {
           </div>
         )}
         <div style={{ marginTop: 18 }}>
-          <PrimaryButton onClick={() => navigate('driver-onboarding')}>
-            {status === 'pending_review' ? 'View application' : 'Continue application'}
+          <PrimaryButton onClick={() => navigate(driverRouteForOnboarding(status))}>
+            {status === 'approved' ? 'Open driver mode' : status === 'pending_review' ? 'View application' : 'Continue application'}
           </PrimaryButton>
         </div>
       </div>

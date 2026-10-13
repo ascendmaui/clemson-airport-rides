@@ -39,7 +39,8 @@ export function depositCents(fareCents) {
 
 /** @deprecated prefer depositCents — kept for dollar UI display */
 export function depositAmount(totalDollars) {
-  return Math.round(totalDollars * 0.25 * 100) / 100
+  void totalDollars
+  return 0
 }
 
 export function getStripeConfig() {
@@ -67,6 +68,7 @@ export async function createCheckoutSession({
   riderId,
   date,
   time,
+  flight,
 }, options = {}) {
   const rate = AIRPORT_RATES[airport]
   if (!rate) throw new Error('Unknown airport')
@@ -80,6 +82,7 @@ export async function createCheckoutSession({
     riderId: riderId || '',
     date: date || undefined,
     time: time || undefined,
+    ...(flight && (flight.number || flight.time) ? { flight } : {}),
     origin,
     successUrl:
       successUrl ||

@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons'
+import { Glyph } from 'rides-native/icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
@@ -9,10 +9,12 @@ import { oneParam } from '@/lib/oneParam'
 import { useAuth } from '@/lib/auth'
 import { registerDriverPush, type PushState } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
-import { useTheme, type DisplayMode, type NavApp } from '@/lib/theme'
-import { loadDriverProfile } from 'rides-native/driverDesk'
+import { useTheme, type NavApp, type RideAlertMode, type RideAlertTier } from '@/lib/theme'
+import { loadDriverDesk, loadDriverProfile, setPriorityMode } from 'rides-native/driverDesk'
+import { riderDriverFirstName } from '../../../../shared/riderDriverPrivacy.js'
+import { QuietHoursChoices } from '@/components/QuietHoursChoices'
 
-const SECTIONS = ['display', 'privacy', 'address', 'accessibility', 'communication', 'navigation', 'sounds'] as const
+const SECTIONS = ['display', 'privacy', 'address', 'accessibility', 'communication', 'navigation', 'sounds', 'auto-accept', 'quiet-hours', 'priority'] as const
 type Section = (typeof SECTIONS)[number]
 
 function isSection(value: string): value is Section {
@@ -22,7 +24,7 @@ function isSection(value: string): value is Section {
 function sectionTitle(section: Section): string {
   switch (section) {
     case 'display':
-      return 'Display'
+      return 'Appearance'
     case 'privacy':
       return 'Privacy'
     case 'address':
@@ -35,18 +37,18 @@ function sectionTitle(section: Section): string {
       return 'Navigation'
     case 'sounds':
       return 'Sounds and voice'
+    case 'auto-accept':
+      return 'Auto-accept'
+    case 'quiet-hours':
+      return 'Quiet hours'
+    case 'priority':
+      return 'Priority mode'
     default: {
       const unknown: never = section
       return unknown
     }
   }
 }
-
-const DISPLAY_OPTIONS: { id: DisplayMode; label: string; body: string }[] = [
-  { id: 'auto', label: 'Auto (solar)', body: 'Light after sunrise and dark after sunset for your last known location, or Clemson, SC.' },
-  { id: 'light', label: 'Light', body: 'The current Clemson cream, orange, and purple look.' },
-  { id: 'dark', label: 'Dark', body: 'Same orange and purple on the night field (#0E0B14).' },
-]
 
 export default function SettingsSection() {
   const router = useRouter()
@@ -59,6 +61,8 @@ export default function SettingsSection() {
   const [phone, setPhone] = useState<string | null>(null)
   const [push, setPush] = useState<PushState | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [priorityOn, setPriorityOn] = useState(false)
+  const [priorityBusy, setPriorityBusy] = useState(false)
 
   useEffect(() => {
     if (!user || !supabase || section !== 'address') return
@@ -67,6 +71,34 @@ export default function SettingsSection() {
       setPhone(value)
     }).catch((err) => setError(err instanceof Error ? err.message : 'Could not load your profile'))
   }, [section, user])
+
+  useEffect(() => {
+    if (!user || !supabase || section !== 'priority') return undefined
+    let alive = true
+    loadDriverDesk(supabase, user.id).then((desk) => {
+      if (alive) setPriorityOn(Boolean(desk.priority))
+    }).catch((err) => {
+      if (alive) setError(err instanceof Error ? err.message : 'Could not load priority mode')
+    })
+    return () => {
+      alive = false
+    }
+  }, [section, user])
+
+  async function onPriorityToggle() {
+    if (!user || !supabase || priorityBusy) return
+    const next = !priorityOn
+    setPriorityBusy(true)
+    setError(null)
+    try {
+      await setPriorityMode(supabase, user.id, next)
+      setPriorityOn(next)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update priority mode')
+    } finally {
+      setPriorityBusy(false)
+    }
+  }
 
   useEffect(() => {
     if (!user || section !== 'communication') return
@@ -79,16 +111,16 @@ export default function SettingsSection() {
     <StackPage title={sectionTitle(section)} onBack={() => router.back()}>
       <FadeIn style={{ gap: 12 }}>
         {section === 'display' ? (
-          <>
-            <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-              Auto follows the sun. It does not follow the phone’s system appearance. Place used now: {theme.solarPlace}.
-            </Text>
-            <ChoiceCards
-              options={DISPLAY_OPTIONS}
-              value={theme.displayMode}
-              onChange={theme.setDisplayMode}
-            />
-          </>
+          <Card>
+            <View style={styles.row}>
+              <Glyph name={theme.scheme === 'dark' ? 'moon' : 'sun'} size={22} color={colors.orange} active={theme.scheme === 'dark'} scheme={theme.scheme} knockout={colors.card} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.ink, fontWeight: '800' }}>Night mode</Text>
+                <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>The app opens in light mode. Turn this on for a dark map, screens, and icons. Saved on this phone.</Text>
+              </View>
+              <Toggle on={theme.scheme === 'dark'} onPress={() => theme.setDisplayMode(theme.scheme === 'dark' ? 'light' : 'dark')} label="Night mode" />
+            </View>
+          </Card>
         ) : null}
         {section === 'privacy' ? (
           <Card>
@@ -123,20 +155,25 @@ export default function SettingsSection() {
               {push?.detail || 'Checking notification permission…'}
             </Text>
             <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-              Offers still appear in the queue while you are online and this app is open.
+              While you are online with the app open, a new request plays in the app with sound and vibration. Asleep, locked, or signed out, the same request is a system notification. That lock-screen path needs an Expo access token on the server plus APNs for iPhone and FCM for Android on the Expo project. Those keys are not in the app, so a saved push token does not by itself prove a locked phone will toast.
             </Text>
           </Card>
         ) : null}
         {section === 'navigation' ? <NavChoices /> : null}
-        {section === 'sounds' ? (
+        {section === 'sounds' ? <SoundChoices /> : null}
+        {section === 'auto-accept' ? <AutoAcceptChoices /> : null}
+        {section === 'quiet-hours' ? <QuietHoursChoices /> : null}
+        {section === 'priority' ? (
           <Card>
             <View style={styles.row}>
-              <Text style={{ color: colors.ink, fontWeight: '800', flex: 1 }}>Request chime</Text>
-              <Toggle on={theme.sounds} onPress={() => theme.setSounds(!theme.sounds)} label="Request chime" />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.ink, fontWeight: '800' }}>Priority mode</Text>
+                <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+                  While you are online, new requests reach you ahead of drivers who leave this off.
+                </Text>
+              </View>
+              <Toggle on={priorityOn} onPress={() => { void onPriorityToggle() }} label="Priority mode" />
             </View>
-            <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-              The chime stays silent when the phone is on silent. Haptics still fire for new requests.
-            </Text>
           </Card>
         ) : null}
         {error ? <ErrorText>{error}</ErrorText> : null}
@@ -164,12 +201,13 @@ function ChoiceCards<T extends string>({
             key={option.id}
             onPress={() => onChange(option.id)}
             accessibilityRole="button"
+            accessibilityLabel={option.label}
             accessibilityState={{ selected: on }}
           >
             <Card style={{ borderColor: on ? colors.orange : colors.border, borderWidth: on ? 1.5 : StyleSheet.hairlineWidth }}>
               <View style={styles.choice}>
                 <Text style={{ color: on ? colors.orange : colors.title, fontWeight: '800', fontSize: 16, flex: 1 }}>{option.label}</Text>
-                {on ? <Ionicons name="checkmark-circle" size={22} color={colors.orange} /> : null}
+                {on ? <Glyph name="checkmark-circle" size={22} color={colors.orange} /> : null}
               </View>
               {option.body ? <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>{option.body}</Text> : null}
             </Card>
@@ -180,18 +218,174 @@ function ChoiceCards<T extends string>({
   )
 }
 
+const ALERT_MODES: { id: RideAlertMode; label: string; body: string }[] = [
+  { id: 'chime_vibrate', label: 'Chime and vibrate', body: 'Sound plus vibration.' },
+  { id: 'chime', label: 'Chime only', body: 'Sound, no vibration.' },
+  { id: 'vibrate', label: 'Vibrate only', body: 'A pulse, no sound.' },
+  { id: 'silent', label: 'Silent', body: 'The card still appears.' },
+]
+
+const ALERT_TIERS: { id: RideAlertTier; label: string }[] = [
+  { id: 'standard', label: 'Standard' },
+  { id: 'wait', label: 'Wait & Save' },
+  { id: 'comfort', label: 'Extra Comfort' },
+  { id: 'carpool', label: 'Carpool' },
+]
+
+function usePersistDriverAlerts() {
+  const { user } = useAuth()
+  const { rideAlerts, autoAccept } = useTheme()
+  useEffect(() => {
+    if (!user || !supabase) return undefined
+    const client = supabase
+    let cancel = false
+    void Promise.resolve(client.from('profiles').select('notification_prefs').eq('id', user.id).maybeSingle()).then((res: { data?: { notification_prefs?: object } | null; error?: { message?: string } | null }) => {
+      if (cancel || res.error) return null
+      const next = { ...(res.data?.notification_prefs || {}), ride_alerts: rideAlerts, auto_accept: autoAccept }
+      return client.from('profiles').update({ notification_prefs: next }).eq('id', user.id)
+    }).catch(() => null)
+    return () => {
+      cancel = true
+    }
+  }, [autoAccept, rideAlerts, user])
+}
+
+function SoundChoices() {
+  const theme = useTheme()
+  const { colors } = theme
+  usePersistDriverAlerts()
+  return (
+    <>
+      <Card>
+        <View style={styles.row}>
+          <Text style={{ color: colors.ink, fontWeight: '800', flex: 1 }}>Request chime</Text>
+          <Toggle on={theme.sounds} onPress={() => theme.setSounds(!theme.sounds)} label="Request chime" />
+        </View>
+        <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+          Turn the chime off to mute every ride type. Vibration still follows the choice below. The phone’s silent switch mutes the chime.
+        </Text>
+      </Card>
+      {ALERT_TIERS.map((tier) => (
+        <View key={tier.id} style={{ gap: 8 }}>
+          <Text style={{ color: colors.purple, fontWeight: '800' }}>{tier.label}</Text>
+          <ChoiceCards
+            options={ALERT_MODES}
+            value={theme.rideAlerts[tier.id]}
+            onChange={(mode) => theme.setRideAlert(tier.id, mode)}
+          />
+        </View>
+      ))}
+    </>
+  )
+}
+
+const MILE_CHOICES = [1, 2, 3, 5, 10]
+const HOURLY_CHOICES = [15, 20, 25, 30, 40]
+
+function AutoAcceptChoices() {
+  const theme = useTheme()
+  const { colors, autoAccept, setAutoAccept } = theme
+  usePersistDriverAlerts()
+  return (
+    <>
+      <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+        Online requests that match these rules are accepted for you. Favorite riders match even when the other bars are not met. Distance and hourly rate both have to pass when both are on.
+      </Text>
+      <Card>
+        <View style={styles.row}>
+          <Text style={{ color: colors.ink, fontWeight: '800', flex: 1 }}>Within distance</Text>
+          <Toggle on={autoAccept.distanceEnabled} onPress={() => setAutoAccept({ distanceEnabled: !autoAccept.distanceEnabled })} label="Auto-accept by distance" />
+        </View>
+        <View style={styles.chips}>
+          {MILE_CHOICES.map((miles) => {
+            const on = autoAccept.maxPickupMiles === miles
+            return (
+              <Pressable
+                key={miles}
+                onPress={() => setAutoAccept({ maxPickupMiles: miles })}
+                accessibilityRole="button"
+                accessibilityLabel={`Auto-accept within ${miles} miles`}
+                accessibilityState={{ selected: on }}
+                style={[styles.chip, { backgroundColor: on ? colors.orange : colors.segment }]}
+              >
+                <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800' }}>{miles} mi</Text>
+              </Pressable>
+            )
+          })}
+        </View>
+      </Card>
+      <Card>
+        <View style={styles.row}>
+          <Text style={{ color: colors.ink, fontWeight: '800', flex: 1 }}>Hourly rate</Text>
+          <Toggle on={autoAccept.hourlyEnabled} onPress={() => setAutoAccept({ hourlyEnabled: !autoAccept.hourlyEnabled })} label="Auto-accept by hourly rate" />
+        </View>
+        <View style={styles.chips}>
+          {HOURLY_CHOICES.map((dollars) => {
+            const on = autoAccept.minHourlyCents === dollars * 100
+            return (
+              <Pressable
+                key={dollars}
+                onPress={() => setAutoAccept({ minHourlyCents: dollars * 100 })}
+                accessibilityRole="button"
+                accessibilityLabel={`Auto-accept at ${dollars} dollars per hour or more`}
+                accessibilityState={{ selected: on }}
+                style={[styles.chip, { backgroundColor: on ? colors.purple : colors.segment }]}
+              >
+                <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800' }}>${dollars}/hr</Text>
+              </Pressable>
+            )
+          })}
+        </View>
+      </Card>
+      <Card>
+        <View style={styles.row}>
+          <Text style={{ color: colors.ink, fontWeight: '800', flex: 1 }}>Favorite riders</Text>
+          <Toggle on={autoAccept.favoritesEnabled} onPress={() => setAutoAccept({ favoritesEnabled: !autoAccept.favoritesEnabled })} label="Auto-accept favorite riders" />
+        </View>
+        <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+          Save a rider from their request card. Those riders are accepted as soon as the offer arrives.
+        </Text>
+        {autoAccept.favoriteRiders.length === 0 ? (
+          <Text style={{ color: colors.ink, fontWeight: '700' }}>No favorite riders yet.</Text>
+        ) : autoAccept.favoriteRiders.map((rider) => (
+          <View key={rider.id} style={styles.row}>
+            <Text style={{ color: colors.title, fontWeight: '800', flex: 1 }}>{riderDriverFirstName(rider.name, 'Rider') || 'Rider'}</Text>
+            <Pressable
+              onPress={() => setAutoAccept({ favoriteRiders: autoAccept.favoriteRiders.filter((row) => row.id !== rider.id) })}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${rider.name} from favorites`}
+            >
+              <Text style={{ color: colors.orange, fontWeight: '800' }}>Remove</Text>
+            </Pressable>
+          </View>
+        ))}
+      </Card>
+    </>
+  )
+}
+
 function NavChoices() {
-  const { colors, navApp, setNavApp } = useTheme()
+  const { colors, navApp, setNavApp, autoNavigate, setAutoNavigate } = useTheme()
   const options: { id: NavApp; label: string }[] = [
     { id: 'apple', label: 'Apple Maps' },
     { id: 'google', label: 'Google Maps' },
+    { id: 'waze', label: 'Waze' },
   ]
   return (
     <>
       <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-        The live trip screen opens this app first. This does not add a maps key or turn-by-turn inside Clemson RIDES.
+        Your nav app opens with directions to pickup when you accept a ride, then to drop-off when you start the trip. If it is not installed, the next app opens instead.
       </Text>
       <ChoiceCards options={options} value={navApp} onChange={setNavApp} />
+      <Card>
+        <View style={styles.row}>
+          <Text style={{ color: colors.ink, fontWeight: '800', flex: 1 }}>Open navigation automatically</Text>
+          <Toggle on={autoNavigate} onPress={() => setAutoNavigate(!autoNavigate)} label="Open navigation automatically" />
+        </View>
+        <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+          Off: use the Navigate button on the live trip screen instead.
+        </Text>
+      </Card>
     </>
   )
 }
@@ -199,4 +393,6 @@ function NavChoices() {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   choice: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
 })
