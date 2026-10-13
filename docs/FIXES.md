@@ -2,6 +2,12 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-13 — Matching edges keep cancel, decline, and offline copy
+
+- **What was wrong:** Updating the matching-edge branch onto current main split the driver home. The newer home hid the offer card behind trip reconciliation and the pass-offer decline, and the older branch hid an offline offer without the shift pulse or the end-trip sheet. British spelling `cancelled` no longer shared a headline with `canceled`.
+- **What changed:** `canceled` and `cancelled` share the canceled headline and detail. Decline uses `declineDriverOffer` and still shows the pass sentence when the rider stays searching. Going offline still uses the shift pulse and, when a searching or offered card was up, the offline-while-offered sentence. The offer card stays hidden while the driver is offline. Favorites, the driving ETA, and the end-trip sheet stay on the card. Demo and synthetic offers stay out of the live offer list. An expired exclusive offer now opens the pool instead of jumping to a third driver, and the edge test follows that.
+- **Files touched:** `packages/rides-native/tripTags.js`, `src/screens/DriverHome.jsx`, `apps/driver/app/(tabs)/index.tsx`, `apps/driver/app/queue.tsx`, `server/matchingEdge.test.js`, `package.json`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/matchingEdge.test.js tests/driverTerminalTrip.test.js` and `npm test` (3579 pass, 0 fail).
 ## 2026-10-13 — Onboarding keeps next-step holds and the background attestation
 
 - **What was wrong:** The friction branch still used the old eligibility form and a Continue button that ignored a salvage title. Current main records a three-step background attestation and does not treat consent as a completed check.
@@ -66,6 +72,41 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `docs/FIXES.md`
 - **Verified:** `node --test tests/gaAuditReconcileAirportCheckoutHardening.test.js` (6/6 passing) and full test runner `npm test`.
 
+## 2026-10-05 — Matching edge messages for cancel, decline rebroadcast, and offline offer cards
+
+- **Track / machine:** Clemson RIDES · deputy/matching-edge-cases
+- **What was wrong:** The cancel, decline, and offline helpers existed, but the screens did not say what those edges do. A rider cancel of an unassigned searching ride cleared the driver card with no "That ride is no longer available." line. A decline was described as always returning the ride to the open pool, so a next-driver rebroadcast looked like the search had stopped. Going offline dropped a searching or offered card with no offline-while-offered sentence. The British spelling `cancelled` still read as an open ride request.
+- **What changed:** `searchingCancelOfferMessage`, `declinePassMessage`, and `riderDeclineRebroadcastMessage` turn the existing helper decisions into copy. The web driver home toasts the cancel and offline sentences, and the pass result when a decline keeps the rider searching. The searching and offered card now says the offer goes to the next driver, or back to the open pool if nobody is left. The rider live card adds the pass note and treats `cancelled` like `canceled`. The driver app hides the offer card while offline and shows the same offline and decline sentences. No migration and no payment change.
+- **Files touched:**
+  - `server/matchingEdge.js`
+  - `server/matchingEdge.test.js`
+  - `packages/rides-native/matchingMessages.js`
+  - `packages/rides-native/matchingMessages.d.ts`
+  - `packages/rides-native/tripTags.js`
+  - `packages/rides-native/liveTrip.js`
+  - `src/screens/DriverHome.jsx`
+  - `src/screens/Requested.jsx`
+  - `src/lib/tripPhase.js`
+  - `src/lib/tripPhase.test.js`
+  - `src/lib/liveDispatchA11y.js`
+  - `apps/driver/app/(tabs)/index.tsx`
+  - `apps/driver/app/queue.tsx`
+  - `docs/MATCHING_EDGE_CASES.md`
+  - `docs/FIXES.md`
+- **Verified:** `node --test server/matchingEdge.test.js src/lib/tripPhase.test.js packages/rides-native/liveTrip.test.js src/lib/driverShift.test.js tests/driverStopShift.test.js tests/driverOfferCard.test.js tests/webLiveDispatchA11y.test.js tests/matchingE2E.test.js server/matchingRebroadcast.test.js` (66/66) and `npm test` (2335/2335).
+
+## 2026-10-05 — Matching edge helpers for cancel, decline rebroadcast, and offline offer cards
+
+- **Track / machine:** Clemson RIDES · deputy/matching-edge-cases
+- **What was wrong:** Cancel-while-searching, decline-then-rebroadcast, and offline-while-offered had no shared helper. Those edges were only implied by broader desk, SQL, and sweep tests, so a later accept after a searching cancel, a decline's rebroadcast flags, and an offline driver's offer card could drift apart.
+- **What changed:** Added pure helpers in `server/matchingEdge.js` and focused unit tests in `server/matchingEdge.test.js`. A rider cancel of an unassigned searching ride blocks a later accept. A targeted driver decline stamps the rebroadcast path flags (`offer_tried_driver_ids`, next or open `offer_driver_id`, `match`, `offer_release_reason`, `offer_rebroadcast_reason`) and leaves the rider searching. An offline driver does not keep an active searching or offered card, and gets the offline-while-offered message. This does not implement SQL expire-stale-offers.
+- **Files touched:**
+  - `server/matchingEdge.js`
+  - `server/matchingEdge.test.js`
+  - `docs/MATCHING_EDGE_CASES.md`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test server/matchingEdge.test.js` (4/4), the acceptance list of the first five `server/*match*.test.js` / `tests/*match*` files (41/41), and `npm test` (2334/2334).
 ## 2026-10-05 — driver onboarding friction UX (t2)
 
 - **What was wrong:** The year, W-9, and unsigned-agreement hints existed only as helpers. The application screens still let a driver tap Continue, Sign, or Submit before the prerequisite was done, and they did not say which single step was next. A blank account form looked ready. Native W-9 Next advanced through empty pages. Employment and agreement sign buttons accepted a tap and then showed an error. A missing vehicle year did not hold later steps, so the driver could leave Account behind. The unsigned agreement was easy to mix up with a blocked submit.
