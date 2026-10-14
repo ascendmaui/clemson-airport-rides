@@ -493,3 +493,216 @@ test('releaseScheduledRides: holds near-term and backup-queue rides, releases ha
   assert.equal(seededPool.supabase._tables.trips[0].status, 'searching')
 })
 
+test('runScheduledDispatchTick: opens window when current time is between window bounds and notifies primary driver', async () => {
+  // Pickup is 25 minutes in the future, driveMs is 0 -> lead is 20 min, window opens at pickup - 20m, closes at +5m
+  const pickupAt = '2026-10-10T15:30:00.000Z'
+  const now = new Date('2026-10-10T15:12:00.000Z') // 18 mins before pickup: inside 15:10 to 15:15 window
+  const trip = {
+    id: 'trip_open_window_1',
+    status: 'scheduled',
+    rider_id: 'rider_open_win',
+    pickup_at: pickupAt,
+    pickup_lat: 34.6784,
+    pickup_lng: -82.8397,
+    metadata: {
+      backup_queue: {
+        ...backupBookingMetadata(1000, now),
+        primaryDriverId: 'driver_p_open',
+        backupDriverId: 'driver_b_open',
+        confirmState: null,
+        generation: 1,
+        events: [],
+      },
+    },
+  }
+
+  const sb = createMatchingSupabase({
+    trips: [trip],
+    trip_events: [],
+    driver_reliability_strikes: [],
+    driver_status: [{ driver_id: 'driver_p_open', online: true, expo_push_token: 'ExponentPushToken[mock]' }],
+  })
+
+  const summary = await runScheduledDispatchTick(sb, { now })
+
+  assert.equal(summary.scanned, 1)
+  assert.equal(summary.opened, 1)
+  assert.equal(summary.promoted, 0)
+  assert.equal(summary.pooled, 0)
+
+  const updated = sb._tables.trips[0]
+  assert.equal(updated.metadata.backup_queue.confirmState, 'window_open')
+  assert.equal(updated.metadata.backup_queue.windowOpensAt, '2026-10-10T15:10:00.000Z')
+  assert.equal(updated.metadata.backup_queue.windowClosesAt, '2026-10-10T15:15:00.000Z')
+  assert.equal(updated.metadata.backup_queue.windowNotifiedAt, now.toISOString())
+  assert.equal(sb._tables.trip_events.some((e) => e.kind === 'backup_window_open'), true)
+})
+
+test('runScheduledDispatchTick: releases directly to backup promotion or urgent pool when tick occurs after window closes on fresh scheduled ride', async () => {
+  const pickupAt = '2026-10-10T15:30:00.000Z'
+  // Window closed at 15:15:00; tick runs at 15:16:00
+  const now = new Date('2026-10-10T15:16:00.000Z')
+
+  // Case A: Has backup driver -> promotes backup
+  const tripBackup = {
+    id: 'trip_overdue_backup',
+    status: 'scheduled',
+    rider_id: 'rider_overdue_1',
+    pickup_at: pickupAt,
+    pickup_lat: 34.6784,
+    pickup_lng: -82.8397,
+    metadata: {
+      backup_queue: {
+        ...backupBookingMetadata(1000, now),
+        primaryDriverId: 'driver_p_late',
+        backupDriverId: 'driver_b_promoted',
+        confirmState: null,
+        generation: 1,
+        events: [],
+      },
+    },
+  }
+
+  const sbBackup = createMatchingSupabase({
+    trips: [tripBackup],
+    trip_events: [],
+    driver_reliability_strikes: [],
+    driver_status: [{ driver_id: 'driver_p_late', online: true }],
+  })
+
+  const summaryBackup = await runScheduledDispatchTick(sbBackup, { now })
+  assert.equal(summaryBackup.scanned, 1)
+  assert.equal(summaryBackup.promoted, 1)
+  assert.equal(summaryBackup.pooled, 0)
+  assert.equal(sbBackup._tables.trips[0].metadata.backup_queue.primaryDriverId, 'driver_b_promoted')
+
+  // Case B: No backup driver -> hands to urgent pool
+  const tripSolo = {
+    id: 'trip_overdue_solo',
+    status: 'scheduled',
+    rider_id: 'rider_overdue_2',
+    pickup_at: pickupAt,
+    pickup_lat: 34.6784,
+    pickup_lng: -82.8397,
+    metadata: {
+      backup_queue: {
+        ...backupBookingMetadata(1000, now),
+        primaryDriverId: 'driver_p_solo_late',
+        backupDriverId: null,
+        confirmState: null,
+        generation: 1,
+        events: [],
+      },
+    },
+  }
+
+  const sbSolo = createMatchingSupabase({
+    trips: [tripSolo],
+    trip_events: [],
+    driver_reliability_strikes: [],
+    driver_status: [{ driver_id: 'driver_p_solo_late', online: true }],
+  })
+
+  const summarySolo = await runScheduledDispatchTick(sbSolo, { now })
+  assert.equal(summarySolo.scanned, 1)
+  assert.equal(summarySolo.pooled, 1)
+  assert.equal(summarySolo.promoted, 0)
+  assert.equal(sbSolo._tables.trips[0].metadata.backup_queue.confirmState, 'handed_to_pool')
+  assert.equal(sbSolo._tables.trips[0].status, 'searching')
+})
+
+test('runScheduledDispatchTick: records updated telemetry and fix during open window without premature transition', async () => {
+  const now = new Date('2026-10-10T14:52:00.000Z')
+  const trip = {
+    id: 'trip_telemetry_update',
+    status: 'scheduled',
+    rider_id: 'rider_telem',
+    pickup_at: '2026-10-10T15:30:00.000Z',
+    pickup_lat: 34.6784,
+    pickup_lng: -82.8397,
+    metadata: {
+      backup_queue: {
+        ...backupBookingMetadata(1000, now),
+        primaryDriverId: 'driver_active_telem',
+        backupDriverId: 'driver_backup_telem',
+        confirmState: 'window_open',
+        windowOpensAt: '2026-10-10T14:50:00.000Z',
+        windowClosesAt: '2026-10-10T14:55:00.000Z',
+        lastFix: { lat: 34.6000, lng: -82.8000 },
+        generation: 2,
+        events: [],
+      },
+    },
+  }
+
+  const sb = createMatchingSupabase({
+    trips: [trip],
+    trip_events: [],
+    driver_status: [
+      {
+        driver_id: 'driver_active_telem',
+        online: true,
+        lat: 34.6100, // Updated location
+        lng: -82.8100,
+        updated_at: '2026-10-10T14:51:55.000Z',
+      },
+    ],
+  })
+
+  const summary = await runScheduledDispatchTick(sb, { now })
+  assert.equal(summary.scanned, 1)
+  assert.equal(summary.opened, 0)
+  assert.equal(summary.promoted, 0)
+  assert.equal(summary.pooled, 0)
+  assert.equal(summary.enroute, 0)
+
+  const updated = sb._tables.trips[0]
+  assert.equal(updated.metadata.backup_queue.lastFix.lat, 34.6100)
+  assert.equal(updated.metadata.backup_queue.generation, 3)
+})
+
+test('runScheduledDispatchTick: triggers departDue transition to enroute when leaveNowAt passes without manual navigation', async () => {
+  const now = new Date('2026-10-10T15:05:00.000Z') // leaveNowAt was 15:00:00 -> 5 minutes past leave time
+  const trip = {
+    id: 'trip_depart_due',
+    status: 'scheduled',
+    rider_id: 'rider_depart_due',
+    pickup_at: '2026-10-10T15:30:00.000Z',
+    pickup_lat: 34.6784,
+    pickup_lng: -82.8397,
+    metadata: {
+      backup_queue: {
+        ...backupBookingMetadata(1000, now),
+        primaryDriverId: 'driver_confirmed_late',
+        backupDriverId: 'driver_b_dep',
+        confirmState: 'window_open',
+        confirmedAt: '2026-10-10T14:51:00.000Z',
+        leaveNowAt: '2026-10-10T15:00:00.000Z',
+        navigateStartedAt: null, // Did not press navigate
+        windowOpensAt: '2026-10-10T14:50:00.000Z',
+        windowClosesAt: '2026-10-10T15:10:00.000Z',
+        generation: 2,
+        events: [],
+      },
+    },
+  }
+
+  const sb = createMatchingSupabase({
+    trips: [trip],
+    trip_events: [],
+    driver_status: [{ driver_id: 'driver_confirmed_late', online: true }],
+  })
+
+  const summary = await runScheduledDispatchTick(sb, { now })
+  assert.equal(summary.scanned, 1)
+  assert.equal(summary.enroute, 1)
+
+  const updated = sb._tables.trips[0]
+  assert.equal(updated.status, 'accepted')
+  assert.equal(updated.driver_id, 'driver_confirmed_late')
+  assert.equal(updated.metadata.backup_queue.confirmState, 'enroute')
+  assert.equal(updated.metadata.backup_queue.navigateStartedAt, now.toISOString())
+  assert.equal(updated.metadata.backup_queue.movementDetectedAt, now.toISOString())
+})
+
+
