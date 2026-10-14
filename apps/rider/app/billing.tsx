@@ -314,12 +314,12 @@ function BillingScreen() {
           <Text style={styles.creditsLabel} accessibilityRole="header">credits</Text>
         </View>
         <View style={[styles.card, lift(colors, 'rest')]} accessibilityLabel="credits">
-          <Text style={styles.cardLast}>
+          <Text style={[styles.cardLast, { fontSize: 40, fontWeight: '800', color: '#F56600' }]}>
             {!creditsLoaded
               ? '…'
               : creditsUnavailable || creditsCents == null
                 ? 'Balance unavailable'
-                : formatCents(creditsCents)}
+                : `$${(creditsCents / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`}
           </Text>
           {creditsError ? <Text style={styles.error}>{creditsError}</Text> : null}
         </View>
