@@ -16,6 +16,7 @@ import { activateTigerPassFromCheckout, syncTigerPassFromStripe, tigerPassMeta }
 import { handleAffiliateConnectEvent, isAffiliateConnectEvent } from '../server/affiliateConnect.js'
 import { handleDriverConnectEvent, isDriverConnectEvent } from '../server/driverPayoutMethods.js'
 import { clientErrorMessage } from '../server/clientError.js'
+import { studentPlanMeta, syncStudentPlanFromStripe } from '../server/studentPlans.js'
 
 export { recordDeposit, applyPaidCheckoutSession }
 
@@ -270,6 +271,25 @@ export default async function handler(req, res, deps = {}) {
         referral,
         ...(retryable ? { error: applied?.error || recorded?.error } : {}),
       })
+    }
+
+    const studentMeta = studentPlanMeta(event.data?.object)
+    if (
+      studentMeta
+      && (event.type === 'customer.subscription.created'
+        || event.type === 'customer.subscription.updated'
+        || event.type === 'customer.subscription.deleted'
+        || event.type === 'invoice.paid'
+        || event.type === 'invoice.payment_failed')
+    ) {
+      let studentPlan = { skipped: true, reason: 'no_service_role' }
+      if (activeServiceKey || deps.serviceClient) {
+        const client = deps.serviceClient ? deps.serviceClient() : serviceClient()
+        const syncFn = deps.syncStudentPlanFromStripe || syncStudentPlanFromStripe
+        studentPlan = await syncFn(client, event.type, event.data.object)
+      }
+      const retryable = studentPlan?.ok === false
+      return sendWebhookJson(res, retryable ? 500 : 200, { received: true, type: event.type, studentPlan })
     }
 
     const passMeta = tigerPassMeta(event.data?.object)
