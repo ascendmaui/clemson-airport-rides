@@ -260,7 +260,7 @@ test('a stale signature timestamp is 400 and does not apply the event', async ()
 
 for (const spec of UNSIGNED_SECRETS) {
   test(`unsigned (${spec.label}) malformed JSON is 400`, async () => {
-    const { calls, deps } = trackingDeps({ webhookSecret: spec.webhookSecret })
+    const { calls, deps } = trackingDeps({ webhookSecret: spec.webhookSecret, allowUnsigned: true })
     const res = await callHandler(mockReq({
       body: '{',
       headers: { 'stripe-signature': 't=1,v1=ignored' },
@@ -272,7 +272,7 @@ for (const spec of UNSIGNED_SECRETS) {
   })
 
   test(`unsigned (${spec.label}) empty body is 400`, async () => {
-    const { calls, deps } = trackingDeps({ webhookSecret: spec.webhookSecret })
+    const { calls, deps } = trackingDeps({ webhookSecret: spec.webhookSecret, allowUnsigned: true })
     const res = await callHandler(mockReq({ body: '' }), deps)
     const body = assertJson(res, 400)
     assert.match(body.error, /Unexpected end of JSON input/)
@@ -291,7 +291,7 @@ for (const spec of UNSIGNED_SECRETS) {
       data: { object: { id: 'cs_wrapped', object: 'checkout.session' } },
     }])
     for (const bodyText of ['[]', wrapped]) {
-      const { calls, deps } = trackingDeps({ webhookSecret: spec.webhookSecret })
+      const { calls, deps } = trackingDeps({ webhookSecret: spec.webhookSecret, allowUnsigned: true })
       const res = await callHandler(mockReq({ body: bodyText }), deps)
       const body = assertJson(res, 200)
       assert.equal(body.received, true)
@@ -302,7 +302,7 @@ for (const spec of UNSIGNED_SECRETS) {
   })
 
   test(`unsigned (${spec.label}) JSON null is 400`, async () => {
-    const { calls, deps } = trackingDeps({ webhookSecret: spec.webhookSecret })
+    const { calls, deps } = trackingDeps({ webhookSecret: spec.webhookSecret, allowUnsigned: true })
     const res = await callHandler(mockReq({ body: 'null' }), deps)
     const body = assertJson(res, 400)
     assert.match(body.error, /Cannot read properties of null/)
@@ -317,7 +317,7 @@ for (const spec of UNSIGNED_SECRETS) {
       object: 'event',
       data: { object: { id: 'cus_no_type', object: 'customer' } },
     })
-    const { calls, deps } = trackingDeps({ webhookSecret: spec.webhookSecret })
+    const { calls, deps } = trackingDeps({ webhookSecret: spec.webhookSecret, allowUnsigned: true })
     const res = await callHandler(mockReq({ body: raw }), deps)
     const body = assertJson(res, 200)
     assert.equal(body.received, true)
@@ -333,7 +333,7 @@ for (const spec of UNSIGNED_SECRETS) {
       object: 'event',
       type: 'customer.created',
     })
-    const { calls, deps } = trackingDeps({ webhookSecret: spec.webhookSecret })
+    const { calls, deps } = trackingDeps({ webhookSecret: spec.webhookSecret, allowUnsigned: true })
     const res = await callHandler(mockReq({ body: raw }), deps)
     const body = assertJson(res, 200)
     assert.deepEqual(body, { received: true, type: 'customer.created' })
@@ -406,6 +406,7 @@ function routingDeps({ serviceKey = '', client = {}, onApply = null } = {}) {
   const deps = {
     stripeSecret: STRIPE_SECRET,
     webhookSecret: '',
+    allowUnsigned: true,
     serviceKey,
     serviceClient() {
       calls.push('serviceClient')
@@ -993,3 +994,16 @@ test('Stripe-Signature header with uppercase casing or array is accepted', async
   assert.equal(res2.statusCode, 200)
 })
 
+
+for (const spec of UNSIGNED_SECRETS) {
+  test(`unsigned (${spec.label}) is refused without the test-only allowUnsigned flag`, async () => {
+    const { calls, deps } = trackingDeps({ webhookSecret: spec.webhookSecret })
+    const res = await callHandler(mockReq({
+      body: JSON.stringify(ACCEPTED_EVENT),
+      headers: { 'stripe-signature': 't=1,v1=ignored' },
+    }), deps)
+    const body = assertJson(res, 400)
+    assert.match(body.error, /signing secret is not configured/)
+    assertNoDownstream(calls)
+  })
+}

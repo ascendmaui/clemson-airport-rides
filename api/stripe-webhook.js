@@ -174,8 +174,11 @@ export default async function handler(req, res, deps = {}) {
     if (whSecret && !whSecret.includes('placeholder')) {
       const sig = extractStripeSignature(req.headers)
       event = stripe.webhooks.constructEvent(rawBody, sig, whSecret)
-    } else {
+    } else if (deps.allowUnsigned === true) {
+      // Test-only injection. Production never accepts an unsigned event.
       event = JSON.parse(rawBody.toString('utf8'))
+    } else {
+      return sendWebhookJson(res, 400, { error: 'Webhook signing secret is not configured' })
     }
 
     if (event.type === 'payment_intent.succeeded' && event.data?.object?.metadata?.kind === 'tip') {
