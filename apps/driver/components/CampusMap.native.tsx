@@ -7,9 +7,11 @@ import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'ri
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, ORANGE, PURPLE, STADIUM } from 'rides-native/places.js'
 import type { BusySpot } from '@/lib/busySpots'
-import { describeCell, type DemandCell } from 'rides-native/demandHeat.js'
+import { describeCell, heatRgb, type DemandCell } from 'rides-native/demandHeat.js'
 import { DemandHeatLayer } from './DemandHeatLayer'
 import type { MapPin } from './CampusMap'
+
+const HEAT_LEGEND_STOPS = [0.1, 0.4, 0.7, 1]
 
 function rgba(hex: string, alpha: number) {
   const raw = hex.replace('#', '')
@@ -248,6 +250,17 @@ export function CampusMap({
           <Text style={styles.peakText}>Peak mode · 30 min window</Text>
         </View>
       ) : null}
+      {showHeat ? (
+        <View pointerEvents="none" style={[styles.heatLegend, { backgroundColor: darkMap ? 'rgba(22,18,31,0.9)' : 'rgba(255,255,255,0.92)' }]} accessibilityLabel="Demand heat map legend, low to high">
+          <Text style={[styles.heatLegendText, { color: darkMap ? '#D5D0DC' : '#3E4654' }]}>Demand</Text>
+          <View style={styles.heatLegendRamp}>
+            {HEAT_LEGEND_STOPS.map((v) => (
+              <View key={v} style={[styles.heatLegendSwatch, { backgroundColor: `rgb(${heatRgb(v, colorScheme).join(',')})` }]} />
+            ))}
+          </View>
+          <Text style={[styles.heatLegendText, { color: darkMap ? '#D5D0DC' : '#3E4654' }]}>Low · High</Text>
+        </View>
+      ) : null}
       {info ? (
         <Animated.View
           style={[
@@ -288,6 +301,10 @@ export function CampusMap({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  heatLegend: { position: 'absolute', left: 12, top: 160, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, alignItems: 'center', gap: 4 },
+  heatLegendRamp: { flexDirection: 'row', borderRadius: 4, overflow: 'hidden' },
+  heatLegendSwatch: { width: 14, height: 8 },
+  heatLegendText: { fontSize: 10, fontWeight: '700' },
   carMarker: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   carStripe: { position: 'absolute', width: 6, height: 40, transform: [{ rotate: '35deg' }], opacity: 0.6 },
   peakBadge: {
