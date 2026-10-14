@@ -112,7 +112,7 @@ export function TabSwipeRegion({
       ref={measure.ref as RefObject<View | null>}
       collapsable={false}
       onLayout={measure.onLayout}
-      style={style}
+      style={[{ flexGrow: 0, alignSelf: 'stretch' }, style]}
     >
       {children}
     </View>

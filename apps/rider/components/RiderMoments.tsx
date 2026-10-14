@@ -55,30 +55,54 @@ export function RiderMoments() {
     seen.current = new Map()
 
     function onRow(row: any) {
-      const next = riderTripSnapshot(row)
-      if (!next) return
-      const prev = seen.current.get(row.id) ?? null
-      seen.current.set(row.id, next)
-      if (!primed || !prev) return
-      const moments = [riderTripMoment(prev, row), paymentFailedMoment(prev.hold, row, 'rider')].filter(Boolean) as Moment[]
-      const matched = ['accepted', 'arriving', 'arrived', 'in_progress'].includes(String(row.status || ''))
-      for (const moment of moments) {
-        // The match sheet already shows Add a payment method. A second banner
-        // that navigates in the same tick fights that modal.
-        if (moment.cue === 'error' && matched && riderModalIsOpen()) continue
-        showToast({
-          key: moment.key,
-          tone: moment.tone,
-          title: moment.title,
-          body: moment.body,
-          onPress: () => {
-            const href = moment.cue === 'error' || moment.action === 'billing'
-              ? { pathname: '/billing' as const }
-              : { pathname: '/requested' as const, params: { trip: row.id } }
-            afterRiderModal(() => router.push(href))
-          },
-        })
-        playRiderMoment(moment)
+      try {
+        const next = riderTripSnapshot(row)
+        if (!next) return
+        const prev = seen.current.get(row.id) ?? null
+        seen.current.set(row.id, next)
+        if (!primed || !prev) return
+        let failed: Moment | null = null
+        try {
+          failed = paymentFailedMoment(prev.hold, row, 'rider')
+        } catch {
+          failed = null
+        }
+        let tripMoment: Moment | null = null
+        try {
+          tripMoment = riderTripMoment(prev, row)
+        } catch {
+          tripMoment = null
+        }
+        const moments = [tripMoment, failed].filter(Boolean) as Moment[]
+        const matched = ['accepted', 'arriving', 'arrived', 'in_progress'].includes(String(row.status || ''))
+        for (const moment of moments) {
+          // The match sheet already shows Add a payment method. A second banner
+          // that navigates in the same tick fights that modal.
+          if (moment.cue === 'error' && matched && riderModalIsOpen()) continue
+          try {
+            showToast({
+              key: moment.key,
+              tone: moment.tone,
+              title: moment.title,
+              body: moment.body,
+              onPress: () => {
+                try {
+                  const href = moment.cue === 'error' || moment.action === 'billing'
+                    ? { pathname: '/billing' as const }
+                    : { pathname: '/requested' as const, params: { trip: row.id } }
+                  afterRiderModal(() => router.push(href))
+                } catch {
+                  /* a hold failure must not crash the app */
+                }
+              },
+            })
+            playRiderMoment(moment)
+          } catch {
+            /* a bad moment must not crash the app */
+          }
+        }
+      } catch {
+        /* a null driver or a bad trip row must not crash the app */
       }
     }
 

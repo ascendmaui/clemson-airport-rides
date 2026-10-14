@@ -567,7 +567,7 @@ function makeStyles(colors: Palette) {
       marginTop: 8,
       marginBottom: 8,
     },
-    friendPills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 8, marginBottom: 8 },
+    friendPills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 8, marginBottom: 8, alignItems: 'flex-start' as const, flexGrow: 0 },
   }
 }
 

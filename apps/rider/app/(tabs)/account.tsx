@@ -369,7 +369,7 @@ function makeStyles(colors: Palette) {
     group: { gap: 8 },
     groupTitle: { color: colors.inkSecondary, fontWeight: '800' as const, fontSize: 12, letterSpacing: 1, textTransform: 'uppercase' as const, marginTop: 8 },
     settingLine: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
-    pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 8 },
+    pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 8, alignItems: 'flex-start' as const, flexGrow: 0 },
     note: { color: colors.link, fontWeight: '700' as const, fontSize: 13 },
     error: { color: colors.danger, fontSize: 13 },
   }

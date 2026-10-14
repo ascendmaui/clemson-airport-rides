@@ -6,6 +6,7 @@ import { reconcileCheckout } from 'rides-native/riderMoney.js'
 import { AppState, AccessibilityInfo, Animated, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { FlowErrorBoundary } from '@/components/FlowErrorBoundary'
 import { MidrideCancelSheet } from '@/components/MidrideCancelSheet'
 import { useEnterMotion } from '@/components/enter'
 import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
@@ -32,6 +33,7 @@ import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { CounterpartCard, partyColorsFromPalette } from 'rides-native/PartyScreens'
 import { CommunityMatchChips } from 'rides-native/CommunityMatchChips'
 import { loadCounterpart, type CounterpartView } from 'rides-native/partyProfile.js'
+import { safeCounterpart, textField } from '@/lib/driverFields'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -98,7 +100,7 @@ function pinsFor(trip: LiveTrip | null): MapPin[] {
   return pins
 }
 
-export default function Requested() {
+function RequestedRide() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const params = useLocalSearchParams<{ dest?: string; trip?: string; driver?: string; session_id?: string; sessionId?: string; paid?: string }>()
@@ -128,7 +130,7 @@ export default function Requested() {
   const sheetMotion = useEnterMotion(12)
   const rideLive = isActiveRideStatus(trip?.status)
   const located = live?.driverLat != null && live?.driverLng != null
-  const driverName = live?.driverName || driver
+  const driverName = textField(live?.driverName, textField(driver, 'Your driver'))
   const error = tripError || mapError
   const reconciledSessions = useRef(new Set<string>())
 
@@ -141,6 +143,23 @@ export default function Requested() {
   const mapRequest = useRef(0)
   const mapPending = useRef(false)
   useEffect(() => () => { mapRequest.current++; mapPending.current = false }, [tripId])
+  function retryTracking() {
+    try {
+      setTrackingNow(Date.now())
+      void reloadMap(true)
+    } catch {
+      setMapError('Could not refresh tracking')
+    }
+  }
+
+  function openBilling() {
+    try {
+      router.push('/billing')
+    } catch {
+      setMapError('Could not open billing')
+    }
+  }
+
   async function reloadMap(recover = false) {
     if (!tripId || (mapPending.current && !recover)) return
     mapPending.current = true
@@ -243,14 +262,27 @@ export default function Requested() {
   const phase = ttlCanceled
     ? { ...basePhase, kicker: 'HOLD EXPIRED', title: 'Hold expired', body: '', steps: [], stepIndex: -1 }
     : basePhase
-  const locationIssue = trackingIssue(shown?.status, live?.driverLocationAt, trackingNow, live?.driverHeartbeatAt)
-  const holdPrompt = failedHoldPrompt({
-    metadata: live?.metadata ?? trip?.metadata ?? null,
-  })
-  const driverFix = live?.driverLat != null && live.driverLng != null ? { lat: live.driverLat, lng: live.driverLng } : null
-  const driverEta = followEtaLine(shown?.status || null, driverFix, live)
-  const heldEta = etaHoldLine(shown?.status || null, driverEta)
-  const etaLine = staleEtaLine(locationIssue, heldEta, { placeholder: !driverEta })
+  let locationIssue: string | null = null
+  let holdPrompt: ReturnType<typeof failedHoldPrompt> = null
+  let driverFix: { lat: number; lng: number } | null = null
+  let driverEta: string | null = null
+  let etaLine: string | null = null
+  try {
+    locationIssue = trackingIssue(shown?.status, live?.driverLocationAt, trackingNow, live?.driverHeartbeatAt)
+    holdPrompt = failedHoldPrompt({
+      metadata: live?.metadata ?? trip?.metadata ?? null,
+    })
+    driverFix = live?.driverLat != null && live.driverLng != null ? { lat: live.driverLat, lng: live.driverLng } : null
+    driverEta = followEtaLine(shown?.status || null, driverFix, live)
+    const heldEta = etaHoldLine(shown?.status || null, driverEta)
+    etaLine = staleEtaLine(locationIssue, heldEta, { placeholder: !driverEta })
+  } catch {
+    locationIssue = null
+    holdPrompt = null
+    driverFix = null
+    driverEta = null
+    etaLine = null
+  }
   const preview = showSearchTheater(shown?.status || null)
   const searchingMap = shown?.status === 'searching' && !located
   const approachLive = isApproachStatus(shown?.status || null)
@@ -341,8 +373,13 @@ export default function Requested() {
             refreshing={refreshing}
             tintColor={colors.orange}
             onRefresh={() => {
-              setRefreshing(true)
-              reloadMap().finally(() => setRefreshing(false))
+              try {
+                setRefreshing(true)
+                void reloadMap().finally(() => setRefreshing(false))
+              } catch {
+                setRefreshing(false)
+                setMapError('Could not refresh tracking')
+              }
             }}
           />
         )}
@@ -360,7 +397,13 @@ export default function Requested() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`${holdPrompt.title}. ${holdPrompt.body}`}
-            onPress={() => router.push('/billing')}
+            onPress={() => {
+              try {
+                openBilling()
+              } catch {
+                setMapError('Could not open billing')
+              }
+            }}
             style={{ padding: 14, borderRadius: 14, backgroundColor: colors.orangeSoft }}
           >
             <Text style={styles.body} accessibilityLiveRegion="polite">{holdPrompt.title}</Text>
@@ -400,14 +443,14 @@ export default function Requested() {
         ) : (
           <View style={[styles.summary, lift(colors, 'rest')]}>
             <CounterpartCard
-              person={person}
+              person={safeCounterpart(person)}
               eta={located ? staleEtaLine(locationIssue, driverEta, { placeholder: !driverEta }) : null}
               colors={partyColorsFromPalette(colors)}
             />
             {person && tripId ? <CommunityMatchChips supabase={supabase} tripId={tripId} colors={colors} /> : null}
             {ttlCanceled ? null : (
               <>
-              {locationIssue ? <View accessibilityLiveRegion="polite"><Text style={{ color: colors.title }}>{locationIssue}</Text><Pressable accessibilityRole="button" onPress={() => void reloadMap(true)}><Text style={{ color: colors.title }}>Retry tracking</Text></Pressable></View> : null}
+              {locationIssue ? <View accessibilityLiveRegion="polite"><Text style={{ color: colors.title }}>{locationIssue}</Text><Pressable accessibilityRole="button" accessibilityLabel="Retry tracking" onPress={() => { try { retryTracking() } catch { setMapError('Could not refresh tracking') } }}><Text style={{ color: colors.title }}>Retry tracking</Text></Pressable></View> : null}
               <LivePhase
                 kicker={phase.kicker}
                 title=""
@@ -570,6 +613,14 @@ export default function Requested() {
         contacts={contacts}
       />
     </View>
+  )
+}
+
+export default function Requested() {
+  return (
+    <FlowErrorBoundary title="Live ride" fill>
+      <RequestedRide />
+    </FlowErrorBoundary>
   )
 }
 

@@ -1,5 +1,5 @@
-import { Text, View } from 'react-native'
-import { GlassButton, GlassSurface, glassTextColor } from 'rides-native/glass'
+import { Pressable, Text, View } from 'react-native'
+import { GlassButton } from 'rides-native/glass'
 import { type as typeScale } from 'rides-native/shared/theme.js'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -58,30 +58,35 @@ export function Pill({
   active?: boolean
   onPress?: () => void
 }) {
-  const { scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
-  const color = glassTextColor({ app: 'rider', scheme, variant: 'chip' })
-  const body = <Text style={[styles.pillLabel, { color }, active && styles.pillLabelOn]}>{label}</Text>
+  const body = (
+    <Text style={[styles.pillLabel, active && styles.pillLabelOn]} numberOfLines={1}>
+      {label}
+    </Text>
+  )
   if (!onPress) {
     return (
-      <GlassSurface app="rider" scheme={scheme} variant="chip" selected={Boolean(active)} style={styles.pill}>
+      <View
+        style={[styles.pill, active && styles.pillOn]}
+        accessibilityRole="text"
+        accessibilityLabel={label}
+        accessibilityState={{ selected: Boolean(active) }}
+      >
         {body}
-      </GlassSurface>
+      </View>
     )
   }
   return (
-    <GlassButton
+    <Pressable
       onPress={onPress}
-      app="rider"
-      scheme={scheme}
-      variant="chip"
-      selected={Boolean(active)}
+      accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ selected: Boolean(active) }}
       hitSlop={8}
+      style={[styles.pill, active && styles.pillOn]}
     >
       {body}
-    </GlassButton>
+    </Pressable>
   )
 }
 
@@ -93,12 +98,22 @@ export function SheetHandle() {
 function makeStyles(colors: Palette) {
   return {
     pill: {
+      alignSelf: 'flex-start' as const,
+      flexGrow: 0,
+      flexShrink: 0,
       borderRadius: 999,
       paddingHorizontal: 14,
       paddingVertical: 8,
+      backgroundColor: colors.purpleSoft,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    pillOn: {
+      backgroundColor: colors.orange,
+      borderColor: colors.orange,
     },
     pillLabel: { color: colors.link, fontWeight: '700' as const, fontSize: typeScale.meta.fontSize, letterSpacing: typeScale.meta.letterSpacing },
-    pillLabelOn: { fontWeight: '800' as const },
+    pillLabelOn: { color: colors.onAccent, fontWeight: '800' as const },
     handle: {
       alignSelf: 'center' as const,
       width: 36,

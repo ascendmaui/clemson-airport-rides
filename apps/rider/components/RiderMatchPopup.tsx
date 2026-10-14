@@ -43,7 +43,12 @@ export function RiderMatchPopup() {
   const fallback = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function holdTitleFor(row: { metadata?: object | null }) {
-    return failedHoldPrompt({ metadata: row?.metadata ?? null })?.title ?? null
+    try {
+      const prompt = failedHoldPrompt({ metadata: row?.metadata ?? null })
+      return typeof prompt?.title === 'string' ? prompt.title : null
+    } catch {
+      return null
+    }
   }
 
   function closeGate() {
@@ -157,7 +162,7 @@ export function RiderMatchPopup() {
         <View style={styles.card} accessibilityRole="alert" accessibilityLabel={notice?.body || 'Driver matched'}>
           <Text style={styles.kicker}>MATCHED</Text>
           <Text style={styles.title}>{notice?.title || 'Driver matched'}</Text>
-          <Text style={styles.name}>{notice?.driverName || 'Your driver'}</Text>
+          <Text style={styles.name}>{typeof notice?.driverName === 'string' && notice.driverName.trim() ? notice.driverName : 'Your driver'}</Text>
           <Text style={styles.copy}>
             {notice?.distanceLabel ? `${notice.distanceLabel} from pickup` : 'Distance shows when your driver shares a location.'}
           </Text>
