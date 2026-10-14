@@ -626,7 +626,7 @@ export function RiderHome() {
             ) : (
               <>
                 <TabSwipeRegion>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroller} contentContainerStyle={[styles.row, styles.chipRow]}>
                   {showBusy
                     ? HEAT_WINDOWS.map((window) => (
                         <Pill
@@ -810,6 +810,8 @@ function makeStyles(colors: Palette) {
     busyText: { color: colors.link, fontSize: 12, fontWeight: '700' as const },
     busyTextOn: { color: colors.onAccent },
     row: { gap: 8, paddingVertical: 2 },
+    chipScroller: { flexGrow: 0, alignSelf: 'stretch' as const },
+    chipRow: { alignItems: 'flex-start' as const, flexGrow: 0 },
     caption: { color: colors.inkSecondary, fontSize: 12, lineHeight: 18 },
     live: { color: colors.link, fontWeight: '700' as const },
     destChip: {

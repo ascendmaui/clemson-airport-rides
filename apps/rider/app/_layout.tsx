@@ -8,6 +8,7 @@ import { ApproachAlert } from '@/components/ApproachAlert'
 import { PickupBeaconHost } from '@/components/PickupBeaconHost'
 import { LostItemBanner } from 'rides-native/LostItemBanner.jsx'
 import { ToastHost } from 'rides-native/ToastHost.jsx'
+import { FlowErrorBoundary } from '@/components/FlowErrorBoundary'
 import { RiderMatchPopup } from '@/components/RiderMatchPopup'
 import { RiderMoments } from '@/components/RiderMoments'
 import { AuthProvider, useAuth } from '@/lib/auth'
@@ -213,9 +214,13 @@ export default function RootLayout() {
             <ThemedStack />
             <ApproachHost />
             <PickupBeaconHost />
-            <RiderMatchPopup />
+            <FlowErrorBoundary title="Driver matched">
+              <RiderMatchPopup />
+            </FlowErrorBoundary>
             <ToastMount />
-            <RiderMoments />
+            <FlowErrorBoundary title="Ride updates">
+              <RiderMoments />
+            </FlowErrorBoundary>
           </Gate>
         </AuthProvider>
       </ThemeProvider>

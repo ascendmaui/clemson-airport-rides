@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { FlowErrorBoundary } from '@/components/FlowErrorBoundary'
 import { TipBoostPicker } from '@/components/TipBoostPicker'
 import { pressStyle, useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
@@ -42,6 +43,7 @@ import {
   type OnlineDriver,
 } from 'rides-native/drivers'
 import { destPoint, pickupPoint } from 'rides-native/places.js'
+import { rosterCard, sanitizeOnlineDrivers, textField } from '@/lib/driverFields'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -62,7 +64,7 @@ function finiteParam(value: string | string[] | undefined) {
   return Number.isFinite(n) ? n : null
 }
 
-export default function PickDriver() {
+function PickDriver() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const params = useLocalSearchParams<{
@@ -139,26 +141,47 @@ export default function PickDriver() {
       : Promise.resolve(null)
     Promise.all([fetchOnlineDrivers(supabase), favorites, wait, pass]).then(async ([result, fav, , loadedPass]) => {
       if (!alive) return
-      const extraIds = fav.ids.filter((id) => !result.drivers.some((driver) => driver.id === id))
-      const extra = extraIds.length
-        ? await fetchDriversByIds(supabase, extraIds)
-        : { drivers: [] as OnlineDriver[], error: null }
-      if (!alive) return
-      const merged = sortPreferredDrivers(filterDriversForFleet([...result.drivers, ...extra.drivers], tier, user?.id), fav.ids, approachPickup)
-      setDrivers(merged)
-      setFavoriteIds(fav.ids)
-      setPassPreferredIds(loadedPass?.active ? loadedPass.preferredDriverIds || [] : [])
-      setFavNote(fav.note)
-      setError(extra.error || result.error)
-      setSelected((current) => {
-        if (current && merged.some((driver) => driver.id === current)) return current
-        if (driverParam && merged.some((driver) => driver.id === driverParam)) return driverParam
-        return current && !merged.some((driver) => driver.id === current) ? null : current
-      })
-      setPhase('results')
-      if (merged.some((driver) => driver.online)) {
-        await playDriverBrowseCue()
+      try {
+        const online = sanitizeOnlineDrivers<OnlineDriver>(result?.drivers)
+        const extraIds = (fav?.ids || []).filter((id) => !online.some((driver) => driver.id === id))
+        const extra = extraIds.length
+          ? await fetchDriversByIds(supabase, extraIds)
+          : { drivers: [] as OnlineDriver[], error: null as string | null }
+        if (!alive) return
+        const merged = sortPreferredDrivers(
+          filterDriversForFleet(
+            sanitizeOnlineDrivers<OnlineDriver>([...online, ...(extra?.drivers || [])]),
+            tier,
+            user?.id,
+          ),
+          fav?.ids,
+          approachPickup,
+        )
+        setDrivers(merged)
+        setFavoriteIds(fav?.ids || [])
+        setPassPreferredIds(loadedPass?.active ? loadedPass.preferredDriverIds || [] : [])
+        setFavNote(fav?.note || null)
+        setError(extra?.error || result?.error || null)
+        setSelected((current) => {
+          if (current && merged.some((driver) => driver.id === current)) return current
+          if (driverParam && merged.some((driver) => driver.id === driverParam)) return driverParam
+          return current && !merged.some((driver) => driver.id === current) ? null : current
+        })
+        setPhase('results')
+        if (merged.some((driver) => driver.online)) {
+          await playDriverBrowseCue()
+        }
+      } catch {
+        if (!alive) return
+        setDrivers([])
+        setError('Could not load drivers')
+        setPhase('results')
       }
+    }).catch(() => {
+      if (!alive) return
+      setDrivers([])
+      setError('Could not load drivers')
+      setPhase('results')
     })
     return () => {
       alive = false
@@ -224,10 +247,13 @@ export default function PickDriver() {
   }
 
   function renderDriver(driver: OnlineDriver) {
-    const on = selected === driver.id
-    const saved = favoriteIds.includes(driver.id)
+    const name = textField(driver?.name, 'Driver')
+    const vehicleLabel = textField(driver?.vehicleLabel, 'Vehicle')
+    const plate = textField(driver?.plate, '')
+    const on = selected === driver?.id
+    const saved = favoriteIds.includes(driver?.id)
     const lines = describeDriver(driver, approachPickup)
-    const eta = driver.online
+    const eta = driver?.online
       ? [lines.etaLabel, lines.distanceLabel ? `${lines.distanceLabel} from pickup` : null].filter(Boolean).join(' · ') || 'ETA unavailable'
       : 'Not available now'
     return (
@@ -236,14 +262,14 @@ export default function PickDriver() {
         onPress={() => { void tapHaptic(); setSelected(driver.id) }}
         style={({ pressed }) => [styles.card, lift(colors, 'rest'), on && styles.cardOn, !driver.online && styles.cardOff, pressStyle(pressed)]}
         accessibilityRole="button"
-        accessibilityLabel={`${driver.name}, ${driver.vehicleLabel}${driver.plate ? `, ${driver.plate}` : ''}. ${eta}`}
+        accessibilityLabel={`${name}, ${vehicleLabel}${plate ? `, ${plate}` : ''}. ${eta}`}
         accessibilityHint={driver.online ? 'Selects this driver' : 'This driver is offline'}
         accessibilityState={{ selected: on }}
       >
         <View style={styles.cardTop}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{driver.name}</Text>
-            <Text style={styles.sub}>{driver.vehicleLabel}{driver.plate ? ` · ${driver.plate}` : ''}</Text>
+            <Text style={styles.name}>{name}</Text>
+            <Text style={styles.sub}>{vehicleLabel}{plate ? ` · ${plate}` : ''}</Text>
           </View>
           <View style={styles.etaCol}>
             <Text style={[styles.eta, !driver.online && styles.etaOff]}>{driver.online ? (lines.etaLabel || 'No ETA') : 'Offline'}</Text>
@@ -263,7 +289,7 @@ export default function PickDriver() {
             onPress={() => { void toggleFavorite(driver.id) }}
             hitSlop={16}
             accessibilityRole="button"
-            accessibilityLabel={saved ? `Remove ${driver.name || 'this driver'} from saved drivers` : `Save ${driver.name || 'this driver'}`}
+            accessibilityLabel={saved ? `Remove ${name} from saved drivers` : `Save ${name}`}
             accessibilityHint={saved ? 'Removes this driver from your preferred list' : 'Saves this driver as preferred'}
             accessibilityState={{ selected: saved }}
           >
@@ -290,12 +316,12 @@ export default function PickDriver() {
   }
 
   const pins = drivers
-    .filter((driver: OnlineDriver) => driver.lat != null && driver.lng != null)
+    .filter((driver: OnlineDriver) => Number.isFinite(Number(driver?.lat)) && Number.isFinite(Number(driver?.lng)))
     .map((driver: OnlineDriver) => ({
       id: driver.id,
       latitude: Number(driver.lat),
       longitude: Number(driver.lng),
-      title: driver.name,
+      title: textField(driver.name, 'Driver'),
       color: colors.orange,
     }))
 
@@ -475,19 +501,27 @@ export default function PickDriver() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>BUSY NOW</Text>
             {busy.map((driver) => {
-              const portrait = resolveDriverPortrait(driver)
+              const card = rosterCard(driver)
+              if (!card) return null
+              let portrait = { initials: '?', color: '#522D80' }
+              try {
+                const resolved = resolveDriverPortrait(driver)
+                portrait = { initials: resolved?.initials || '?', color: resolved?.color || '#522D80' }
+              } catch {
+                portrait = { initials: '?', color: '#522D80' }
+              }
               return (
-                <View key={driver.id} aria-disabled={true} accessibilityState={{ disabled: true }} style={[styles.card, { opacity: 0.55, borderColor: '#aaa' }]}>
+                <View key={card.id} aria-disabled={true} accessibilityState={{ disabled: true }} style={[styles.card, { opacity: 0.55, borderColor: '#aaa' }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: portrait.color || '#522D80' }}>
                       <Text style={{ color: '#fff', fontWeight: '800' }}>{portrait.initials}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.name}>{driver.name}</Text>
-                      <Text style={styles.meta}>★ {driver.rating} · {driver.tripCount.toLocaleString('en-US')} trips</Text>
-                      <Text style={styles.sub}>{driver.vehicleLabel}</Text>
+                      <Text style={styles.name}>{card.name}</Text>
+                      <Text style={styles.meta}>★ {card.rating} · {card.tripCountLabel} trips</Text>
+                      <Text style={styles.sub}>{card.vehicleLabel}</Text>
                     </View>
-                    <Text style={{ fontSize: 11, fontWeight: '700', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: driver.status === 'on_trip' ? '#f4dfcc' : '#e5e5e5', color: driver.status === 'on_trip' ? '#855023' : '#555' }}>{driver.statusLabel}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '700', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: card.status === 'on_trip' ? '#f4dfcc' : '#e5e5e5', color: card.status === 'on_trip' ? '#855023' : '#555' }}>{card.statusLabel}</Text>
                   </View>
                 </View>
               )
@@ -527,6 +561,14 @@ export default function PickDriver() {
         }}
       />
     </View>
+  )
+}
+
+export default function PickDriverScreen() {
+  return (
+    <FlowErrorBoundary title="Pick a driver" fill>
+      <PickDriver />
+    </FlowErrorBoundary>
   )
 }
 

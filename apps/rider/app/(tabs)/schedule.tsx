@@ -884,7 +884,7 @@ export function ScheduleScreen() {
         <Text style={styles.fine}>Friday 9:00 PM is filled in. Change it for another slot, at least 30 minutes ahead.</Text>
         <Text style={styles.label}>Pickup</Text>
         <TabSwipeRegion>
-<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroller} contentContainerStyle={styles.pills}>
           {RIDE_PLACES.map((place) => (
             <Pill key={`wpu-${place.label}`} label={place.label} active={weekendPickup.label === place.label} onPress={() => setWeekendPickup(place)} />
           ))}
@@ -894,7 +894,7 @@ export function ScheduleScreen() {
           <>
             <Text style={styles.label}>Drop-off</Text>
             <TabSwipeRegion>
-<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroller} contentContainerStyle={styles.pills}>
               {RIDE_PLACES.map((place) => (
                 <Pill key={`wdo-${place.label}`} label={place.label} active={weekendDropoff.label === place.label} onPress={() => setWeekendDropoff(place)} />
               ))}
@@ -1124,7 +1124,7 @@ export function ScheduleScreen() {
         <TextInput value={campusTime} onChangeText={setCampusTime} placeholder="HH:MM" placeholderTextColor={colors.placeholder} style={styles.input} autoCapitalize="none" accessibilityLabel="Ride pickup time" />
         <Text style={styles.label}>Pickup</Text>
         <TabSwipeRegion>
-<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroller} contentContainerStyle={styles.pills}>
           {RIDE_PLACES.map((place) => (
             <Pill key={`pu-${place.label}`} label={place.label} active={pickup.label === place.label} onPress={() => setPickup(place)} />
           ))}
@@ -1132,7 +1132,7 @@ export function ScheduleScreen() {
 </TabSwipeRegion>
         <Text style={styles.label}>Drop-off</Text>
         <TabSwipeRegion>
-<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroller} contentContainerStyle={styles.pills}>
           {RIDE_PLACES.map((place) => (
             <Pill key={`do-${place.label}`} label={place.label} active={dropoff.label === place.label} onPress={() => setDropoff(place)} />
           ))}
@@ -1319,7 +1319,8 @@ function makeStyles(colors: Palette) {
       overflow: 'hidden' as const,
     },
     link: { color: colors.link, fontWeight: '700' as const, marginTop: 14, marginBottom: 8 },
-    pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
+    pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, alignItems: 'flex-start' as const, flexGrow: 0 },
+    chipScroller: { flexGrow: 0, alignSelf: 'stretch' as const },
     cardLine: { fontWeight: '800' as const, color: colors.ink },
     student: { color: colors.orange, fontWeight: '700' as const, fontSize: 12 },
     cancel: { color: colors.danger, fontWeight: '700' as const, marginTop: 6 },

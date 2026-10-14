@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { authedJson } from 'rides-native/apiClient'
+import { textField } from '@/lib/driverFields'
 import { riderSwitchGuide } from '../../../shared/copy/riderSwitch.js'
 import { GlassSheet } from 'rides-native/glass'
 import { PrimaryButton } from '@/components/Button'
@@ -86,7 +87,7 @@ export function RiderSwitchSheet({
 
   const quote = preview?.quote
   const allowed = Boolean(quote?.allowed)
-  const drivers = preview?.drivers || []
+  const drivers = (preview?.drivers || []).filter((driver) => driver && typeof driver.id === 'string' && driver.id)
   const tiers = preview?.tiers || []
 
   return (
@@ -120,12 +121,12 @@ export function RiderSwitchSheet({
                   <Pressable
                     key={driver.id}
                     accessibilityRole="button"
-                    accessibilityLabel={`Switch to ${driver.name}`}
+                    accessibilityLabel={`Switch to ${textField(driver.name, 'Driver')}`}
                     disabled={busy}
                     onPress={() => { void confirm('switch-driver', { driverId: driver.id }) }}
                     style={[styles.choice, { borderColor: colors.border }]}
                   >
-                    <Text style={styles.choiceTitle}>{driver.name}</Text>
+                    <Text style={styles.choiceTitle}>{textField(driver.name, 'Driver')}</Text>
                     {driver.detail ? <Text style={styles.body}>{driver.detail}</Text> : null}
                   </Pressable>
                 ))}
