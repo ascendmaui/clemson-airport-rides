@@ -177,6 +177,10 @@
     {
       "path": "/api/weekly-coupon?slot=est",
       "schedule": "0 17 * * 5"
+    },
+    {
+      "path": "/api/stripe-payment-methods?action=student-plans&op=nightly",
+      "schedule": "0 7 * * *"
     }
   ]
 }

@@ -18,6 +18,7 @@ import { displayFirstName } from 'rides-native/authErrors'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { FAVORITE_SPOTS } from 'rides-native/riderShell.js'
 import { TIGER_PASS_NAME } from 'rides-native/tigerPassClient'
+import { PLAN_BADGE_COLOR, loadStudentPlans } from 'rides-native/studentPlansClient.js'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
 import { WomenOnlyCard } from 'rides-native/WomenOnlyCard'
 import { loadComfortPreference, saveComfortPreference } from 'rides-native/comfortPreference.js'
@@ -25,8 +26,19 @@ import { supabase } from '@/lib/supabase'
 import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
 import { SignInScreen } from 'rides-native/AuthScreens'
 
-type AccountHref = '/tiger-pass' | '/student' | '/community' | '/billing' | '/notifications' | '/help' | '/support' | '/lost-found' | '/safety'
-type AccountLink = { href?: AccountHref; label: string; hint: string; icon: string; mailSubject?: string }
+type AccountHref = '/tiger-pass' | '/student' | '/student-plans' | '/community' | '/billing' | '/notifications' | '/help' | '/support' | '/lost-found' | '/safety'
+type AccountLink = { href?: AccountHref; label: string; hint: string; icon: string; mailSubject?: string; badge?: string }
+
+const STUDENT_PLANS_LINK: AccountLink = { href: '/student-plans', label: 'Student plans', hint: 'Weekend Carpool Plan and your personalized plan', icon: 'pass', badge: 'NEW' }
+
+/** Inserts Student plans right after Student in Membership, only when the flag is on. */
+function withStudentPlans(groups: typeof GROUPS, on: boolean) {
+  if (!on) return groups
+  return groups.map((g) => (g.title !== 'Membership' ? g : {
+    ...g,
+    links: g.links.flatMap((l) => (l.href === '/student' ? [l, STUDENT_PLANS_LINK] : [l])),
+  }))
+}
 
 const GROUPS: { title: string; links: AccountLink[] }[] = [
   {
@@ -83,6 +95,7 @@ export function AccountScreen() {
   const [womenOnly, setWomenOnly] = useState(false)
   const [comfortAvailable, setComfortAvailable] = useState(false)
   const [comfortNote, setComfortNote] = useState<string | null>(null)
+  const [studentPlansOn, setStudentPlansOn] = useState(false)
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Rider') : null
 
   useEffect(() => {
@@ -96,6 +109,11 @@ export function AccountScreen() {
       return () => {
         alive = false
       }
+    }
+    if (supabase) {
+      loadStudentPlans(supabase).then((d: { enabled?: boolean }) => {
+        if (alive) setStudentPlansOn(d?.enabled === true)
+      }).catch(() => {})
     }
     loadAccount(user.id).then((account) => {
       if (!alive) return
@@ -226,7 +244,7 @@ export function AccountScreen() {
             ? 'Payments, student pricing, promos, and alerts use the same account as the web app.'
             : 'Supabase anon key is missing. Add EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable, then rebuild.'}
         </Text>
-        {GROUPS.map((group) => (
+        {withStudentPlans(GROUPS, studentPlansOn).map((group) => (
           <View key={group.title} style={styles.group}>
             <Text style={styles.groupTitle}>{group.title}</Text>
             {group.links.map((link) => (
@@ -247,6 +265,9 @@ export function AccountScreen() {
                   <Glyph name={link.icon} size={22} color={colors.purple} scheme={scheme} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.rowTitle}>{link.label}</Text>
+                    {link.badge ? (
+                      <Text style={{ alignSelf: 'flex-start', backgroundColor: PLAN_BADGE_COLOR, color: '#FFFFFF', fontSize: 11, fontWeight: '800', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, overflow: 'hidden' }}>{link.badge}</Text>
+                    ) : null}
                     <Text style={styles.copy}>{link.mailSubject ? supportEmail() : link.hint}</Text>
                   </View>
                   <Glyph name="forward" size={16} color={colors.inkSecondary} />

@@ -31,6 +31,7 @@ import handleRideOptions from '../server/endpoints/rideOptions.js'
 import handleScheduleSlots from '../server/endpoints/scheduleSlots.js'
 import handleMatchNotice from '../server/endpoints/matchNotice.js'
 import handleTigerPass from '../server/endpoints/tigerPass.js'
+import handleStudentPlans from '../server/endpoints/studentPlans.js'
 import handleFavoriteDrivers from '../server/endpoints/favoriteDrivers.js'
 import handleScheduledRider from '../server/endpoints/scheduledRider.js'
 import handleBumpScheduledBoost from '../server/endpoints/bumpScheduledBoost.js'
@@ -57,6 +58,7 @@ const HANDLERS = {
   'schedule-slots': handleScheduleSlots,
   'match-notice': handleMatchNotice,
   'tiger-pass': handleTigerPass,
+  'student-plans': handleStudentPlans,
   'favorite-drivers': handleFavoriteDrivers,
   'scheduled-rider': handleScheduledRider,
   'bump-scheduled-boost': handleBumpScheduledBoost,
