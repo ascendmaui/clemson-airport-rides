@@ -658,7 +658,7 @@ test('support mail stores a draft for approval and agents mail is summary only',
   const prompt = JSON.parse(draft.init.body)
   assert.equal(prompt.model, 'openai/gpt-oss-120b')
   assert.match(prompt.messages[0].content, /customer help/i)
-  assert.match(prompt.messages[0].content, /There is no deposit/)
+  assert.match(prompt.messages[0].content, /hold is released if the trip is canceled within policy/)
   const notify = JSON.parse(calls.find((item) => item.kind === 'notify').init.body)
   assert.equal(notify.send, false)
   assert.equal(notify.draft_reply, sb.rows[0].draft_reply)

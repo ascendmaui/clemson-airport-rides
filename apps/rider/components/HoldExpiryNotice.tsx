@@ -30,7 +30,7 @@ export function HoldExpiryNotice({
 
   return (
     <View style={[styles.card, view.mode === 'expired' ? styles.expired : null]}>
-      <Text style={styles.kicker}>{view.mode === 'expired' ? 'HOLD EXPIRED' : 'AIRPORT DEPOSIT'}</Text>
+      <Text style={styles.kicker}>{view.mode === 'expired' ? 'HOLD EXPIRED' : 'AIRPORT RIDE'}</Text>
       <Text
         accessibilityLiveRegion="polite"
         accessibilityLabel={view.label}

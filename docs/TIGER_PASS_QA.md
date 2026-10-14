@@ -15,7 +15,7 @@ Change `TIGER_PASS_NAME` in `shared/tigerPass.js`. Checkout, the rider screen, t
 - While the pass is active, preferred drivers (a subset of favorites) are offered first, then other favorites, then the usual John / Kim / everyone else order. Removing a favorite removes them from the preferred list.
 - Cancel keeps the discount until `current_period_end` when Stripe has a subscription id and a period end. Otherwise the pass is canceled immediately.
 - A second checkout is refused while the row is active or `past_due` (`tiger_pass_already_subscribed`). The rider app and Account → Billing hide Subscribe in those states.
-- The rider app opens Checkout with `clemsonrides://tiger-pass`. When the browser closes, it confirms the session id returned by checkout create, even if the redirect URL is missing. A cold start on that link opens the pass screen and confirms. That link is not sent through ride-deposit reconcile.
+- The rider app opens Checkout with `clemsonrides://tiger-pass`. When the browser closes, it confirms the session id returned by checkout create, even if the redirect URL is missing. A cold start on that link opens the pass screen and confirms. That link is not sent through legacy ride-checkout reconcile.
 
 ## Preview cars
 

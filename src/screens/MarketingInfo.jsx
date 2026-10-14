@@ -30,7 +30,7 @@ const FAQ = [
   },
   {
     q: 'How does carpool pricing work?',
-    a: `Carpool is ${CARPOOL_SEAT_FRACTION_BPS / 100}% of the Standard fare per seat when 3 or 4 riders split the trip. Pickup and drop-off each need to be nearby, and the times need to fall in the same window. Each rider is pre-authorized for their own seat. There is no deposit.`,
+    a: `Carpool is ${CARPOOL_SEAT_FRACTION_BPS / 100}% of the Standard fare per seat when 3 or 4 riders split the trip. Pickup and drop-off each need to be nearby, and the times need to fall in the same window. Each rider gets a hold on their card for their own seat, and the full seat fare is charged when the trip ends.`,
   },
   {
     q: 'Who gets the student discount?',
@@ -290,7 +290,7 @@ export function SupportPage() {
       </article>
       <article className="mkt-card mkt-feature">
         <h2>Payments</h2>
-        <p>When you book, your card is pre-authorized for the estimated fare. This is a hold, not a deposit. The fare is charged when the trip ends.</p>
+        <p>When you book, we place a hold on your card for the estimated fare. The full fare is charged when the trip ends. If you cancel within policy, the hold is released.</p>
       </article>
       <article className="mkt-card mkt-feature">
         <h2>More information</h2>
