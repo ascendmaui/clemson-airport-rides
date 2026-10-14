@@ -71,13 +71,13 @@ export default async function handler(req, res) {
   if (!access.admin) return json(res, 403, { error: 'Admin only' })
 
   const url = new URL(req.url || '/', 'http://localhost')
-  if (req.method === 'GET') return read(sb, res, action, url)
+  if (req.method === 'GET') return read(sb, res, action, url, access)
   const { body, error } = parseBody(req)
   if (error) return json(res, 400, { error })
   return write(sb, res, action, user, body)
 }
 
-async function read(sb, res, action, url) {
+async function read(sb, res, action, url, access) {
   switch (action) {
     case 'overview':
       return overview(sb, res)
@@ -92,7 +92,7 @@ async function read(sb, res, action, url) {
     case 'applicant-thread':
       return applicantThread(sb, res, url.searchParams.get('profile_id') || '')
     case 'inbox':
-      return inbox(sb, res)
+      return inbox(sb, res, access)
     default: {
       const unknown = action
       return json(res, 400, { error: `Unknown admin read: ${unknown}` })
@@ -117,9 +117,10 @@ async function write(sb, res, action, user, body) {
   }
 }
 
-async function inbox(sb, res) {
+async function inbox(sb, res, access) {
   const loaded = await loadAdminInbox(sb)
-  return json(res, 200, loaded)
+  // Native admin entry shows only when profiles.is_admin is true, read server-side with the service role.
+  return json(res, 200, { ...loaded, isAdmin: access?.profile?.is_admin === true })
 }
 
 async function safeCount(sb, table, column, value) {

@@ -21,9 +21,11 @@ test('web admin gates on the server inbox and opens at /admin', () => {
   assert.doesNotMatch(account, /isAdminIdentity/)
 })
 
-test('rider and driver Account and Settings show the server-gated Admin row', () => {
+test('driver Account and Settings show the server-gated Admin row; rider never does', () => {
+  assert.doesNotMatch(read('apps/rider/app/(tabs)/account.tsx'), /AdminAccountRow/)
+  assert.match(read('packages/rides-native/AdminAccountRow.jsx'), /access\?\.isAdmin !== true/)
+  assert.match(read('server/endpoints/adminDesk.js'), /isAdmin: access\?\.profile\?\.is_admin === true/)
   const surfaces = [
-    'apps/rider/app/(tabs)/account.tsx',
     'apps/driver/app/(tabs)/menu.tsx',
     'apps/driver/app/settings/index.tsx',
     'apps/driver/app/account.tsx',

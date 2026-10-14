@@ -23,7 +23,7 @@ export function AdminAccountRow({ supabase, colors, onPress }) {
     }
   }, [supabase])
 
-  if (!access?.admin) return null
+  if (!access?.admin || access?.isAdmin !== true) return null
   const count = Number(access.total) || 0
   const ink = colors?.title || colors?.ink || '#522D80'
   return (
