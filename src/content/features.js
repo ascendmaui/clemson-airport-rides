@@ -150,7 +150,7 @@ export const FEATURES = [
       `Each seat is ${carpoolPercent}% of Standard.`,
       'Riders group when pickup and drop-off are each nearby and the times are close.',
       'The group books at 3 riders and caps at 4. Each rider is pre-authorized for their own seat.',
-      'There is no deposit. Demo cars do not count.',
+      'The full seat fare is charged when the trip ends, and the hold is released if you cancel within policy. Demo cars do not count.',
     ],
     why: 'Splitting the ride costs less than booking Standard alone.',
   },

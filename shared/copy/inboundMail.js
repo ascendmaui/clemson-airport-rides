@@ -10,7 +10,7 @@ const DOMAIN = 'clemsonrides.com'
 export const INBOUND_PRODUCT_RULES = [
   'Clemson RIDES connects riders with independent drivers in Clemson, South Carolina. It is not Clemson University transit.',
   'Ride types are only Standard, Wait & Save, Extra Comfort, and Carpool. Do not name any other ride type.',
-  'A ride request places a pre-authorization hold for the estimated fare plus a buffer. The fare is captured when the trip ends. There is no deposit.',
+  'A ride request places a pre-authorization hold for the estimated fare plus a buffer. The full fare is captured when the trip ends, and the hold is released if the trip is canceled within policy.',
   'A person drives every ride. Do not describe an autonomous vehicle.',
   'Drivers use their own cars. Do not promise a company-owned car, a guaranteed vehicle, or a dispatch plan.',
   'Do not invent prices, refunds, arrival times, or ridership numbers.',

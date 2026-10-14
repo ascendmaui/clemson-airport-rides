@@ -40,7 +40,7 @@ function rideConfirmationEmail(trip, env) {
       `From: ${place(trip, 'pickup_label', 'Pickup')}`,
       `To: ${place(trip, 'dropoff_label', 'Dropoff')}`,
       when ? `Pickup: ${when}` : null,
-      'Your card is pre-authorized for the estimated fare. This is a hold, not a deposit. The fare is charged when the trip ends.',
+      'Your card is pre-authorized for the estimated fare. This is a hold, not a charge. The full fare is charged when the trip ends. If you cancel within policy, the hold is released.',
       supportLine(env),
     ].filter(Boolean).join('\n'),
   }
@@ -62,7 +62,7 @@ function receiptEmail(trip, env) {
       wait > 0 ? `Wait time: ${money(wait)}` : null,
       `Tip: ${money(tip)}`,
       `Total: ${money(fare + tip + wait)}`,
-      'The fare is charged when the trip ends. Before that, the card is pre-authorized for the estimate. That hold is not a deposit.',
+      'The full fare is charged when the trip ends. Until then, there is only a hold on the card for the estimate. If the trip is canceled within policy, the hold is released.',
       supportLine(env),
     ].filter(Boolean).join('\n'),
   }

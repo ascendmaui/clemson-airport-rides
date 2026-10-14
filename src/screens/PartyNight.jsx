@@ -319,7 +319,7 @@ function SplitPreview({ quote }) {
         With {quote.partySize} {quote.partySize === 1 ? 'person' : 'people'}, each share is <strong>{formatPartyUsd(sample.shareCents)}</strong>.
       </p>
       <p style={{ margin: '8px 0 0', fontSize: 14, lineHeight: 1.45, color: '#522D80', fontWeight: 700 }}>
-        Pre-authorization hold {formatPartyUsd(sample.holdCents)} per person. Not a deposit.
+        Pre-authorization hold {formatPartyUsd(sample.holdCents)} per person. Charged at trip end.
       </p>
       <p style={{ margin: '6px 0 0', fontSize: 13, lineHeight: 1.45, color: 'var(--ink-secondary)' }}>{SPLIT_NOTE}</p>
     </div>
@@ -398,7 +398,7 @@ function Lobby({ token, night, loading, user, queue, onNight, onQueue, onError }
           ))}
         </ul>
         <p style={{ margin: '12px 0 0', fontWeight: 800, color: '#522D80' }}>
-          Fare {formatPartyUsd(night.estimatedFareCents)}. Pre-authorization holds, not a deposit.
+          Fare {formatPartyUsd(night.estimatedFareCents)}. Pre-authorization holds, charged at trip end.
         </p>
       </div>
       <div style={card}>

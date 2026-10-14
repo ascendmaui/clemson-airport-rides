@@ -40,7 +40,7 @@ const GROUPS: { title: string; links: AccountLink[] }[] = [
   {
     title: 'Payments',
     links: [
-      { href: '/billing', label: 'Billing', hint: 'Card, deposits, and ride fares', icon: 'money' },
+      { href: '/billing', label: 'Billing', hint: 'Card, fare holds, and ride fares', icon: 'money' },
     ],
   },
   {

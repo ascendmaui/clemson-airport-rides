@@ -23,7 +23,7 @@ test('each clemson mailbox maps to one role', () => {
     assert.equal(box.address, `${local}@clemsonrides.com`)
     assert.match(box.system, /Standard, Wait & Save, Extra Comfort, and Carpool/)
     assert.match(box.system, /pre-authorization hold/)
-    assert.match(box.system, /There is no deposit/)
+    assert.match(box.system, /hold is released if the trip is canceled within policy/)
     assert.match(box.system, /John approves it before anyone sends it/)
     assert.doesNotMatch(box.system, /I have sent/)
   }

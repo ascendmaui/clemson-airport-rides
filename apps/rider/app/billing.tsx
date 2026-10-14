@@ -405,12 +405,12 @@ function BillingScreen() {
           )}
         </View>
 
-        <Text style={styles.kicker}>DEPOSITS</Text>
+        <Text style={styles.kicker}>PAYMENTS</Text>
         {deposits.length === 0 ? <Text style={styles.copy}>{loading ? 'Loading payments…' : 'No fare payments on this account.'}</Text> : null}
         {deposits.map((row: Deposit) => (
           <View key={row.id} style={[styles.card, lift(colors, 'rest')]}>
             <Text style={styles.rowTitle}>{formatCents(row.amount_cents || 0)}</Text>
-            <Text style={styles.copy}>{row.status || 'recorded'} · {row.created_at ? new Date(row.created_at).toLocaleString() : 'deposit'}</Text>
+            <Text style={styles.copy}>{row.status || 'recorded'} · {row.created_at ? new Date(row.created_at).toLocaleString() : 'payment'}</Text>
           </View>
         ))}
 

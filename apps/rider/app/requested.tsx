@@ -241,7 +241,7 @@ export default function Requested() {
     ? { ...livePhase, title: flightView.waitingTitle, body: 'Head to the Arrivals curb. The trip starts once you are in the car.' }
     : livePhase
   const phase = ttlCanceled
-    ? { ...basePhase, kicker: 'HOLD EXPIRED', title: 'Deposit hold expired', body: '', steps: [], stepIndex: -1 }
+    ? { ...basePhase, kicker: 'HOLD EXPIRED', title: 'Hold expired', body: '', steps: [], stepIndex: -1 }
     : basePhase
   const locationIssue = trackingIssue(shown?.status, live?.driverLocationAt, trackingNow, live?.driverHeartbeatAt)
   const holdPrompt = failedHoldPrompt({
