@@ -434,7 +434,7 @@ test('connect webhooks record account, transfer, and payout events', async () =>
       id: 'evt_live', type: 'account.updated', livemode: true,
       data: { object: { id: 'acct_test_aff', payouts_enabled: false, details_submitted: false } },
     })),
-  }, res, { stripeSecret: 'sk_test_crimson', webhookSecret: '', serviceKey: 'service', serviceClient: () => sb })
+  }, res, { stripeSecret: 'sk_test_crimson', webhookSecret: '', allowUnsigned: true, serviceKey: 'service', serviceClient: () => sb })
   assert.equal(res.statusCode, 200)
   assert.equal(res.json.affiliate.reason, 'live_mode')
   assert.equal(tables.affiliates[0].stripe_connect_status, 'verified')

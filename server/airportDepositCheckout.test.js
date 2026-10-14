@@ -314,6 +314,7 @@ test('the webhook marks a legacy airport deposit paid so the trip enters matchin
   }), hookRes, {
     stripeSecret: 'sk_test_airport_deposit_mock',
     webhookSecret: '',
+    allowUnsigned: true,
     serviceKey: '',
     serviceClient: () => db,
   })
