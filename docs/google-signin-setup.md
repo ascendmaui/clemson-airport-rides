@@ -8,7 +8,7 @@ Native apps and UI components already contain readiness gating (`packages/rides-
 
 ## Status (audited 2026-10-14)
 
-- Auth stack: Supabase Auth only (project `awktabuhijrshmsmagpq`). Clerk was removed in #71; no Clerk package, plugin, or env is used by either app, so the old "Clerk Google iOS URL scheme" item no longer applies.
+- Auth stack: Supabase Auth only (project `awktabuhijrshmsmagpq`). The old third-party auth vendor was removed in #71 and nothing from it is used by either app, so the old "Google iOS URL scheme" item for that vendor no longer applies.
 - Supabase `/auth/v1/settings`: `google=true`, `apple=true`, `email=true`. The Google web client is set in Supabase and Google accepts its redirect URI `https://awktabuhijrshmsmagpq.supabase.co/auth/v1/callback`.
 - Redirect allow list (checked by starting a flow and reading the stored redirect): `clemsonrides://auth/callback`, `clemsonrides-driver://auth/callback`, `https://clemsonrides.com/**`, `https://www.clemsonrides.com/**`, and `exp://` dev links are accepted. Unknown URLs fall back to the Site URL `https://clemsonrides.com`.
 - Native apps open Google in the system browser (`WebBrowser.openAuthSessionAsync`). They need no Google iOS or Android client id and no reversed-client-id URL scheme. The `EXPO_PUBLIC_GOOGLE_*` vars below are optional.

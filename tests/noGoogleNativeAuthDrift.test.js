@@ -5,7 +5,7 @@ import { googleOAuthRedirect } from '../packages/rides-native/googleAuth.js'
 
 // Google sign-in in both Clemson Rides apps runs on Supabase Auth through the system
 // browser (signInWithOAuth + WebBrowser.openAuthSessionAsync). It needs no Google iOS
-// client id, reversed-client-id URL scheme, or Clerk. These checks keep the app scheme,
+// client id or reversed-client-id URL scheme (tests/noClerk.test.js keeps the old vendor out). These checks keep the app scheme,
 // the redirect the code sends, and the callback route in step.
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 
@@ -33,10 +33,4 @@ for (const app of APPS) {
     assert.match(source, /completeGoogleSession/)
   })
 
-  test(`${app.dir}: no Clerk left in the native auth path`, () => {
-    const pkg = JSON.parse(read(`${app.dir}/package.json`))
-    const deps = { ...pkg.dependencies, ...pkg.devDependencies }
-    assert.deepEqual(Object.keys(deps).filter((d) => /clerk/i.test(d)), [])
-    assert.doesNotMatch(read(`${app.dir}/app.json`), /clerk/i)
-  })
 }
