@@ -23,7 +23,7 @@ import { loadRatingSummary } from 'rides-native/PartyScreens'
 import { WomenOnlyCard } from 'rides-native/WomenOnlyCard'
 import { loadComfortPreference, saveComfortPreference } from 'rides-native/comfortPreference.js'
 import { supabase } from '@/lib/supabase'
-import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
+import { homeTabClearance } from '@/lib/homeSheetSnap'
 import { SignInScreen } from 'rides-native/AuthScreens'
 
 type AccountHref = '/tiger-pass' | '/student' | '/student-plans' | '/community' | '/billing' | '/notifications' | '/help' | '/support' | '/lost-found' | '/safety'
@@ -198,7 +198,7 @@ export function AccountScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
-      <ScrollView contentContainerStyle={styles.body} onScroll={remeasureTabs} scrollEventThrottle={32}>
+      <ScrollView contentContainerStyle={[styles.body, { paddingBottom: homeTabClearance(insets.bottom) + 24 }]} onScroll={remeasureTabs} scrollEventThrottle={32}>
         <Text style={styles.kicker}>ACCOUNT</Text>
         <Text style={styles.title}>{name || 'Guest'}</Text>
         {!user ? (
@@ -277,7 +277,6 @@ export function AccountScreen() {
           </View>
         ))}
         <Text style={styles.groupTitle}>Settings</Text>
-        <AdminAccountRow supabase={supabase} colors={colors} onPress={() => router.push('/admin')} />
         <View style={[styles.row, lift(colors, 'rest')]}>
           <View style={styles.settingLine}>
             <Glyph name={scheme === 'dark' ? 'moon' : 'sun'} size={22} color={colors.orange} active={scheme === 'dark'} scheme={scheme} knockout={colors.card} />
