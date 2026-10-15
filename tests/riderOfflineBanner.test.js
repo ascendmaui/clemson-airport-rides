@@ -95,3 +95,4 @@ test('root layout watches NetInfo and booking, confirm, requested, and trip offe
     assert.match(src, /<RetryAction/, file)
   }
 })
+
