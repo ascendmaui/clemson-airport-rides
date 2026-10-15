@@ -7,6 +7,7 @@ import { mapAuthError, normalizePromoCode } from 'rides-native/authErrors.js'
 import { completeGoogleSession, googleOAuthRedirect, startGoogleOAuth } from 'rides-native/googleAuth.js'
 import { googleAuthConfig, mapGoogleAuthError } from 'rides-native/googleAuthConfig'
 import { appleFullName, splitPersonName, type SocialProviderId } from 'rides-native/socialAuth.js'
+import { logCaught } from '@/lib/caught'
 import { supabase } from '@/lib/supabase'
 
 export function useSocialSignIn(scheme = 'clemsonrides') {
@@ -46,7 +47,10 @@ export function useSocialSignIn(scheme = 'clemsonrides') {
 
       if (providerId === 'apple') {
         const isNativeAvailable =
-          Platform.OS === 'ios' && (await AppleAuthentication.isAvailableAsync().catch(() => false))
+          Platform.OS === 'ios' && (await AppleAuthentication.isAvailableAsync().catch((err: unknown) => {
+            logCaught('apple-sign-in', err)
+            return false
+          }))
 
         if (!isNativeAvailable) {
           const redirect = googleOAuthRedirect(scheme)

@@ -2,6 +2,7 @@ import { authedJson } from 'rides-native/apiClient.js'
 import { authStorage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
 import { friendlyApiError } from 'rides-native/apiErrors.js'
+import { logCaught } from '@/lib/caught'
 
 const FRIENDS_KEY = 'rider.friends'
 
@@ -28,7 +29,8 @@ export async function loadSavedFriends(): Promise<SavedFriend[]> {
       const friend = row as SavedFriend
       return typeof friend.email === 'string' && typeof friend.name === 'string'
     })
-  } catch {
+  } catch (err) {
+    logCaught('friends-cache-read', err)
     return []
   }
 }
@@ -36,8 +38,8 @@ export async function loadSavedFriends(): Promise<SavedFriend[]> {
 async function persistFriends(friends: SavedFriend[]) {
   try {
     await authStorage.setItem(FRIENDS_KEY, JSON.stringify(friends))
-  } catch {
-    // Ignore storage errors for offline cache
+  } catch (err) {
+    logCaught('friends-cache', err)
   }
 }
 

@@ -117,6 +117,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Staging builds use STAGING_VITE_STRIPE_PUBLISHABLE_KEY (Stripe TEST).
+      # Production uses VITE_STRIPE_PUBLISHABLE_KEY (live). The check fails a
+      # staging build that would otherwise ship a live key.
+      - name: Check staging Stripe key is test mode
+        if: steps.meta.outputs.target == 'staging'
+        env:
+          STAGING_PK: ${{ secrets.STAGING_VITE_STRIPE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          case "$STAGING_PK" in
+            pk_test_*) echo "staging publishable key is test mode" ;;
+            *) echo "STAGING_VITE_STRIPE_PUBLISHABLE_KEY must be set to a pk_test_ key" >&2; exit 1 ;;
+          esac
+
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
@@ -129,7 +143,7 @@ jobs:
             GIT_SHA=${{ steps.meta.outputs.sha }}
             VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
             VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
-            VITE_STRIPE_PUBLISHABLE_KEY=${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
+            VITE_STRIPE_PUBLISHABLE_KEY=${{ steps.meta.outputs.target == 'staging' && secrets.STAGING_VITE_STRIPE_PUBLISHABLE_KEY || secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
             VITE_GOOGLE_MAPS_API_KEY=${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
             VITE_APP_URL=${{ secrets.VITE_APP_URL }}
           cache-from: type=gha

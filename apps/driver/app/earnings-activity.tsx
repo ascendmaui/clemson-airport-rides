@@ -125,7 +125,7 @@ export default function EarningsActivity() {
                   accessibilityLabel={`${noShow ? 'No-show fee' : trip.status === 'canceled' ? 'Canceled trip' : 'Completed trip'}, ${trip.pickup_label || 'Pickup'} to ${trip.dropoff_label || 'Drop-off'}, ${trip.status === 'canceled' ? 'No payout' : shownCents(earned, earningsPrivate)}`}
                   accessibilityHint="Opens trip details and breakdown"
                 >
-                  <Text style={{ color: colors.title, fontWeight: '800' }}>{noShow ? 'No-show fee' : trip.status === 'canceled' ? 'Canceled' : 'Clemson RIDES'}</Text>
+                  <Text style={{ color: colors.title, fontWeight: '800' }}>{noShow ? 'No-show fee' : trip.status === 'canceled' ? 'Canceled' : 'Clemson Rides'}</Text>
                   <Text style={{ color: colors.ink }}>{trip.pickup_label || 'Pickup'}</Text>
                   <Text style={{ color: colors.ink }}>{trip.dropoff_label || 'Drop-off'}</Text>
                   <Text style={{ color: colors.title, fontWeight: '800' }}>
@@ -135,7 +135,7 @@ export default function EarningsActivity() {
                     <Text style={{ color: colors.inkSecondary }}>Wait time {shownCents(trip.driver_wait_earnings_cents || 0, earningsPrivate)}</Text>
                   ) : null}
                   {trip.status !== 'canceled' && boost > 0 ? (
-                    <Text style={{ color: '#F56600', fontWeight: '800' }}>Boost {formatBoostBadge(boost)}</Text>
+                    <Text style={{ color: colors.orange, fontWeight: '800' }}>Boost {formatBoostBadge(boost)}</Text>
                   ) : null}
                   {trip.status !== 'canceled' && pay?.showBonus ? (
                     <Text style={{ color: colors.inkSecondary }}>

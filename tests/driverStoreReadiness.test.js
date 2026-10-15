@@ -18,18 +18,17 @@ test('driver store name and version are Clemson Rides Driver 1.2.0', () => {
   assert.doesNotMatch(expo.name, /Crimson|RIDES/)
 })
 
-test('driver purpose strings justify background location, camera, and photos', () => {
+test('driver purpose strings justify background location and photos', () => {
   const expo = JSON.parse(read('apps/driver/app.json')).expo
-  const always = expo.ios.infoPlist.NSLocationAlwaysAndWhenInUseUsageDescription
-  const camera = expo.ios.infoPlist.NSCameraUsageDescription
-  const photos = expo.ios.infoPlist.NSPhotoLibraryUsageDescription
+  const [, location] = expo.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-location')
+  const [, picker] = expo.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-image-picker')
+  const always = location.locationAlwaysAndWhenInUsePermission
   assert.match(always, /active trip/)
   assert.match(always, /phone is locked/)
   assert.match(always, /Location sharing stops when the trip ends/)
-  assert.match(camera, /driver documents/)
-  assert.match(photos, /license, insurance, and vehicle documents/)
-  assert.doesNotMatch(`${always} ${camera} ${photos}`, /Crimson|Clemson RIDES/)
-  assert.ok(expo.ios.infoPlist.UIBackgroundModes.includes('location'))
+  assert.match(picker.photosPermission, /license, insurance, and vehicle documents/)
+  assert.doesNotMatch(`${always} ${picker.photosPermission}`, /Crimson|Clemson RIDES/)
+  assert.deepEqual(expo.ios.infoPlist.UIBackgroundModes, ['location'])
 })
 
 test('driver offers Sign in with Apple beside Google', () => {

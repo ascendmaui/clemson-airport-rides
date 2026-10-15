@@ -11,7 +11,7 @@ const ACTIVE_TRIP_KEY = 'driver.active-trip-location'
 const LAST_PUBLISH_KEY = 'driver.last-location-publish'
 const native = Platform.OS === 'ios' || Platform.OS === 'android'
 
-export type BackgroundLocationStatus = 'started' | 'foreground-denied' | 'background-denied' | 'disclosure-required' | 'inactive' | 'unsupported'
+export type BackgroundLocationStatus = 'started' | 'foreground-denied' | 'background-denied' | 'inactive' | 'unsupported'
 type DriverLocationInput = Parameters<typeof writeDriverLocation>[2]
 
 // Foreground callbacks, task deliveries, permission prompts and stops share one
@@ -147,22 +147,13 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(DRIVER_TRIP_LOC
   }
 })
 
-export function startTripBackgroundLocation(
-  tripId: string,
-  options?: { backgroundConsent?: boolean },
-): Promise<BackgroundLocationStatus> {
+export function startTripBackgroundLocation(tripId: string): Promise<BackgroundLocationStatus> {
   return serial<BackgroundLocationStatus>(async () => {
     if (!native) return 'unsupported'
     if (!await activeTrip(tripId)) { await stopUpdates(tripId); return 'inactive' }
     const foreground = await Location.requestForegroundPermissionsAsync()
     if (foreground.status !== 'granted') { await stopUpdates(); return 'foreground-denied' }
-    const existing = await Location.getBackgroundPermissionsAsync()
-    // Play requires a prominent in-app disclosure before the background prompt.
-    // Already-granted access skips that prompt and the disclosure.
-    if (existing.status !== 'granted' && !options?.backgroundConsent) return 'disclosure-required'
-    const background = existing.status === 'granted'
-      ? existing
-      : await Location.requestBackgroundPermissionsAsync()
+    const background = await Location.requestBackgroundPermissionsAsync()
     if (background.status !== 'granted') { await stopUpdates(); return 'background-denied' }
     // The rider may cancel (or the driver may sign out) while the prompt is open.
     if (!await activeTrip(tripId)) { await stopUpdates(); return 'inactive' }

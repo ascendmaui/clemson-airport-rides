@@ -4,6 +4,10 @@
  * Inline SVG keeps the bundle free of an icon package.
  */
 const PATHS = {
+  'arrow-left': <><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></>,
+  locate: <><line x1="2" x2="5" y1="12" y2="12" /><line x1="19" x2="22" y1="12" y2="12" /><line x1="12" x2="12" y1="2" y2="5" /><line x1="12" x2="12" y1="19" y2="22" /><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="3" /></>,
+  clock: <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></>,
+  sparkles: <><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" /><path d="M20 3v4" /><path d="M22 5h-4" /></>,
   'arrow-right': <><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></>,
   'chevron-right': <path d="m9 18 6-6-6-6" />,
   calendar: <><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" /></>,
@@ -42,7 +46,7 @@ export function rideTypeSiteIcon(id) {
 
 export const SITE_ICON_NAMES = Object.freeze(Object.keys(PATHS))
 
-export function SiteIcon({ name, size = 20, className = '' }) {
+export function SiteIcon({ name, size = 20, className = '', filled = false, style }) {
   const shape = PATHS[name] || PATHS['arrow-right']
   return (
     <svg
@@ -50,13 +54,14 @@ export function SiteIcon({ name, size = 20, className = '' }) {
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      fill="none"
+      fill={filled ? 'currentColor' : 'none'}
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
       focusable="false"
+      style={style}
     >
       {shape}
     </svg>

@@ -76,7 +76,7 @@ export function LiveShareCard({
       const next = await ensureShare()
       if (!next) return
       await Share.share({
-        title: 'My Clemson RIDES location',
+        title: 'My Clemson Rides location',
         message: tripShareMessage({
           pickup: trip?.pickup_label,
           dropoff: trip?.dropoff_label,
@@ -105,7 +105,7 @@ export function LiveShareCard({
         status: trip?.status,
         url: next.url,
       })
-      await Share.share({ title: 'My Clemson RIDES trip', message, url: next.url })
+      await Share.share({ title: 'My Clemson Rides trip', message, url: next.url })
       setCopiedNote('Trip link ready to send')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not share the trip'

@@ -126,7 +126,7 @@ export default function DiscoverScreen() {
             onPress={() => router.push('/game-day')}
             style={{ marginTop: 8 }}
           >
-            <Text style={{ color: '#F56600', fontWeight: '800' }}>Prep, hot times, and the fare →</Text>
+            <Text style={{ color: colors.orange, fontWeight: '800' }}>Prep, hot times, and the fare →</Text>
           </Pressable>
         </Card>
         <CampusEventsCard />

@@ -23,6 +23,7 @@ import { mapKindLabel } from '@/components/mapTypes'
 import { TabSwipeRegion, useTabSwipeMeasure, useTabSwipeRemeasure } from '@/components/MainTabPager'
 import { Skeleton } from '@/components/Skeleton'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
+import { logCaught, toastCaught } from '@/lib/caught'
 import { useAuth } from '@/lib/auth'
 import { setAuthNext } from '@/lib/authNext'
 import { listScheduledTrips, type ScheduledRow } from '@/lib/scheduleApi'
@@ -156,7 +157,8 @@ export function RiderHome() {
     try {
       const row = await loadGameDay(supabase)
       setGameNotice(gameDayNotice(row))
-    } catch {
+    } catch (err) {
+      logCaught('home-game-day', err)
       setGameNotice(gameDayNotice(null))
     }
   }
@@ -169,7 +171,8 @@ export function RiderHome() {
     try {
       setScheduledRows(await listScheduledTrips(user.id))
       setClock(new Date())
-    } catch {
+    } catch (err) {
+      toastCaught('home-scheduled', err, 'Could not load scheduled rides')
       setScheduledRows([])
     }
   }
@@ -184,7 +187,8 @@ export function RiderHome() {
       try {
         const row = await loadGameDay(supabase)
         if (alive) setGameNotice(gameDayNotice(row))
-      } catch {
+      } catch (err) {
+        logCaught('home-game-day', err)
         if (alive) setGameNotice(gameDayNotice(null))
       }
     })()
@@ -208,7 +212,8 @@ export function RiderHome() {
       if (!alive) return
       setScheduledRows(rows)
       setClock(new Date())
-    }).catch(() => {
+    }).catch((err: unknown) => {
+      toastCaught('home-scheduled', err, 'Could not load scheduled rides')
       if (alive) setScheduledRows([])
     })
     return () => {
@@ -225,7 +230,8 @@ export function RiderHome() {
       setCaption(result.caption)
       setBlended(result.blended)
       setSpotsLoading(false)
-    }).catch(() => {
+    }).catch((err: unknown) => {
+      logCaught('home-busy-spots', err)
       if (alive) setSpotsLoading(false)
     })
     return () => {
@@ -669,7 +675,7 @@ export function RiderHome() {
             accessibilityHint={user ? 'Opens student pricing' : 'Sign in to check student pricing'}
           >
             <View style={styles.offerIcon}>
-              <Text style={styles.gamedayIcon}>🎓</Text>
+              <Glyph name="learning" size={24} color={colors.purple} />
             </View>
             <View style={styles.gamedayCopy}>
               <Text style={styles.gamedayTitle}>{studentOffer.title}</Text>
@@ -688,7 +694,7 @@ export function RiderHome() {
             accessibilityHint="Opens carpools"
           >
             <View style={styles.offerIcon}>
-              <Text style={styles.gamedayIcon}>🏈</Text>
+              <Glyph name="dropoff" size={24} color={colors.orange} />
             </View>
             <View style={styles.gamedayCopy}>
               <Text style={styles.gamedayTitle}>Game day carpool</Text>
@@ -962,7 +968,6 @@ function makeStyles(colors: Palette) {
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
     },
-    gamedayIcon: { fontSize: 20 },
     gamedayCopy: { flex: 1 },
     gamedayTitle: { fontWeight: '700' as const, fontSize: 15, letterSpacing: -0.2, color: colors.ink },
     gamedayBody: { fontSize: 13, lineHeight: 18, color: colors.inkSecondary, marginTop: 2 },

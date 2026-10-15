@@ -16,6 +16,7 @@ import { loadRiderHoldTrip, loadSurfaceHold, type RiderHoldTrip } from '@/lib/ho
 import { oneParam } from '@/lib/oneParam'
 import { useAuth } from '@/lib/auth'
 import { successHaptic, tapHaptic } from '@/lib/feedback'
+import { logCaught, toastCaught } from '@/lib/caught'
 // duplicate oneParam import removed to fix TS2300
 import { openStripeCheckout } from '@/lib/openCheckout'
 import {
@@ -393,7 +394,8 @@ export function ScheduleScreen() {
       setPassActive(Boolean(status.active))
       setPassBps(status.active ? status.discountBps : 0)
       setPassName(status.name || TIGER_PASS_NAME)
-    }).catch(() => {
+    }).catch((err: unknown) => {
+      toastCaught('schedule-pass', err, 'Could not load Tiger Pass')
       if (!alive) return
       setPassActive(false)
       setPassBps(0)
@@ -478,7 +480,10 @@ export function ScheduleScreen() {
       .then((row) => {
         if (alive && row) setCheckoutTrip(row)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        logCaught('schedule-hold', err)
+        if (alive) setBanner('Could not load that ride hold. Try again.')
+      })
     return () => {
       alive = false
     }
@@ -492,7 +497,10 @@ export function ScheduleScreen() {
         if (!alive || !row) return
         setCheckoutTrip((current: RiderHoldTrip | null) => (current && current.id !== row.id ? current : row))
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        logCaught('schedule-surface-hold', err)
+        if (alive) setBanner('Could not load your ride hold. Try again.')
+      })
     return () => {
       alive = false
     }
@@ -510,8 +518,8 @@ export function ScheduleScreen() {
         try {
           const rows = await listScheduledTrips(riderId)
           if (alive) setMine(rows)
-        } catch {
-          /* Leave the list in place. The countdown text still ticks. */
+        } catch (err) {
+          logCaught('schedule-hold-list', err)
         }
         if (!checkoutTripId) return
         try {
@@ -519,8 +527,8 @@ export function ScheduleScreen() {
           if (!alive || !row) return
           setCheckoutTrip(row)
           if (isUnpaidHoldTtlCancel(row)) setBanner(null)
-        } catch {
-          /* Leave the checkout hold in place until the next tick. */
+        } catch (err) {
+          logCaught('schedule-hold-tick', err)
         }
       })()
     }, HOLD_COUNTDOWN_TICK_MS)
@@ -617,8 +625,8 @@ export function ScheduleScreen() {
           .then((held) => {
             if (!ignoreEarlyHold && held) setCheckoutTrip(held)
           })
-          .catch(() => {
-            /* The countdown appears once the trip row can be read. */
+          .catch((err: unknown) => {
+            logCaught('schedule-checkout-hold', err)
           })
       }
       setBanner(`Opening checkout. The final fare ${formatCents(farePaid)} is charged when the trip ends.`)
@@ -647,7 +655,8 @@ export function ScheduleScreen() {
       if (!settled.settled && !reconciledPaid) {
         try {
           close = await abandonAirportCheckout(supabase, { tripId, sessionId })
-        } catch {
+        } catch (err) {
+          logCaught('schedule-abandon-checkout', err)
           close = null
         }
       }
@@ -655,7 +664,8 @@ export function ScheduleScreen() {
       let held: RiderHoldTrip | null = null
       try {
         held = await loadRiderHoldTrip(tripId)
-      } catch {
+      } catch (err) {
+        logCaught('schedule-hold-after-checkout', err)
         held = null
       }
       if (outcome !== 'paid' && isUnpaidHoldTtlCancel(held)) {

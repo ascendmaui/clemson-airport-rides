@@ -3,7 +3,7 @@ import { Glyph } from 'rides-native/icons'
 import { createTrackingRefresh } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, AppState, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { AccessibilityInfo, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
@@ -71,30 +71,25 @@ import { canDriverEnd } from '../../../shared/driverEndTrip.js'
 import { MISSING_TRIP_VIEW, driverCanceledView, nextDriverTripCard } from 'rides-native/tripCanceled'
 import { CrashBoundary } from '@/components/CrashBoundary'
 import { forgetActiveTrip, rememberActiveTrip } from '@/lib/crashReport'
-import { failureToast, quiet, tripStepFailureTitle } from '@/lib/softFail'
+import { useSecondClock } from '@/lib/useSecondClock'
+import { TRIP_FALLBACK_POLL_MS, tripPollTick } from '@/lib/tripPoll'
+import { failureToast, quiet, quietly, tripStepFailureTitle } from '@/lib/softFail'
+import { LocationDisclosure } from '@/components/LocationDisclosure'
+import { DISCLOSURE_DECLINED_NOTE, shouldShowLocationDisclosure } from '@/lib/locationDisclosure'
+import * as Location from 'expo-location'
 
 type RiderFix = { latitude: number; longitude: number }
 
 function ConfirmCountdown({ closesAt }: { closesAt?: string | null }) {
-  const [label, setLabel] = useState<string | null>(() => confirmCountdownLabel(closesAt))
-  useEffect(() => {
-    const tick = () => setLabel(confirmCountdownLabel(closesAt))
-    tick()
-    const id = setInterval(tick, 1000)
-    return () => clearInterval(id)
-  }, [closesAt])
+  useSecondClock()
+  const label = confirmCountdownLabel(closesAt)
   if (!label) return null
   return <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 28, marginTop: 6 }}>{label}</Text>
 }
 
 function LeaveNowLabel({ leaveNowAt }: { leaveNowAt?: string | null }) {
-  const [label, setLabel] = useState<string | null>(() => leaveNowCountdownLabel(leaveNowAt))
-  useEffect(() => {
-    const tick = () => setLabel(leaveNowCountdownLabel(leaveNowAt))
-    tick()
-    const id = setInterval(tick, 1000)
-    return () => clearInterval(id)
-  }, [leaveNowAt])
+  useSecondClock()
+  const label = leaveNowCountdownLabel(leaveNowAt)
   if (!label) return null
   return <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 28, marginTop: 6 }}>{label}</Text>
 }
@@ -131,6 +126,7 @@ function TripScreenBody() {
   }
   const confirmedRef = useRef(false)
   const readerRef = useRef<ReturnType<typeof createTrackingRefresh> | null>(null)
+  const riderReaderRef = useRef<{ refresh: (force?: boolean) => unknown } | null>(null)
   // Offline action queue: taps saved without signal show as done here and are
   // sent in order (same idempotency key on every retry) once signal returns.
   const onQueueEvent = useCallback((event: ActionQueueEvent) => {
@@ -162,9 +158,15 @@ function TripScreenBody() {
   const seenStatus = useRef<string | null>(null)
   const activeTrip = isActiveTripLocationStatus(trip?.status)
   const [backgroundNote, setBackgroundNote] = useState<string | null>(null)
-  const [backgroundDisclosure, setBackgroundDisclosure] = useState(false)
-  const declinedBackgroundRef = useRef(false)
-  const backgroundTripRef = useRef<string | null>(null)
+  // Prominent disclosure before the OS background-location prompt (Play policy).
+  const [disclosureFor, setDisclosureFor] = useState<string | null>(null)
+  const [disclosureAnswered, setDisclosureAnswered] = useState<{ tripId: string; accepted: boolean } | null>(null)
+  const answerDisclosure = useCallback((accepted: boolean) => {
+    setDisclosureFor((tripId) => {
+      if (tripId) setDisclosureAnswered({ tripId, accepted })
+      return null
+    })
+  }, [])
   const [self, setSelf] = useState<{ latitude: number; longitude: number } | null>(null)
   const [rider, setRider] = useState<RiderFix | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -260,41 +262,41 @@ function TripScreenBody() {
     }
     void pull()
     const listener = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void reader.refresh(true)
+      if (state !== 'active') return
+      void reader.refresh(true)
+      void riderReaderRef.current?.refresh(true)
     })
     const unsubscribe = subscribeTrips(supabase, pull)
-    const timer = setInterval(pull, 5000)
+    // One fallback poll behind realtime: trip + heartbeat always, rider fix only in the foreground.
+    const timer = setInterval(() => tripPollTick(AppState.currentState, pull, () => riderReaderRef.current?.refresh()), TRIP_FALLBACK_POLL_MS)
     return () => { reader.stop(); readerRef.current = null; listener.remove(); unsubscribe(); clearInterval(timer) }
   }, [refresh, id, user?.id])
 
   useEffect(() => {
     if (!trip) return undefined
-    if (backgroundTripRef.current !== trip.id) {
-      backgroundTripRef.current = trip.id
-      declinedBackgroundRef.current = false
-    }
     let alive = true
     const updateBackgroundLocation = async () => {
       if (!activeTrip || terminalTrip || !user) {
         await stopTripBackgroundLocation(trip.id)
-        if (alive) {
-          setBackgroundNote(null)
-          setBackgroundDisclosure(false)
-        }
+        if (alive) setBackgroundNote(null)
         return
       }
       try {
-        const status = await startTripBackgroundLocation(trip.id)
+        // Disclosure first: the OS prompt is only requested after the driver taps Continue.
+        const current = Platform.OS === 'web' ? { granted: true } : await Location.getBackgroundPermissionsAsync().catch(quietly('background permission read', null))
+        const granted = Boolean(current?.granted)
+        const answered = disclosureAnswered?.tripId === trip.id ? disclosureAnswered : null
         if (!alive) return
-        if (status === 'disclosure-required') {
-          setBackgroundDisclosure(!declinedBackgroundRef.current)
-          setBackgroundNote(declinedBackgroundRef.current
-            ? 'Background location stays off until you allow it for this trip.'
-            : null)
+        if (shouldShowLocationDisclosure({ granted, answeredTripId: answered?.tripId ?? null, tripId: trip.id })) {
+          setDisclosureFor(trip.id)
           return
         }
-        setBackgroundDisclosure(false)
-        setBackgroundNote(status === 'background-denied'
+        if (!granted && answered && !answered.accepted) {
+          setBackgroundNote(DISCLOSURE_DECLINED_NOTE)
+          return
+        }
+        const status = await startTripBackgroundLocation(trip.id)
+        if (alive) setBackgroundNote(status === 'background-denied'
           ? 'Set location to Always so your rider can still see you while you use Maps.'
           : null)
       } catch {
@@ -307,7 +309,7 @@ function TripScreenBody() {
     })
     // Navigation away from this screen must keep an active trip's service alive.
     return () => { alive = false; listener.remove() }
-  }, [trip?.id, activeTrip, terminalTrip, user?.id])
+  }, [trip?.id, activeTrip, terminalTrip, user?.id, disclosureAnswered])
 
   useEffect(() => {
     if (!supabase || !id || !trip || terminalTrip) return undefined
@@ -320,11 +322,9 @@ function TripScreenBody() {
       onError: () => {},
     })
     void reader.refresh()
-    const listener = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void reader.refresh(true)
-    })
-    const timer = setInterval(() => void reader.refresh(), 5000)
-    return () => { reader.stop(); listener.remove(); clearInterval(timer) }
+    // Polled by the trip screen's single fallback poll (tripPollTick); no second interval here.
+    riderReaderRef.current = reader
+    return () => { reader.stop(); if (riderReaderRef.current === reader) riderReaderRef.current = null }
   }, [id, trip?.status, terminalTrip])
 
   const locationTracking = useDriverLocation(Boolean(user && trip && !terminalTrip), async (fix) => {
@@ -646,30 +646,6 @@ function TripScreenBody() {
     )
     : null
 
-  async function allowBackgroundLocation() {
-    if (!trip?.id) return
-    declinedBackgroundRef.current = false
-    setBackgroundDisclosure(false)
-    try {
-      const status = await startTripBackgroundLocation(trip.id, { backgroundConsent: true })
-      if (status === 'disclosure-required') {
-        setBackgroundDisclosure(true)
-        return
-      }
-      setBackgroundNote(status === 'background-denied'
-        ? 'Set location to Always so your rider can still see you while you use Maps.'
-        : null)
-    } catch {
-      setBackgroundNote('Background location could not start. Check location in Settings, then return to retry.')
-    }
-  }
-
-  function declineBackgroundLocation() {
-    declinedBackgroundRef.current = true
-    setBackgroundDisclosure(false)
-    setBackgroundNote('Background location stays off until you allow it for this trip.')
-  }
-
   return (
     <View style={styles.screen}>
       {/* Remaining road is the stored polyline when this car is on it. Otherwise the coordinate line stays. */}
@@ -832,19 +808,11 @@ function TripScreenBody() {
         {backgroundNote && activeTrip ? (
           <View>
             <Text style={styles.note}>{backgroundNote}</Text>
-            {backgroundNote === 'Background location stays off until you allow it for this trip.' ? (
-              <Pressable accessibilityRole="button" accessibilityLabel="Review background location"
-                onPress={() => { declinedBackgroundRef.current = false; setBackgroundDisclosure(true) }}
-                style={styles.nav}>
-                <Text style={styles.navText}>Review background location</Text>
-              </Pressable>
-            ) : (
-              <Pressable accessibilityRole="button" accessibilityLabel="Open location settings"
-                onPress={() => { void Linking.openSettings().catch(() => setError('Could not open Settings. Open your phone’s Settings to update location permission.')) }}
-                style={styles.nav}>
-                <Text style={styles.navText}>Open Settings</Text>
-              </Pressable>
-            )}
+            <Pressable accessibilityRole="button" accessibilityLabel="Open location settings"
+              onPress={() => { void Linking.openSettings().catch(() => setError('Could not open Settings. Open your phone’s Settings to update location permission.')) }}
+              style={styles.nav}>
+              <Text style={styles.navText}>Open Settings</Text>
+            </Pressable>
           </View>
         ) : null}
         {locationTracking.error ? (
@@ -925,6 +893,7 @@ function TripScreenBody() {
         </ScrollView>
         </GestureDetector>
       </View>
+      <LocationDisclosure visible={Boolean(disclosureFor && disclosureFor === trip?.id && activeTrip && !terminalTrip)} onAccept={() => answerDisclosure(true)} onDecline={() => answerDisclosure(false)} />
       <SosSheet
         open={sosOpen && sosActive}
         onClose={() => setSosOpen(false)}
@@ -932,18 +901,6 @@ function TripScreenBody() {
         userId={user?.id ?? null}
         fix={self ? { lat: self.latitude, lng: self.longitude } : null}
       />
-      <Modal visible={backgroundDisclosure} animationType="fade" presentationStyle="fullScreen" onRequestClose={declineBackgroundLocation}>
-        <View style={[styles.disclosure, { paddingTop: insets.top + 28, paddingBottom: insets.bottom + 28 }]}>
-          <Text style={styles.disclosureTitle} accessibilityRole="header">Background location</Text>
-          <Text style={styles.disclosureBody}>
-            Clemson Rides collects your location in the background during an active trip so your rider can see your car, including while you use Maps or this phone is locked. Sharing stops when the trip ends. This location is not used for ads.
-          </Text>
-          <Primary label="Continue" onPress={() => { void allowBackgroundLocation() }} accessibilityLabel="Continue and allow background location" />
-          <Pressable accessibilityRole="button" accessibilityLabel="Not now" onPress={declineBackgroundLocation} style={styles.disclosureLater}>
-            <Text style={styles.disclosureLaterText}>Not now</Text>
-          </Pressable>
-        </View>
-      </Modal>
     </View>
   )
 }
@@ -970,11 +927,6 @@ function tripStyles(colors: Palette) {
     kicker: { color: colors.orange, ...typeScale.kickerSm },
     copy: { color: colors.inkSecondary, ...typeScale.body },
     note: { color: colors.orange, fontSize: 13, lineHeight: 18, fontWeight: '700' },
-    disclosure: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 24, justifyContent: 'center', gap: 16 },
-    disclosureTitle: { color: colors.title, fontSize: 32, fontWeight: '800', letterSpacing: -0.6 },
-    disclosureBody: { color: colors.ink, fontSize: 18, lineHeight: 26 },
-    disclosureLater: { alignItems: 'center', paddingVertical: 14 },
-    disclosureLaterText: { color: colors.inkSecondary, fontWeight: '700', fontSize: 16 },
     fare: { color: colors.ink, fontWeight: '800', fontSize: 16 },
     tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     navRow: { flexDirection: 'row', gap: 8 },
@@ -985,6 +937,6 @@ function tripStyles(colors: Palette) {
     navText: { color: colors.onAccent, fontWeight: '800', letterSpacing: -0.2 },
     settle: { color: colors.title, fontWeight: '700', lineHeight: 20 },
     airport: { borderRadius: radius.lg, padding: 12, gap: 2, backgroundColor: colors.purpleSoft },
-    airportChip: { color: colors.purple, fontWeight: '800', letterSpacing: 0.6 },
+    airportChip: { color: colors.link, fontWeight: '800', letterSpacing: 0.6 },
   })
 }

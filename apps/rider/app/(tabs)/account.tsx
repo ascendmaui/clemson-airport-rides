@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { TabSwipeRegion, useTabSwipeRemeasure } from '@/components/MainTabPager'
 import { loadAccount, saveProfile } from '@/lib/accountApi'
+import { caughtMessage, logCaught } from '@/lib/caught'
 import { useAuth } from '@/lib/auth'
 import { hapticsEnabled, playMatchChime, setHapticsEnabled, setSoundsEnabled, soundsEnabled, tapHaptic } from '@/lib/feedback'
 import { lift } from '@/lib/elevation'
@@ -66,8 +67,8 @@ const GROUPS: { title: string; links: AccountLink[] }[] = [
     links: [
       { href: '/help', label: 'Help', hint: 'How booking, Schedule, friends, and billing work', icon: 'help' },
       { href: '/support', label: 'Support', hint: 'Charge, ride, bug, or safety tickets', icon: 'chat' },
-      { label: 'Email help', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson RIDES help' },
-      { label: 'Email support', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson RIDES support' },
+      { label: 'Email help', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson Rides help' },
+      { label: 'Email support', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson Rides support' },
       { href: '/lost-found', label: 'Lost & found', hint: 'An item left in the car after a ride', icon: 'lostFound' },
     ],
   },
@@ -100,9 +101,13 @@ export function AccountScreen() {
 
   useEffect(() => {
     let alive = true
-    hapticsEnabled().then(setHapticsOn).catch(() => {})
+    hapticsEnabled().then(setHapticsOn).catch((err: unknown) => {
+      logCaught('account-haptics', err)
+    })
     soundsEnabled().then((on) => {
       if (alive) setSoundsOn(on)
+    }).catch((err: unknown) => {
+      logCaught('account-sounds', err)
     })
     if (!user?.id) {
       setSpots([])
@@ -113,7 +118,9 @@ export function AccountScreen() {
     if (supabase) {
       loadStudentPlans(supabase).then((d: { enabled?: boolean }) => {
         if (alive) setStudentPlansOn(d?.enabled === true)
-      }).catch(() => {})
+      }).catch((err: unknown) => {
+        logCaught('account-student-plans', err)
+      })
     }
     loadAccount(user.id).then((account) => {
       if (!alive) return
@@ -121,6 +128,10 @@ export function AccountScreen() {
       setFullName(account.profile?.full_name || user.user_metadata?.full_name || '')
       setBio(account.profile?.bio || '')
       if (account.error) setError(account.error)
+    }).catch((err: unknown) => {
+      if (!alive) return
+      logCaught('account-load', err)
+      setError(caughtMessage(err, 'Could not load your account. Try again.'))
     })
     if (supabase) {
       loadComfortPreference(supabase, user.id).then((comfort) => {
@@ -128,12 +139,18 @@ export function AccountScreen() {
         setGenderIdentity(comfort.genderIdentity)
         setWomenOnly(comfort.womenOnlyMatching)
         setComfortAvailable(comfort.available)
-      }).catch(() => {})
+      }).catch((err: unknown) => {
+        if (!alive) return
+        logCaught('account-comfort', err)
+        setComfortNote('Could not load the comfort preference.')
+      })
       loadRatingSummary(supabase, user.id).then((summary) => {
         if (!alive) return
         setRatingLine(summary.line)
         setPendingTrip(summary.pending?.id || null)
-      }).catch(() => {})
+      }).catch((err: unknown) => {
+        logCaught('account-rating', err)
+      })
     }
     return () => {
       alive = false

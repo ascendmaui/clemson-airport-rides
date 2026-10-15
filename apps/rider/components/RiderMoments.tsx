@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import { showToast } from 'rides-native/toastStore.js'
 import { paymentFailedMoment, riderTripMoment, riderTripSnapshot, type Moment, type RiderTripSnapshot } from 'rides-native/rideMoments.js'
 import { afterRiderModal, riderModalIsOpen } from '@/lib/afterModal'
+import { logCaught } from '@/lib/caught'
 import { useAuth } from '@/lib/auth'
 import { hapticsEnabled, playApproachPing, playCompleteCue, successHaptic, warningHaptic } from '@/lib/feedback'
 import { supabase } from '@/lib/supabase'
@@ -12,7 +13,9 @@ const COLS = 'id, status, pickup_label, dropoff_label, metadata'
 
 async function errorHaptic() {
   if (!(await hapticsEnabled())) return
-  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
+  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch((err: unknown) => {
+    logCaught('haptic-error', err)
+  })
 }
 
 /** Haptic + sound for a moment. Every part honors the rider's haptics / sounds settings and the mute switch. */
@@ -64,13 +67,15 @@ export function RiderMoments() {
         let failed: Moment | null = null
         try {
           failed = paymentFailedMoment(prev.hold, row, 'rider')
-        } catch {
+        } catch (err) {
+          logCaught('rider-moment-hold', err)
           failed = null
         }
         let tripMoment: Moment | null = null
         try {
           tripMoment = riderTripMoment(prev, row)
-        } catch {
+        } catch (err) {
+          logCaught('rider-moment-trip', err)
           tripMoment = null
         }
         const moments = [tripMoment, failed].filter(Boolean) as Moment[]
@@ -91,18 +96,18 @@ export function RiderMoments() {
                     ? { pathname: '/billing' as const }
                     : { pathname: '/requested' as const, params: { trip: row.id } }
                   afterRiderModal(() => router.push(href))
-                } catch {
-                  /* a hold failure must not crash the app */
+                } catch (err) {
+                  logCaught('rider-moment-open', err)
                 }
               },
             })
             playRiderMoment(moment)
-          } catch {
-            /* a bad moment must not crash the app */
+          } catch (err) {
+            logCaught('rider-moment', err)
           }
         }
-      } catch {
-        /* a null driver or a bad trip row must not crash the app */
+      } catch (err) {
+        logCaught('rider-moment-row', err)
       }
     }
 
