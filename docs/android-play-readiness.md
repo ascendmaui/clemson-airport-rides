@@ -16,7 +16,7 @@ Two current binaries. The frozen TestFlight app is a third package and must not 
 | Driver | `apps/driver` | `com.ascendmaui.clemsonrides.driver` | 1.1.0 | `clemson-rides-driver` | `090d10b8-2f52-4502-ac9d-e8bd0fe35033` | `clemsonrides-driver` |
 | Frozen (do not ship) | `apps/mobile` | `com.ascendmaui.clemsonairportrides` | 1.0.0 | `clemson-airport-rides` (`FROZEN_EXPO_SLUG`) | `1440e29e-13f0-4571-8f32-596ec81f3369` | `clemsonrides` (legacy) |
 
-Package names are `expo.android.package` in each `app.json`. They match the iOS bundle ids. Expo owner is `johnmatveyev`. Production `eas.json` sets `appVersionSource` to `remote` and `autoIncrement` on the production profile, so the Play `versionCode` is not in git.
+Package names are `expo.android.package` in each `app.json`. They match the iOS bundle ids. Expo owner is `johnmatveyev`. Rider `app.json` sets `android.versionCode` to 19, the same integer as the iOS build number. Production `eas.json` still sets `appVersionSource` to `remote` and `autoIncrement` on the production profile, so an EAS production build uses the remote versionCode instead of the value in git. Do not change `eas.json` to make the git value win.
 
 Declared Android permissions (manifest list in `app.json`; background location is not requested):
 

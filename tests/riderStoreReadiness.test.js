@@ -16,6 +16,24 @@ test('rider store name and version are Clemson Rides 1.2.0', () => {
   assert.doesNotMatch(expo.name, /Crimson|RIDES/)
 })
 
+test('rider android manifest has a versionCode and no background location', () => {
+  const expo = JSON.parse(read('apps/rider/app.json')).expo
+  assert.equal(expo.android.package, 'com.ascendmaui.clemsonrides.rider')
+  assert.equal(expo.android.versionCode, 19)
+  assert.equal(expo.ios.buildNumber, '19')
+  assert.equal(expo.android.permissions.includes('ACCESS_BACKGROUND_LOCATION'), false)
+  assert.deepEqual(expo.android.permissions, [
+    'ACCESS_COARSE_LOCATION',
+    'ACCESS_FINE_LOCATION',
+    'CAMERA',
+    'RECORD_AUDIO',
+  ])
+  const plugins = expo.plugins.map((plugin) => (Array.isArray(plugin) ? plugin[0] : plugin))
+  // React Native 0.86.3 pins compileSdk and targetSdk to 36. Do not add a plugin that lowers them.
+  assert.equal(plugins.includes('expo-build-properties'), false)
+  assert.equal(JSON.parse(read('apps/rider/package.json')).dependencies['react-native'], '0.86.3')
+})
+
 test('rider purpose strings cover location, camera, and photos', () => {
   const expo = JSON.parse(read('apps/rider/app.json')).expo
   const location = expo.ios.infoPlist.NSLocationWhenInUseUsageDescription
