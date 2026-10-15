@@ -36,6 +36,8 @@ export function PasswordRecoveryListener() {
     }
     Linking.getInitialURL().then((url: string | null) => {
       if (alive) open(url)
+    }).catch((err: unknown) => {
+      console.warn('[auth] recovery initial url', err instanceof Error ? err.message : err)
     })
     const sub = Linking.addEventListener('url', ({ url }: { url: string }) => {
       open(url)

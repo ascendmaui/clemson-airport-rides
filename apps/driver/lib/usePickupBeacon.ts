@@ -11,6 +11,7 @@ import {
 } from '../../../shared/pickupBeacon.js'
 import { authStorage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
+import { quiet } from '@/lib/softFail'
 
 type Point = { lat: number; lng: number }
 
@@ -199,7 +200,7 @@ export function useDriverPickupBeacon(userId: string | null) {
     if (!tripId) return
     setDismissed((prev) => rememberDismissal(prev, tripId))
     wasOpen.current = false
-    void persistDismissedPickupBeacon(tripId, authStorage).catch(() => {})
+    void persistDismissedPickupBeacon(tripId, authStorage).catch(quiet('pickup beacon dismiss'))
   }
 
   return { show, code, tripId, dismiss }

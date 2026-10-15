@@ -6,6 +6,7 @@ import { setDriverOnline } from 'rides-native/drivers'
 import { startLocationPublisher } from 'rides-native/tracking'
 import { drainLocationWrites, publishDriverLocation } from './backgroundLocation'
 import { supabase } from './supabase'
+import { quiet } from '@/lib/softFail'
 
 let publisherError: string | null = null
 const errorListeners = new Set<(error: string | null) => void>()
@@ -62,7 +63,7 @@ export async function goOnline(driverId: string, fix: { lat: number; lng: number
 /** END: stop the heartbeat, let queued writes finish, then write offline. */
 export async function goOffline(driverId: string) {
   driverPresence.goOffline()
-  await drainLocationWrites().catch(() => {})
+  await drainLocationWrites().catch(quiet('drain location writes'))
   await setDriverOnline(supabase, driverId, false)
 }
 
