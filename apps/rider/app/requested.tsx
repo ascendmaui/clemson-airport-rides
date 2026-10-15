@@ -38,6 +38,7 @@ import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
+import { logCaught, toastCaught } from '@/lib/caught'
 import { registerRiderPush } from '@/lib/push'
 import { riderFlightView } from 'rides-native/flightStatus'
 import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
@@ -137,7 +138,9 @@ function RequestedRide() {
   // Ask for notification permission once a ride exists, so "on the way / here" can reach a locked phone.
   useEffect(() => {
     if (!user?.id || !tripId) return
-    registerRiderPush(supabase, user.id, { prompt: true }).catch(() => {})
+    registerRiderPush(supabase, user.id, { prompt: true }).catch((err: unknown) => {
+      toastCaught('requested-push', err, 'Ride alerts could not be turned on')
+    })
   }, [user?.id, tripId])
 
   const mapRequest = useRef(0)
@@ -147,7 +150,8 @@ function RequestedRide() {
     try {
       setTrackingNow(Date.now())
       void reloadMap(true)
-    } catch {
+    } catch (err) {
+      logCaught('requested-retry', err)
       setMapError('Could not refresh tracking')
     }
   }
@@ -155,7 +159,8 @@ function RequestedRide() {
   function openBilling() {
     try {
       router.push('/billing')
-    } catch {
+    } catch (err) {
+      logCaught('requested-billing', err)
       setMapError('Could not open billing')
     }
   }
@@ -227,6 +232,8 @@ function RequestedRide() {
     let alive = true
     loadMidrideStarted(supabase, { id: shown?.id || tripId, status: shown?.status }).then((started) => {
       if (alive) setMidrideStarted(started)
+    }).catch((err: unknown) => {
+      toastCaught('requested-cancel', err, 'Could not check cancel options')
     })
     return () => { alive = false }
   }, [shown?.id, shown?.status, tripId])
@@ -276,7 +283,8 @@ function RequestedRide() {
     driverEta = followEtaLine(shown?.status || null, driverFix, live)
     const heldEta = etaHoldLine(shown?.status || null, driverEta)
     etaLine = staleEtaLine(locationIssue, heldEta, { placeholder: !driverEta })
-  } catch {
+  } catch (err) {
+    logCaught('requested-live', err)
     locationIssue = null
     holdPrompt = null
     driverFix = null
@@ -320,6 +328,8 @@ function RequestedRide() {
     let alive = true
     listEmergencyContacts(supabase, user.id).then((result) => {
       if (alive) setContacts(result.contacts)
+    }).catch((err: unknown) => {
+      toastCaught('requested-contacts', err, 'Could not load emergency contacts')
     })
     return () => {
       alive = false
@@ -336,7 +346,8 @@ function RequestedRide() {
       driver_id: live?.driver_id || trip?.driver_id || null,
     }, user.id).then((next) => {
       if (alive) setPerson(next)
-    }).catch(() => {
+    }).catch((err: unknown) => {
+      toastCaught('requested-driver', err, 'Could not load your driver')
       if (alive) setPerson(null)
     })
     return () => {
@@ -376,7 +387,8 @@ function RequestedRide() {
               try {
                 setRefreshing(true)
                 void reloadMap().finally(() => setRefreshing(false))
-              } catch {
+              } catch (err) {
+                logCaught('requested-retry', err)
                 setRefreshing(false)
                 setMapError('Could not refresh tracking')
               }
@@ -400,7 +412,8 @@ function RequestedRide() {
             onPress={() => {
               try {
                 openBilling()
-              } catch {
+              } catch (err) {
+                logCaught('requested-billing', err)
                 setMapError('Could not open billing')
               }
             }}
@@ -450,7 +463,7 @@ function RequestedRide() {
             {person && tripId ? <CommunityMatchChips supabase={supabase} tripId={tripId} colors={colors} /> : null}
             {ttlCanceled ? null : (
               <>
-              {locationIssue ? <View accessibilityLiveRegion="polite"><Text style={{ color: colors.title }}>{locationIssue}</Text><Pressable accessibilityRole="button" accessibilityLabel="Retry tracking" onPress={() => { try { retryTracking() } catch { setMapError('Could not refresh tracking') } }}><Text style={{ color: colors.title }}>Retry tracking</Text></Pressable></View> : null}
+              {locationIssue ? <View accessibilityLiveRegion="polite"><Text style={{ color: colors.title }}>{locationIssue}</Text><Pressable accessibilityRole="button" accessibilityLabel="Retry tracking" onPress={() => { try { retryTracking() } catch (err) { logCaught('requested-retry', err); setMapError('Could not refresh tracking') } }}><Text style={{ color: colors.title }}>Retry tracking</Text></Pressable></View> : null}
               <LivePhase
                 kicker={phase.kicker}
                 title=""

@@ -9,6 +9,7 @@ import {
   distanceFareCents,
   haversineMeters,
 } from 'rides-native/riderShell.js'
+import { logCaught } from '@/lib/caught'
 import { supabase } from '@/lib/supabase'
 
 export type RidePlace = { label: string; lat: number; lng: number }
@@ -101,7 +102,10 @@ export async function fetchScheduleSlots(pickup: RidePlace, tier = 'standard') {
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ pickup, tier }),
   })
-  const body = await res.json().catch(() => ({}))
+  const body = await res.json().catch((err: unknown) => {
+    logCaught('schedule-slots', err)
+    return {}
+  })
   if (!res.ok) throw new Error(body?.error || 'Could not load pickup times')
   return body as {
     waitMinutes: number | null

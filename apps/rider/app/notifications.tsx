@@ -17,6 +17,7 @@ import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { RequireAuth } from '@/components/RequireAuth'
+import { caughtMessage, logCaught } from '@/lib/caught'
 
 type Prefs = typeof DEFAULT_NOTIFICATION_PREFS
 
@@ -37,6 +38,10 @@ function NotificationsScreen() {
       if (!alive) return
       setPrefs(result.prefs as Prefs)
       if (result.softFail) setNote(`Saved on this phone. Profile sync: ${result.softFail}`)
+    }).catch((err: unknown) => {
+      if (!alive) return
+      logCaught('notifications', err)
+      setNote(caughtMessage(err, 'Could not load notification settings.'))
     })
     return () => {
       alive = false

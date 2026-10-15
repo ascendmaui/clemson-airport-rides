@@ -8,6 +8,7 @@ import {
   pickupBeaconShouldShow,
   rememberDismissal,
 } from '../../../shared/pickupBeacon.js'
+import { logCaught } from '@/lib/caught'
 import { authStorage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
 
@@ -37,7 +38,8 @@ async function readCode(tripId: string): Promise<string | null> {
   try {
     const data = await authedJson(supabase, `/api/pickup-beacon?tripId=${encodeURIComponent(tripId)}`)
     return typeof data?.pickupCode === 'string' ? data.pickupCode : null
-  } catch {
+  } catch (err) {
+    logCaught('pickup-beacon-code', err)
     return null
   }
 }
@@ -58,7 +60,8 @@ export function useRiderPickupBeacon(userId: string | null) {
       if (!alive) return
       setDismissed(map)
       setReady(true)
-    }).catch(() => {
+    }).catch((err: unknown) => {
+      logCaught('pickup-beacon-dismissed', err)
       if (alive) setReady(true)
     })
     return () => {
@@ -144,8 +147,8 @@ export function useRiderPickupBeacon(userId: string | null) {
           },
         )
         if (!alive) sub.remove()
-      } catch {
-        /* A missing fix keeps the beacon down. */
+      } catch (err) {
+        logCaught('pickup-beacon-location', err)
       }
     }
     void start()
@@ -213,7 +216,9 @@ export function useRiderPickupBeacon(userId: string | null) {
     if (!tripId) return
     setDismissed((prev) => rememberDismissal(prev, tripId))
     wasOpen.current = false
-    void persistDismissedPickupBeacon(tripId, authStorage).catch(() => {})
+    void persistDismissedPickupBeacon(tripId, authStorage).catch((err: unknown) => {
+      logCaught('pickup-beacon-dismiss', err)
+    })
   }
 
   return { show, code, tripId, dismiss }

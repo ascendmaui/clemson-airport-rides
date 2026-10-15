@@ -1,5 +1,12 @@
+import { describeDriver } from '../../../packages/rides-native/drivers.js'
 import { failedHoldPrompt, paymentFailedMoment } from '../../../packages/rides-native/rideMoments.js'
 import { trackingIssue } from '../../../packages/rides-native/tracking.js'
+
+/** Same line as logCaught. This module is loaded by node tests, which cannot resolve the app alias. */
+function logPicker(scope: string, err: unknown): void {
+  const detail = err instanceof Error ? err.message : err
+  console.warn(`[rider] ${scope}`, detail)
+}
 
 /** Read a driver string. Blank, null, and non-strings become the fallback. */
 export function textField(value: unknown, fallback: string): string {
@@ -107,7 +114,8 @@ export function safeCounterpart<T extends CounterpartShape>(person: T | null | u
 export function guardValue<T>(read: () => T, fallback: T): T {
   try {
     return read()
-  } catch {
+  } catch (err) {
+    logPicker('guard-value', err)
     return fallback
   }
 }
@@ -122,4 +130,146 @@ export function readPaymentFailedMoment(prevHold: unknown, row: unknown, role: '
 
 export function readTrackingIssue(status: unknown, timestamp: unknown, now?: number, heartbeatAt?: unknown) {
   return guardValue(() => trackingIssue(status, timestamp, now, heartbeatAt), null)
+}
+
+export type PickerDriverCard = {
+  id: string
+  name: string
+  vehicleLabel: string
+  plate: string
+  online: boolean
+  saved: boolean
+  eta: string
+  etaShort: string
+  availability: string
+  ratingLabel: string
+  lowRating: boolean
+  comfort: boolean
+  priority: boolean
+}
+
+type Approach = { lat?: number; lng?: number } | null | undefined
+
+type DriverLines = {
+  etaLabel?: string | null
+  distanceLabel?: string | null
+  availability?: string | null
+  ratingLabel?: string | null
+}
+
+function safeDriverId(driver: object): string {
+  return textField((driver as { id?: unknown }).id, '')
+}
+
+/**
+ * Keep rows the picker can group. Nulls, blanks, and rows that throw while
+ * reading id or online are dropped here so one bad record cannot blank the screen.
+ */
+export function readablePickerDrivers<T>(rows: unknown): T[] {
+  if (!Array.isArray(rows)) return []
+  const out: T[] = []
+  for (const row of rows) {
+    try {
+      if (!row || typeof row !== 'object') continue
+      if (!safeDriverId(row)) continue
+      Boolean((row as { online?: unknown }).online)
+      out.push(row as T)
+    } catch (err) {
+      logPicker('pick-driver-row', err)
+    }
+  }
+  return out
+}
+
+function fallbackPickerCard(id: string, saved: boolean): PickerDriverCard {
+  return {
+    id,
+    name: 'Driver',
+    vehicleLabel: 'Vehicle',
+    plate: '',
+    online: false,
+    saved,
+    eta: 'Not available now',
+    etaShort: 'Offline',
+    availability: 'Offline',
+    ratingLabel: 'New driver',
+    lowRating: false,
+    comfort: false,
+    priority: false,
+  }
+}
+
+/** One picker row. Returns null when the row has no id. Never throws. */
+export function pickerDriverCard(driver: unknown, pickup: Approach, saved = false): PickerDriverCard | null {
+  if (!driver || typeof driver !== 'object') return null
+  let id = ''
+  try {
+    id = safeDriverId(driver)
+  } catch (err) {
+    logPicker('pick-driver-row', err)
+    return null
+  }
+  if (!id) return null
+  try {
+    const row = driver as Record<string, unknown>
+    const name = textField(row.name, 'Driver')
+    const vehicleLabel = textField(row.vehicleLabel, 'Vehicle')
+    const plate = textField(row.plate, '')
+    const online = Boolean(row.online)
+    let lines: DriverLines = {}
+    try {
+      lines = (describeDriver(driver, pickup) || {}) as DriverLines
+    } catch (err) {
+      logPicker('pick-driver-card', err)
+      lines = {}
+    }
+    const etaLabel = typeof lines.etaLabel === 'string' ? lines.etaLabel : null
+    const distanceLabel = typeof lines.distanceLabel === 'string' ? lines.distanceLabel : null
+    const eta = online
+      ? [etaLabel, distanceLabel ? `${distanceLabel} from pickup` : null].filter(Boolean).join(' · ') || 'ETA unavailable'
+      : 'Not available now'
+    return {
+      id,
+      name,
+      vehicleLabel,
+      plate,
+      online,
+      saved,
+      eta,
+      etaShort: online ? (etaLabel || 'No ETA') : 'Offline',
+      availability: textField(lines.availability, online ? 'Online' : 'Offline'),
+      ratingLabel: textField(lines.ratingLabel, 'New driver'),
+      lowRating: row.standing === 'watch',
+      comfort: Boolean(row.comfortClass),
+      priority: Boolean(row.priorityMode) && online,
+    }
+  } catch (err) {
+    logPicker('pick-driver-card', err)
+    return fallbackPickerCard(id, saved)
+  }
+}
+
+/**
+ * What pick-driver renders for a roster. A null row, an empty object, and a
+ * row that throws while it is read all stay off the list.
+ */
+export function renderPickerDriverList(
+  rows: unknown,
+  pickup: Approach = null,
+  favoriteIds: readonly string[] = [],
+): PickerDriverCard[] {
+  const favorites = new Set(favoriteIds)
+  const cards: PickerDriverCard[] = []
+  for (const row of readablePickerDrivers<object>(rows)) {
+    let saved = false
+    try {
+      saved = favorites.has(safeDriverId(row))
+    } catch (err) {
+      logPicker('pick-driver-row', err)
+      saved = false
+    }
+    const card = pickerDriverCard(row, pickup, saved)
+    if (card) cards.push(card)
+  }
+  return cards
 }

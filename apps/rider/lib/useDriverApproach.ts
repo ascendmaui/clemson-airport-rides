@@ -9,6 +9,7 @@ import {
   isApproachStatus,
   type ApproachStage,
 } from '@/lib/approachAlert'
+import { logCaught } from '@/lib/caught'
 import { supabase } from '@/lib/supabase'
 
 type Coord = { lat: number; lng: number; heading?: number | null }
@@ -57,7 +58,8 @@ export function useDriverApproach(status: string | null, driverId: string | null
           },
         )
         if (!alive) sub.remove()
-      } catch {
+      } catch (err) {
+        logCaught('driver-approach', err)
         if (alive) setDenied(true)
       }
     }
