@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { navigate } from '../lib/navigation'
 import { supportEmail } from '../../shared/productLinks.js'
 import { SiteIcon } from './SiteIcon'
@@ -66,7 +66,8 @@ function useNavOverPage() {
  * ends so the photo and its overlay stop there and the page below stays light.
  */
 function useHeroHeight(rootRef) {
-  useEffect(() => {
+  // Layout effect: set the height before first paint so the photo never paints at the 560px fallback.
+  useLayoutEffect(() => {
     const root = rootRef.current
     if (!root) return undefined
     const hero = root.querySelector('.mkt-stage, .mkt-page-hero')
