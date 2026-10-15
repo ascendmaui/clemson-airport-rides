@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setAuthNext, takeAuthNext } from './authNext.ts'
 import { lift } from './elevation.ts'
+import { darkPalette } from './palette.ts'
 import { oneParam } from './oneParam.ts'
 
 test('authNext: stores and retrieves deferred navigation route with one-time consume', () => {
@@ -58,4 +59,20 @@ test('lift: calculates elevation and shadow properties across elevation levels',
   // Defaults to rest level
   const defaultStyle = lift(palette)
   assert.deepEqual(defaultStyle, restStyle)
+
+  const nightRest = lift(darkPalette, 'rest')
+  assert.equal(nightRest.shadowColor, darkPalette.shadow)
+  assert.equal(nightRest.shadowOpacity, 0.28)
+  assert.equal(nightRest.shadowRadius, 12)
+  assert.deepEqual(nightRest.shadowOffset, { width: 0, height: 6 })
+
+  const nightFloat = lift(darkPalette, 'float')
+  assert.equal(nightFloat.shadowOpacity, 0.28)
+  assert.equal(nightFloat.shadowRadius, 18)
+  assert.deepEqual(nightFloat.shadowOffset, { width: 0, height: 10 })
+
+  const nightBar = lift(darkPalette, 'bar')
+  assert.equal(nightBar.shadowOpacity, 0.28)
+  assert.equal(nightBar.shadowRadius, 12)
+  assert.deepEqual(nightBar.shadowOffset, { width: 0, height: -4 })
 })
