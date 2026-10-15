@@ -202,6 +202,7 @@ type Quote = {
   studentDiscountCents: number
   surgeMultiplier: number
   surgeLabel: string | null
+  peak?: { surchargePct: number; riderLine: string | null } | null
   routeSource: string | null
   source?: string
   tigerPassApplied?: boolean
@@ -1127,7 +1128,10 @@ export function ScheduleScreen() {
             <Row label={airportQuote.tigerPassName || TIGER_PASS_NAME} value={`−${formatCents(airportQuote.tigerPassDiscountCents || 0)}`} />
           ) : null}
           {airportQuote && airportQuote.surgeMultiplier > 1 ? (
-            <Row label={airportQuote.surgeLabel || 'Surge'} value={`${airportQuote.surgeMultiplier}×`} />
+            <Row
+              label={airportQuote.surgeLabel || 'Surge'}
+              value={airportQuote.peak ? `+${airportQuote.peak.surchargePct}%` : `${airportQuote.surgeMultiplier}×`}
+            />
           ) : null}
           <Row
             label="Charged now"

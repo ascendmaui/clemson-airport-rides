@@ -19,6 +19,7 @@ import {
 import { carpoolSeatCount, resolveOfferedTier } from '../../shared/rideOptions.js'
 import { tigerPassQuoteFields } from '../../shared/tigerPass.js'
 import { loadRiderMatchPreferences } from '../riderPass.js'
+import { peakQuoteFields } from '../peakPricing.js'
 
 const CLIENT_MONEY_KEYS = [
   'fareCents',
@@ -127,6 +128,8 @@ export default async function handler(req, res, deps = {}) {
     version: FARE_RATES_VERSION,
     routeSource: priced.routeSource,
     surge: priced.surge,
+    // Peak pricing (flag PEAK_PRICING_ENABLED): shown to the rider before they confirm.
+    peak: peakQuoteFields(priced),
     gameDay: gameDayEvent
       ? {
           id: gameDayEvent.id ?? null,

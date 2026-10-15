@@ -65,6 +65,17 @@ export function zoneContains(zone: { lat: number; lng: number; radius: number },
 export function bestPayableZone(lat: number, lng: number, zones: TigerHeatZone[]): TigerHeatZone | null
 export function heatWindowActivation(windowId: string): TigerHeatActivation
 export function tigerHeatAnchor(windowId: string, now?: Date): Date
+export type PeakStatus = {
+  enabled: boolean
+  active: boolean
+  reason?: string | null
+  reasonLabel?: string | null
+  campusSurchargeBps?: number
+  airportSurchargeBps?: number
+  reasons?: string[]
+  driverLine?: string | null
+}
+export function normalizePeakStatus(raw: unknown): PeakStatus
 export function normalizeTigerHeatMap(body: unknown): {
   label: string
   windowId: string
@@ -73,5 +84,6 @@ export function normalizeTigerHeatMap(body: unknown): {
   deactivated: unknown[]
   solvency: unknown
   durationPolicy: unknown
+  peak: PeakStatus
   error: string | null
 }

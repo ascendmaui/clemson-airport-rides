@@ -2,7 +2,8 @@
  * One driver-net calculation for a trip, shared by the payout queue (server/payouts.js)
  * and every driver screen (live trip header, fare panel, trip-end summary).
  *
- * netCents = fare net (Tiger Heat settled pay, else the accept-locked
+ * netCents = fare net (Tiger Heat settled pay, else settled peak-pricing pay,
+ *            else the accept-locked
  *            metadata.driver_net_cents / driver_payout_cents, else 80%)
  *          + driver share of any boost not already in that net
  *          + backup-queue bonus (when promoted from backup)
@@ -27,6 +28,18 @@ export function tigerHeatPayoutCents(trip) {
   return Math.max(0, Math.round(amount))
 }
 
+/**
+ * Settled peak-pricing pay (higher cut + pool bonus) replaces the ladder net.
+ * Written only by the server at trip completion (server/peakPricing.js).
+ */
+export function peakPricingPayoutCents(trip) {
+  const peak = trip?.metadata?.peak_pricing
+  if (!peak || peak.kind !== 'peak' || peak.settled !== true) return null
+  const amount = Number(peak.driverEarningsCents)
+  if (!Number.isFinite(amount)) return null
+  return Math.max(0, Math.round(amount))
+}
+
 export function driverTripEarnings(trip) {
   const status = String(trip?.status || '')
   const fareCents = cents(trip?.fare_cents)
@@ -37,11 +50,12 @@ export function driverTripEarnings(trip) {
     const waitCents = status === 'cancelled_wait' ? waitShare : 0
     return {
       kind: 'cancel', fareCents, fareNetCents: 0, platformFeeCents: 0, boostCents: 0, backupBonusCents: 0,
-      waitCents, riderWaitFeeCents, tigerHeatBonusCents: 0, platformFundedCents: 0, tipCents, prepaidTipCents: 0, netCents: waitCents,
+      waitCents, riderWaitFeeCents, tigerHeatBonusCents: 0, peakBonusCents: 0, platformFundedCents: 0, tipCents, prepaidTipCents: 0, netCents: waitCents,
     }
   }
   const heatPay = tigerHeatPayoutCents(trip)
-  const fareNetCents = heatPay == null ? resolveDriverNetCents(trip) : heatPay
+  const peakPay = heatPay == null ? peakPricingPayoutCents(trip) : null
+  const fareNetCents = heatPay != null ? heatPay : (peakPay != null ? peakPay : resolveDriverNetCents(trip))
   const included = trip?.metadata?.boost_included_in_driver_net === true
   const boostSource = included ? 0 : Math.max(readBoostCents(trip), readScheduledBoostCents(trip?.metadata))
   const boostCents = driverBoostShareCents(boostSource)
@@ -57,6 +71,7 @@ export function driverTripEarnings(trip) {
     fareCents,
     fareNetCents,
     platformFeeCents: heatPay == null ? Math.max(0, fareCents - fareNetCents) : 0,
+    peakBonusCents: peakPay == null ? 0 : cents(trip?.metadata?.peak_pricing?.bonusCents),
     boostCents,
     backupBonusCents,
     waitCents,

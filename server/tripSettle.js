@@ -19,6 +19,7 @@ import { insertTripEvent } from './tripEvents.js'
 import { debitStoredRideCredits } from './rideCreditSettle.js'
 import { airportDepositRequiredCents } from '../packages/rides-native/tripTags.js'
 import { releaseTigerHeatReservation, settleTigerHeatReservation } from './tigerHeatService.js'
+import { settlePeakPricing } from './peakPricing.js'
 import { releaseOpenFareHold, settleFareHold } from './fareAuthorization.js'
 import { riderCaptureFareCents } from '../shared/backupDriverQueue.js'
 import { claimCompletion, completionResult, releaseCompletion } from './tripCompletion.js'
@@ -424,6 +425,28 @@ async function settleClaimedTrip({
     metadata.tiger_heat = tigerHeat
     patch.metadata = metadata
     trip = { ...trip, metadata, status: patch.status }
+  }
+
+  // Peak pricing (PEAK_PRICING_ENABLED, default off): settle the higher cut and
+  // pool bonus on a peak trip, or the pool contribution on a regular trip.
+  if (action === 'complete' && !campusUncollected && !tigerHeat?.settled) {
+    let peakPricing = null
+    try {
+      peakPricing = await settlePeakPricing({ sb, trip, now: new Date(now) })
+    } catch (error) {
+      console.warn(JSON.stringify({
+        level: 'warn',
+        msg: 'peak_pricing_settle_failed',
+        tripId: trip.id,
+        error: error?.message || String(error),
+      }))
+    }
+    if (peakPricing) {
+      const metadata = { ...(patch.metadata || trip.metadata || {}) }
+      metadata.peak_pricing = peakPricing
+      patch.metadata = metadata
+      trip = { ...trip, metadata, status: patch.status }
+    }
   }
 
   if (sb) {

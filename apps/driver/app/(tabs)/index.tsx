@@ -91,6 +91,8 @@ import { motion, shadowStyle } from 'rides-native/shared/theme.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { GameDaySurgeLine } from 'rides-native/GameDayBoard.jsx'
 import { useGameDayExperience } from 'rides-native/useGameDayExperience.js'
+import { fetchPeakStatus } from 'rides-native/tigerHeatClient.js'
+import type { PeakStatus } from 'rides-native/tigerHeat.js'
 import { approvalGateMessage, isSyntheticOffer } from 'rides-native/syntheticOffers'
 import { driverGateView } from 'rides-native/driverGateView'
 import { loadCounterpart } from 'rides-native/partyProfile.js'
@@ -182,6 +184,22 @@ function DriverHomeBody() {
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null)
   const [gameNotice, setGameNotice] = useState<GameDayNotice | null>(null)
   const gameDayExperience = useGameDayExperience(supabase, { driverId: user?.id || null })
+  // Peak pricing status from the server (disabled while PEAK_PRICING_ENABLED is off).
+  const [peak, setPeak] = useState<PeakStatus>({ enabled: false, active: false })
+  useEffect(() => {
+    let alive = true
+    const load = () => {
+      fetchPeakStatus().then((next: PeakStatus) => {
+        if (alive) setPeak(next)
+      }).catch(() => undefined)
+    }
+    load()
+    const timer = setInterval(load, 5 * 60 * 1000)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [])
   const myMarker = useMyMarker()
   const [refreshing, setRefreshing] = useState(false)
   const [offerNote, setOfferNote] = useState<string | null>(null)
@@ -701,6 +719,14 @@ function DriverHomeBody() {
                         : demand.updatedAt ? 'Quiet right now · updates every 30 s' : 'Loading live demand…'
                       : heatLoading ? 'Loading campus demand…' : `${heatCaption}${heatBlended ? ' · Live + typical' : ''}`}
                 </Text>
+                {peak.enabled && peak.active ? (
+                  <Text
+                    accessibilityRole="text"
+                    style={{ color: colors.orange, fontSize: 12, fontWeight: '800', marginHorizontal: 16, marginTop: 4 }}
+                  >
+                    {`Peak pricing now · ${(peak.reasons || []).join(' · ') || peak.reasonLabel || 'Peak'}`}
+                  </Text>
+                ) : null}
                 {canSeeOffers && !desk?.active ? <ForecastCard /> : null}
               </>
             ) : null}
@@ -770,6 +796,7 @@ function DriverHomeBody() {
             <GameDaySurgeLine
               model={gameDayExperience.ready ? gameDayExperience.model : null}
               online={false}
+              peak={peak}
               onPress={() => router.push('/game-day')}
             />
           ) : null}

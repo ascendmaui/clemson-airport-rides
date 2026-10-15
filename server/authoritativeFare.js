@@ -32,6 +32,8 @@ import {
 } from '../shared/rideOptions.js'
 import { applyTigerPassDiscount, tigerPassMetadata } from '../shared/tigerPass.js'
 import { tigerPassBpsForRider } from './riderPass.js'
+import { PEAK_PRICING_VERSION, surchargeForFare } from '../shared/peakPricing.js'
+import { peakSurgeMode } from './peakPricing.js'
 
 /** Stored rows keep their label in the UI. A retired tier is not repriced as a live option. */
 function tierForStoredTrip(raw) {
@@ -86,11 +88,94 @@ function finiteCents(value) {
 }
 
 /**
+ * Surge for one pricing pass.
+ *   legacy: PEAK_PRICING_ENABLED is off, so the existing resolveSurge rules apply unchanged.
+ *   none:   peak pricing is on and no peak reason applies, so there is no surcharge.
+ *   peak:   peak pricing is on. The surcharge percent becomes the multiplier, in the same
+ *           stacking slot as legacy surge (after the tier scale, before discounts).
+ */
+function surgeForMode(mode, { at, airport, gameDayMultiplier }) {
+  if (!mode || mode.kind === 'legacy') return resolveSurge({ at, airport, gameDayMultiplier })
+  if (mode.kind !== 'peak' || !(mode.effectiveBps > 0)) {
+    return { multiplier: 1, rule: null, matched: [], at: at.toISOString() }
+  }
+  const multiplier = 1 + mode.effectiveBps / 10000
+  const primary = mode.peak.primary
+  const rule = { id: `peak_${primary.id}`, label: `Peak · ${primary.label}`, multiplier }
+  return {
+    multiplier,
+    rule,
+    matched: mode.peak.reasons.map((r) => ({ id: `peak_${r.id}`, label: `Peak · ${r.label}`, multiplier: 1 + Math.min(r.bps, mode.effectiveBps) / 10000 })),
+    at: at.toISOString(),
+    peak: true,
+  }
+}
+
+/**
+ * Run one pricing function under the right surge mode. With peak pricing on,
+ * it prices once with no surcharge (the base fare, and the classed fare for the
+ * dollar cap), then once with the capped surcharge, and records both on the result.
+ */
+function preDiscountCents(priced) {
+  const b = priced?.quote?.breakdown || priced?.breakdown || {}
+  const each = Number(b.surged_cents ?? b.subtotal_cents)
+  if (!Number.isFinite(each)) return null
+  const seats = Math.max(1, Math.round(Number(priced?.seatCount) || 1))
+  return Math.max(0, Math.round(each)) * seats
+}
+
+function priceWithPeak({ at, airport, scheduled = false, gameDayMultiplier }, run) {
+  const mode = peakSurgeMode({ at, airport, scheduled, gameDayMultiplier })
+  if (mode.kind !== 'peak') return run(mode)
+  const off = run({ kind: 'none' })
+  const classed = off?.quote?.breakdown?.subtotal_cents ?? off?.breakdown?.subtotal_cents ?? off?.fareCents
+  const capped = surchargeForFare(classed, mode.bps, mode.config)
+  if (capped.effectiveBps <= 0) return off
+  const priced = run({ ...mode, effectiveBps: capped.effectiveBps })
+  const primary = mode.peak.primary
+  const peak = {
+    version: PEAK_PRICING_VERSION,
+    active: true,
+    reason: primary.id,
+    reasonLabel: primary.label,
+    reasons: mode.peak.reasons.map((r) => r.label),
+    requestedBps: capped.requestedBps,
+    surchargeBps: capped.effectiveBps,
+    dollarCapped: capped.dollarCapped,
+    baseFareCents: off.fareCents,
+    surchargeCents: Math.max(0, priced.fareCents - off.fareCents),
+  }
+  const keys = {
+    peak_pricing_version: PEAK_PRICING_VERSION,
+    peak_surcharge_bps: peak.surchargeBps,
+    peak_base_fare_cents: peak.baseFareCents,
+    peak_surcharge_cents: peak.surchargeCents,
+    peak_pay_base_cents: preDiscountCents(off),
+    peak_pay_peak_cents: preDiscountCents(priced),
+    peak_reason: peak.reason,
+  }
+  const next = { ...priced, peak }
+  if (priced.breakdown && typeof priced.breakdown === 'object') next.breakdown = { ...priced.breakdown, ...keys }
+  if (priced.quote && typeof priced.quote === 'object') {
+    next.quote = { ...priced.quote, breakdown: { ...(priced.quote.breakdown || {}), ...keys } }
+  }
+  return next
+}
+
+/**
  * Metered campus → GSP/CLT fare. Student 10% only when isStudent is already
  * decided by studentDiscountGranted. No upfront deposit; the fare is charged
  * at trip end.
  */
-export function quoteAirportCheckout({
+export function quoteAirportCheckout(args = {}) {
+  const at = args.at instanceof Date && !Number.isNaN(args.at.getTime()) ? args.at : new Date()
+  return priceWithPeak(
+    { at, airport: true, scheduled: Boolean(args.scheduleAhead), gameDayMultiplier: args.gameDayMultiplier ?? null },
+    (mode) => quoteAirportCheckoutWith({ ...args, at }, mode),
+  )
+}
+
+function quoteAirportCheckoutWith({
   airport,
   at = new Date(),
   isStudent = false,
@@ -99,12 +184,12 @@ export function quoteAirportCheckout({
   durationS = null,
   tigerPassBps = 0,
   tier = 'standard',
-} = {}) {
+} = {}, mode = { kind: 'legacy' }) {
   const code = String(airport || 'GSP').toUpperCase() === 'CLT' ? 'CLT' : 'GSP'
   const fb = AIRPORT_ROUTE_FALLBACK[code]
   const when = at instanceof Date && !Number.isNaN(at.getTime()) ? at : new Date()
   const hasRoute = distanceM != null || durationS != null
-  const surge = resolveSurge({ at: when, airport: true, gameDayMultiplier })
+  const surge = surgeForMode(mode, { at: when, airport: true, gameDayMultiplier })
   const quote = quoteFare({
     distanceM: hasRoute ? distanceM : undefined,
     durationS: hasRoute ? durationS : undefined,
@@ -132,7 +217,24 @@ export function quoteAirportCheckout({
  * Fare recorded on a scheduled or campus trip. GSP/CLT use the airport quote.
  * Other trips use the shared card on server distance. ATL keeps its existing floor.
  */
-export function priceScheduledRequest({
+function requestAirportCode(pickup, dropoff, airport) {
+  const explicit = airport ? String(airport).toUpperCase() : null
+  const fromPlace = airportCodeForPlace(dropoff) || airportCodeForPlace(pickup)
+  return explicit === 'GSP' || explicit === 'CLT' || explicit === 'ATL'
+    ? explicit
+    : fromPlace
+}
+
+export function priceScheduledRequest(args = {}) {
+  const at = args.at instanceof Date && !Number.isNaN(args.at.getTime()) ? args.at : new Date()
+  const code = requestAirportCode(args.pickup, args.dropoff, args.airport ?? null)
+  return priceWithPeak(
+    { at, airport: Boolean(code), scheduled: Boolean(args.scheduleAhead), gameDayMultiplier: args.gameDayMultiplier ?? null },
+    (mode) => priceScheduledRequestWith({ ...args, at }, mode),
+  )
+}
+
+function priceScheduledRequestWith({
   pickup,
   dropoff,
   airport = null,
@@ -146,18 +248,14 @@ export function priceScheduledRequest({
   now = new Date(),
   tigerPassBps = 0,
   seatCount = 1,
-} = {}) {
-  const explicit = airport ? String(airport).toUpperCase() : null
-  const fromPlace = airportCodeForPlace(dropoff) || airportCodeForPlace(pickup)
-  const code = explicit === 'GSP' || explicit === 'CLT' || explicit === 'ATL'
-    ? explicit
-    : fromPlace
+} = {}, mode = { kind: 'legacy' }) {
+  const code = requestAirportCode(pickup, dropoff, airport)
   const tierId = resolveOfferedTier(tier)
   const student = Boolean(isStudent) && tierId === 'standard'
   const when = at instanceof Date && !Number.isNaN(at.getTime()) ? at : new Date()
 
   if (code === 'GSP' || code === 'CLT') {
-    const priced = quoteAirportCheckout({
+    const priced = quoteAirportCheckoutWith({
       airport: code,
       at: when,
       isStudent: student,
@@ -166,7 +264,7 @@ export function priceScheduledRequest({
       durationS,
       tigerPassBps,
       tier: tierId,
-    })
+    }, mode)
     return applyCarpoolSeats(applyScheduleAheadDiscount(
       { ...priced, tier: tierId },
       { at: when, now, enabled: scheduleAhead },
@@ -181,7 +279,7 @@ export function priceScheduledRequest({
     miles = Math.max(0, (Number(meters) || 0) / METERS_PER_MILE)
     minutes = Math.max(8, Math.round(miles * 2.2))
   }
-  const surge = resolveSurge({ at: when, airport: false, gameDayMultiplier })
+  const surge = surgeForMode(mode, { at: when, airport: false, gameDayMultiplier })
   const quote = quoteFare({
     miles,
     minutes,
@@ -267,21 +365,24 @@ export function priceCheckoutBody({
 } = {}) {
   const when = parseRideAt(body, at)
   const tier = resolveOfferedTier(body.tier)
-  const quoted = quoteAirportCheckout({
-    airport: body.airport,
-    at: when,
-    isStudent: studentDiscountGranted(user) && tier === 'standard',
-    gameDayMultiplier,
-    distanceM,
-    durationS,
-    tigerPassBps,
-    tier,
-  })
   const scheduled = Boolean(body.date || body.pickupAt || body.scheduled_for || body.scheduledFor)
-  const priced = applyScheduleAheadDiscount(
-    { ...quoted, tier },
+  const safeWhen = when instanceof Date && !Number.isNaN(when.getTime()) ? when : new Date()
+  const priced = priceWithPeak({ at: safeWhen, airport: true, scheduled, gameDayMultiplier }, (mode) => applyScheduleAheadDiscount(
+    {
+      ...quoteAirportCheckoutWith({
+        airport: body.airport,
+        at: when,
+        isStudent: studentDiscountGranted(user) && tier === 'standard',
+        gameDayMultiplier,
+        distanceM,
+        durationS,
+        tigerPassBps,
+        tier,
+      }, mode),
+      tier,
+    },
     { at: when, now, enabled: scheduled },
-  )
+  ))
   const clientFare = finiteCents(body.fareCents ?? body.fare_cents ?? body.total ?? body.totalCents ?? body.total_cents)
   const clientCharge = finiteCents(
     body.depositCents ?? body.deposit_cents ?? body.amount ?? body.amountCents ?? body.amount_cents,

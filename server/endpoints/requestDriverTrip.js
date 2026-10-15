@@ -235,7 +235,9 @@ export default async function handler(req, res, deps = {}) {
   }
   let tigerHeat = null
   try {
-    tigerHeat = await reserveTigerHeatOffer({
+    // A peak-priced trip is paid from the surcharge and the peak pool, not a
+    // second Tiger Heat bonus (only happens with PEAK_PRICING_ENABLED on).
+    if (!priced.peak) tigerHeat = await reserveTigerHeatOffer({
       sb,
       pickupLat: places.pickup.lat,
       pickupLng: places.pickup.lng,

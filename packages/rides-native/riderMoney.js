@@ -247,6 +247,20 @@ function num(value) {
   return Number.isFinite(n) ? n : 0
 }
 
+/** Peak-pricing block from /api/quote-fare. Null when no surcharge applies. */
+export function parsePeakQuote(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const bps = Math.max(0, Math.round(Number(raw.surchargeBps) || 0))
+  if (!bps) return null
+  return {
+    surchargeBps: bps,
+    surchargePct: bps / 100,
+    surchargeCents: Math.max(0, Math.round(Number(raw.surchargeCents) || 0)),
+    reasonLabel: typeof raw.reasonLabel === 'string' ? raw.reasonLabel : null,
+    riderLine: typeof raw.riderLine === 'string' ? raw.riderLine : null,
+  }
+}
+
 export function parseQuoteResponse(data) {
   const quote = data?.quote && typeof data.quote === 'object' ? data.quote : {}
   const breakdown = quote.breakdown && typeof quote.breakdown === 'object' ? quote.breakdown : {}
@@ -255,11 +269,13 @@ export function parseQuoteResponse(data) {
   const surge = data?.surge && typeof data.surge === 'object' ? data.surge : null
   const rule = surge?.rule && typeof surge.rule === 'object' ? surge.rule : null
   const tiers = Array.isArray(data?.tiers) ? data.tiers : []
+  const peak = parsePeakQuote(data?.peak)
   return {
     ...recomputeDeposit({ fareCents, cashCents }),
     studentDiscountCents: num(breakdown.student_discount_cents),
     surgeMultiplier: num(surge?.multiplier) || 1,
     surgeLabel: rule?.label || null,
+    ...(peak ? { peak } : {}),
     routeSource: data?.routeSource || null,
     tigerPassApplied: Boolean(data?.tigerPassApplied),
     tigerPassName: data?.tigerPassName || null,
