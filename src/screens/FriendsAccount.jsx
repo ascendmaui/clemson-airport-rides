@@ -6,6 +6,7 @@ import { navigate, shareUrl } from '../lib/navigation'
 import { createLocationShare, startSharingLocation } from '../lib/locationShare'
 import { fetchProfile, updateMyProfile } from '../lib/ratings'
 import { supabase } from '../lib/supabase'
+import { SiteIcon } from '../components/SiteIcon'
 
 const ACTIVE = ['searching', 'offered', 'accepted', 'arriving', 'arrived', 'in_progress']
 
@@ -113,7 +114,7 @@ export function FriendsScreen() {
   return (
     <div className="route-fade" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <div style={{ flex: 1, padding: 24, overflow: 'auto', paddingBottom: 96 }}>
-        <button type="button" className="pressable" onClick={() => navigate('home')} style={backBtn}>←</button>
+        <button type="button" className="pressable" aria-label="Back to home" onClick={() => navigate('home')} style={backBtn}><SiteIcon name="arrow-left" size={20} /></button>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--purple)' }}>Friends</h1>
         <p style={{ color: 'var(--ink-secondary)', marginTop: 8, lineHeight: 1.45 }}>
           Ride together or share live location on an active trip.

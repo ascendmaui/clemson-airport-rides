@@ -225,7 +225,7 @@ export function OfferBridge() {
         <GlassCard app="driver" scheme={scheme} pointerEvents="none" selected style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <GlassBadge name={rideTypeIconName(banner.tier || 'standard')} size={32} tone="orange" scheme={scheme} active />
-          <Text style={[styles.kicker, { color: colors.purple }]}>RIDE REQUEST</Text>
+          <Text style={[styles.kicker, { color: colors.link }]}>RIDE REQUEST</Text>
         </View>
         <Text style={[styles.title, { color: colors.title }]}>{banner.title}</Text>
         <Text style={{ color: colors.ink }}>{banner.body}</Text>
