@@ -12,6 +12,7 @@ import {
   type Place,
 } from 'rides-native/shared/carpool.js'
 import { EmptyState } from '@/components/carpool/ui'
+import { logCaught } from '@/lib/caught'
 import { TabSwipeRegion } from '@/components/MainTabPager'
 import type { Palette } from '@/lib/palette'
 import { addressFromGeocode } from '@/lib/reverseAddress'
@@ -75,7 +76,8 @@ async function geocodedPlaces(query: string): Promise<SpotCandidate[]> {
       lat: hit.latitude,
       lng: hit.longitude,
     }]
-  } catch {
+  } catch (err) {
+    logCaught('neighborhood-geocode', err)
     return []
   }
 }
@@ -131,6 +133,9 @@ export function NeighborhoodPicker({
     setExtraPlaces([])
     void geocodedPlaces(q).then((rows) => {
       if (alive) setExtraPlaces(rows)
+    }).catch((err: unknown) => {
+      logCaught('neighborhood-search', err)
+      if (alive) setExtraPlaces([])
     })
     return () => {
       alive = false
@@ -163,7 +168,8 @@ export function NeighborhoodPicker({
       let position
       try {
         position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation })
-      } catch {
+      } catch (err) {
+        logCaught('neighborhood-locate', err)
         position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
       }
       const lat = position.coords.latitude
@@ -176,7 +182,8 @@ export function NeighborhoodPicker({
       try {
         const reversed = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng })
         placeLabel = addressFromGeocode(reversed[0]) || placeLabel
-      } catch {
+      } catch (err) {
+        logCaught('neighborhood-address', err)
         placeLabel = 'Current location'
       }
       onChange({ label: placeLabel, lat, lng })

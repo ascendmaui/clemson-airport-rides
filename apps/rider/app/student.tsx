@@ -10,6 +10,7 @@ import { STUDENT_CLAIM_COPY, STUDENT_DISCOUNT_LABEL, loadStudentProfile, markStu
 import type { Palette } from '@/lib/palette'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { RequireAuth } from '@/components/RequireAuth'
+import { caughtMessage, logCaught } from '@/lib/caught'
 
 function StudentScreen() {
   const router = useRouter()
@@ -29,6 +30,10 @@ function StudentScreen() {
       setVerifiedAt(row.studentVerifiedAt)
       setEmail(row.email || user.email || null)
       if (row.error) setNote(row.error)
+    }).catch((err: unknown) => {
+      if (!alive) return
+      logCaught('student', err)
+      setNote(caughtMessage(err, 'Could not load student status.'))
     })
     return () => {
       alive = false

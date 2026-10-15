@@ -22,6 +22,7 @@ import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
+import { toastCaught } from '@/lib/caught'
 
 export default function RideTiers() {
   const router = useRouter()
@@ -67,7 +68,9 @@ export default function RideTiers() {
       setPass(next)
       const preferred = (next.preferredCarTypes || []).find((id) => tiers.some((tier) => tier.id === id))
       if (preferred && !tiers.some((tier) => tier.id === presetTier)) setSelected(preferred)
-    }).catch(() => {})
+    }).catch((err: unknown) => {
+      toastCaught('tiers-pass', err, 'Could not load Tiger Pass')
+    })
     const pickupLatN = Number(pickupLat)
     const pickupLngN = Number(pickupLng)
     const destLatN = Number(destLat)
@@ -84,7 +87,9 @@ export default function RideTiers() {
       setQuote(next)
       const preferred = (next.preferredCarTypes || []).find((id) => tiers.some((tier) => tier.id === id))
       if (preferred && !tiers.some((tier) => tier.id === presetTier)) setSelected(preferred)
-    }).catch(() => {})
+    }).catch((err: unknown) => {
+      toastCaught('tiers-quote', err, 'Could not load this fare')
+    })
     return () => {
       alive = false
     }
