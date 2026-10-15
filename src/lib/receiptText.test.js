@@ -152,7 +152,7 @@ test('shareReceipt: falls back to mailto when navigator is absent but window exi
   try {
     const res = await shareReceipt({ id: 'trip-mail' })
     assert.equal(res, 'mailto')
-    assert.ok(globalThis.window.location.href.startsWith('mailto:?subject=Clemson%20RIDES%20receipt'))
+    assert.ok(globalThis.window.location.href.startsWith('mailto:?subject=Clemson%20Rides%20receipt'))
   } finally {
     delete globalThis.window
     if (origNav) Object.defineProperty(globalThis, 'navigator', origNav)
