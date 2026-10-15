@@ -56,7 +56,7 @@ const FAQ = [
 
 function PageHead({ kicker, title, lede }) {
   return (
-    <div className="mkt-section-head">
+    <div className="mkt-section-head mkt-page-hero">
       <p className="mkt-kicker">{kicker}</p>
       <h1>{title}</h1>
       {lede ? <p>{lede}</p> : null}

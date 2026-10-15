@@ -56,7 +56,7 @@ export function AppDownloadPage({ appId }) {
 
   return (
     <MarketingChrome current="get-the-app">
-      <div className="mkt-section-head">
+      <div className="mkt-section-head mkt-page-hero">
         <p className="mkt-kicker" style={{ background: CLEMSON_PURPLE }}>{offer.audience}</p>
         <h1>{offer.product}</h1>
         <p>
