@@ -71,6 +71,8 @@ import { canDriverEnd } from '../../../shared/driverEndTrip.js'
 import { MISSING_TRIP_VIEW, driverCanceledView, nextDriverTripCard } from 'rides-native/tripCanceled'
 import { CrashBoundary } from '@/components/CrashBoundary'
 import { forgetActiveTrip, rememberActiveTrip } from '@/lib/crashReport'
+import { useSecondClock } from '@/lib/useSecondClock'
+import { TRIP_FALLBACK_POLL_MS, tripPollTick } from '@/lib/tripPoll'
 import { failureToast, quiet, quietly, tripStepFailureTitle } from '@/lib/softFail'
 import { LocationDisclosure } from '@/components/LocationDisclosure'
 import { DISCLOSURE_DECLINED_NOTE, shouldShowLocationDisclosure } from '@/lib/locationDisclosure'
@@ -79,25 +81,15 @@ import * as Location from 'expo-location'
 type RiderFix = { latitude: number; longitude: number }
 
 function ConfirmCountdown({ closesAt }: { closesAt?: string | null }) {
-  const [label, setLabel] = useState<string | null>(() => confirmCountdownLabel(closesAt))
-  useEffect(() => {
-    const tick = () => setLabel(confirmCountdownLabel(closesAt))
-    tick()
-    const id = setInterval(tick, 1000)
-    return () => clearInterval(id)
-  }, [closesAt])
+  useSecondClock()
+  const label = confirmCountdownLabel(closesAt)
   if (!label) return null
   return <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 28, marginTop: 6 }}>{label}</Text>
 }
 
 function LeaveNowLabel({ leaveNowAt }: { leaveNowAt?: string | null }) {
-  const [label, setLabel] = useState<string | null>(() => leaveNowCountdownLabel(leaveNowAt))
-  useEffect(() => {
-    const tick = () => setLabel(leaveNowCountdownLabel(leaveNowAt))
-    tick()
-    const id = setInterval(tick, 1000)
-    return () => clearInterval(id)
-  }, [leaveNowAt])
+  useSecondClock()
+  const label = leaveNowCountdownLabel(leaveNowAt)
   if (!label) return null
   return <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 28, marginTop: 6 }}>{label}</Text>
 }
@@ -134,6 +126,7 @@ function TripScreenBody() {
   }
   const confirmedRef = useRef(false)
   const readerRef = useRef<ReturnType<typeof createTrackingRefresh> | null>(null)
+  const riderReaderRef = useRef<{ refresh: (force?: boolean) => unknown } | null>(null)
   // Offline action queue: taps saved without signal show as done here and are
   // sent in order (same idempotency key on every retry) once signal returns.
   const onQueueEvent = useCallback((event: ActionQueueEvent) => {
@@ -269,10 +262,13 @@ function TripScreenBody() {
     }
     void pull()
     const listener = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void reader.refresh(true)
+      if (state !== 'active') return
+      void reader.refresh(true)
+      void riderReaderRef.current?.refresh(true)
     })
     const unsubscribe = subscribeTrips(supabase, pull)
-    const timer = setInterval(pull, 5000)
+    // One fallback poll behind realtime: trip + heartbeat always, rider fix only in the foreground.
+    const timer = setInterval(() => tripPollTick(AppState.currentState, pull, () => riderReaderRef.current?.refresh()), TRIP_FALLBACK_POLL_MS)
     return () => { reader.stop(); readerRef.current = null; listener.remove(); unsubscribe(); clearInterval(timer) }
   }, [refresh, id, user?.id])
 
@@ -326,11 +322,9 @@ function TripScreenBody() {
       onError: () => {},
     })
     void reader.refresh()
-    const listener = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void reader.refresh(true)
-    })
-    const timer = setInterval(() => void reader.refresh(), 5000)
-    return () => { reader.stop(); listener.remove(); clearInterval(timer) }
+    // Polled by the trip screen's single fallback poll (tripPollTick); no second interval here.
+    riderReaderRef.current = reader
+    return () => { reader.stop(); if (riderReaderRef.current === reader) riderReaderRef.current = null }
   }, [id, trip?.status, terminalTrip])
 
   const locationTracking = useDriverLocation(Boolean(user && trip && !terminalTrip), async (fix) => {
