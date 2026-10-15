@@ -2504,3 +2504,13 @@ html body .site.mkt .mkt-page-hero > * {
     animation: none !important;
   }
 }
+
+/* Home shell: the static hero already painted, so the mounted hero must not
+   replay its entrance (it would jump 18px after the page is visible). */
+html[data-home-shell="1"] .route-fade.route-site[data-route="landing"],
+html[data-home-shell="1"] .site.mkt-home,
+html[data-home-shell="1"] .site.mkt-home .mkt-stage-photo,
+html[data-home-shell="1"] .site.mkt-home .mkt-stage-copy,
+html[data-home-shell="1"] .site .mkt-home-hero .mkt-hero-shot {
+  animation: none !important;
+}

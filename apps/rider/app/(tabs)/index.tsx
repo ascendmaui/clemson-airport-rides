@@ -305,7 +305,7 @@ export function RiderHome() {
               </View>
               <View style={styles.brandCopy}>
                 <Text style={styles.brandKicker}>RIDE • GAME • REPEAT</Text>
-                <Text style={styles.brandTitle}>Clemson <Text style={styles.brandSoft}>RIDES</Text></Text>
+                <Text style={styles.brandTitle}>Clemson <Text style={styles.brandSoft}>Rides</Text></Text>
                 <Text style={styles.brandPillText}>TIGERS GET YOU THERE</Text>
               </View>
             </View>

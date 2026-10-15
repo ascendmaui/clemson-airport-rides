@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import driverHandler from './api/driver.js'
@@ -13,6 +14,61 @@ import tripMessagesHandler from './api/trip-messages.js'
 import scheduledDispatchHandler from './api/scheduled-dispatch-tick.js'
 import riderSwitchHandler from './api/rider-switch.js'
 import partyNightHandler from './api/party-night.js'
+
+/** Inline the static home hero into #root so the marketing home paints before the bundle runs. */
+function homeShell() {
+  return {
+    name: 'clemson-home-shell',
+    transformIndexHtml(html) {
+      const shell = readFileSync(new URL('./src/shell/homeShell.html', import.meta.url), 'utf8')
+      return html.replace('<div id="root"></div>', `<div id="root">${shell}</div>`)
+    },
+  }
+}
+
+/**
+ * Build only: on the home shell, request the app bundle right after the hero
+ * photo paints instead of during first paint. Other routes load it immediately.
+ */
+function deferEntryOnHomeShell() {
+  return {
+    name: 'clemson-home-shell-defer-entry',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html) {
+        const tag = html.match(/<script type="module" crossorigin src="(\/assets\/index-[\w-]+\.js)"><\/script>/)
+        if (!tag) throw new Error('home shell: entry script tag not found in index.html')
+        // Request the bundle only after a hero photo is on screen: the first image
+        // largest-contentful-paint entry arrives after that frame is presented, so the
+        // bundle never competes with first paint. (Chrome may pick the stadium photo or a
+        // collage photo as LCP depending on the viewport, so any image entry counts.) Browsers without LCP entries (Safari)
+        // wait for decode + a frame. Capped at 2.5 s either way.
+        const loader = `<script type="module">
+let started = false
+const go = () => { if (!started) { started = true; import('${tag[1]}') } }
+if (document.documentElement.getAttribute('data-home-shell') === '1') {
+  const photo = document.querySelector('[data-home-shell] .mkt-stage-photo')
+  const later = () => setTimeout(go, 0)
+  const lcp = typeof PerformanceObserver !== 'undefined' && (PerformanceObserver.supportedEntryTypes || []).includes('largest-contentful-paint')
+  if (photo && lcp) {
+    const seen = new PerformanceObserver((list) => {
+      if (list.getEntries().some((e) => e.url)) { seen.disconnect(); later() }
+    })
+    seen.observe({ type: 'largest-contentful-paint', buffered: true })
+    photo.addEventListener('error', later)
+  } else {
+    const ready = photo && photo.decode ? photo.decode().catch(() => {}) : Promise.resolve()
+    ready.then(() => requestAnimationFrame(later))
+  }
+  setTimeout(go, 2500)
+} else go()
+</script>`
+        return html.replace(tag[0], loader)
+      },
+    },
+  }
+}
 
 const legacy = {
   '/api/help-chat': ['/api/admin-drivers?action=help-chat', adminHandler],
@@ -98,7 +154,7 @@ function devApiPlugin() {
 }
 
 export default defineConfig({
-  plugins: [react(), devApiPlugin()],
+  plugins: [react(), devApiPlugin(), homeShell(), deferEntryOnHomeShell()],
   define: {
     'process.env.SUPPORT_EMAIL': JSON.stringify(process.env.SUPPORT_EMAIL || ''),
     'process.env.VITE_SUPPORT_EMAIL': JSON.stringify(process.env.VITE_SUPPORT_EMAIL || ''),
