@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { driverProfilePhotoMessage } from '../../../shared/profilePhotoReview.js'
+import { quiet } from '@/lib/softFail'
 
 export default function ProfilePhotoScreen() {
   const router = useRouter()
@@ -37,7 +38,7 @@ export default function ProfilePhotoScreen() {
         if (!alive || token !== request.current || !photo?.reviewStatus) return
         setNote(photo.driverMessage || driverProfilePhotoMessage(photo.reviewStatus))
       })
-      .catch(() => {})
+      .catch(quiet('profile photo load'))
     return () => { alive = false }
   }, [user]))
 

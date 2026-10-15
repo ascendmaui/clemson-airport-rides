@@ -55,6 +55,7 @@ import {
   backgroundStatusLabel,
   emptyDisclosures,
 } from '../../../shared/backgroundCheck.js'
+import { quiet, quietly } from '@/lib/softFail'
 
 const HEADLINE = 'Become a driver'
 const TAGLINE = 'For Clemson University students and experienced rideshare drivers.'
@@ -203,8 +204,8 @@ export default function OnboardingScreen() {
     setStepId(next.stepId)
     if (next.application?.onboarding_status === 'approved') return
     const [profile, vehicle] = await Promise.all([
-      loadDriverProfile(supabase, user.id).catch(() => null),
-      loadVehicle(supabase, user.id).catch(() => null),
+      loadDriverProfile(supabase, user.id).catch(quietly('onboarding profile', null)),
+      loadVehicle(supabase, user.id).catch(quietly('onboarding vehicle', null)),
     ])
     setBundle(next)
     setStepId(next.stepId)
@@ -277,7 +278,7 @@ export default function OnboardingScreen() {
         setInboxMessages(data.messages || [])
         setInboxRequests(data.requests || [])
       })
-      .catch(() => {})
+      .catch(quiet('onboarding load'))
     return () => { alive = false }
   }, [stepId])
 

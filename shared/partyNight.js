@@ -289,7 +289,7 @@ export function partyNightExplainer() {
       {
         id: 'invite',
         title: 'Invite friends with a link',
-        body: `Share one link. Friends with a Clemson RIDES account join the same ride, up to ${MAX_PARTY_SIZE} people. The group sees first names.`,
+        body: `Share one link. Friends with a Clemson Rides account join the same ride, up to ${MAX_PARTY_SIZE} people. The group sees first names.`,
       },
       {
         id: 'split',

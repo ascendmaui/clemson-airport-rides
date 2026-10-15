@@ -91,5 +91,5 @@ export function riderPromoShareUrl(code) {
 
 export function riderPromoShareText(code) {
   const norm = normalizePromoCode(code)
-  return `Join me on Clemson RIDES. Use code ${norm} when you sign up.`
+  return `Join me on Clemson Rides. Use code ${norm} when you sign up.`
 }

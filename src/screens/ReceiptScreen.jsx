@@ -30,7 +30,7 @@ function ReceiptBody() {
     <div className="fade-in" style={{ padding: 24, maxWidth: 440, margin: '0 auto' }}>
       <div className="glass-panel glass-panel--elevated" style={{ padding: 22, borderRadius: 22 }}>
         <div style={{ fontSize: 12, letterSpacing: 1.2, fontWeight: 800, color: 'var(--orange)' }}>RECEIPT</div>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--purple)', marginTop: 4 }}>Clemson RIDES</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--purple)', marginTop: 4 }}>Clemson Rides</h1>
         <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 14, marginTop: 14, lineHeight: 1.5 }}>
           {text}
         </pre>

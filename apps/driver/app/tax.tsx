@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase'
 import { exportYearEnd, type ExportKind } from '@/lib/taxExport'
 import { loadYearEnd, type YearEndView } from '@/lib/taxPacket'
 import { useTheme } from '@/lib/theme'
-import { elevation, radius, type as typeScale } from 'rides-native/shared/theme.js'
+import { color, radius, shadowStyle, type as typeScale } from 'rides-native/shared/theme.js'
 import { loadDriverW9 } from 'rides-native/driverW9Client'
 import { w9StatusLabel } from '../../../shared/driverW9.js'
 
@@ -278,11 +278,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sheet,
     padding: 22,
     gap: 4,
-    shadowColor: '#522D80',
-    shadowOpacity: elevation.float.shadowOpacity,
-    shadowRadius: elevation.float.shadowRadius,
-    shadowOffset: { width: elevation.float.shadowOffset.width, height: elevation.float.shadowOffset.height },
-    elevation: elevation.float.elevation,
+    ...shadowStyle(color.purple, 'float'),
   },
   heroKicker: { color: '#FFFFFF', ...typeScale.kicker, opacity: 0.9 },
   heroAmount: { color: '#FFFFFF', fontSize: 36, fontWeight: '800', letterSpacing: -1 },
