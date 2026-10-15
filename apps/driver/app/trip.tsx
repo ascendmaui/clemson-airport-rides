@@ -71,6 +71,7 @@ import { canDriverEnd } from '../../../shared/driverEndTrip.js'
 import { MISSING_TRIP_VIEW, driverCanceledView, nextDriverTripCard } from 'rides-native/tripCanceled'
 import { CrashBoundary } from '@/components/CrashBoundary'
 import { forgetActiveTrip, rememberActiveTrip } from '@/lib/crashReport'
+import { failureToast, quiet, tripStepFailureTitle } from '@/lib/softFail'
 
 type RiderFix = { latitude: number; longitude: number }
 
@@ -233,7 +234,7 @@ function TripScreenBody() {
     const reader = createTrackingRefresh({
       load: () => loadTrip(supabase, id, user?.id),
       onData: (row) => {
-        if (!row) void stopTripBackgroundLocation(id).catch(() => {})
+        if (!row) void stopTripBackgroundLocation(id).catch(quiet('stop trip location'))
         // A poll begun before Start or cancel must not restore the wait screen.
         setTrip((current) => current && current.id === row?.id && row?.status === 'arrived'
           && ['in_progress', 'completed', 'canceled', 'canceled_midride', 'cancelled_wait'].includes(current.status)
@@ -281,9 +282,9 @@ function TripScreenBody() {
         if (alive) setBackgroundNote('Background location could not start. Check location in Settings, then return to retry.')
       }
     }
-    void updateBackgroundLocation().catch(() => {})
+    void updateBackgroundLocation().catch(quiet('trip background location'))
     const listener = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void updateBackgroundLocation().catch(() => {})
+      if (state === 'active') void updateBackgroundLocation().catch(quiet('trip background location'))
     })
     // Navigation away from this screen must keep an active trip's service alive.
     return () => { alive = false; listener.remove() }
@@ -376,9 +377,17 @@ function TripScreenBody() {
       } else {
         pulse('accept')
       }
-      await refresh()
+      // The step is saved; a slow re-read must not report the step as failed.
+      await refresh().catch(quiet('refresh after trip step'))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update this trip')
+      failureToast({
+        key: 'trip-step',
+        title: tripStepFailureTitle(trip.status),
+        err,
+        fallback: 'The trip did not change.',
+        retry: () => { void onAdvance() },
+      })
     } finally {
       setBusy(false)
     }
@@ -438,10 +447,11 @@ function TripScreenBody() {
       }
       if (result?.trip) setTrip(toDriverCard(result.trip, { driverId: user.id }))
       pulse(op === 'drop' ? 'complete' : 'accept')
-      await refresh()
+      await refresh().catch(quiet('refresh after stop'))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update this stop')
-      await refresh()
+      failureToast({ key: 'trip-stop', title: 'Could not update this stop', err, fallback: 'The stop did not change.', retry: () => { void onStopAction(stop, op) } })
+      await refresh().catch(quiet('refresh after stop failure'))
     } finally {
       setBusy(false)
     }
@@ -454,9 +464,10 @@ function TripScreenBody() {
     try {
       const result = await driverTripAction(supabase, trip.id, 'cancel')
       setTrip(toDriverCard(result.trip, { driverId: user?.id }))
-      await refresh()
+      await refresh().catch(quiet('refresh after no-show'))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not cancel this ride')
+      failureToast({ key: 'trip-no-show', title: 'Could not mark a no-show', err, fallback: 'The ride is unchanged.', retry: () => { void onNoShow() } })
     } finally {
       setBusy(false)
     }
@@ -479,7 +490,7 @@ function TripScreenBody() {
           departedTrip.current = null
           const message = err instanceof Error ? err.message : 'Could not start navigation'
           if (!/changed|Refresh/i.test(message)) setError(message)
-          refresh()
+          refresh().catch(quiet('refresh after leave-now'))
         })
     }
     const wait = dueAt - Date.now()
@@ -810,8 +821,9 @@ function TripScreenBody() {
               onPress={() => {
                 if (!supabase || !trip.id) return
                 setBusy(true)
-                confirmBackupQueueTrip(supabase, trip.id).then(() => refresh()).catch((err: unknown) => {
+                confirmBackupQueueTrip(supabase, trip.id).then(() => refresh().catch(quiet('refresh after confirm'))).catch((err: unknown) => {
                   setError(err instanceof Error ? err.message : 'Could not confirm')
+                  failureToast({ key: 'trip-confirm', title: 'Could not confirm this trip', err, fallback: 'Your seat is unchanged.' })
                 }).finally(() => setBusy(false))
               }}
               disabled={busy}
@@ -824,7 +836,7 @@ function TripScreenBody() {
                 setBusy(true)
                 confirmBackupQueueTrip(supabase, trip.id, { navigate: true })
                   .then(() => openNavigation(navApp, target))
-                  .then(() => refresh())
+                  .then(() => refresh().catch(quiet('refresh after confirm and navigate')))
                   .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not start navigation'))
                   .finally(() => setBusy(false))
               }}
@@ -838,7 +850,7 @@ function TripScreenBody() {
                   if (!supabase || !trip.id || !trip.backupRole) return
                   setBusy(true)
                   releaseBackupQueueSeat(supabase, trip.id, { role: trip.backupRole })
-                    .then(() => refresh())
+                    .then(() => refresh().catch(quiet('refresh after seat release')))
                     .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not release this seat'))
                     .finally(() => setBusy(false))
                 }}

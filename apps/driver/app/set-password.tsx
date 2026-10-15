@@ -48,6 +48,8 @@ export default function SetPasswordRoute() {
     Linking.getInitialURL().then((url: string | null) => {
       if (!alive) return
       void consume(url)
+    }).catch((err: unknown) => {
+      console.warn('[auth] reset initial url', err instanceof Error ? err.message : err)
     })
     const sub = Linking.addEventListener('url', ({ url }: { url: string }) => {
       void consume(url)
