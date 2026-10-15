@@ -127,7 +127,7 @@ export async function settleSwitchHold({
       payment_method_options: {
         card: { request_incremental_authorization: 'if_available' },
       },
-      description: 'Clemson RIDES fare hold',
+      description: 'Clemson Rides fare hold',
       metadata: {
         kind: 'fare_authorization',
         tripId: String(trip.id || ''),

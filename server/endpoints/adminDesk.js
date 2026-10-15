@@ -338,7 +338,7 @@ async function applicantMessage(sb, res, user, body) {
     profileId,
     text,
     kind: 'message',
-    subject: 'Message from Clemson RIDES admin',
+    subject: 'Message from Clemson Rides admin',
   })
 }
 
@@ -354,7 +354,7 @@ async function infoRequest(sb, res, user, body) {
 
   const notice = await sendApplicantNotice({
     to: profile.data.email,
-    subject: 'Clemson RIDES needs more information',
+    subject: 'Clemson Rides needs more information',
     text: `An admin asked for more information on your driver application:\n\n${text}\n\nOpen the driver application to reply.`,
   })
 
