@@ -6,6 +6,7 @@ import { authStorage } from '@/lib/storage'
 import { paletteFor, type Palette, type Scheme } from '@/lib/palette'
 import { CLEMSON_LAT, CLEMSON_LNG, isDaylight } from '@/lib/solar'
 import { isNavApp as isKnownNavApp, type NavApp as SharedNavApp } from 'rides-native/mapsLink'
+import { quiet } from '@/lib/softFail'
 
 export type DisplayMode = 'auto' | 'light' | 'dark'
 export type NavApp = SharedNavApp
@@ -163,7 +164,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     authStorage.getItem(PREFS_KEY).then((raw) => {
       setPrefs(readPrefs(raw))
-    }).catch(() => {})
+    }).catch(quiet('theme prefs read'))
   }, [])
 
   useEffect(() => {
@@ -176,7 +177,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     Location.getLastKnownPositionAsync().then((pos: { coords: { latitude: number; longitude: number } } | null) => {
       if (!alive || !pos) return
       setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-    }).catch(() => {})
+    }).catch(quiet('theme location'))
     return () => {
       alive = false
     }
@@ -185,7 +186,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   function update(patch: Partial<Prefs>) {
     setPrefs((current: Prefs) => {
       const next = { ...current, ...patch }
-      authStorage.setItem(PREFS_KEY, JSON.stringify(next)).catch(() => {})
+      authStorage.setItem(PREFS_KEY, JSON.stringify(next)).catch(quiet('theme prefs save'))
       return next
     })
   }

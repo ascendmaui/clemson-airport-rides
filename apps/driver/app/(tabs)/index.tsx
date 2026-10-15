@@ -87,7 +87,7 @@ import { followEtaLine } from 'rides-native/roadFollow'
 import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { useReduceMotion } from 'rides-native/shared/reduceMotion.js'
-import { motion } from 'rides-native/shared/theme.js'
+import { motion, shadowStyle } from 'rides-native/shared/theme.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { GameDaySurgeLine } from 'rides-native/GameDayBoard.jsx'
 import { useGameDayExperience } from 'rides-native/useGameDayExperience.js'
@@ -101,6 +101,7 @@ import { offerCardGauge } from 'rides-native/offerGauge'
 import { fetchOfferPreview, riderInitials } from 'rides-native/offerPreviewClient'
 import { OfferGauge } from '@/components/OfferGauge'
 import { CrashBoundary } from '@/components/CrashBoundary'
+import { failureToast, quiet, quietly, withRetry } from '@/lib/softFail'
 import { tipBoostOfferLine } from '../../../../shared/prepaidTip.js'
 import { ACTIVE_TRIP_RECONCILE_MS, reconcileActiveTrip } from 'rides-native/activeTripReconcile'
 import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
@@ -260,8 +261,8 @@ function DriverHomeBody() {
     }
     const [application, rows, deadline] = await Promise.all([
       fetchDriverApplication(supabase, user.id),
-      fetchMyDriverDocuments(supabase, user.id).catch(() => null),
-      fetchInspectionDeadline(supabase, user.id).catch(() => null),
+      fetchMyDriverDocuments(supabase, user.id).catch(quietly('home documents', null)),
+      fetchInspectionDeadline(supabase, user.id).catch(quietly('home inspection deadline', null)),
     ])
     setDocuments(rows)
     setInspectionDueAt(deadline?.inspection_due_at ?? null)
@@ -277,7 +278,7 @@ function DriverHomeBody() {
     })
     if (currentGate.canSeeOffers) {
       const loaded = await loadDriverDesk(supabase, user.id)
-      if (loaded.online) markSearchingOffers(supabase, loaded.offers).catch(() => {})
+      if (loaded.online) markSearchingOffers(supabase, loaded.offers).catch(quiet('mark searching offers'))
       const active = loaded.active
       const decision = active
         ? reconcileActiveTrip({ id: active.id, status: active.status }, { id: active.id, status: active.status })
@@ -287,7 +288,7 @@ function DriverHomeBody() {
       if (loaded.lat != null && loaded.lng != null) {
         setSelf({ latitude: Number(loaded.lat), longitude: Number(loaded.lng) })
       }
-      const earnings = await loadEarnings(supabase, user.id).catch(() => null)
+      const earnings = await loadEarnings(supabase, user.id).catch(quietly('home earnings', null))
       if (earnings) {
         setTodayCents(earnings.summary?.todayNetCents || 0)
         setWeekCents(weekNetCents(earnings.trips || []))
@@ -339,7 +340,7 @@ function DriverHomeBody() {
   useEffect(() => {
     if (!supabase || !canSeeOffers) return undefined
     return subscribeTrips(supabase, () => {
-      refresh().catch(() => {})
+      refresh().catch(quiet('home realtime refresh'))
     })
   }, [canSeeOffers, refresh])
 
@@ -350,7 +351,7 @@ function DriverHomeBody() {
     const reconcile = () => {
       const active = deskRef.current?.active
       if (active?.id && canDriverEnd(active.status)) void sendTripHeartbeat(supabase, active.id)
-      refresh().catch(() => {})
+      refresh().catch(quiet('home reconcile refresh'))
     }
     const timer = setInterval(reconcile, ACTIVE_TRIP_RECONCILE_MS)
     const listener = AppState.addEventListener('change', (state) => {
@@ -408,10 +409,10 @@ function DriverHomeBody() {
     const nextOnline = !online
     if (nextOnline) {
       const rows = supabase
-        ? await fetchMyDriverDocuments(supabase, user.id).catch(() => null)
+        ? await withRetry(() => fetchMyDriverDocuments(supabase, user.id), { attempts: 2 }).catch(quietly('go online documents', null))
         : null
       const deadline = supabase
-        ? await fetchInspectionDeadline(supabase, user.id).catch(() => null)
+        ? await withRetry(() => fetchInspectionDeadline(supabase, user.id), { attempts: 2 }).catch(quietly('go online inspection deadline', null))
         : null
       const dueAt = deadline?.inspection_due_at ?? null
       const decision = decideGoPress({
@@ -439,7 +440,9 @@ function DriverHomeBody() {
       else await goOffline(user.id)
       if (fix) setSelf({ latitude: fix.lat, longitude: fix.lng })
       if (nextOnline) {
-        await publishDriverCapacity(supabase, user.id, desk?.vehicle?.seats)
+        // Already online at this point: a seats write failing must not read as "could not go online".
+        await withRetry(() => publishDriverCapacity(supabase, user.id, desk?.vehicle?.seats))
+          .catch(quiet('publish capacity'))
         setFocusToken((value: number) => value + 1)
       }
       pulseShift(nextOnline ? 'GO' : 'END')
@@ -452,9 +455,16 @@ function DriverHomeBody() {
         setOfferNote(message)
         AccessibilityInfo.announceForAccessibility(message || 'You are now offline')
       }
-      await refresh()
+      await refresh().catch(quiet('refresh after go online/offline'))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update online status')
+      failureToast({
+        key: 'go-online',
+        title: nextOnline ? 'Could not go online' : 'Could not go offline',
+        err,
+        fallback: 'Your status did not change.',
+        retry: () => { void toggle() },
+      })
     } finally {
       setBusy(false)
     }
@@ -470,12 +480,18 @@ function DriverHomeBody() {
     setError(null)
     try {
       await acceptTrip(supabase, card, user.id)
-      notifyAcceptedRide(card).catch(() => {})
-      pulse('accept')
-      await refresh()
-      router.push({ pathname: '/trip', params: { id: card.id } })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not accept')
+      failureToast({ key: 'accept', title: 'Could not accept this ride', err, fallback: 'The ride was not accepted.', retry: () => { void onAccept(card) } })
+      setBusy(false)
+      return
+    }
+    try {
+      // Accepted: a slow refresh or a local notification failing must not hide the trip.
+      notifyAcceptedRide(card).catch(quiet('accepted ride notification'))
+      pulse('accept')
+      await refresh().catch(quiet('refresh after accept'))
+      router.push({ pathname: '/trip', params: { id: card.id } })
     } finally {
       setBusy(false)
     }
@@ -499,9 +515,10 @@ function DriverHomeBody() {
         setOfferNote(message)
         AccessibilityInfo.announceForAccessibility(message)
       }
-      await refresh()
+      await refresh().catch(quiet('refresh after decline'))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not decline')
+      failureToast({ key: 'decline', title: 'Could not pass on this ride', err, fallback: 'The offer is still yours.', retry: () => { void onDecline(card) } })
     } finally {
       setBusy(false)
     }
@@ -791,7 +808,7 @@ function DriverHomeBody() {
               disabled={busy}
               onEnded={() => {
                 pulse('cancel')
-                refresh().catch(() => {})
+                refresh().catch(quiet('home refresh'))
               }}
             />
           ) : null}
@@ -879,7 +896,7 @@ export function RideCard({
     let alive = true
     setPreview(null)
     if (!isSyntheticOffer(card)) {
-      fetchOfferPreview(supabase, card.id).then((p) => { if (alive) setPreview(p) })
+      fetchOfferPreview(supabase, card.id).then((p) => { if (alive) setPreview(p) }).catch(quiet('offer preview'))
     }
     return () => { alive = false }
   }, [card.id])
@@ -1125,8 +1142,7 @@ const styles = StyleSheet.create({
   heatChipOn: {
     backgroundColor: PURPLE,
     borderColor: 'rgba(255,255,255,0.16)',
-    shadowColor: PURPLE, shadowOpacity: 0.22, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    ...shadowStyle(PURPLE, 'rest', 'dark'),
   },
   hotspotRow: { flexGrow: 0, marginTop: 10 },
   hotspots: { paddingHorizontal: 16, gap: 8 },

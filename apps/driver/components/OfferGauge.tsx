@@ -3,7 +3,8 @@
  * All motion runs on the UI thread via Reanimated; reduce-motion keeps colors with static effects.
  */
 import { useEffect, useMemo } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Platform, StyleSheet, Text, View } from 'react-native'
+import { glowStyle as glowStyleFor, shadowStyle } from 'rides-native/shared/theme.js'
 import * as Haptics from 'expo-haptics'
 import { LinearGradient } from 'expo-linear-gradient'
 import Animated, {
@@ -135,7 +136,7 @@ export function OfferGauge({ gauge, offerId }: { gauge: Gauge; offerId: string }
   return (
     <View style={styles.wrap} accessible accessibilityRole="text" accessibilityLabel={gauge.accessibilityLabel}>
       {fx.glow > 0 ? (
-        <Animated.View pointerEvents="none" style={[styles.glow, { backgroundColor: swatch.accent, shadowColor: swatch.accent }, glowStyle]} />
+        <Animated.View pointerEvents="none" style={[glowStyleFor(swatch.accent, Platform.OS), styles.glow, { backgroundColor: swatch.accent }, glowStyle]} />
       ) : null}
       {fx.burst ? (
         <Animated.View pointerEvents="none" style={[styles.burst, { borderColor: swatch.accent }, burstStyle]} />
@@ -143,7 +144,7 @@ export function OfferGauge({ gauge, offerId }: { gauge: Gauge; offerId: string }
       {fx.ring ? (
         <Animated.View pointerEvents="none" style={[styles.ring2, { borderTopColor: swatch.accent, borderRightColor: 'transparent', borderBottomColor: 'transparent', borderLeftColor: swatch.accent }, ringStyle]} />
       ) : null}
-      <View style={[styles.lift, { shadowColor: swatch.accent }]}>
+      <View style={[styles.lift, shadowStyle(swatch.accent, 'float', scheme)]}>
       <View style={[styles.pill, { backgroundColor: swatch.bg, borderColor: swatch.accent }]}>
         {fancy ? (
           <LinearGradient colors={swatch.gradient as [string, string, string]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
@@ -174,7 +175,7 @@ const styles = StyleSheet.create({
     borderRadius: 999, borderWidth: 1, overflow: 'hidden', minHeight: 44,
   },
   // Contact shadow plus a soft tinted lift. Kept light so the pay number stays the focus.
-  lift: { borderRadius: 999, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.16, shadowRadius: 18, elevation: 3 },
+  lift: { borderRadius: 999 },
   ring: { position: 'absolute', width: ARC, height: ARC, borderRadius: ARC / 2, borderWidth: STROKE },
   value: { fontSize: 16, fontWeight: '700', fontVariant: ['tabular-nums'], letterSpacing: -0.4 },
   label: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 1 },

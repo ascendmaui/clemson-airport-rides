@@ -7,7 +7,7 @@ import { shownCents } from '@/lib/shown'
 import { useTheme } from '@/lib/theme'
 import type { EarningBar } from '@/lib/earningsMath'
 import { formatPayoutEta } from 'rides-native/earningsDashboard.js'
-import { radius, type as typeScale } from 'rides-native/shared/theme.js'
+import { color, radius, shadowStyle, type as typeScale } from 'rides-native/shared/theme.js'
 import type {
   ForecastHighlights,
   PayoutTimeline,
@@ -459,11 +459,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 22,
     gap: 4,
-    shadowColor: '#522D80',
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
+    ...shadowStyle(color.purple, 'float'),
   },
   heroDark: {
     borderWidth: 1,

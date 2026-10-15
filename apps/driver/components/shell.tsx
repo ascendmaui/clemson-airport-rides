@@ -2,9 +2,9 @@ import { GlassButton, GlassSurface, glassTextColor } from 'rides-native/glass'
 import { Glyph } from 'rides-native/icons'
 import type { ReactNode } from 'react'
 import { useEffect, useRef } from 'react'
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Animated, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { motion, radius, type as typeScale } from 'rides-native/shared/theme.js'
+import { color, glowStyle, motion, radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { Enter } from '@/lib/enterMotion'
 import { useTheme } from '@/lib/theme'
 import { useLift } from '@/components/chrome'
@@ -261,11 +261,8 @@ const styles = StyleSheet.create({
     padding: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#F56600',
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    // Orange glow; on Android also a soft orange ring, since elevation shadows draw grey there.
+    ...glowStyle(color.orange, Platform.OS),
   },
   goText: {
     fontSize: 26,
