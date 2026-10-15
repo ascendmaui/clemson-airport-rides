@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import handler from './endpoints/driverPayoutMethods.js'
 import { handleDriverConnectEvent } from './driverPayoutMethods.js'
-import { expressTestKeyAllowed, payoutStatusChip, publicPayoutMethod, shouldApplyPayoutStatus } from '../shared/driverPayoutMethods.js'
+import { expressKeyAllowed, expressTestKeyAllowed, payoutStatusChip, publicPayoutMethod, shouldApplyPayoutStatus } from '../shared/driverPayoutMethods.js'
 
 const ENV = { STRIPE_SECRET_KEY: 'sk_test_driver' }
 const USER = { id: 'd1', email: 'ada@clemson.edu' }
@@ -135,19 +135,21 @@ function stripeMock(external) {
   }
 }
 
-test('a live Stripe key is refused before any account or payout call', async () => {
+test('a live Stripe key may set up Connect payouts; live cash out still needs CASHOUT_LIVE_ENABLED', async () => {
   assert.equal(expressTestKeyAllowed('sk_live_crimson'), false)
-  assert.equal(expressTestKeyAllowed('rk_live_crimson'), false)
-  assert.equal(expressTestKeyAllowed('sk_test_driver'), true)
+  assert.equal(expressKeyAllowed('sk_live_crimson'), true)
+  assert.equal(expressKeyAllowed('rk_live_crimson'), true)
+  assert.equal(expressKeyAllowed('sk_test_driver'), true)
+  assert.equal(expressKeyAllowed('pk_live_x'), false)
+  assert.equal(expressKeyAllowed(''), false)
   const stripe = stripeMock()
   const res = await call(
     { method: 'POST', headers: { origin: 'https://clemsonrides.com' }, body: { op: 'setup' } },
     { sb: memory(), user: USER, stripe, env: { STRIPE_SECRET_KEY: 'sk_live_crimson' } },
   )
-  assert.equal(res.status, 403)
-  assert.equal(res.json.error, 'live_keys_blocked')
-  assert.equal(stripe.calls.create.length, 0)
-  assert.equal(stripe.calls.links.length, 0)
+  assert.equal(res.status, 200)
+  assert.equal(stripe.calls.create.length, 1)
+  assert.equal(stripe.calls.links.length, 1)
   const cash = await call(
     { method: 'POST', headers: {}, body: { op: 'cashout', confirm: true, method: 'instant', feeCents: 75 } },
     { sb: memory({ account: 'acct_1' }), user: USER, stripe, env: { STRIPE_SECRET_KEY: 'sk_live_crimson' } },
@@ -272,8 +274,9 @@ test('webhook status chips move pending to in transit to paid and do not rewind'
     id: 'evt_live', type: 'payout.paid', livemode: true, account: 'acct_1',
     data: { object: { id: 'po_live', amount: 1, status: 'paid' } },
   })
-  assert.equal(live.reason, 'live_mode')
-  assert.equal(sb.state.events.some((row) => row.stripe_payout_id === 'po_live'), false)
+  // Live driver payouts are on (behind admin approval), so live Connect events sync too.
+  assert.equal(live.ok, true)
+  assert.equal(sb.state.events.some((row) => row.stripe_payout_id === 'po_live'), true)
 })
 
 test('payout methods screen reuses cash out and the daily cron schedule stays', () => {
