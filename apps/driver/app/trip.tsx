@@ -3,7 +3,7 @@ import { Glyph } from 'rides-native/icons'
 import { createTrackingRefresh } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { AccessibilityInfo, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
@@ -71,7 +71,10 @@ import { canDriverEnd } from '../../../shared/driverEndTrip.js'
 import { MISSING_TRIP_VIEW, driverCanceledView, nextDriverTripCard } from 'rides-native/tripCanceled'
 import { CrashBoundary } from '@/components/CrashBoundary'
 import { forgetActiveTrip, rememberActiveTrip } from '@/lib/crashReport'
-import { failureToast, quiet, tripStepFailureTitle } from '@/lib/softFail'
+import { failureToast, quiet, quietly, tripStepFailureTitle } from '@/lib/softFail'
+import { LocationDisclosure } from '@/components/LocationDisclosure'
+import { DISCLOSURE_DECLINED_NOTE, shouldShowLocationDisclosure } from '@/lib/locationDisclosure'
+import * as Location from 'expo-location'
 
 type RiderFix = { latitude: number; longitude: number }
 
@@ -162,6 +165,15 @@ function TripScreenBody() {
   const seenStatus = useRef<string | null>(null)
   const activeTrip = isActiveTripLocationStatus(trip?.status)
   const [backgroundNote, setBackgroundNote] = useState<string | null>(null)
+  // Prominent disclosure before the OS background-location prompt (Play policy).
+  const [disclosureFor, setDisclosureFor] = useState<string | null>(null)
+  const [disclosureAnswered, setDisclosureAnswered] = useState<{ tripId: string; accepted: boolean } | null>(null)
+  const answerDisclosure = useCallback((accepted: boolean) => {
+    setDisclosureFor((tripId) => {
+      if (tripId) setDisclosureAnswered({ tripId, accepted })
+      return null
+    })
+  }, [])
   const [self, setSelf] = useState<{ latitude: number; longitude: number } | null>(null)
   const [rider, setRider] = useState<RiderFix | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -274,6 +286,19 @@ function TripScreenBody() {
         return
       }
       try {
+        // Disclosure first: the OS prompt is only requested after the driver taps Continue.
+        const current = Platform.OS === 'web' ? { granted: true } : await Location.getBackgroundPermissionsAsync().catch(quietly('background permission read', null))
+        const granted = Boolean(current?.granted)
+        const answered = disclosureAnswered?.tripId === trip.id ? disclosureAnswered : null
+        if (!alive) return
+        if (shouldShowLocationDisclosure({ granted, answeredTripId: answered?.tripId ?? null, tripId: trip.id })) {
+          setDisclosureFor(trip.id)
+          return
+        }
+        if (!granted && answered && !answered.accepted) {
+          setBackgroundNote(DISCLOSURE_DECLINED_NOTE)
+          return
+        }
         const status = await startTripBackgroundLocation(trip.id)
         if (alive) setBackgroundNote(status === 'background-denied'
           ? 'Set location to Always so your rider can still see you while you use Maps.'
@@ -288,7 +313,7 @@ function TripScreenBody() {
     })
     // Navigation away from this screen must keep an active trip's service alive.
     return () => { alive = false; listener.remove() }
-  }, [trip?.id, activeTrip, terminalTrip, user?.id])
+  }, [trip?.id, activeTrip, terminalTrip, user?.id, disclosureAnswered])
 
   useEffect(() => {
     if (!supabase || !id || !trip || terminalTrip) return undefined
@@ -874,6 +899,7 @@ function TripScreenBody() {
         </ScrollView>
         </GestureDetector>
       </View>
+      <LocationDisclosure visible={Boolean(disclosureFor && disclosureFor === trip?.id && activeTrip && !terminalTrip)} onAccept={() => answerDisclosure(true)} onDecline={() => answerDisclosure(false)} />
       <SosSheet
         open={sosOpen && sosActive}
         onClose={() => setSosOpen(false)}
