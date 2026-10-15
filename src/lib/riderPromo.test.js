@@ -197,21 +197,21 @@ test('riderPromoShareUrl: builds share URL with WEB_ORIGIN in Node and handles b
 test('riderPromoShareText: produces share invitation copy with normalized code', () => {
   assert.equal(
     riderPromoShareText('TIGER2026'),
-    'Join me on Clemson RIDES. Use code TIGER2026 when you sign up.',
+    'Join me on Clemson Rides. Use code TIGER2026 when you sign up.',
   )
   assert.equal(
     riderPromoShareText(' clemson-fun '),
-    'Join me on Clemson RIDES. Use code CLEMSONFUN when you sign up.',
+    'Join me on Clemson Rides. Use code CLEMSONFUN when you sign up.',
   )
 
   // BUG?: Empty or stripped code leaves an extra space in "Use code  when you sign up."
   assert.equal(
     riderPromoShareText(''),
-    'Join me on Clemson RIDES. Use code  when you sign up.',
+    'Join me on Clemson Rides. Use code  when you sign up.',
   )
   assert.equal(
     riderPromoShareText('!!!'),
-    'Join me on Clemson RIDES. Use code  when you sign up.',
+    'Join me on Clemson Rides. Use code  when you sign up.',
   )
 })
 

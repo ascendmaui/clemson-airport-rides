@@ -9,7 +9,7 @@ export const PRIVACY_SECTIONS = [
   {
     heading: 'Article 1. Who We Are',
     paragraphs: [
-      'Clemson RIDES (“we”, “us”, “the Company”) is a technology platform for campus and airport rides used by Clemson University students and approved independent drivers. We help riders book flat-rate trips between campus and GSP/CLT airports, and we help drivers accept and complete those trips. The Company is not a transportation carrier and it does not provide transportation services. Our mailing address is 101 North Main Street, Greenville, SC 29601.',
+      'Clemson Rides (“we”, “us”, “the Company”) is a technology platform for campus and airport rides used by Clemson University students and approved independent drivers. We help riders book flat-rate trips between campus and GSP/CLT airports, and we help drivers accept and complete those trips. The Company is not a transportation carrier and it does not provide transportation services. Our mailing address is 101 North Main Street, Greenville, SC 29601.',
       'This Privacy Policy describes categories of information the software handles, the purposes of that handling, and the choices you have. It is not a promise that anyone at the Company watches a trip, and it does not create a duty to protect you from another person. Drivers are independent contractors, not our employees or agents. Holding the data described below does not make the Company the provider of a ride or responsible for what happens on one.',
     ],
   },
@@ -19,8 +19,8 @@ export const PRIVACY_SECTIONS = [
       'Capitalized words in this Privacy Policy have the following meanings. The same words in the Terms of Service have the meanings given there, and those meanings control if the two documents ever differ on a contract point.',
     ],
     bullets: [
-      '“Company” means Clemson RIDES, the operator of the Platform, which may be reached by mail at 101 North Main Street, Greenville, SC 29601.',
-      '“Platform” means the Clemson RIDES websites, mobile applications, and related software, including booking, matching, pricing, payment, messaging, and safety tools.',
+      '“Company” means Clemson Rides, the operator of the Platform, which may be reached by mail at 101 North Main Street, Greenville, SC 29601.',
+      '“Platform” means the Clemson Rides websites, mobile applications, and related software, including booking, matching, pricing, payment, messaging, and safety tools.',
       '“Services” means your access to that software. Services are not transportation and are not a promise that a vehicle will arrive.',
       '“Rider” means a person who requests a Ride through the Platform.',
       '“Driver” means an independent contractor who has been approved to receive ride requests through the Platform.',
@@ -39,7 +39,7 @@ export const PRIVACY_SECTIONS = [
       'Account details: name, email, and authentication identifiers from Supabase Auth. A Clemson (@clemson.edu) email may unlock student pricing.',
       'Student verification markers such as student_verified_at when your Clemson email is confirmed.',
       'Trip details: pickup/dropoff labels and coordinates, scheduled time, fare amounts, status history, and driver assignment.',
-      'Payment metadata from Stripe Checkout (we do not store full card numbers on Clemson RIDES servers).',
+      'Payment metadata from Stripe Checkout (we do not store full card numbers on Clemson Rides servers).',
       'Optional profile fields you provide (phone, home/work labels) and device/session signals needed for realtime trip updates.',
       'Safety-tool events you start, including SOS, a call or text you place from the app, trip sharing, and emergency-contact labels you save for yourself.',
       'Driver application materials you submit, such as license, vehicle, insurance, and background-check information required before a Driver may go online.',
@@ -86,7 +86,7 @@ export const PRIVACY_SECTIONS = [
   {
     heading: 'Article 9. Your Rights and Choices',
     paragraphs: [
-      'You may update profile details in Account, sign out at any time, and request deletion of your account/trip history by contacting Clemson RIDES support from Account. Marketing browse screens remain available without signup; booking and payment require a signed-in account.',
+      'You may update profile details in Account, sign out at any time, and request deletion of your account/trip history by contacting Clemson Rides support from Account. Marketing browse screens remain available without signup; booking and payment require a signed-in account.',
       'You may decline optional recording and you may choose not to share a trip link. Emergency tools, including SOS and call 911, remain available so you can use them if you want. Closing an account does not erase a safety record, a tax record, or a qualification file we must keep for a legal process, a chargeback, or an investigation already underway.',
       'If a state privacy law applies to you and gives a right to know, access, correct, delete, or appeal, or a right to opt out of a sale or of targeted advertising, you may send that request from Account → Support or by mail to the address in Article 12. We will honor a right that statute actually gives you and that it does not allow a contract to waive. As of the date of this policy, South Carolina has not enacted a general consumer privacy statute of the California type. A request we cannot complete because another law requires us to keep the record will be explained to you.',
     ],
@@ -94,7 +94,7 @@ export const PRIVACY_SECTIONS = [
   {
     heading: 'Article 10. Children',
     paragraphs: [
-      'The Platform is not offered to children, and a person under 18 is not permitted to create an account, request a Ride, or drive. Clemson RIDES is intended for university students and adults. We do not knowingly collect personal information from children under 13. If we learn that we have, we will delete it and close the account.',
+      'The Platform is not offered to children, and a person under 18 is not permitted to create an account, request a Ride, or drive. Clemson Rides is intended for university students and adults. We do not knowingly collect personal information from children under 13. If we learn that we have, we will delete it and close the account.',
     ],
   },
   {
@@ -107,7 +107,7 @@ export const PRIVACY_SECTIONS = [
   {
     heading: 'Article 12. Contact',
     paragraphs: [
-      `Privacy questions and privacy-rights requests may be sent to ${SUPPORT}, from Account → Support, or by mail to Clemson RIDES, 101 North Main Street, Greenville, SC 29601. A mailed notice is effective when we receive it.`,
+      `Privacy questions and privacy-rights requests may be sent to ${SUPPORT}, from Account → Support, or by mail to Clemson Rides, 101 North Main Street, Greenville, SC 29601. A mailed notice is effective when we receive it.`,
     ],
   },
 ]
@@ -116,7 +116,7 @@ export const TERMS_SECTIONS = [
   {
     heading: 'Article 1. Agreement',
     paragraphs: [
-      'By creating a Clemson RIDES account, requesting a ride, going online as a driver, or otherwise using the booking, payment, or driver features, you agree to these Terms of Service and to the Privacy Policy. If you do not agree, do not use those features. Guest browsing of marketing and schedule information is allowed without an account.',
+      'By creating a Clemson Rides account, requesting a ride, going online as a driver, or otherwise using the booking, payment, or driver features, you agree to these Terms of Service and to the Privacy Policy. If you do not agree, do not use those features. Guest browsing of marketing and schedule information is allowed without an account.',
       'These Terms are a contract between you and the Company. They bind every Rider, every Driver, and anyone else who uses the Platform. You represent that you can form a binding contract under South Carolina law and that you are using the Platform by your own choice.',
       'Section 1.1. The articles on the technology-platform role, independent contractors, the Driver Agreement, assumption of risk, disclaimers, limitation of liability, release, indemnification, safety cooperation, and arbitration allocate risk. Using the Platform after the “Last updated” date accepts the Terms then posted.',
       'Section 1.2. A Driver’s clickwrap is part of this contract. Checking the box and tapping “I Agree” is an electronic signature, as Article 20 describes, and it is acceptance of the Driver Agreement, these Terms, and the Privacy Policy in the versions then presented.',
@@ -128,7 +128,7 @@ export const TERMS_SECTIONS = [
       'Section 2.1. The following words, when capitalized, have the meanings in this Article. “Including” means “including without limitation.” Headings and article numbers are for convenience and do not narrow the text.',
     ],
     bullets: [
-      '“Company” means Clemson RIDES, the operator of the Platform. Notices go to 101 North Main Street, Greenville, SC 29601.',
+      '“Company” means Clemson Rides, the operator of the Platform. Notices go to 101 North Main Street, Greenville, SC 29601.',
       '“Platform” means the websites, applications, and software through which a person may request or accept a Ride, pay a fare, or use a safety tool.',
       '“Services” means the license to use that software. The Services are not transportation, and the Company does not provide transportation services.',
       '“Rider” means a person who uses the Platform to request a Ride.',
@@ -151,9 +151,9 @@ export const TERMS_SECTIONS = [
   {
     heading: 'Article 4. The Services',
     paragraphs: [
-      'Clemson RIDES connects student riders with drivers for scheduled campus-to-airport trips at published flat rates (for example GSP and CLT). Requesting a ride places a card hold for the estimated fare plus a buffer. The final fare is charged when the trip ends. Tips or adjustments may be handled as described in-app. Availability depends on online drivers and is not guaranteed for every requested time.',
+      'Clemson Rides connects student riders with drivers for scheduled campus-to-airport trips at published flat rates (for example GSP and CLT). Requesting a ride places a card hold for the estimated fare plus a buffer. The final fare is charged when the trip ends. Tips or adjustments may be handled as described in-app. Availability depends on online drivers and is not guaranteed for every requested time.',
       'What we offer in that sentence is software: a way to request, match, price, and pay. Any transportation that follows is performed by an independent Driver under Article 8 and Article 9. A quote, a hold, or a match is not a promise by the Company that a vehicle will arrive or that a trip will be finished.',
-      'Section 4.1. Fares are disclosed in the app before you confirm. Payment for a Ride arranged on the Platform is made through the Platform. A Driver does not accept a street hail or a cash fare for a Clemson RIDES booking.',
+      'Section 4.1. Fares are disclosed in the app before you confirm. Payment for a Ride arranged on the Platform is made through the Platform. A Driver does not accept a street hail or a cash fare for a Clemson Rides booking.',
     ],
   },
   {
@@ -170,7 +170,7 @@ export const TERMS_SECTIONS = [
     bullets: [
       'Maintain a valid license, insurance, and vehicle fit for passenger transport.',
       'Advance trip status honestly (accepted, arriving, arrived, in progress, completed). Tap Arrive at pickup; a wait fee applies after a 3-minute grace.',
-      'Complete only trips you accepted; do not solicit off-platform cash for Clemson RIDES bookings.',
+      'Complete only trips you accepted; do not solicit off-platform cash for Clemson Rides bookings.',
     ],
   },
   {
@@ -183,7 +183,7 @@ export const TERMS_SECTIONS = [
   {
     heading: 'Article 8. Technology Platform',
     paragraphs: [
-      'Clemson RIDES is a technology platform that connects people who want a ride with independent drivers who choose to offer one. The Company is not a transportation carrier, a taxi company, a limousine service, or a common carrier, and it does not provide transportation services. We do not own, lease, or operate the vehicles used for trips, and we do not employ the people who drive them.',
+      'Clemson Rides is a technology platform that connects people who want a ride with independent drivers who choose to offer one. The Company is not a transportation carrier, a taxi company, a limousine service, or a common carrier, and it does not provide transportation services. We do not own, lease, or operate the vehicles used for trips, and we do not employ the people who drive them.',
       'Your use of the apps, websites, maps, fare quotes, and dispatch tools is a license to use software. It is not the sale of a ride by the Company. When a Driver accepts a request, transportation that follows is supplied by that Driver, in that Driver’s Personal Vehicle, on that Driver’s time. The Company does not control the manner or route of driving, does not ride along, and is not a party to the act of transporting someone.',
       'A logo, a campus color, an estimated arrival, or a status such as “arriving” does not make the Company the carrier and does not make a Driver our employee or agent. Clemson University does not operate the Platform and is not responsible for trips. The word “Clemson” in the product name identifies the community the software is built around. It is not a statement of university sponsorship.',
       'Section 8.1. If a statute, including the TNC Act, treats the Company as a transportation network company for a particular duty, the Company will meet that duty to the extent the statute requires and does not allow a contract to say otherwise. Meeting that duty does not make the Company the carrier, does not make a Driver an employee, and does not expand liability beyond the statute and Articles 13 through 16.',
@@ -192,7 +192,7 @@ export const TERMS_SECTIONS = [
   {
     heading: 'Article 9. Independent Contractors',
     paragraphs: [
-      'Drivers on the Platform are independent contractors. They are not employees, agents, partners, joint venturers, or representatives of Clemson RIDES. A Driver chooses whether to open the app, whether to go online after approval, which requests to accept, and how to operate the Driver’s own vehicle within the law.',
+      'Drivers on the Platform are independent contractors. They are not employees, agents, partners, joint venturers, or representatives of Clemson Rides. A Driver chooses whether to open the app, whether to go online after approval, which requests to accept, and how to operate the Driver’s own vehicle within the law.',
       'The Company does not pay a wage, does not assign a shift, and does not withhold payroll taxes from trip payouts except where a statute later requires a withholding we will describe in writing. Drivers supply their own licenses, vehicles, fuel, insurance, and tax filings. Letting a Driver receive requests is permission to use software. It is not a public certification that the Driver is safe, and it gives the Driver no authority to speak for or bind the Company.',
       'Riders use a marketplace. They are not passengers of the Company. No Rider, Driver, airport, university, or other third party is a beneficiary of any promise that the Company will answer vicariously for someone else’s driving or personal conduct. Approved Drivers also accept the Driver Agreement. Where that agreement and these Terms both apply, the Driver must meet both, and on any question of the Company’s liability the provision that limits that liability more tightly is the one that controls.',
     ],
@@ -200,7 +200,7 @@ export const TERMS_SECTIONS = [
   {
     heading: 'Article 10. Driver Agreement',
     paragraphs: [
-      'Section 10.1. Status. Each driver who uses the Platform is an independent contractor. There is no employment, no agency, and no partnership between a driver and Clemson RIDES. A driver is solely responsible for the driver’s own conduct, for the vehicle the driver uses, for the insurance that covers that driving, and for compliance with traffic law, airport rules, campus rules, the TNC Act to the extent it applies to the driver, and every other legal duty that applies to the driver.',
+      'Section 10.1. Status. Each driver who uses the Platform is an independent contractor. There is no employment, no agency, and no partnership between a driver and Clemson Rides. A driver is solely responsible for the driver’s own conduct, for the vehicle the driver uses, for the insurance that covers that driving, and for compliance with traffic law, airport rules, campus rules, the TNC Act to the extent it applies to the driver, and every other legal duty that applies to the driver.',
       'Section 10.2. Platform accountability. The platform may hold a driver accountable for access to the software. Accountability can include a warning, a suspension, a deactivation, or forfeiture of incentives, and the Company may use any of those measures at its sole discretion. Those measures decide whether the driver may keep using the Platform. They are not wages, not employee discipline, and not an undertaking to supervise the driving.',
       'Section 10.3. No liability for driver conduct. The platform shall never be held liable, to the fullest extent permitted by law, for any legal claim arising from a driver’s acts or omissions. That reaches claims by a rider, another driver, a pedestrian, an airport, a university, an insurer, or any other person, and it reaches injury, death, property damage or loss, harassment, and illegal conduct before, during, or after a ride. The limit applies to the maximum extent permitted by applicable law. It does not reach liability for gross negligence or willful misconduct, or any other liability, where a statute forbids the waiver.',
       'Section 10.4. Indemnity. The driver indemnifies and defends the platform. A driver will defend, indemnify, and hold harmless the Company and its owners, members, managers, officers, employees, agents, and affiliates from Claims arising out of the driver’s driving, vehicle, insurance, Third-Party Conduct involving the driver, or failure to follow the law, the Zero-Tolerance Policy, or these Terms. The Company may direct the defense of a covered Claim. This duty continues after access to the Platform ends.',
@@ -242,7 +242,7 @@ export const TERMS_SECTIONS = [
   {
     heading: 'Article 13. Disclaimers',
     paragraphs: [
-      'Rides are provided by independent drivers, not as a university-operated transit service. Clemson RIDES is a software marketplace and is not a common carrier. Transportation, when it happens, is performed only by the driver who accepts the request. The Company disclaims responsibility for the condition of a vehicle, the path a driver takes, and whether a driver or a rider follows the law.',
+      'Rides are provided by independent drivers, not as a university-operated transit service. Clemson Rides is a software marketplace and is not a common carrier. Transportation, when it happens, is performed only by the driver who accepts the request. The Company disclaims responsibility for the condition of a vehicle, the path a driver takes, and whether a driver or a rider follows the law.',
       'THE PLATFORM, THE APPS, THE WEBSITES, THE SERVICES, AND EVERY RELATED FEATURE ARE PROVIDED “AS IS” AND “AS AVAILABLE.” TO THE FULLEST EXTENT PERMITTED BY LAW, THE COMPANY DISCLAIMS EVERY WARRANTY, EXPRESS, IMPLIED, OR STATUTORY, INCLUDING ANY IMPLIED WARRANTY OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, QUIET ENJOYMENT, AND NON-INFRINGEMENT, AND ANY WARRANTY THAT THE SERVICE WILL BE UNINTERRUPTED, TIMELY, SECURE, OR FREE OF ERRORS. WE DO NOT WARRANT THAT A DRIVER WILL BE NEARBY, THAT AN ARRIVAL TIME OR A FARE WILL BE RIGHT, THAT A FLIGHT WILL BE MET, OR THAT A TRIP WILL BE SAFE OR COMPLETED.',
       'The Company is not responsible for incidents or interactions connected with the Platform or a Ride. That responsibility is disclaimed for inappropriate behavior, illegal acts, sexual misconduct, harassment, abuse, assault, personal injury, and property damage or loss, whether the event is before, during, or after a Ride, and whether the people involved are Riders, Drivers, or other persons. The disclaimer also reaches conduct off the Platform when it involves someone you met through a trip.',
       'TO THE FULLEST EXTENT PERMITTED BY LAW, THE COMPANY DISCLAIMS RESPONSIBILITY FOR MOTOR VEHICLE ACCIDENTS, COLLISIONS, AND CRASHES, AND FOR BODILY INJURY, DEATH, OR PROPERTY DAMAGE RESULTING FROM THEM, WHETHER BEFORE, DURING, OR AFTER ANY RIDE.',
@@ -262,7 +262,7 @@ export const TERMS_SECTIONS = [
   {
     heading: 'Article 15. Release and Waiver',
     paragraphs: [
-      'To the maximum extent permitted by applicable law, you release and forever discharge Clemson RIDES and its owners, members, managers, officers, employees, agents, contractors, affiliates, and successors from Claims arising out of the Platform, the Services, a Ride, or an interaction tied to a Ride. The release includes Claims you know about and, to the extent South Carolina law allows, Claims you do not yet know about.',
+      'To the maximum extent permitted by applicable law, you release and forever discharge Clemson Rides and its owners, members, managers, officers, employees, agents, contractors, affiliates, and successors from Claims arising out of the Platform, the Services, a Ride, or an interaction tied to a Ride. The release includes Claims you know about and, to the extent South Carolina law allows, Claims you do not yet know about.',
       'The released subject matter includes personal injury, death, property damage, property loss, emotional distress, and money loss. It includes Claims arising from inappropriate behavior, illegal acts, sexual misconduct, harassment, abuse, or assault. It includes Third-Party Conduct, and events before a Ride, during it, and after it. You give up Claims you might otherwise bring against the Company because of those events, except a Claim a statute says you cannot give up.',
       'To the fullest extent permitted by law, the release covers motor vehicle accidents, collisions, and crashes, and bodily injury, death, or property damage resulting from them, before, during, or after any Ride. The released party is the Company, not the Driver’s insurer and not any statutorily required TNC insurance coverage. The release does not reach liability for gross negligence or willful misconduct where a statute forbids the waiver.',
       'YOU WAIVE UNKNOWN CLAIMS TO THE EXTENT SOUTH CAROLINA LAW ALLOWS A WAIVER OF CLAIMS YOU DO NOT SUSPECT. This release is a material reason the Platform is offered at all. If a decision-maker holds that one slice of the release cannot be enforced against one Claim, every other part of the release and every other part of these Terms stays in force. You are not relying on any statement that the Company supervises Drivers or promises a safe trip.',
@@ -271,7 +271,7 @@ export const TERMS_SECTIONS = [
   {
     heading: 'Article 16. Indemnification and Defense',
     paragraphs: [
-      'You will defend, indemnify, and hold harmless Clemson RIDES and its owners, members, managers, officers, employees, agents, affiliates, and service providers from any Claim arising out of or related to (a) your use of the Platform or the Services, (b) your conduct before, during, or after a Ride, (c) your interaction with a Rider, a Driver, or any other person, (d) your violation of law, the Zero-Tolerance Policy, or these Terms, (e) injury, death, or property damage or loss connected with a trip you requested or drove, and (f) a dispute between you and another user.',
+      'You will defend, indemnify, and hold harmless Clemson Rides and its owners, members, managers, officers, employees, agents, affiliates, and service providers from any Claim arising out of or related to (a) your use of the Platform or the Services, (b) your conduct before, during, or after a Ride, (c) your interaction with a Rider, a Driver, or any other person, (d) your violation of law, the Zero-Tolerance Policy, or these Terms, (e) injury, death, or property damage or loss connected with a trip you requested or drove, and (f) a dispute between you and another user.',
       'We may choose counsel on a covered Claim at your expense, or we may require a defense by counsel we reasonably accept. You will not settle a matter that admits fault by the Company or that puts an obligation on the Company unless we agree in writing first. This indemnity continues after you close your account. It is meant to reach as far as the law will let an indemnity by a user of software reach.',
       'You do not have to indemnify the Company for the Company’s own gross negligence or willful misconduct, or for a liability a statute forbids a contract to shift onto you. If a consumer statute trims an indemnity, this Article is enforced only to the maximum extent permitted by applicable law and the trimmed piece is handled under Article 19.',
     ],
@@ -330,7 +330,7 @@ export const TERMS_SECTIONS = [
   {
     heading: 'Article 23. Notices and Contact',
     paragraphs: [
-      `For terms or privacy questions, email ${SUPPORT} or use Account → Support. Notices required by these Terms, including a notice that starts the informal dispute step and an arbitration opt-out, must be mailed to Clemson RIDES, 101 North Main Street, Greenville, SC 29601. A mailed notice is effective when we receive it. The Company may give you notice at the email on your account, and that notice is effective when sent.`,
+      `For terms or privacy questions, email ${SUPPORT} or use Account → Support. Notices required by these Terms, including a notice that starts the informal dispute step and an arbitration opt-out, must be mailed to Clemson Rides, 101 North Main Street, Greenville, SC 29601. A mailed notice is effective when we receive it. The Company may give you notice at the email on your account, and that notice is effective when sent.`,
     ],
   },
 ]

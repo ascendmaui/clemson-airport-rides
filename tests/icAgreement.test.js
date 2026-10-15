@@ -8,7 +8,7 @@ test('the contractor agreement is a deep company-protective template', () => {
   assert.ok(words.length > 6000, `expected a deep agreement, got ${words.length} words`)
   assert.ok(pages > 12, `expected more than 12 pages, got ${pages}`)
   assert.equal(IC_AGREEMENT_VERSION, 'ic-agreement-2026-10-05')
-  assert.equal(OPERATOR_NAME, 'Clemson RIDES / Operator')
+  assert.equal(OPERATOR_NAME, 'Clemson Rides / Operator')
   const html = IC_AGREEMENT_HTML.toLowerCase()
   for (const phrase of [
     'independent contractor',

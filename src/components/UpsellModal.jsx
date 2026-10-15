@@ -1,4 +1,5 @@
 import { PrimaryButton } from './PrimaryButton'
+import { SiteIcon } from './SiteIcon.jsx'
 import { useModalA11y } from './A11yModal'
 
 export function UpsellModal({ open, onClose, onUpgrade, variant = 'comfort', upgradePrice = 4.5 }) {
@@ -48,7 +49,7 @@ export function UpsellModal({ open, onClose, onUpgrade, variant = 'comfort', upg
             boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',
           }}
         >
-          ✨
+          <SiteIcon name="armchair" size={48} />
         </div>
         <h2 id="upsell-modal-title" style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.3, marginBottom: 8 }}>
           Ride in a roomy, clean new car

@@ -49,7 +49,7 @@ export function riderTripMoment(prev, row) {
       key: `completed:${row.id}`,
       tone: 'success',
       title: 'Trip complete',
-      body: row.dropoff_label ? `You made it to ${row.dropoff_label}.` : 'Thanks for riding with Clemson RIDES.',
+      body: row.dropoff_label ? `You made it to ${row.dropoff_label}.` : 'Thanks for riding with Clemson Rides.',
       cue: 'complete',
     }
   }

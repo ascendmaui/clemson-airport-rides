@@ -20,6 +20,24 @@ const PATHS = {
   'graduation-cap': <><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z" /><path d="M22 10v6" /><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5" /></>,
   flag: <><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><path d="M4 22v-7" /></>,
   check: <path d="M20 6 9 17l-5-5" />,
+  star: <path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" />,
+  receipt: <><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" /><path d="M14 8H8" /><path d="M16 12H8" /><path d="M13 16H8" /></>,
+  phone: <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />,
+  music: <><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></>,
+  menu: <><path d="M4 5h16" /><path d="M4 12h16" /><path d="M4 19h16" /></>,
+  info: <><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></>,
+}
+
+const RIDE_TYPE_SITE_ICONS = {
+  standard: 'car',
+  wait: 'hourglass',
+  waitSave: 'hourglass',
+  comfort: 'armchair',
+  carpool: 'users',
+}
+
+export function rideTypeSiteIcon(id) {
+  return RIDE_TYPE_SITE_ICONS[id] || RIDE_TYPE_SITE_ICONS.standard
 }
 
 export const SITE_ICON_NAMES = Object.freeze(Object.keys(PATHS))
@@ -42,5 +60,18 @@ export function SiteIcon({ name, size = 20, className = '' }) {
     >
       {shape}
     </svg>
+  )
+}
+
+export function StarRow({ filled = 0, of = 5, size = 14 }) {
+  const count = Math.max(0, Math.min(of, Number(filled) || 0))
+  return (
+    <span aria-hidden="true" style={{ display: 'inline-flex', gap: 2, verticalAlign: 'text-bottom' }}>
+      {Array.from({ length: of }, (_, index) => (
+        <span key={index} style={{ color: 'var(--orange)', opacity: index < count ? 1 : 0.35, display: 'inline-flex' }}>
+          <SiteIcon name="star" size={size} />
+        </span>
+      ))}
+    </span>
   )
 }
