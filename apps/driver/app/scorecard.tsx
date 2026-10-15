@@ -60,7 +60,7 @@ export default function ScorecardScreen() {
         <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: e.fill || card?.marker?.fill || colors.orange, borderWidth: selected ? 3 : 1, borderColor: selected ? colors.orange : (e.accent || colors.track) }}>
           <Ionicons name={(e.glyph || card?.marker?.glyph || 'car') as keyof typeof Ionicons.glyphMap} size={18} color="#FFFFFF" />
         </View>
-        <Text style={{ color: colors.inkSecondary, fontSize: 11, textAlign: 'center' }}>{open ? e.label : `🔒 ${e.label}`}</Text>
+        <Text style={{ color: colors.inkSecondary, fontSize: 11, textAlign: 'center' }}>{open ? e.label : `Locked · ${e.label}`}</Text>
       </Pressable>
     )
   }
@@ -80,7 +80,7 @@ export default function ScorecardScreen() {
         <Text style={{ color: colors.title, fontWeight: '800' }}>Milestones</Text>
         {(card?.milestones || []).map((m) => (
           <Text key={m.id} style={{ color: m.reached ? colors.orange : colors.inkSecondary }}>
-            {`${m.reached ? '✓' : '○'} ${(METRIC[m.metric] || String)(m.threshold)}`}
+            {`${m.reached ? 'Met' : 'Open'} · ${(METRIC[m.metric] || String)(m.threshold)}`}
           </Text>
         ))}
       </Card>

@@ -125,7 +125,7 @@ export default function EarningsActivity() {
                   accessibilityLabel={`${noShow ? 'No-show fee' : trip.status === 'canceled' ? 'Canceled trip' : 'Completed trip'}, ${trip.pickup_label || 'Pickup'} to ${trip.dropoff_label || 'Drop-off'}, ${trip.status === 'canceled' ? 'No payout' : shownCents(earned, earningsPrivate)}`}
                   accessibilityHint="Opens trip details and breakdown"
                 >
-                  <Text style={{ color: colors.title, fontWeight: '800' }}>{noShow ? 'No-show fee' : trip.status === 'canceled' ? 'Canceled' : 'Clemson RIDES'}</Text>
+                  <Text style={{ color: colors.title, fontWeight: '800' }}>{noShow ? 'No-show fee' : trip.status === 'canceled' ? 'Canceled' : 'Clemson Rides'}</Text>
                   <Text style={{ color: colors.ink }}>{trip.pickup_label || 'Pickup'}</Text>
                   <Text style={{ color: colors.ink }}>{trip.dropoff_label || 'Drop-off'}</Text>
                   <Text style={{ color: colors.title, fontWeight: '800' }}>

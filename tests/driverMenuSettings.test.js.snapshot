@@ -42,7 +42,7 @@ exports[`Driver Menu snapshot 1`] = `
     {
       "icon": "inbox",
       "title": "Inbox",
-      "subtitle": "Messages from Clemson RIDES and riders"
+      "subtitle": "Messages from Clemson Rides and riders"
     },
     {
       "icon": "discover",
@@ -106,7 +106,7 @@ exports[`Driver Settings snapshot 1`] = `
   "account": [
     {
       "icon": "person",
-      "title": "Manage Clemson RIDES account",
+      "title": "Manage Clemson Rides account",
       "subtitle": "Name, email, and sign out"
     },
     {

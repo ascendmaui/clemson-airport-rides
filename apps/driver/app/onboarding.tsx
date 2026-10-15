@@ -623,7 +623,7 @@ export default function OnboardingScreen() {
           onPress={() => { void Linking.openURL(WEB_DRIVER_RENTALS_URL) }}
           accessibilityRole="link"
           accessibilityLabel="No car? Rent one"
-          accessibilityHint="Opens weekly rentals from Clemson RIDES partners. Available after your license and background check pass."
+          accessibilityHint="Opens weekly rentals from Clemson Rides partners. Available after your license and background check pass."
         >
           <Text style={styles.link}>No car? Rent one from a rental partner</Text>
         </Pressable>
@@ -651,7 +651,7 @@ export default function OnboardingScreen() {
                 style={[styles.stepChip, item.id === stepId && styles.stepChipOn]}
               >
                 <Text style={[styles.stepChipText, item.id === stepId && styles.stepChipTextOn]}>
-                  {done ? '✓ ' : ''}{item.label}
+                  {item.label}
                 </Text>
               </Pressable>
             )
@@ -821,7 +821,7 @@ export default function OnboardingScreen() {
                 >
                   <View style={[styles.box, backgroundAuthorized && styles.boxOn]} />
                   <Text style={styles.checkCopy}>
-                    I authorize Clemson RIDES to request a background check, including motor-vehicle records, if a screening vendor is connected later. Signing this does not mean a check was completed.
+                    I authorize Clemson Rides to request a background check, including motor-vehicle records, if a screening vendor is connected later. Signing this does not mean a check was completed.
                   </Text>
                 </Pressable>
                 <Field label="Type your legal name to sign" value={signature} onChangeText={setSignature} />
@@ -862,7 +862,7 @@ export default function OnboardingScreen() {
         {kind === 'tax' ? (
           <Card>
             <Text style={styles.cardTitle}>W-9</Text>
-            <Text style={styles.hint}>Clemson RIDES contractor tax info. This is not legal or tax advice. The full TIN is stored by the database function. This screen keeps the last four.</Text>
+            <Text style={styles.hint}>Clemson Rides contractor tax info. This is not legal or tax advice. The full TIN is stored by the database function. This screen keeps the last four.</Text>
             {w9Step === 0 ? <Field label="Legal name" value={legalName} onChangeText={setLegalName} /> : null}
             {w9Step === 1 ? <Field label="Business name (if any)" value={businessName} onChangeText={setBusinessName} placeholder="Optional" /> : null}
             {w9Step === 2 ? (
