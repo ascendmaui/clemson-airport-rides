@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
-import { ScrollView, Text, View } from 'react-native'
+import { Alert, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { RequireAuth } from '@/components/RequireAuth'
@@ -10,7 +10,7 @@ import { useAuth } from '@/lib/auth'
 import type { Palette } from '@/lib/palette'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { supportTicketRequest } from 'rides-native/assistClient.js'
-import { ACCOUNT_DELETION_TICKET } from 'rides-native/accountDeletion.js'
+import { buildAccountDeletionTicket } from 'rides-native/accountDeletion.js'
 
 function DeleteAccountScreen() {
   const router = useRouter()
@@ -30,10 +30,7 @@ function DeleteAccountScreen() {
         url: apiUrl('/api/admin-drivers?action=ticket'),
         headers,
         method: 'POST',
-        body: {
-          ...ACCOUNT_DELETION_TICKET,
-          body: `${ACCOUNT_DELETION_TICKET.body} Account email: ${user?.email || 'on file'}.`,
-        },
+        body: buildAccountDeletionTicket({ email: user?.email, roleVariant: 'rider' }),
       })
       const id = data.ticket?.id
       setNote(id
@@ -46,6 +43,18 @@ function DeleteAccountScreen() {
     }
   }
 
+  function confirmRequest() {
+    if (busy || note) return
+    Alert.alert(
+      'Delete account?',
+      'This sends a confirmed request to delete your account and the trip history tied to it. The account stays signed in until that request is processed.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete account', style: 'destructive', onPress: () => void fileRequest() },
+      ],
+    )
+  }
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <StackHeader title="Delete account" onBack={() => router.back()} />
@@ -55,7 +64,7 @@ function DeleteAccountScreen() {
         </Text>
         <Text style={styles.copy}>Signed in as {user?.email || 'this account'}.</Text>
         {note ? <Text style={styles.note}>{note}</Text> : (
-          <PrimaryButton label={busy ? 'Filing…' : 'File deletion request'} onPress={() => void fileRequest()} disabled={busy} tone="purple" />
+          <PrimaryButton label={busy ? 'Filing…' : 'Delete account'} onPress={confirmRequest} disabled={busy} tone="purple" />
         )}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <PrimaryButton label="Read the privacy policy" tone="ghost" onPress={() => router.push({ pathname: '/legal', params: { doc: 'privacy' } })} />
