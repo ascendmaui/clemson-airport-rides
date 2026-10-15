@@ -1,5 +1,6 @@
 import { useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
+import { logCaught } from '@/lib/caught'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { loadStudentProfile, studentStatus } from 'rides-native/riderMoney.js'
@@ -29,6 +30,8 @@ export function useStudentStatus(): StudentPricing {
     loadStudentProfile(supabase, user.id).then((row) => {
       if (!alive) return
       setStatus(statusFor(user, row.studentVerifiedAt))
+    }).catch((err: unknown) => {
+      logCaught('student-status', err)
     })
     return () => {
       alive = false

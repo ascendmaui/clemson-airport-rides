@@ -3,7 +3,7 @@ import { useAuth } from '../lib/auth'
 import { getHashRoute } from '../lib/navigation'
 import { fetchFullProfile } from '../lib/profiles'
 import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
-import { SiteIcon } from '../components/SiteIcon'
+import { SiteIcon, StarRow } from '../components/SiteIcon.jsx'
 
 export function ProfileView() {
   const { user } = useAuth()
@@ -65,7 +65,7 @@ export function ProfileView() {
         onClick={() => window.history.back()}
         style={{ marginBottom: 12 }}
       >
-        <SiteIcon name="arrow-left" size={20} />
+        ←
       </button>
 
       <div
@@ -106,7 +106,7 @@ export function ProfileView() {
                 color: 'var(--orange)',
               }}
             >
-              CLEMSON RIDES
+              Clemson Rides
             </div>
             <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--purple)', letterSpacing: -0.3 }}>
               {peerName}
@@ -116,7 +116,7 @@ export function ProfileView() {
               {profile.student_verified_at ? ' · verified student' : ''}
             </div>
             <div style={{ marginTop: 4, fontWeight: 700 }}>
-              <SiteIcon name="star" size={13} filled style={{ verticalAlign: -2 }} /> {avg}{' '}
+              <SiteIcon name="star" size={14} /> {avg}{' '}
               <span style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>({count})</span>
               {profile.standing === 'watch' && (
                 <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: 'var(--orange)' }}>Low rating</span>
@@ -163,7 +163,7 @@ export function ProfileView() {
 
         {!minimal && profile.music_taste && (
           <div style={{ marginTop: 12, fontSize: 13, color: 'var(--ink-secondary)' }}>
-            <SiteIcon name="music" size={14} style={{ verticalAlign: -2 }} /> {profile.music_taste}
+            <SiteIcon name="music" size={14} /> {profile.music_taste}
           </div>
         )}
 
@@ -236,9 +236,7 @@ export function ProfileView() {
             <div style={{ fontWeight: 700, marginBottom: 8 }}>Recent ratings</div>
             {profile.recentRatings.map((r, i) => (
               <div key={i} style={{ fontSize: 13, marginBottom: 8, color: 'var(--ink-secondary)' }}>
-                <span role="img" aria-label={`${r.stars} of 5 stars`} style={{ color: '#F56600' }}>
-                  {[1, 2, 3, 4, 5].map((n) => <SiteIcon key={n} name="star" size={13} filled={n <= r.stars} style={{ verticalAlign: -2 }} />)}
-                </span>
+                <StarRow filled={r.stars} />
                 {r.comment ? ` — ${r.comment}` : ''}
               </div>
             ))}

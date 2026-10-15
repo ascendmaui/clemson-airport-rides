@@ -7,6 +7,7 @@ import { useStudentStatus } from '../lib/useStudentStatus'
 import { studentSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 import { SearchField } from '../components/SearchField'
 import { Pill } from '../components/Pill'
+import { SiteIcon } from '../components/SiteIcon.jsx'
 import { BottomTabs } from '../components/BottomTabs'
 import { CampusMap, STADIUM } from '../components/CampusMap'
 import { getHashRoute, navigate } from '../lib/navigation'
@@ -157,7 +158,7 @@ export function RiderHome() {
               maxWidth: 220,
               minHeight: 96,
               borderRadius: 18,
-              background: 'linear-gradient(145deg, #F56600 0%, #ff7a1a 58%, #522D80 160%)',
+              background: 'linear-gradient(145deg, var(--orange) 0%, var(--orange) 58%, var(--purple) 160%)',
               boxShadow: '0 10px 24px rgba(245,102,0,0.28), 0 18px 36px rgba(82,45,128,0.16)',
               transition: 'transform 240ms var(--ease-spring), box-shadow 240ms var(--ease-soft)',
               color: '#fff',
@@ -168,6 +169,13 @@ export function RiderHome() {
               overflow: 'hidden',
             }}
           >
+            <img
+              src="/brand/rider-icon.svg"
+              alt=""
+              width="36"
+              height="36"
+              style={{ position: 'absolute', top: 10, right: 12, width: 36, height: 36 }}
+            />
             <div style={{ position: 'relative', fontSize: 9, letterSpacing: 1.6, fontWeight: 700, opacity: 0.9, marginBottom: 4 }}>
               RIDE • GAME • REPEAT
             </div>
@@ -264,16 +272,16 @@ export function RiderHome() {
           </button>
 
           <div style={{ display: 'flex', gap: 10, marginTop: 8, overflowX: 'auto', paddingBottom: 4 }}>
-            <Pill icon={<SiteIcon name="clock" size={16} />} tone="orange" onClick={() => navigate('schedule')}>
+            <Pill icon="calendar" tone="orange" onClick={() => navigate('schedule')}>
               Schedule a ride
             </Pill>
-            <Pill icon={<SiteIcon name="users" size={16} />} tone="purple" onClick={() => navigate('carpool', { hub: '1' })}>
+            <Pill icon="users" tone="purple" onClick={() => navigate('carpool', { hub: '1' })}>
               Carpool · split the surge
             </Pill>
-            <Pill icon={<SiteIcon name="moon" size={16} />} tone="orange" onClick={() => navigate('party-night')}>
+            <Pill icon="moon" tone="orange" onClick={() => navigate('party-night')}>
               Party night
             </Pill>
-            <Pill icon={<SiteIcon name="receipt" size={16} />} tone="purple" onClick={() => navigate('history')}>
+            <Pill icon="receipt" tone="purple" onClick={() => navigate('history')}>
               Your rides
             </Pill>
           </div>
@@ -321,7 +329,7 @@ export function RiderHome() {
               background: studentOffer.granted ? 'rgba(245,102,0,0.10)' : 'rgba(82,45,128,0.08)',
             }}
           >
-            <div style={{ color: studentOffer.granted ? '#F56600' : '#522D80', display: 'grid' }}><SiteIcon name="graduation-cap" size={24} /></div>
+            <div style={{ color: 'var(--purple)' }}><SiteIcon name="graduation-cap" size={24} /></div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 800, color: '#522D80' }}>
                 {studentOffer.title}
@@ -336,7 +344,7 @@ export function RiderHome() {
             className="glass-panel glass-panel--orange card-soft"
             style={{ marginTop: 18, marginBottom: 18, borderRadius: 18, padding: 16, display: 'flex', gap: 14, alignItems: 'center' }}
           >
-            <div style={{ width: 48, height: 48, borderRadius: 14, background: 'var(--orange-soft)', display: 'grid', placeItems: 'center', color: '#F56600', flexShrink: 0 }}>
+            <div style={{ width: 48, height: 48, borderRadius: 14, background: 'var(--orange-soft)', display: 'grid', placeItems: 'center', color: 'var(--orange)', flexShrink: 0 }}>
               <SiteIcon name="flag" size={24} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>

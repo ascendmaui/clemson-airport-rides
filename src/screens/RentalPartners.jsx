@@ -9,6 +9,7 @@ import {
   OFF_PLATFORM_PAYMENT_NOTE, PARTNER_TERMS_DRAFT, evaluateListing, filterListings, partnerSignupErrors,
 } from '../../shared/rentalPartner.js'
 import { nextStatuses } from '../../shared/rentalStateMachine.js'
+import { SiteIcon } from '../components/SiteIcon.jsx'
 
 const wrap = { maxWidth: 880, margin: '0 auto', padding: '24px 16px 64px' }
 const card = {
@@ -233,7 +234,7 @@ export function ListingForm({ initial, onSaved, onCancel }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
           {CONDITION_PHOTO_SLOTS.map((s) => (
             <div key={s.id} style={{ border: '1px dashed #cfc6dc', borderRadius: 10, padding: 8, fontSize: 13 }}>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>{s.label} {f.conditionPhotos[s.id] ? '✓' : ''}</div>
+              <div style={{ fontWeight: 600, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>{s.label} {f.conditionPhotos[s.id] ? <SiteIcon name="check" size={14} /> : null}</div>
               {f.conditionPhotos[s.id] && <img src={f.conditionPhotos[s.id]} alt={s.label} style={{ width: '100%', height: 70, objectFit: 'cover', borderRadius: 6 }} />}
               <UploadButton id={`cp-${s.id}`} text={f.conditionPhotos[s.id] ? 'Replace' : 'Upload'} prefix={`cond-${s.id}`} onFile={(u) => set('conditionPhotos')({ ...f.conditionPhotos, [s.id]: u })} />
             </div>
@@ -248,7 +249,7 @@ export function ListingForm({ initial, onSaved, onCancel }) {
             <label style={{ display: 'flex', gap: 8, marginTop: 8, fontSize: 14 }}><input type="checkbox" checked={f.inspectionAttested} onChange={(e) => set('inspectionAttested')(e.target.checked)} /> I attest this vehicle passed a safety inspection in the last 12 months.</label>
           )}
           {f.inspectionKind === 'upload' && (
-            <div style={{ marginTop: 8 }}><UploadButton id="insp-up" text={f.inspectionDocPath ? 'Replace report' : 'Upload report'} accept="image/*,application/pdf" bucket="rental-docs" prefix="inspection" onFile={set('inspectionDocPath')} /> {f.inspectionDocPath && '✓ uploaded'}</div>
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}><UploadButton id="insp-up" text={f.inspectionDocPath ? 'Replace report' : 'Upload report'} accept="image/*,application/pdf" bucket="rental-docs" prefix="inspection" onFile={set('inspectionDocPath')} /> {f.inspectionDocPath ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><SiteIcon name="check" size={14} /> uploaded</span> : null}</div>
           )}
           {show('inspection') && <p role="alert" style={errStyle}>{show('inspection')}</p>}
         </fieldset>
@@ -323,10 +324,10 @@ export function PartnerDashboard() {
           {requests.map((r) => (
             <div key={r.id} style={{ borderTop: '1px solid #eee', padding: '10px 0', display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
               <div>
-                <strong>{r.driver.name}</strong> {r.driver.rating ? `★ ${r.driver.rating.toFixed(2)} (${r.driver.ratingCount})` : '· New driver'} · <span style={{ fontSize: 13 }}>{r.driver.checkStatus}</span>
+                <strong>{r.driver.name}</strong> {r.driver.rating ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><SiteIcon name="star" size={12} /> {r.driver.rating.toFixed(2)} ({r.driver.ratingCount})</span> : '· New driver'} · <span style={{ fontSize: 13 }}>{r.driver.checkStatus}</span>
                 <div style={{ fontSize: 13, color: '#4b3f5c' }}>{r.vehicle} · <span style={pill('#eef', '#335')}>{r.status}</span>{r.start_date ? ` · ${r.start_date}${r.end_date ? ` → ${r.end_date}` : ''}` : ''}</div>
                 {r.message && <div style={{ fontSize: 13 }}>“{r.message}”</div>}
-                <div style={{ fontSize: 13 }}>{r.driver.phone ? `Phone ${r.driver.phone} · Email ${r.driver.email}` : 'Contact details appear after you accept.'}</div>
+                <div style={{ fontSize: 13 }}>{r.driver.phone ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}><SiteIcon name="phone" size={14} /> {r.driver.phone} <SiteIcon name="mail" size={14} /> {r.driver.email}</span> : 'Contact details appear after you accept.'}</div>
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 {nextStatuses(r.status, 'partner').map((to) => (

@@ -6,6 +6,7 @@ import { StackPage } from '@/components/shell'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { claimDriverReferral, loadDriverPerks, type ReferralSummary } from 'rides-native/driverDesk'
+import { quiet } from '@/lib/softFail'
 
 const CLAIM_COPY: Record<string, string> = {
   unknown_code: 'That code was not found.',
@@ -49,7 +50,7 @@ export default function ReferScreen() {
             const msg = ref?.link
               ? `Drive with Clemson RIDES. Sign up with my code ${ref.code}: ${ref.link}`
               : 'Drive with Clemson RIDES. Campus and airport trips for Clemson students.'
-            Share.share({ message: msg }).catch(() => {})
+            Share.share({ message: msg }).catch(quiet('share referral'))
           }}
         />
       </Card>

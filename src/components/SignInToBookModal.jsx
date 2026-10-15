@@ -1,7 +1,7 @@
+import { SiteIcon } from './SiteIcon.jsx'
 import { useAuth } from '../lib/auth'
 import { navigate } from '../lib/navigation'
 import { useModalA11y } from './A11yModal'
-import { SiteIcon } from './SiteIcon'
 
 /** Soft auth gate helpers + "Sign in to book your ride" modal. */
 export function resumeAfterAuth(params = {}) {
@@ -83,7 +83,7 @@ export function SignInToBookModal({ open, onClose, nextPath, nextParams = {} }) 
             border: '1px solid rgba(255,255,255,0.35)',
           }}
         >
-          <SiteIcon name="car" size={24} />
+          <SiteIcon name="shield-check" size={22} />
         </div>
         <h2 id="sign-in-to-book-title" style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.4 }}>
           Sign in to book your ride

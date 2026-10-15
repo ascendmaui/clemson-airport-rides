@@ -4,6 +4,7 @@ import { canDriverEnd } from '../../shared/driverEndTrip.js'
 import { trackingIssue, staleEtaLine, withTrackingTimeout, onTrackingResume } from '../../packages/rides-native/tracking.js'
 import { useEffect, useRef, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
+import { SiteIcon } from '../components/SiteIcon.jsx'
 import { AccessibleAlert } from '../components/AccessibleAlert'
 import { CampusMap, CLEMSON, STADIUM } from '../components/CampusMap'
 import { navigate, shareUrl } from '../lib/navigation'
@@ -56,7 +57,6 @@ import { LivePhase } from '../components/LivePhase'
 import { reconcileCheckoutSession } from '../lib/stripeCheckout'
 import { parseCheckoutSessionId } from '../../packages/rides-native/checkoutReturn.js'
 import { riderDeclineRebroadcastMessage } from '../../server/matchingEdge.js'
-import { SiteIcon } from '../components/SiteIcon'
 
 export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driver', driverId = '', paid = '', sessionId = '' }) {
   const { user } = useAuth()
@@ -568,7 +568,11 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
                   return (
                     <div key={action.id} className="glass-panel live-trip-rate">
                       <div className="live-trip-rate__title">Trip complete — rate your driver?</div>
-                      <PrimaryButton onClick={() => navigate('rate', { trip })}>Rate now</PrimaryButton>
+                      <PrimaryButton onClick={() => navigate('rate', { trip })}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                          Rate now <SiteIcon name="star" size={16} />
+                        </span>
+                      </PrimaryButton>
                       <button type="button" className="pressable live-trip-text-btn live-trip-text-btn--quiet" onClick={() => setRateNudge(false)}>
                         Soft remind later
                       </button>

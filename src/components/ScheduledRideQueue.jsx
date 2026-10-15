@@ -3,9 +3,9 @@ import { formatUsdFromCents } from '../lib/pricing'
 import { formatPickupAt, toDriverQueueCard } from '../lib/scheduledRideModel'
 import { CONFIRM_TRIP_COPY, backupNumberTwoCopy, confirmCountdownLabel, driverBackupPresentation, leaveNowCountdownLabel } from '../../shared/backupDriverQueue.js'
 import { ScheduledRidesHint } from './ScheduledRidesInfo'
+import { SiteIcon } from './SiteIcon.jsx'
 import { driverBoostOfferLine } from '../../shared/copy/boost.js'
 import { compareBoostedFirst, formatBoostBadge } from '../../shared/scheduledBoost.js'
-import { SiteIcon } from './SiteIcon'
 
 function ConfirmCountdown({ closesAt }) {
   const [label, setLabel] = useState(() => confirmCountdownLabel(closesAt))
@@ -79,7 +79,7 @@ export function ScheduledRideQueue({
             textAlign: 'center',
           }}
         >
-          <div style={{ marginBottom: 4, color: '#522D80', display: 'grid', placeItems: 'center' }}><SiteIcon name="calendar" size={24} /></div>
+          <div style={{ marginBottom: 4, color: 'var(--purple)' }} aria-hidden="true"><SiteIcon name="calendar" size={22} /></div>
           <p style={{ fontSize: 13, color: 'var(--ink-secondary)', margin: 0, lineHeight: 1.45 }}>
             {emptyHint || 'No scheduled rides available right now. Upcoming airport and game-day reservations will appear here.'}
           </p>

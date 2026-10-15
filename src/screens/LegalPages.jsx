@@ -36,7 +36,7 @@ function LegalShell({ title, children }) {
         >
           Back
         </button>
-        <p className="lux-kicker">Clemson RIDES</p>
+        <p className="lux-kicker">Clemson Rides</p>
         <h1>{title}</h1>
         <p className="lux-legal-meta">Last updated {LEGAL_UPDATED}</p>
         <div className="lux-legal-body">{children}</div>

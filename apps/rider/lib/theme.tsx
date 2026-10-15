@@ -1,6 +1,7 @@
 import * as Location from 'expo-location'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated'
+import { logCaught } from '@/lib/caught'
 import { authStorage } from '@/lib/storage'
 import { paletteFor, type Palette, type Scheme } from '@/lib/palette'
 import { CLEMSON_LAT, CLEMSON_LNG, isDaylight } from '@/lib/solar'
@@ -37,7 +38,8 @@ function readPrefs(raw: string | null): Prefs {
     return {
       displayMode: isDisplayMode(parsed.displayMode) && parsed.displayMode === 'dark' ? 'dark' : 'light',
     }
-  } catch {
+  } catch (err) {
+    logCaught('theme-prefs-parse', err)
     return DEFAULT_PREFS
   }
 }
@@ -66,7 +68,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     authStorage.getItem(PREFS_KEY).then((raw) => {
       setPrefs(readPrefs(raw))
-    }).catch(() => {})
+    }).catch((err: unknown) => {
+      logCaught('theme-prefs', err)
+    })
   }, [])
 
   useEffect(() => {
@@ -79,7 +83,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     Location.getLastKnownPositionAsync().then((pos: { coords: { latitude: number; longitude: number } } | null) => {
       if (!alive || !pos) return
       setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-    }).catch(() => {})
+    }).catch((err: unknown) => {
+      logCaught('theme-location', err)
+    })
     return () => {
       alive = false
     }
@@ -88,7 +94,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   function update(patch: Partial<Prefs>) {
     setPrefs((current: Prefs) => {
       const next = { ...current, ...patch }
-      authStorage.setItem(PREFS_KEY, JSON.stringify(next)).catch(() => {})
+      authStorage.setItem(PREFS_KEY, JSON.stringify(next)).catch((err: unknown) => {
+        logCaught('theme-prefs-save', err)
+      })
       return next
     })
   }

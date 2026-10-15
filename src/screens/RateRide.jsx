@@ -9,12 +9,12 @@ import {
   ratingBlockReason,
 } from '../lib/ratings'
 import { PrimaryButton } from '../components/PrimaryButton'
+import { SiteIcon } from '../components/SiteIcon.jsx'
 import { RequireAuth } from '../components/RequireAuth'
 import { RideChat, RideMessageButton } from '../components/RideChat'
 import { ReportLostItemButton } from '../components/ReportLostItem'
 import { rideChatMode } from '../lib/tripChatRules'
 import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
-import { SiteIcon } from '../components/SiteIcon'
 
 function RideMessagesEntry({ trip, userId }) {
   const [open, setOpen] = useState(false)
@@ -138,7 +138,11 @@ function RateForm() {
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
             <RideMessagesEntry trip={trip} userId={user?.id} />
-            <PrimaryButton onClick={() => setSkipped(false)}>Actually, rate now</PrimaryButton>
+            <PrimaryButton onClick={() => setSkipped(false)}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                Actually, rate now <SiteIcon name="star" size={16} />
+              </span>
+            </PrimaryButton>
             <button
               type="button"
               className="pressable"
@@ -167,7 +171,7 @@ function RateForm() {
     return (
       <div className="fade-in" style={{ padding: 24, maxWidth: 420, margin: '0 auto' }}>
         <div className="glass-panel glass-panel--elevated" style={{ padding: 22, borderRadius: 22 }}>
-          <div style={{ marginBottom: 8, color: '#F56600' }}><SiteIcon name="star" size={40} filled /></div>
+          <div style={{ marginBottom: 8, color: 'var(--orange)' }}><SiteIcon name="star" size={40} /></div>
           <h1 style={{ color: 'var(--purple)', fontSize: 24, fontWeight: 800 }}>
             {already ? 'Already rated' : 'Thanks for the rating'}
           </h1>
@@ -286,7 +290,7 @@ function RateForm() {
                   boxShadow: n <= stars ? '0 6px 16px rgba(245,102,0,0.35)' : 'none',
                 }}
               >
-                <SiteIcon name="star" size={22} filled={n <= stars} />
+                <SiteIcon name="star" size={22} />
               </button>
             ))}
           </div>

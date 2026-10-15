@@ -1,7 +1,5 @@
 import { A11yBadge } from './A11yBadge.jsx'
-import { SiteIcon } from './SiteIcon'
-
-const TIER_ICONS = { standard: 'car', wait: 'hourglass', comfort: 'armchair', carpool: 'users' }
+import { SiteIcon, rideTypeSiteIcon } from './SiteIcon.jsx'
 
 export function TierRow({ tier, selected, onSelect }) {
   return (
@@ -39,9 +37,7 @@ export function TierRow({ tier, selected, onSelect }) {
           transform: selected ? 'scale(1.04)' : 'scale(1)',
         }}
       >
-        <span style={{ color: tier.id === 'carpool' || tier.id === 'comfort' ? '#522D80' : '#F56600', display: 'grid' }}>
-          <SiteIcon name={TIER_ICONS[tier.id] || 'car'} size={24} />
-        </span>
+        <SiteIcon name={rideTypeSiteIcon(tier.id)} size={24} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -73,7 +69,7 @@ export function TierRow({ tier, selected, onSelect }) {
             fontWeight: 700,
           }}
         >
-          <SiteIcon name="check" size={13} />
+          <SiteIcon name="check" size={14} />
         </div>
       )}
     </button>

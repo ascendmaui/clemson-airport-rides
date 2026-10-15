@@ -12,6 +12,7 @@ import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { authedJson } from 'rides-native/apiClient'
+import { caughtMessage, logCaught } from '@/lib/caught'
 
 type Dispute = { id: string; status: string; created_at: string; ticket_id: string | null }
 
@@ -31,7 +32,10 @@ function DisputeScreen() {
     if (!tripId) return
     authedJson(supabase, '/api/trip-messages?action=dispute-summary', { method: 'POST', body: { tripId } })
       .then((result: any) => setDispute(result?.dispute || null))
-      .catch(() => {})
+      .catch((err: unknown) => {
+        logCaught('dispute-summary', err)
+        setError(caughtMessage(err, 'Could not load this dispute.'))
+      })
   }, [tripId])
 
   async function submit() {

@@ -1,3 +1,4 @@
+import { SiteIcon } from './SiteIcon.jsx'
 import { DriverShiftControl } from './DriverShiftControl'
 import { MapTypeSelect } from './MapTypeSelect'
 
@@ -22,8 +23,9 @@ export function DriverDeskHeader({
         type="button"
         className="pressable driver-desk-header__menu"
         onClick={onMenu}
+        aria-label="Menu"
       >
-        ☰
+        <SiteIcon name="menu" size={20} />
       </button>
       {showMapType ? (
         <MapTypeSelect value={mapTypeId} onChange={onMapTypeChange} />
