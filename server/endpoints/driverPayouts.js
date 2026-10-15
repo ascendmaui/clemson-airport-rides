@@ -202,7 +202,7 @@ export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
     // A driver may have claimed this payout for instant cash-out since the list was read.
     if (await claimedByCashout(sb, trip.id)) continue
     const account = connectAccountId || await loadAccountFn(sb, trip.driver_id)
-    const attempt = await attemptFn({ trip, stripe, connectAccountId: account, now })
+    const attempt = await attemptFn({ trip, stripe, connectAccountId: account, now, sb, env: deps.env || process.env })
     await writeFn(sb, trip, attempt.payout)
     results.push({
       tripId: trip.id,

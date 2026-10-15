@@ -313,19 +313,23 @@ export default async function handler(req, res, deps = {}) {
     }
 
     if (isAffiliateConnectEvent(event.type) || isDriverConnectEvent(event.type)) {
-      if (event.livemode === true) {
+      // Driver payouts run live (behind admin approval). Affiliate Connect stays test-mode only.
+      const live = event.livemode === true
+      if (live && !isDriverConnectEvent(event.type)) {
         return sendWebhookJson(res, 200, {
           received: true,
           type: event.type,
           affiliate: { skipped: true, reason: 'live_mode' },
-          driver: { skipped: true, reason: 'live_mode' },
+          driver: { skipped: true, reason: 'not_driver_event' },
         })
       }
       const client = deps.serviceClient ? deps.serviceClient() : serviceClient(activeServiceKey)
       if (!client) {
         return sendWebhookJson(res, 200, { received: true, type: event.type, affiliate: { skipped: true, reason: 'no_service_role' } })
       }
-      const affiliate = isAffiliateConnectEvent(event.type)
+      const affiliate = live
+        ? { ok: true, skipped: true, reason: 'live_mode' }
+        : isAffiliateConnectEvent(event.type)
         ? await (deps.handleAffiliateConnectEvent || handleAffiliateConnectEvent)(client, event)
         : { ok: true, skipped: true, reason: 'not_affiliate' }
       const driver = isDriverConnectEvent(event.type)
