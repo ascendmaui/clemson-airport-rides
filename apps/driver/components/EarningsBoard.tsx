@@ -16,6 +16,7 @@ import type {
   StreakCard,
   TipsBreakdown,
 } from 'rides-native/earningsDashboard.js'
+import { earningsHeroColors } from '@/lib/palette'
 
 export type DashPeriod = 'day' | 'week' | 'month'
 
@@ -106,7 +107,7 @@ export function EarningsHero({
   const muted = onDark ? colors.inkSecondary : 'rgba(255,255,255,0.84)'
   const body = (
     <>
-      <Text style={[styles.kicker, { color: onDark ? colors.orange : '#FFD8B8' }]}>{periodKicker(period)}</Text>
+      <Text style={[styles.kicker, { color: onDark ? colors.orange : earningsHeroColors.kickerOnPurple }]}>{periodKicker(period)}</Text>
       <Text style={[styles.heroAmount, { color: onDark ? colors.orange : ink }]}>{amount}</Text>
       <Text style={[styles.heroLabel, { color: muted }]}>{label}</Text>
       <Text style={[styles.heroMeta, { color: muted }]}>{rides} {rides === 1 ? 'ride' : 'rides'} · {tips} in tips</Text>
@@ -120,7 +121,7 @@ export function EarningsHero({
     )
   }
   return (
-    <LinearGradient colors={[color.purple, '#3C1E66']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+    <LinearGradient colors={[color.purple, earningsHeroColors.gradientEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
       {body}
     </LinearGradient>
   )
@@ -373,7 +374,7 @@ export function PayoutPanel({
         accessibilityHint="Opens payouts to retry a transfer that is already due"
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Text style={[styles.cashLabel, { color: '#1A1033' }]}>Cash out</Text>
+        <Text style={[styles.cashLabel, { color: earningsHeroColors.cashInk }]}>Cash out</Text>
       </Pressable>
     </Card>
   )
