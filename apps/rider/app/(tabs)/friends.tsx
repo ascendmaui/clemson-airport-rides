@@ -11,6 +11,7 @@ import { Card, EmptyState, ErrorText, Field, SkeletonBlock } from '@/components/
 import { TabSwipeRegion, useTabSwipeRemeasure } from '@/components/MainTabPager'
 import { normalizeTabPath } from '@/lib/tabSwipe'
 import { loadAmbassadorCode } from '@/lib/ambassadorCode'
+import { caughtMessage, logCaught } from '@/lib/caught'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { successHaptic, tapHaptic } from '@/lib/feedback'
@@ -127,7 +128,9 @@ export function CarpoolHubScreen() {
       .then((code) => {
         if (alive) setAmbassadorCode(code)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        logCaught('friends-ambassador', err)
+      })
     return () => {
       alive = false
     }
@@ -145,7 +148,9 @@ export function CarpoolHubScreen() {
       .then((data) => {
         if (alive) setFirstRide(data)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        logCaught('friends-first-ride', err)
+      })
       .finally(() => {
         if (alive) setFirstRideLoaded(true)
       })
@@ -173,7 +178,10 @@ export function CarpoolHubScreen() {
       .then((rows) => {
         if (alive) setActivity(rows)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        if (alive) setFriendError(caughtMessage(err, 'Could not load friend rides.'))
+        logCaught('friends-activity', err)
+      })
     return () => {
       alive = false
     }
@@ -231,8 +239,9 @@ export function CarpoolHubScreen() {
       const url = inviteUrl(data.token, 'carpool')
       try {
         await Share.share({ message: url })
-      } catch {
-        /* the lobby still has the link */
+      } catch (err) {
+        const message = caughtMessage(err, '')
+        if (!/cancel|dismiss/i.test(message)) logCaught('friends-share', err)
       }
       router.push(`/carpool/${data.token}`)
     } catch (err) {

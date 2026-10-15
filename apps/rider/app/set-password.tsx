@@ -3,6 +3,7 @@ import * as Linking from 'expo-linking'
 import { useEffect, useState } from 'react'
 import { SetNewPasswordScreen } from 'rides-native/AuthScreens'
 import { useAuth } from '@/lib/auth'
+import { caughtMessage, logCaught } from '@/lib/caught'
 import { applyRecoveryLink, currentRecoveryUrl } from '@/lib/recovery'
 
 export default function SetPasswordRoute() {
@@ -36,6 +37,10 @@ export default function SetPasswordRoute() {
     currentRecoveryUrl().then((url: string | null) => {
       if (!alive) return
       void consume(url)
+    }).catch((err: unknown) => {
+      if (!alive) return
+      logCaught('set-password', err)
+      setNote(caughtMessage(err, 'Could not open that reset link.'))
     })
     const sub = Linking.addEventListener('url', ({ url }: { url: string }) => {
       void consume(url)

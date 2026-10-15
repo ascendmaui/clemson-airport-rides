@@ -15,6 +15,7 @@ import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
+import { caughtMessage, logCaught } from '@/lib/caught'
 
 type Draft = {
   id?: string
@@ -57,6 +58,11 @@ export function EmergencyContactsCard({
       if (!alive) return
       setError(result.error)
       publish(result.contacts)
+      setLoading(false)
+    }).catch((err: unknown) => {
+      if (!alive) return
+      logCaught('emergency-contacts', err)
+      setError(caughtMessage(err, 'Could not load emergency contacts.'))
       setLoading(false)
     })
     return () => {

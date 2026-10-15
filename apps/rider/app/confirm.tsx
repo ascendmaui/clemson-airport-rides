@@ -11,6 +11,7 @@ import { CampusMap } from '@/components/CampusMap'
 import type { CampusMapHandle } from '@/components/mapTypes'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
+import { logCaught } from '@/lib/caught'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { lookupCatalogPlace, placeFromStop, type Place } from 'rides-native/shared/carpool.js'
@@ -115,7 +116,8 @@ export default function ConfirmPickup() {
       let position
       try {
         position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation })
-      } catch {
+      } catch (err) {
+        logCaught('confirm-locate', err)
         position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
       }
       const lat = position.coords.latitude
@@ -124,7 +126,8 @@ export default function ConfirmPickup() {
       try {
         const reversed = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng })
         label = addressFromGeocode(reversed[0]) || label
-      } catch {
+      } catch (err) {
+        logCaught('confirm-address', err)
         label = 'Current location'
       }
       const place = { label, lat, lng }
@@ -267,7 +270,8 @@ async function placeFromGps(): Promise<Place> {
   let position
   try {
     position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation })
-  } catch {
+  } catch (err) {
+    logCaught('confirm-locate', err)
     position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
   }
   const lat = position.coords.latitude
@@ -279,7 +283,8 @@ async function placeFromGps(): Promise<Place> {
   try {
     const reversed = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng })
     label = addressFromGeocode(reversed[0]) || label
-  } catch {
+  } catch (err) {
+    logCaught('confirm-address', err)
     label = 'Current location'
   }
   return { label, lat, lng }
