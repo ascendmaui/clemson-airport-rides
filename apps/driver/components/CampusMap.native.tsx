@@ -14,6 +14,7 @@ import { StillMarker } from './StillMarker'
 import { markerLookKey } from '@/lib/markerRedraw'
 import { GLYPHS, Glyph, ION_ALIASES } from 'rides-native/icons'
 import type { MapPin } from './CampusMap'
+import { mapHeatColors, mapUnavailableColors } from '@/lib/palette'
 
 const HEAT_LEGEND_STOPS = [0.1, 0.4, 0.7, 1]
 
@@ -93,6 +94,7 @@ export function CampusMap({
   const info = live ? describeCell(live, center ? { lat: center.latitude, lng: center.longitude } : null) : null
   const cardIn = useRef(new Animated.Value(0)).current
   const darkMap = colorScheme === 'dark'
+  const heat = darkMap ? mapHeatColors.dark : mapHeatColors.light
 
   useEffect(() => {
     if (!live) {
@@ -246,8 +248,8 @@ export function CampusMap({
             <View style={[styles.carMarker, { backgroundColor: pin.marker.fill, borderColor: pin.marker.accent, borderStyle: pin.marker.pattern === 'check' ? 'dashed' : 'solid', borderWidth: pin.marker.pattern === 'ring' ? 4 : 2 }]}>
               {pin.marker.pattern === 'stripe' ? <View style={[styles.carStripe, { backgroundColor: pin.marker.accent }]} /> : null}
               {hasSharedGlyph(pin.marker.glyph)
-                ? <Glyph name={pin.marker.glyph} size={18} color={pin.marker.pattern === 'check' ? pin.marker.accent : '#FFFFFF'} />
-                : <Ionicons name={pin.marker.glyph as keyof typeof Ionicons.glyphMap} size={18} color={pin.marker.pattern === 'check' ? pin.marker.accent : '#FFFFFF'} />}
+                ? <Glyph name={pin.marker.glyph} size={18} color={pin.marker.pattern === 'check' ? pin.marker.accent : color.white} />
+                : <Ionicons name={pin.marker.glyph as keyof typeof Ionicons.glyphMap} size={18} color={pin.marker.pattern === 'check' ? pin.marker.accent : color.white} />}
             </View>
           </StillMarker>
         ) : (
@@ -268,14 +270,14 @@ export function CampusMap({
         </View>
       ) : null}
       {showHeat ? (
-        <View pointerEvents="none" style={[styles.heatLegend, { backgroundColor: darkMap ? 'rgba(22,18,31,0.9)' : 'rgba(255,255,255,0.92)' }]} accessibilityLabel="Demand heat map legend, low to high">
-          <Text style={[styles.heatLegendText, { color: darkMap ? '#D5D0DC' : '#3E4654' }]}>Demand</Text>
+        <View pointerEvents="none" style={[styles.heatLegend, { backgroundColor: heat.legend }]} accessibilityLabel="Demand heat map legend, low to high">
+          <Text style={[styles.heatLegendText, { color: heat.body }]}>Demand</Text>
           <View style={styles.heatLegendRamp}>
             {HEAT_LEGEND_STOPS.map((v) => (
               <View key={v} style={[styles.heatLegendSwatch, { backgroundColor: `rgb(${heatRgb(v, colorScheme).join(',')})` }]} />
             ))}
           </View>
-          <Text style={[styles.heatLegendText, { color: darkMap ? '#D5D0DC' : '#3E4654' }]}>Low · High</Text>
+          <Text style={[styles.heatLegendText, { color: heat.body }]}>Low · High</Text>
         </View>
       ) : null}
       {info ? (
@@ -283,8 +285,8 @@ export function CampusMap({
           style={[
             styles.heatCard,
             {
-              backgroundColor: darkMap ? '#16121F' : '#FFFFFF',
-              borderColor: darkMap ? 'rgba(255,255,255,0.14)' : 'rgba(82,45,128,0.12)',
+              backgroundColor: heat.surface,
+              borderColor: heat.border,
               opacity: cardIn,
               transform: [{ translateY: cardIn.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
             },
@@ -292,10 +294,10 @@ export function CampusMap({
           accessibilityRole="summary"
           accessibilityLabel={`${info.title}. ${info.estimate}. ${info.distance || ''}`}
         >
-          <Text style={[styles.heatCardTitle, { color: darkMap ? '#FFFFFF' : '#1B1B1F' }]}>{info.title}</Text>
-          <Text style={[styles.heatCardEstimate, { color: darkMap ? '#FFC9A3' : '#9A3F00' }]}>{info.estimate}</Text>
-          {info.detail ? <Text style={[styles.heatCardDetail, { color: darkMap ? '#D5D0DC' : '#3E4654' }]}>{info.detail}</Text> : null}
-          {info.distance ? <Text style={[styles.heatCardDetail, { color: darkMap ? '#D5D0DC' : '#3E4654' }]}>{info.distance}</Text> : null}
+          <Text style={[styles.heatCardTitle, { color: heat.title }]}>{info.title}</Text>
+          <Text style={[styles.heatCardEstimate, { color: heat.estimate }]}>{info.estimate}</Text>
+          {info.detail ? <Text style={[styles.heatCardDetail, { color: heat.body }]}>{info.detail}</Text> : null}
+          {info.distance ? <Text style={[styles.heatCardDetail, { color: heat.body }]}>{info.distance}</Text> : null}
           <Pressable
             onPress={() => setSelected(null)}
             style={styles.heatCardClose}
@@ -303,7 +305,7 @@ export function CampusMap({
             accessibilityLabel="Close demand details"
             hitSlop={8}
           >
-            <Text style={[styles.heatCardCloseText, { color: darkMap ? '#FFC9A3' : '#9A3F00' }]}>Close</Text>
+            <Text style={[styles.heatCardCloseText, { color: heat.estimate }]}>Close</Text>
           </Pressable>
         </Animated.View>
       ) : null}
@@ -327,11 +329,11 @@ const styles = StyleSheet.create({
   peakBadge: {
     position: 'absolute', top: 108, alignSelf: 'center',
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
-    backgroundColor: '#522D80',
+    backgroundColor: PURPLE,
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.28)',
     ...shadowStyle(PURPLE, 'rest', 'dark'),
   },
-  peakText: { color: '#FFFFFF', fontWeight: '700', fontSize: 12, letterSpacing: 0.3 },
+  peakText: { color: color.white, fontWeight: '700', fontSize: 12, letterSpacing: 0.3 },
   heatCard: {
     position: 'absolute', left: 16, right: 16, top: 156,
     borderRadius: 22, padding: 16, paddingRight: 88, borderWidth: 1,
@@ -346,31 +348,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
-    backgroundColor: '#F4F5F8',
+    backgroundColor: mapUnavailableColors.surface,
   },
-  unavailableTitle: { fontSize: 16, fontWeight: '800', color: '#522D80', marginBottom: 8 },
-  unavailableBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', color: '#5B6472' },
+  unavailableTitle: { fontSize: 16, fontWeight: '800', color: PURPLE, marginBottom: 8 },
+  unavailableBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', color: mapUnavailableColors.body },
   tigerChip: {
-    backgroundColor: '#F56600',
-    borderColor: '#522D80',
+    backgroundColor: ORANGE,
+    borderColor: PURPLE,
     borderWidth: 2,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  tigerChipPreview: { backgroundColor: '#522D80' },
-  tigerChipText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  tigerChipPreview: { backgroundColor: PURPLE },
+  tigerChipText: { color: color.white, fontSize: 12, fontWeight: '800' },
   zone: { position: 'absolute', left: 16, top: 88, right: 16, alignItems: 'flex-start' },
   requestDot: {
     width: 14,
     height: 14,
     borderRadius: 7,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: color.white,
   },
   zoneText: {
     backgroundColor: ORANGE,
-    color: '#fff',
+    color: color.white,
     overflow: 'hidden',
     borderRadius: 999,
     paddingHorizontal: 10,

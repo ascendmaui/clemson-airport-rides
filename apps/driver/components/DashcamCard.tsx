@@ -17,6 +17,7 @@ import {
 import { keepClipOnDevice } from '@/lib/localClip'
 import { useTheme } from '@/lib/theme'
 import { quiet } from '@/lib/softFail'
+import { useSecondClock } from '@/lib/useSecondClock'
 
 type CaptureSession = {
   phase: string
@@ -40,8 +41,8 @@ export function DashcamCard({ status, active = true }: { status: string | null; 
   const [cameraReady, setCameraReady] = useState(false)
   const [arming, setArming] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [now, setNow] = useState(() => Date.now())
   const recording = session.phase === 'recording'
+  const now = useSecondClock(recording)
   recordingRef.current = recording
   const blocked = recordingBlockReason({ status, permission, mode: 'video' })
 
@@ -60,13 +61,6 @@ export function DashcamCard({ status, active = true }: { status: string | null; 
       alive = false
     }
   }, [])
-
-  useEffect(() => {
-    if (!recording) return undefined
-    setNow(Date.now())
-    const clock = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(clock)
-  }, [recording])
 
   useEffect(() => () => {
     const pending = pendingRef.current

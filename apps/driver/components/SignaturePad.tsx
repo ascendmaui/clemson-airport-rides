@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react'
 import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native'
+import { signatureColors } from '@/lib/palette'
 
 type Point = { x: number; y: number }
 
 export function SignaturePad({
   onChange,
-  ink = '#111111',
+  ink = signatureColors.ink,
 }: {
   onChange: (points: Point[]) => void
   ink?: string
@@ -59,12 +60,12 @@ const styles = StyleSheet.create({
   pad: {
     height: 140,
     borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: signatureColors.surface,
     borderWidth: 1,
-    borderColor: '#D7D3DE',
+    borderColor: signatureColors.border,
     overflow: 'hidden',
   },
-  hint: { color: '#8B939E', padding: 12 },
+  hint: { color: signatureColors.hint, padding: 12 },
   dot: { position: 'absolute', width: 3, height: 3, borderRadius: 2 },
   clear: { fontWeight: '700', fontSize: 13 },
 })

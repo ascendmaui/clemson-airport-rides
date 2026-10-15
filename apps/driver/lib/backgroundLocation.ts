@@ -170,7 +170,7 @@ export function startTripBackgroundLocation(tripId: string): Promise<BackgroundL
         pausesUpdatesAutomatically: false,
         showsBackgroundLocationIndicator: true,
         foregroundService: {
-          notificationTitle: 'Clemson RIDES trip in progress',
+          notificationTitle: 'Clemson Rides trip in progress',
           notificationBody: 'Sharing your location with your rider until the trip ends.',
         },
       })

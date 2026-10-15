@@ -8,6 +8,7 @@ import { NeighborhoodPicker } from '@/components/carpool/NeighborhoodPicker'
 import { BackButton, Card, EmptyState, ErrorText, Field, SkeletonBlock, SplitModePicker } from '@/components/carpool/ui'
 import { MainTabs } from '@/components/MainTabs'
 import { loadAmbassadorCode } from '@/lib/ambassadorCode'
+import { logCaught } from '@/lib/caught'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
@@ -161,7 +162,9 @@ export default function CarpoolLobbyScreen() {
       .then((data) => {
         if (alive) setFirstRide(data)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        logCaught('carpool-first-ride', err)
+      })
       .finally(() => {
         if (alive) setFirstRideLoaded(true)
       })

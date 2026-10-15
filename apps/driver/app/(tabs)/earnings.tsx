@@ -40,6 +40,7 @@ import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { CASHOUT_COPY } from '../../../../shared/cashout.js'
 import { readPrepaidTipCents } from '../../../../shared/prepaidTip.js'
 import { quiet, quietly } from '@/lib/softFail'
+import { tipsColor } from '@/lib/palette'
 
 type EarningsState = Awaited<ReturnType<typeof loadEarnings>> | null
 
@@ -204,14 +205,14 @@ export default function EarningsHub() {
   const segments = standard
     ? [
         { label: 'You', value: 80, color: legendColor(colors, 'you') },
-        { label: 'Clemson RIDES', value: 20, color: legendColor(colors, 'platform') },
+        { label: 'Clemson Rides', value: 20, color: legendColor(colors, 'platform') },
         { label: 'Other', value: 0, color: legendColor(colors, 'other') },
       ]
     : [
         { label: 'You', value: you, color: legendColor(colors, 'you') },
-        { label: 'Clemson RIDES', value: platform, color: legendColor(colors, 'platform') },
-        { label: 'Boost', value: boostSum, color: '#F56600' },
-        { label: 'Tips (100% yours)', value: tipSlice, color: '#22A04B' },
+        { label: 'Clemson Rides', value: platform, color: legendColor(colors, 'platform') },
+        { label: 'Boost', value: boostSum, color: colors.orange },
+        { label: 'Tips (100% yours)', value: tipSlice, color: tipsColor },
         { label: 'Other', value: other, color: legendColor(colors, 'other') },
       ]
 
@@ -247,7 +248,7 @@ export default function EarningsHub() {
                 totals={{ day: shown(dayReport.totalCents), week: shown(weekReport.totalCents), month: shown(monthReport.totalCents) }}
                 bars={selected.bars}
                 caption={chartCaption}
-                split={`${shown(selected.youCents)} you · ${shown(selected.platformCents)} Clemson RIDES`}
+                split={`${shown(selected.youCents)} you · ${shown(selected.platformCents)} Clemson Rides`}
                 hidden={earningsPrivate}
               />
               <BoardNote>
@@ -279,7 +280,7 @@ export default function EarningsHub() {
                   accessibilityHint="Shows the fee and asks you to confirm before sending your balance"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Text style={{ color: quote?.state === 'ready' ? '#FFFFFF' : colors.title, fontWeight: '800' }}>
+                  <Text style={{ color: quote?.state === 'ready' ? colors.onAccent : colors.title, fontWeight: '800' }}>
                     {cashing ? 'Sending…' : quote?.state === 'needs_setup' ? 'Set up payouts to cash out' : 'Instant cash-out'}
                   </Text>
                 </Pressable>

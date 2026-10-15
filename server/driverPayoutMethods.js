@@ -1,12 +1,15 @@
 /**
- * Stripe Connect Express payout desk for drivers. Test mode only.
+ * Stripe Connect Express payout desk for drivers. Test or live key; live money
+ * waits for admin approval (server/payoutApproval.js).
  * Account links and the Express dashboard login link add or remove banks
  * and cards. This module never stores a full account number.
  */
 import { cashoutQuote, executeCashout } from './cashout.js'
 import { loadConnectAccount } from './payouts.js'
+import { usableConnectAccount } from './payoutApproval.js'
+import { publicApprovalRow } from '../shared/payoutApproval.js'
 import {
-  expressTestKeyAllowed,
+  expressKeyAllowed,
   payoutStatusChip,
   publicPayoutMethod,
   shouldApplyPayoutStatus,
@@ -91,10 +94,11 @@ async function readHistory(sb, driverId) {
 }
 
 export async function loadPayoutDesk({ sb, stripe, driverId, env = process.env, origin = 'https://clemsonrides.com', now = new Date() }) {
-  if (!expressTestKeyAllowed(env.STRIPE_SECRET_KEY)) {
+  if (!expressKeyAllowed(env.STRIPE_SECRET_KEY)) {
     return { ok: false, status: 403, error: 'live_keys_blocked' }
   }
-  const accountId = await loadConnectAccount(sb, driverId)
+  const usable = await usableConnectAccount(stripe, await loadConnectAccount(sb, driverId), env)
+  const accountId = usable.accountId
   let detailsSubmitted = false
   let payoutsEnabled = false
   let setupUrl = null
@@ -123,6 +127,7 @@ export async function loadPayoutDesk({ sb, stripe, driverId, env = process.env, 
     cashoutQuote({ sb, stripe, driverId, env, now, method: 'instant' }),
     cashoutQuote({ sb, stripe, driverId, env, now, method: 'standard' }),
   ])
+  const approvals = await readApprovals(sb, driverId)
   delete instant.connectAccountId
   delete standard.connectAccountId
   return {
@@ -138,34 +143,63 @@ export async function loadPayoutDesk({ sb, stripe, driverId, env = process.env, 
     instant,
     standard,
     history: await readHistory(sb, driverId),
+    approvals,
+    needsReonboard: usable.needsReonboard === true,
+  }
+}
+
+/** The driver's own payout approval requests (Pending approval / Sent / Rejected). */
+async function readApprovals(sb, driverId) {
+  try {
+    const res = await sb.from('payout_approval_requests')
+      .select('id, kind, amount_cents, status, reject_reason, requested_at, decided_at, sent_at, trip_id')
+      .eq('payee_id', driverId)
+      .order('requested_at', { ascending: false })
+      .limit(30)
+    if (res?.error) {
+      if (missingRelation(res.error)) return []
+      throw new Error(res.error.message)
+    }
+    return (res.data || []).map(publicApprovalRow).filter(Boolean)
+  } catch (err) {
+    if (missingRelation(err)) return []
+    throw err
   }
 }
 
 export async function startDirectDeposit({ sb, stripe, user, env = process.env, origin = 'https://clemsonrides.com' }) {
-  if (!expressTestKeyAllowed(env.STRIPE_SECRET_KEY)) {
+  if (!expressKeyAllowed(env.STRIPE_SECRET_KEY)) {
     return { ok: false, status: 403, error: 'live_keys_blocked' }
   }
   if (!stripe?.accounts?.create || !stripe?.accountLinks?.create) {
     return { ok: false, status: 503, error: 'Stripe not configured' }
   }
-  let accountId = await loadConnectAccount(sb, user.id)
+  // A saved test-mode account cannot be used with the live key: onboard a new live account.
+  const usable = await usableConnectAccount(stripe, await loadConnectAccount(sb, user.id), env)
+  let accountId = usable.accountId
   let created = false
   if (!accountId) {
     const account = await stripe.accounts.create(expressAccountParams(user))
     accountId = account?.id || null
     created = true
     if (!accountId) return { ok: false, status: 502, error: 'stripe_account_missing' }
-    const saved = await sb.from('profiles').update({ stripe_account_id: accountId }).eq('id', user.id)
+    const patch = usable.needsReonboard
+      ? { stripe_account_id: accountId, stripe_connect_id: null, stripe_details_submitted: false, stripe_payouts_enabled: false }
+      : { stripe_account_id: accountId }
+    let saved = await sb.from('profiles').update(patch).eq('id', user.id)
+    if (saved?.error && usable.needsReonboard && missingRelation(saved.error)) {
+      saved = await sb.from('profiles').update({ stripe_account_id: accountId }).eq('id', user.id)
+    }
     if (saved?.error) return { ok: false, status: 500, error: saved.error.message }
   }
   const current = created ? null : await stripe.accounts.retrieve(accountId)
   const submitted = current?.details_submitted === true
   const link = await createDriverAccountLink(stripe, accountId, origin, submitted)
-  return { ok: true, url: link.url, type: link.type, created }
+  return { ok: true, url: link.url, type: link.type, created, reonboarded: usable.needsReonboard === true }
 }
 
 export async function cashOutDriver({ sb, stripe, driverId, method, expectedFeeCents, env = process.env, now = new Date() }) {
-  if (!expressTestKeyAllowed(env.STRIPE_SECRET_KEY)) {
+  if (!expressKeyAllowed(env.STRIPE_SECRET_KEY)) {
     return { ok: false, status: 403, error: 'live_keys_blocked' }
   }
   if (method !== 'instant' && method !== 'standard') {
@@ -248,7 +282,6 @@ async function syncDriverPayout(sb, event) {
 }
 
 export async function handleDriverConnectEvent(sb, event) {
-  if (event?.livemode === true) return { ok: true, skipped: true, reason: 'live_mode' }
   const type = event?.type
   if (!isDriverConnectEvent(type)) return { ok: true, skipped: true, reason: 'unhandled' }
   try {

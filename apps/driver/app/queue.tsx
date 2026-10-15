@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FarePanel } from '@/components/FarePanel'
 import { BackButton, Card, ErrorText, Primary, Tag } from '@/components/chrome'
@@ -11,6 +11,7 @@ import { useFeedback } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { DRIVER_LIST_WINDOW } from '@/lib/virtualRows'
 import { riderDriverFirstName } from '../../../shared/riderDriverPrivacy.js'
 import type { Palette } from '@/lib/palette'
 import { acceptTrip, confirmBackupQueueTrip, declineDriverOffer, loadDriverDesk, markSearchingOffers, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
@@ -43,6 +44,7 @@ import { driverBoostOfferLine } from '../../../shared/copy/boost.js'
 import { compareBoostedFirst, formatBoostBadge } from '../../../shared/scheduledBoost.js'
 import { CrashBoundary } from '@/components/CrashBoundary'
 import { failureToast, quiet } from '@/lib/softFail'
+import { color as brand } from 'rides-native/shared/theme.js'
 
 function useQueueStyles() {
   const { colors } = useTheme()
@@ -58,7 +60,7 @@ function ConfirmCountdown({ closesAt }: { closesAt?: string | null }) {
     return () => clearInterval(id)
   }, [closesAt])
   if (!label) return null
-  return <Text style={{ color: '#F56600', fontWeight: '800', fontSize: 22, marginTop: 4 }}>{label}</Text>
+  return <Text style={{ color: brand.orange, fontWeight: '800', fontSize: 22, marginTop: 4 }}>{label}</Text>
 }
 
 function LeaveNowCountdown({ leaveNowAt, onDue }: { leaveNowAt?: string | null; onDue: () => boolean | Promise<boolean | void> }) {
@@ -88,7 +90,7 @@ function LeaveNowCountdown({ leaveNowAt, onDue }: { leaveNowAt?: string | null; 
     return () => clearInterval(id)
   }, [leaveNowAt])
   if (!label) return null
-  return <Text style={{ color: '#F56600', fontWeight: '800', fontSize: 22, marginTop: 4 }}>{label}</Text>
+  return <Text style={{ color: brand.orange, fontWeight: '800', fontSize: 22, marginTop: 4 }}>{label}</Text>
 }
 
 function seatReleaseLabel(role?: string | null) {
@@ -145,7 +147,7 @@ function QueueCard({
           <Text style={styles.copy}>{statusHeadline(card.status)}</Text>
         </View>
       </View>
-      <Text style={[styles.fare, (card.boostDriverCents || 0) > 0 && { color: '#F56600' }]}>{formatCents(card.driverNetCents)} est. earnings</Text>
+      <Text style={[styles.fare, (card.boostDriverCents || 0) > 0 && { color: colors.orange }]}>{formatCents(card.driverNetCents)} est. earnings</Text>
       {(card.boostDriverCents || 0) > 0 ? (
         <View style={styles.boostBadge}>
           <Text style={styles.boostText}>{formatBoostBadge(card.boostDriverCents || 0)}</Text>
@@ -161,15 +163,15 @@ function QueueCard({
       <Text style={styles.copy}>Drop-off · {card.dropoffLabel}</Text>
       {card.airportContext ? <Text style={styles.note} accessibilityLabel={`Airport: ${card.airportContext.line}`}>{card.airportContext.line}</Text> : null}
       {card.pickupAt ? <Text style={styles.copy}>{formatPickupAt(card.pickupAt)}</Text> : null}
-      {card.backupLabel ? <Text style={[styles.note, { color: '#F56600', fontWeight: '800' }]}>{card.backupLabel}</Text> : null}
-      {card.lookingForBackup && card.backupRole === 'primary' ? <Text style={[styles.note, { color: '#522D80' }]}>Looking for backup driver</Text> : null}
+      {card.backupLabel ? <Text style={[styles.note, { color: colors.orange, fontWeight: '800' }]}>{card.backupLabel}</Text> : null}
+      {card.lookingForBackup && card.backupRole === 'primary' ? <Text style={[styles.note, { color: colors.link }]}>Looking for backup driver</Text> : null}
       {card.lookingForBackup && card.backupRole === 'primary' ? <ScheduledRidesHint topic="looking" colors={colors} /> : null}
       {card.backupRole === 'open_backup' ? <ScheduledRidesHint topic="offer" colors={colors} /> : null}
       {card.backupRole === 'backup' && card.pickupAt ? (
-        <Text style={[styles.note, { color: '#522D80' }]}>{`You're #2 for this trip, pickup at ${formatPickupAt(card.pickupAt)}`}</Text>
+        <Text style={[styles.note, { color: colors.link }]}>{`You're #2 for this trip, pickup at ${formatPickupAt(card.pickupAt)}`}</Text>
       ) : null}
       {card.backupStatusLine && card.backupRole === 'primary' ? <Text style={styles.note}>{card.backupStatusLine}</Text> : null}
-      {card.backupNotice ? <Text style={[styles.note, { color: '#522D80', fontWeight: '700' }]}>{card.backupNotice}</Text> : null}
+      {card.backupNotice ? <Text style={[styles.note, { color: colors.link, fontWeight: '700' }]}>{card.backupNotice}</Text> : null}
       {card.passengers > 1 ? <Text style={styles.copy}>{card.passengers} riders · capacity check is your seat count</Text> : null}
       <View style={styles.tags}>
         {card.tagLabels.map((label: string) => (
@@ -181,17 +183,17 @@ function QueueCard({
       {card.comfortStub ? <Text style={styles.copy}>{COMFORT_FLEET_NOTICE}</Text> : null}
       {card.backupConfirmOpen ? (
         <View style={{ marginTop: 8, padding: 10, borderRadius: 12, backgroundColor: 'rgba(245,102,0,0.12)' }}>
-          <Text style={{ color: '#F56600', fontWeight: '800' }}>Confirm trip</Text>
+          <Text style={{ color: colors.orange, fontWeight: '800' }}>Confirm trip</Text>
           <Text style={styles.copy}>{card.backupConfirmCopy}</Text>
           <ScheduledRidesHint topic="confirm" colors={colors} />
-          {card.backupUrgent ? <Text style={[styles.note, { color: '#F56600', fontWeight: '800' }]}>You are up. Confirm and start toward pickup.</Text> : null}
+          {card.backupUrgent ? <Text style={[styles.note, { color: colors.orange, fontWeight: '800' }]}>You are up. Confirm and start toward pickup.</Text> : null}
           <ConfirmCountdown closesAt={card.backupConfirmClosesAt} />
           <Primary label={busy ? 'Saving…' : 'Confirm trip'} onPress={onConfirm} disabled={busy} />
         </View>
       ) : null}
       {card.backupLeaveNowOpen ? (
         <View style={{ marginTop: 8, padding: 10, borderRadius: 12, backgroundColor: 'rgba(245,102,0,0.12)' }}>
-          <Text style={{ color: '#F56600', fontWeight: '800' }}>Leave now</Text>
+          <Text style={{ color: colors.orange, fontWeight: '800' }}>Leave now</Text>
           <ScheduledRidesHint topic="leave" colors={colors} />
           <LeaveNowCountdown leaveNowAt={card.backupLeaveNowAt} onDue={onDepart} />
           <Primary label={busy ? 'Saving…' : 'Leave now'} onPress={onDepart} disabled={busy} />
@@ -446,7 +448,10 @@ function QueueScreenBody() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
-      <ScrollView
+      <FlatList
+        data={canSeeOffers ? shown : []}
+        keyExtractor={(card: DriverCard) => card.id}
+        {...DRIVER_LIST_WINDOW}
         contentContainerStyle={styles.list}
         refreshControl={
           <RefreshControl
@@ -458,88 +463,91 @@ function QueueScreenBody() {
             accessibilityLabel="Pull to refresh application status"
           />
         }
-      >
-        <BackButton onPress={() => router.back()} />
-        <Text style={styles.kicker}>QUEUE</Text>
-        <Text style={styles.title}>{canSeeOffers ? 'Accept rides' : 'Ride queue'}</Text>
-        <Text style={styles.copy}>
-          {canSeeOffers
-            ? 'Chosen-driver requests, open matches, student discounts, game-day rides, and scheduled weekend or party pickups.'
-            : 'Ride requests and scheduled pickups will appear here once your driver application is approved.'}
-        </Text>
+        ListHeaderComponent={
+          <View style={styles.listHeader}>
+            <BackButton onPress={() => router.back()} />
+            <Text style={styles.kicker}>QUEUE</Text>
+            <Text style={styles.title}>{canSeeOffers ? 'Accept rides' : 'Ride queue'}</Text>
+            <Text style={styles.copy}>
+              {canSeeOffers
+                ? 'Chosen-driver requests, open matches, student discounts, game-day rides, and scheduled weekend or party pickups.'
+                : 'Ride requests and scheduled pickups will appear here once your driver application is approved.'}
+            </Text>
 
-        <View style={[styles.filters, styles.board]}>
-          {([
-            ['open', 'Open pool'],
-            ['scheduled', 'Scheduled'],
-          ] as const).map(([id, label]) => (
-            <Pressable
-              key={id}
-              onPress={() => setBoard(id)}
-              style={[styles.filter, board === id && styles.filterOn]}
-              accessibilityRole="tab"
-              accessibilityLabel={id === 'scheduled' ? 'Scheduled rides at 75 percent' : 'Open pool'}
-              accessibilityState={{ selected: board === id }}
-            >
-              <Text style={[styles.filterText, board === id && styles.filterTextOn]}>{label}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <Text style={styles.copy}>
-          {board === 'scheduled'
-            ? 'Scheduled rides stay on this tab. You net 75%.'
-            : 'The first offer nets 80% for 15 seconds, then the pool nets 70% for two minutes.'}
-        </Text>
-        {board === 'scheduled' ? <ScheduledRidesExplainer role="driver" colors={colors} /> : null}
+            <View style={[styles.filters, styles.board]}>
+              {([
+                ['open', 'Open pool'],
+                ['scheduled', 'Scheduled'],
+              ] as const).map(([id, label]) => (
+                <Pressable
+                  key={id}
+                  onPress={() => setBoard(id)}
+                  style={[styles.filter, board === id && styles.filterOn]}
+                  accessibilityRole="tab"
+                  accessibilityLabel={id === 'scheduled' ? 'Scheduled rides at 75 percent' : 'Open pool'}
+                  accessibilityState={{ selected: board === id }}
+                >
+                  <Text style={[styles.filterText, board === id && styles.filterTextOn]}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.copy}>
+              {board === 'scheduled'
+                ? 'Scheduled rides stay on this tab. You net 75%.'
+                : 'The first offer nets 80% for 15 seconds, then the pool nets 70% for two minutes.'}
+            </Text>
+            {board === 'scheduled' ? <ScheduledRidesExplainer role="driver" colors={colors} /> : null}
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-          {queueFilters().map((item) => (
-            <Pressable
-              key={item}
-              onPress={() => setFilter(item)}
-              style={[styles.filter, filter === item && styles.filterOn]}
-              accessibilityRole="tab"
-              accessibilityLabel={`${filterLabel(item)} filter`}
-              accessibilityState={{ selected: filter === item }}
-              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-            >
-              <Text style={[styles.filterText, filter === item && styles.filterTextOn]}>{filterLabel(item)}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-        {error ? <ErrorText>{error}</ErrorText> : null}
-        {warning ? <ErrorText>{warning}</ErrorText> : null}
-        {offerNote ? (
-          <Text accessibilityLiveRegion="polite" style={{ color: colors.ink, fontWeight: '700' }}>{offerNote}</Text>
-        ) : null}
-        {!user ? <Primary label="Sign in" onPress={() => router.push('/sign-in')} /> : null}
-
-        {!canSeeOffers ? (
-          <DriverStatusCard
-            status={status}
-            gate={gate}
-            reason={reason}
-            onRefresh={onPullRefresh}
-            refreshing={refreshing}
-          />
-        ) : (
-          <>
-            {shown.length === 0 ? (
-              <Card>
-                <Text style={styles.cardTitle}>{board === 'scheduled' ? 'No scheduled rides' : empty.title}</Text>
-                <Text style={styles.copy}>
-                  {board === 'scheduled'
-                    ? 'Rides booked ahead show up on this tab at 75%.'
-                    : empty.body}
-                </Text>
-              </Card>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+              {queueFilters().map((item) => (
+                <Pressable
+                  key={item}
+                  onPress={() => setFilter(item)}
+                  style={[styles.filter, filter === item && styles.filterOn]}
+                  accessibilityRole="tab"
+                  accessibilityLabel={`${filterLabel(item)} filter`}
+                  accessibilityState={{ selected: filter === item }}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <Text style={[styles.filterText, filter === item && styles.filterTextOn]}>{filterLabel(item)}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            {error ? <ErrorText>{error}</ErrorText> : null}
+            {warning ? <ErrorText>{warning}</ErrorText> : null}
+            {offerNote ? (
+              <Text accessibilityLiveRegion="polite" style={{ color: colors.ink, fontWeight: '700' }}>{offerNote}</Text>
             ) : null}
-            {shown.map((card: DriverCard) => (
-              <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onConfirm={() => onConfirm(card)} onDepart={() => onDepart(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
-            ))}
-          </>
+            {!user ? <Primary label="Sign in" onPress={() => router.push('/sign-in')} /> : null}
+
+            {!canSeeOffers ? (
+              <DriverStatusCard
+                status={status}
+                gate={gate}
+                reason={reason}
+                onRefresh={onPullRefresh}
+                refreshing={refreshing}
+              />
+            ) : (
+              <>
+                {shown.length === 0 ? (
+                  <Card>
+                    <Text style={styles.cardTitle}>{board === 'scheduled' ? 'No scheduled rides' : empty.title}</Text>
+                    <Text style={styles.copy}>
+                      {board === 'scheduled'
+                        ? 'Rides booked ahead show up on this tab at 75%.'
+                        : empty.body}
+                    </Text>
+                  </Card>
+                ) : null}
+              </>
+            )}
+          </View>
+        }
+        renderItem={({ item: card }) => (
+          <QueueCard card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onConfirm={() => onConfirm(card)} onDepart={() => onDepart(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
         )}
-      </ScrollView>
+      />
     </View>
   )
 }
@@ -548,6 +556,7 @@ function queueStyles(colors: Palette) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
     list: { padding: 16, gap: 12, paddingBottom: 40 },
+    listHeader: { gap: 12 },
     kicker: { color: colors.orange, fontWeight: '800', letterSpacing: 1.1, fontSize: 12, marginTop: 8 },
     title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.4, color: colors.title },
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
@@ -557,7 +566,7 @@ function queueStyles(colors: Palette) {
     riderRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     avatar: { width: 44, height: 44, borderRadius: 22 },
     avatarFallback: { backgroundColor: colors.purple, alignItems: 'center', justifyContent: 'center' },
-    avatarLetter: { color: '#fff', fontWeight: '800', fontSize: 18 },
+    avatarLetter: { color: colors.onAccent, fontWeight: '800', fontSize: 18 },
     filter: { backgroundColor: colors.card, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
     filterOn: { backgroundColor: colors.fill },
     filterText: { color: colors.title, fontWeight: '800' },
@@ -570,12 +579,12 @@ function queueStyles(colors: Palette) {
     fare: { color: colors.ink, fontWeight: '800', fontSize: 22, letterSpacing: -0.3 },
     boostBadge: {
       alignSelf: 'flex-start',
-      backgroundColor: '#F56600',
+      backgroundColor: colors.orange,
       borderRadius: 999,
       paddingHorizontal: 10,
       paddingVertical: 4,
     },
-    boostText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+    boostText: { color: colors.onAccent, fontWeight: '800', fontSize: 12 },
     tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   })
 }

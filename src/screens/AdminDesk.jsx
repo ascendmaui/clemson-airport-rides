@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase'
 import { AdminAccessDenied } from '../components/AdminAccessDenied'
 import { AdminEventsPanel } from '../components/AdminEventsPanel'
 import { AdminInboxPanel } from '../components/AdminInboxPanel'
+import { AdminPayoutApprovals } from '../components/AdminPayoutApprovals'
 import { rideOptionLabel } from '../../shared/rideOptions.js'
 import {
   fetchAdminInbox,
@@ -26,6 +27,7 @@ const TABS = [
   ['applications', 'Applicants'],
   ['people', 'People'],
   ['trips', 'Trips'],
+  ['payouts', 'Payout approvals'],
   ['support', 'Support'],
   ['events', 'Events'],
   ['rentals', 'Rental partners'],
@@ -154,6 +156,7 @@ export function AdminDesk() {
       {tab === 'applications' && <AdminDrivers embedded />}
       {tab === 'people' && <PeoplePanel />}
       {tab === 'trips' && <TripsPanel />}
+      {tab === 'payouts' && <AdminPayoutApprovals />}
       {tab === 'support' && <SupportPanel />}
       {tab === 'events' && <AdminEventsPanel />}
       {tab === 'rentals' && <AdminRentalPartners />}

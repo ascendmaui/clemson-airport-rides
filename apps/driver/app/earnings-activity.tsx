@@ -1,12 +1,13 @@
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Card, ErrorText, Primary } from '@/components/chrome'
 import { StackPage } from '@/components/shell'
 import { useAuth } from '@/lib/auth'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { DRIVER_LIST_WINDOW, dayRows } from '@/lib/virtualRows'
 import { messagingGuide } from '../../../shared/copy/messaging.js'
 import { loadEarnings } from 'rides-native/driverDesk'
 import { carpoolPayFromTrip, incentiveLabel, tripPayoutCents } from 'rides-native/tripTags'
@@ -70,8 +71,58 @@ export default function EarningsActivity() {
     return [...map.entries()]
   }, [visible])
 
-  return (
-    <StackPage title="Earnings activity" onBack={() => router.back()}>
+  const rows = useMemo(() => dayRows(groups), [groups])
+
+  function renderTrip(trip: Trip) {
+    const noShow = trip.status === 'cancelled_wait'
+    const pay = noShow ? null : carpoolPayFromTrip(trip)
+    const boost = noShow ? 0 : readBoostCents(trip)
+    const earned = trip.status === 'canceled' ? 0 : tripPayoutCents(trip)
+    return (
+      <Card>
+        <Pressable
+          onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id } })}
+          accessibilityRole="button"
+          accessibilityLabel={`${noShow ? 'No-show fee' : trip.status === 'canceled' ? 'Canceled trip' : 'Completed trip'}, ${trip.pickup_label || 'Pickup'} to ${trip.dropoff_label || 'Drop-off'}, ${trip.status === 'canceled' ? 'No payout' : shownCents(earned, earningsPrivate)}`}
+          accessibilityHint="Opens trip details and breakdown"
+        >
+          <Text style={{ color: colors.title, fontWeight: '800' }}>{noShow ? 'No-show fee' : trip.status === 'canceled' ? 'Canceled' : 'Clemson Rides'}</Text>
+          <Text style={{ color: colors.ink }}>{trip.pickup_label || 'Pickup'}</Text>
+          <Text style={{ color: colors.ink }}>{trip.dropoff_label || 'Drop-off'}</Text>
+          <Text style={{ color: colors.title, fontWeight: '800' }}>
+            {trip.status === 'canceled' ? 'No payout' : shownCents(earned, earningsPrivate)}
+          </Text>
+          {trip.status === 'completed' && (trip.driver_wait_earnings_cents || 0) > 0 ? (
+            <Text style={{ color: colors.inkSecondary }}>Wait time {shownCents(trip.driver_wait_earnings_cents || 0, earningsPrivate)}</Text>
+          ) : null}
+          {trip.status !== 'canceled' && boost > 0 ? (
+            <Text style={{ color: colors.orange, fontWeight: '800' }}>Boost {formatBoostBadge(boost)}</Text>
+          ) : null}
+          {trip.status !== 'canceled' && pay?.showBonus ? (
+            <Text style={{ color: colors.inkSecondary }}>
+              Base net {shownCents(pay.baseNetCents, earningsPrivate)} · {incentiveLabel(pay.incentiveId)} {shownCents(pay.bonusCents, earningsPrivate)} · total {shownCents(pay.payoutCents, earningsPrivate)}
+            </Text>
+          ) : null}
+        </Pressable>
+        {trip.status === 'completed' ? (
+          <Pressable
+            onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id, lost: '1' } })}
+            accessibilityRole="button"
+            accessibilityLabel="Report a lost item"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={{ color: colors.orange, fontWeight: '800' }}>Report a lost item</Text>
+            <Text style={{ color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 }}>
+              {messagingGuide('driver').reportHint}
+            </Text>
+          </Pressable>
+        ) : null}
+      </Card>
+    )
+  }
+
+  const header = (
+    <View style={styles.header}>
       <View style={styles.filters}>
         {FILTERS.map((item) => {
           const on = item.id === filter
@@ -109,58 +160,22 @@ export default function EarningsActivity() {
           <Text style={{ color: colors.inkSecondary }}>Completed and canceled trips from your driver account show up here.</Text>
         </Card>
       ) : null}
-      {groups.map(([day, rows]: [string, Trip[]]) => (
-        <View key={day} style={styles.group}>
-          <Text style={{ color: colors.inkSecondary, fontWeight: '800' }}>{day}</Text>
-          {rows.map((trip: Trip) => {
-            const noShow = trip.status === 'cancelled_wait'
-            const pay = noShow ? null : carpoolPayFromTrip(trip)
-            const boost = noShow ? 0 : readBoostCents(trip)
-            const earned = trip.status === 'canceled' ? 0 : tripPayoutCents(trip)
-            return (
-              <Card key={trip.id}>
-                <Pressable
-                  onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id } })}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${noShow ? 'No-show fee' : trip.status === 'canceled' ? 'Canceled trip' : 'Completed trip'}, ${trip.pickup_label || 'Pickup'} to ${trip.dropoff_label || 'Drop-off'}, ${trip.status === 'canceled' ? 'No payout' : shownCents(earned, earningsPrivate)}`}
-                  accessibilityHint="Opens trip details and breakdown"
-                >
-                  <Text style={{ color: colors.title, fontWeight: '800' }}>{noShow ? 'No-show fee' : trip.status === 'canceled' ? 'Canceled' : 'Clemson RIDES'}</Text>
-                  <Text style={{ color: colors.ink }}>{trip.pickup_label || 'Pickup'}</Text>
-                  <Text style={{ color: colors.ink }}>{trip.dropoff_label || 'Drop-off'}</Text>
-                  <Text style={{ color: colors.title, fontWeight: '800' }}>
-                    {trip.status === 'canceled' ? 'No payout' : shownCents(earned, earningsPrivate)}
-                  </Text>
-                  {trip.status === 'completed' && (trip.driver_wait_earnings_cents || 0) > 0 ? (
-                    <Text style={{ color: colors.inkSecondary }}>Wait time {shownCents(trip.driver_wait_earnings_cents || 0, earningsPrivate)}</Text>
-                  ) : null}
-                  {trip.status !== 'canceled' && boost > 0 ? (
-                    <Text style={{ color: '#F56600', fontWeight: '800' }}>Boost {formatBoostBadge(boost)}</Text>
-                  ) : null}
-                  {trip.status !== 'canceled' && pay?.showBonus ? (
-                    <Text style={{ color: colors.inkSecondary }}>
-                      Base net {shownCents(pay.baseNetCents, earningsPrivate)} · {incentiveLabel(pay.incentiveId)} {shownCents(pay.bonusCents, earningsPrivate)} · total {shownCents(pay.payoutCents, earningsPrivate)}
-                    </Text>
-                  ) : null}
-                </Pressable>
-                {trip.status === 'completed' ? (
-                  <Pressable
-                    onPress={() => router.push({ pathname: '/trip-details', params: { id: trip.id, lost: '1' } })}
-                    accessibilityRole="button"
-                    accessibilityLabel="Report a lost item"
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Text style={{ color: colors.orange, fontWeight: '800' }}>Report a lost item</Text>
-                    <Text style={{ color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 }}>
-                      {messagingGuide('driver').reportHint}
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </Card>
-            )
-          })}
-        </View>
-      ))}
+    </View>
+  )
+
+  return (
+    <StackPage title="Earnings activity" onBack={() => router.back()} scroll={false}>
+      <FlatList
+        data={rows}
+        keyExtractor={(row) => row.key}
+        {...DRIVER_LIST_WINDOW}
+        contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={header}
+        renderItem={({ item: row }) => row.kind === 'day'
+          ? <Text style={[styles.day, { color: colors.inkSecondary }, !row.first && styles.dayGap]}>{row.day}</Text>
+          : renderTrip(row.item)}
+      />
     </StackPage>
   )
 }
@@ -168,5 +183,8 @@ export default function EarningsActivity() {
 const styles = StyleSheet.create({
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
   chip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  group: { gap: 8 },
+  header: { gap: 12, paddingBottom: 12 },
+  list: { padding: 16, paddingBottom: 40, gap: 8 },
+  day: { fontWeight: '800' },
+  dayGap: { marginTop: 8 },
 })
