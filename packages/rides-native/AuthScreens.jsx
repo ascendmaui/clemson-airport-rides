@@ -540,7 +540,7 @@ export function SignUpScreen({
   const profileHint = profileFieldError({ full_name: fullName, phone, bio, ride_style: rideStyle })
 
   return (
-    <AuthShell title="Join Clemson RIDES" subtitle={subtitle} mark={mark} onBack={onBack}>
+    <AuthShell title="Join Clemson Rides" subtitle={subtitle} mark={mark} onBack={onBack}>
       <SocialButtons
         providers={effectiveProviders}
         busyId={socialId}
@@ -686,7 +686,7 @@ export function ForgotPasswordScreen({
   return (
     <AuthShell
       title="Forgot password"
-      subtitle="We'll email a reset link that opens Clemson RIDES so you can choose a new password."
+      subtitle="We'll email a reset link that opens Clemson Rides so you can choose a new password."
       mark={mark}
       onBack={onBack}
     >

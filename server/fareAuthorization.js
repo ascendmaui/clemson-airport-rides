@@ -72,7 +72,7 @@ async function createAuthorization(stripe, {
       payment_method_options: {
         card: { request_incremental_authorization: 'if_available' },
       },
-      description: 'Clemson RIDES fare hold',
+      description: 'Clemson Rides fare hold',
       metadata: {
         kind: 'fare_authorization',
         tripId: String(tripId || ''),
@@ -554,7 +554,7 @@ async function chargeOverage(stripe, {
           payment_method: pmId,
           off_session: true,
           confirm: true,
-          description: 'Clemson RIDES fare balance',
+          description: 'Clemson Rides fare balance',
           metadata: {
             kind: 'fare_balance',
             tripId: String(tripId || ''),

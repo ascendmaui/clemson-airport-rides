@@ -11,13 +11,13 @@ export function rentalEmail(kind, ctx = {}) {
     case 'partner_applied':
       return { subject: `New rental partner: ${ctx.businessName}`, text: `${ctx.businessName} (${ctx.city}) applied to be a rental partner. Review it at ${o}/admin.` }
     case 'partner_approved':
-      return { subject: 'You are approved as a Clemson RIDES rental partner', text: `Hi ${ctx.contactName || ''}, your partner account for ${ctx.businessName} is approved. Add vehicles at ${o}/partners.` }
+      return { subject: 'You are approved as a Clemson Rides rental partner', text: `Hi ${ctx.contactName || ''}, your partner account for ${ctx.businessName} is approved. Add vehicles at ${o}/partners.` }
     case 'partner_rejected':
-      return { subject: 'Your Clemson RIDES partner application', text: `Hi ${ctx.contactName || ''}, we could not approve ${ctx.businessName} right now.${ctx.note ? ` Note: ${ctx.note}` : ''}` }
+      return { subject: 'Your Clemson Rides partner application', text: `Hi ${ctx.contactName || ''}, we could not approve ${ctx.businessName} right now.${ctx.note ? ` Note: ${ctx.note}` : ''}` }
     case 'listing_reviewed':
-      return { subject: `Listing ${ctx.decision}: ${ctx.vehicle}`, text: `Your listing ${ctx.vehicle} was ${ctx.decision} by Clemson RIDES.${ctx.note ? ` Note: ${ctx.note}` : ''} ${o}/partners` }
+      return { subject: `Listing ${ctx.decision}: ${ctx.vehicle}`, text: `Your listing ${ctx.vehicle} was ${ctx.decision} by Clemson Rides.${ctx.note ? ` Note: ${ctx.note}` : ''} ${o}/partners` }
     case 'driver_interested':
-      return { subject: `A driver is interested in your ${ctx.vehicle}`, text: `A cleared Clemson RIDES driver sent an "I'm interested" request for your ${ctx.vehicle}. Accept or decline at ${o}/partners. Contact details appear after you accept.` }
+      return { subject: `A driver is interested in your ${ctx.vehicle}`, text: `A cleared Clemson Rides driver sent an "I'm interested" request for your ${ctx.vehicle}. Accept or decline at ${o}/partners. Contact details appear after you accept.` }
     case 'request_accepted':
       return { subject: `${ctx.businessName} accepted your rental request`, text: `${ctx.businessName} accepted your request for the ${ctx.vehicle}. They will contact you to arrange pickup. Payment is arranged directly with the partner, off-platform. ${o}/drivers/rentals` }
     case 'request_declined':

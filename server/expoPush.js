@@ -50,7 +50,7 @@ export async function sendExpoPush({ to, title, body, data, sound = 'default', c
   const message = {
     to: token,
     title: clean(title) || 'New ride request',
-    body: clean(body) || 'Open Clemson RIDES to respond.',
+    body: clean(body) || 'Open Clemson Rides to respond.',
     priority: 'high',
     channelId,
     data: data && typeof data === 'object' ? data : {},
