@@ -13,6 +13,7 @@ import { useTheme, type NavApp, type RideAlertMode, type RideAlertTier } from '@
 import { loadDriverDesk, loadDriverProfile, setPriorityMode } from 'rides-native/driverDesk'
 import { riderDriverFirstName } from '../../../../shared/riderDriverPrivacy.js'
 import { QuietHoursChoices } from '@/components/QuietHoursChoices'
+import { quietly } from '@/lib/softFail'
 
 const SECTIONS = ['display', 'privacy', 'address', 'accessibility', 'communication', 'navigation', 'sounds', 'auto-accept', 'quiet-hours', 'priority'] as const
 type Section = (typeof SECTIONS)[number]
@@ -243,7 +244,7 @@ function usePersistDriverAlerts() {
       if (cancel || res.error) return null
       const next = { ...(res.data?.notification_prefs || {}), ride_alerts: rideAlerts, auto_accept: autoAccept }
       return client.from('profiles').update({ notification_prefs: next }).eq('id', user.id)
-    }).catch(() => null)
+    }).catch(quietly('settings load', null))
     return () => {
       cancel = true
     }

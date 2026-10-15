@@ -1,4 +1,5 @@
 import { formatPickupAt } from '../lib/scheduledRideModel'
+import { SiteIcon } from './SiteIcon.jsx'
 import { PurpleAcceptButton } from './PrimaryButton'
 import { SkeletonOfferStream } from './LoadingSkeleton'
 import { formatMiles, formatMinutes, clockTime, hourlyRateCents } from '../lib/rideGeometry'
@@ -63,7 +64,7 @@ export function DriverOfferSheet({
       <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>{riderName || 'Rider'}</div>
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--purple)' }}>
-          {ratingCount > 0 && ratingAvg != null ? `★ ${Number(ratingAvg).toFixed(1)}` : 'New rider'}
+          {ratingCount > 0 && ratingAvg != null ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><SiteIcon name="star" size={13} /> {Number(ratingAvg).toFixed(1)}</span> : 'New rider'}
         </div>
       </div>
       {standing === 'watch' && (

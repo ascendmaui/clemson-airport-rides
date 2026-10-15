@@ -1,4 +1,5 @@
 import { A11yBadge } from './A11yBadge.jsx'
+import { SiteIcon, rideTypeSiteIcon } from './SiteIcon.jsx'
 
 export function TierRow({ tier, selected, onSelect }) {
   return (
@@ -36,7 +37,7 @@ export function TierRow({ tier, selected, onSelect }) {
           transform: selected ? 'scale(1.04)' : 'scale(1)',
         }}
       >
-        {tier.icon}
+        <SiteIcon name={rideTypeSiteIcon(tier.id)} size={24} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -68,7 +69,7 @@ export function TierRow({ tier, selected, onSelect }) {
             fontWeight: 700,
           }}
         >
-          ✓
+          <SiteIcon name="check" size={14} />
         </div>
       )}
     </button>

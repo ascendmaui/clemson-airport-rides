@@ -1,4 +1,5 @@
 import { ONBOARDING_FLOW, canOpenStep, progressSnapshot, stepIsComplete } from '../../shared/driverOnboarding.js'
+import { SiteIcon } from './SiteIcon.jsx'
 
 const ORANGE = '#F56600'
 const PURPLE = '#522D80'
@@ -64,7 +65,7 @@ export function OnboardingProgress({ viewing, onSelect, ...ctx }) {
                 opacity: reachable ? 1 : 0.55,
               }}
             >
-              {done ? '✓ ' : `${index + 1} `}
+              {done ? <><SiteIcon name="check" size={12} /> </> : `${index + 1} `}
               {step.label}
             </button>
           )

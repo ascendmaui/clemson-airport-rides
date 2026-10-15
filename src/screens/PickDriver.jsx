@@ -1,3 +1,4 @@
+import { SiteIcon } from '../components/SiteIcon.jsx'
 import { useDemoBusyRoster } from '../lib/useDemoBusyRoster.js'
 import { busyRosterFor } from '../../packages/rides-native/busyRoster.js'
 import { useEffect, useState } from 'react'
@@ -369,7 +370,7 @@ export function PickDriver({
                       <div style={{ fontWeight: 700, fontSize: 16 }}>
                         {d.name}
                         <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--purple)' }}>
-                          ★ {lines.ratingLabel}
+                          <SiteIcon name="star" size={12} /> {lines.ratingLabel}
                         </span>
                       </div>
                       {d.standing === 'watch' && (
@@ -401,7 +402,7 @@ export function PickDriver({
                           }}
                           style={{ fontSize: 12, fontWeight: 800, color: saved ? '#fff' : 'var(--orange)', background: saved ? 'var(--purple)' : 'transparent', borderRadius: 999, padding: '4px 10px', minHeight: 44 }}
                         >
-                          <span aria-hidden="true">{saved ? '★' : '☆'}</span>
+                          <span aria-hidden="true" style={{ display: 'inline-flex', opacity: saved ? 1 : 0.55 }}><SiteIcon name="star" size={12} /></span>
                           {' '}
                           {saved ? 'Saved' : 'Save'}
                         </button>
@@ -432,7 +433,7 @@ export function PickDriver({
                     <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: portrait.color, color: '#fff', fontWeight: 800 }}>{portrait.initials}</span>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 700 }}>{driver.name}</div>
-                      <div style={{ fontSize: 12, marginTop: 4 }}>★ {driver.rating} · {driver.tripCount.toLocaleString('en-US')} trips</div>
+                      <div style={{ fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><SiteIcon name="star" size={12} /> {driver.rating} · {driver.tripCount.toLocaleString('en-US')} trips</div>
                       <div style={{ fontSize: 13, marginTop: 4, color: 'var(--ink-secondary)' }}>{driver.vehicleLabel}</div>
                     </div>
                     <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '5px 8px', background: driver.status === 'on_trip' ? '#f4dfcc' : '#e5e5e5', color: driver.status === 'on_trip' ? '#855023' : '#555' }}>{driver.statusLabel}</span>

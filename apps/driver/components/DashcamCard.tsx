@@ -16,6 +16,7 @@ import {
 } from 'rides-native/safetyCapture.js'
 import { keepClipOnDevice } from '@/lib/localClip'
 import { useTheme } from '@/lib/theme'
+import { quiet } from '@/lib/softFail'
 
 type CaptureSession = {
   phase: string
@@ -54,7 +55,7 @@ export function DashcamCard({ status, active = true }: { status: string | null; 
           setPermission('granted')
         }
       })
-      .catch(() => {})
+      .catch(quiet('dashcam permission check'))
     return () => {
       alive = false
     }
@@ -75,7 +76,7 @@ export function DashcamCard({ status, active = true }: { status: string | null; 
     void pending.then((result) => {
       if (!result?.uri) return
       try { keepClipOnDevice(result.uri, localClipName('video')) } catch { /* cache copy remains on this phone */ }
-    }).catch(() => {})
+    }).catch(quiet('dashcam stop on unmount'))
   }, [])
 
   useEffect(() => {
@@ -99,6 +100,7 @@ export function DashcamCard({ status, active = true }: { status: string | null; 
       armRef.current = false
       setArming(false)
       pendingRef.current = result.pending
+      // Marks the recording promise handled; endRef awaits it and reports its outcome.
       void result.pending.catch(() => {})
       setSession({ phase: 'recording', mode: 'video', startedAt: result.startedAt, uri: null, note: null })
       return

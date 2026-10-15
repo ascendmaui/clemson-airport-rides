@@ -33,7 +33,7 @@ function rideConfirmationEmail(trip, env) {
   const when = trip?.scheduled_at || trip?.pickup_at || trip?.pickup_time || ''
   return {
     kind: 'ride_confirmation',
-    subject: 'Your Clemson RIDES trip is confirmed',
+    subject: 'Your Clemson Rides trip is confirmed',
     text: [
       'Your ride is confirmed.',
       trip?.id ? `Trip ${trip.id}` : null,
@@ -52,9 +52,9 @@ function receiptEmail(trip, env) {
   const wait = Math.max(0, Math.round(Number(trip?.wait_fee_cents) || 0))
   return {
     kind: 'receipt',
-    subject: 'Your Clemson RIDES receipt',
+    subject: 'Your Clemson Rides receipt',
     text: [
-      'Clemson RIDES receipt',
+      'Clemson Rides receipt',
       trip?.id ? `Trip ${trip.id}` : null,
       `From: ${place(trip, 'pickup_label', 'Pickup')}`,
       `To: ${place(trip, 'dropoff_label', 'Dropoff')}`,
@@ -72,7 +72,7 @@ function cancellationEmail(trip, env) {
   const reason = String(trip?.reason || trip?.cancel_reason || '').trim()
   return {
     kind: 'cancellation',
-    subject: 'Your Clemson RIDES trip was canceled',
+    subject: 'Your Clemson Rides trip was canceled',
     text: [
       'This ride is canceled.',
       trip?.id ? `Trip ${trip.id}` : null,
@@ -92,7 +92,7 @@ function driverDecisionEmail(ctx, env, decision) {
   if (decision === 'approve') {
     return {
       kind: 'driver_approved',
-      subject: 'You are approved to drive with Clemson RIDES',
+      subject: 'You are approved to drive with Clemson Rides',
       text: [
         greeting,
         'Your driver application is approved. You can go online and receive rides.',
@@ -102,7 +102,7 @@ function driverDecisionEmail(ctx, env, decision) {
   }
   return {
     kind: 'driver_declined',
-    subject: 'Your Clemson RIDES driver application',
+    subject: 'Your Clemson Rides driver application',
     text: [
       greeting,
       'We could not approve your driver application.',
@@ -118,7 +118,7 @@ function payoutNoticeEmail(ctx, env) {
   const tripId = ctx?.tripId || ctx?.trip_id || ctx?.id || ''
   return {
     kind: 'payout_notice',
-    subject: 'Your Clemson RIDES payout was sent',
+    subject: 'Your Clemson Rides payout was sent',
     text: [
       `A payout of ${amount} was sent${tripId ? ` for trip ${tripId}` : ''}.`,
       'This is a transfer of earnings from completed trips. It is not a rider charge.',

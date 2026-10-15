@@ -27,6 +27,7 @@ import { offerHourly, pickupMiles, EXCLUSIVE_SECONDS } from 'rides-native/offerL
 import { homeIsShowingOffer, offerAcceptSeconds } from 'rides-native/offerStack.js'
 import { WorthItLegend } from 'rides-native/WorthItLegend'
 import { shouldAutoAccept } from 'rides-native/autoAccept.js'
+import { quiet } from '@/lib/softFail'
 
 type Banner = {
   id: string
@@ -118,11 +119,11 @@ export function OfferBridge() {
           const posted = freshBoard[0]
           if (posted) {
             AccessibilityInfo.announceForAccessibility(`Scheduled ride on the board. ${posted.pickupLabel} to ${posted.dropoffLabel}`)
-            if (alertOk) notifyScheduledBoard(posted).catch(() => {})
+            if (alertOk) notifyScheduledBoard(posted).catch(quiet('scheduled board alert'))
           }
         }
         const offers = (desk.offers || []).filter((card: DriverCard) => !isSyntheticOffer(card))
-        if (desk.online) markSearchingOffers(supabase, offers).catch(() => {})
+        if (desk.online) markSearchingOffers(supabase, offers).catch(quiet('mark searching offers'))
         if (!primed.current) {
           offers.forEach((card: DriverCard) => seen.current.add(card.id))
           primed.current = true
@@ -158,7 +159,7 @@ export function OfferBridge() {
         }
         if (!alertOk) return
         pulse('request', { tier: next.tier })
-        notifyNewRequest(next).catch(() => {})
+        notifyNewRequest(next).catch(quiet('new request alert'))
       } catch {
         /* desk reads can fail while signed out or offline */
       }

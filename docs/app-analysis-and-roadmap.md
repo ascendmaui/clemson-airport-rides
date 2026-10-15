@@ -18,14 +18,16 @@ _Review date: Oct 15, 2026. Reviewed main at `da02b38` (#528). Review only; no c
 - **Server items:** code reading of `server/credits.js`, `supabase/payment_failure_hardening.sql`, `server/matchingRebroadcast.js` and `server/dispatchBoost.js`.
 - **Counts** (for example "64 silent catches") are pattern counts from the code and may be off by a few.
 
-### Already in progress
-- **PR #529** ("Marketing site: desktop-first polish") was open and mergeable at review time and is being merged to live. Its description fixes:
-  - the duplicated and cut-off pill sub-nav (now one sticky text-tab sub-nav),
-  - the invisible footer brand,
-  - uneven grids,
-  - hero image weight (WebP srcset),
-  - "Clemson RIDES" → "Clemson Rides" (marketing files and `index.html` meta only).
-- **Not in #529:** the native apps, `shared/` copy, booking logic, and the Maps key. Those items below are still open.
+### Already done / in progress
+- **PR #529 merged** to main as `ad737e6` ("Marketing site: desktop-first polish and remove TestFlight/beta prompts"). It shipped:
+  - one sticky text-tab sub-nav (replacing the duplicated, cut-off pills),
+  - the visible 4-column footer,
+  - even card grids,
+  - the WebP hero srcset,
+  - "Clemson Rides" naming in marketing files and `index.html` meta.
+  The website staging screenshots in this review were taken before that merge, so re-check the sub-nav and footer items on live.
+- **Still open after #529:** the native apps, `shared/` copy, booking logic (pickup default, signed-out fare) and the Google Maps key.
+- **Server credits, bigint and dispatch batching:** being done in the server workstream (see section 4).
 
 ---
 
