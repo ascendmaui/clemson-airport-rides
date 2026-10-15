@@ -3,12 +3,13 @@ import { Glyph } from 'rides-native/icons'
 import { normalizeFlight } from 'rides-native/airportContext'
 import { useFocusEffect, useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, Image, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
+import { AccessibilityInfo, FlatList, Image, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
 import { TabSwipeRegion, useTabSwipeRemeasure } from '@/components/MainTabPager'
 import { normalizeTabPath } from '@/lib/tabSwipe'
+import { RIDER_LIST_WINDOW, upcomingScheduleRows } from '@/lib/virtualRows'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { Skeleton } from '@/components/Skeleton'
 import { setAuthNext } from '@/lib/authNext'
@@ -348,13 +349,14 @@ export function ScheduleScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [clock, setClock] = useState(() => new Date())
   const [checkoutTrip, setCheckoutTrip] = useState<RiderHoldTrip | null>(null)
-  const scrollRef = useRef<ScrollView>(null)
+  const scrollRef = useRef<FlatList<ScheduledRow>>(null)
   const depositSectionY = useRef(0)
   const reminders = useMemo(() => dueScheduleReminders(mine, clock), [mine, clock])
   const reminderByTrip = useMemo(() => {
     const byTrip = new Map(reminders.map((item) => [item.tripId, item]))
     return byTrip
   }, [reminders])
+  const upcoming = useMemo(() => upcomingScheduleRows(mine), [mine])
   const generation = useRef(0)
   const [passActive, setPassActive] = useState(false)
   const [passBps, setPassBps] = useState(0)
@@ -461,7 +463,7 @@ export function ScheduleScreen() {
     const code = holdAirportCode(trip)
     if (code) setAirport(code)
     void tapHaptic()
-    scrollRef.current?.scrollTo({ y: Math.max(depositSectionY.current - 12, 0), animated: true })
+    scrollRef.current?.scrollToOffset({ offset: Math.max(depositSectionY.current - 12, 0), animated: true })
   }
 
   useEffect(() => {
@@ -798,10 +800,85 @@ export function ScheduleScreen() {
     }
   }
 
+  function renderUpcoming({ item: row }: { item: ScheduledRow }) {
+    const reminder = reminderByTrip.get(row.id)
+    const backup = riderBackupPresentation(row)
+    const boostCents = readBoostCents(row)
+    const nudge = boostNudge(row, clock)
+    const canBump = boostIsEditable(row) && boostCents < BOOST_MAX_CENTS
+    return (
+      <View style={styles.panel}>
+        {reminder ? <Text style={styles.remindKicker}>{reminder.label}</Text> : null}
+        <Text style={styles.cardLine}>{row.pickup_label} → {row.dropoff_label}</Text>
+        <Text style={styles.fine}>
+          {rowPurpose(row)} · {riderStatusPhrase(row.status)} · {formatPickupAt(row.pickup_at || row.scheduled_for)}
+          {row.metadata?.recurrence?.weekdays?.length ? ` · weekly ${row.metadata.recurrence.weekdays.join(', ')}` : ''}
+        </Text>
+        {rideTypeName(String(row.tier || '')) ? <Text style={styles.student}>{rideTypeName(String(row.tier || ''))}</Text> : null}
+        {backup?.status ? <Text style={styles.student}>{backup.status}</Text> : null}
+        {backup?.status === LOOKING_FOR_BACKUP_LABEL ? <ScheduledRidesHint topic="looking" colors={colors} /> : null}
+        {backup?.notice ? <Text style={styles.fine}>{backup.notice}</Text> : null}
+        {backup ? (
+          <BackupActions
+            tripId={row.id}
+            backup={backup}
+            onDone={() => reload()}
+            onError={(message) => setError(message)}
+          />
+        ) : null}
+        {boostCents > 0 ? <Text style={styles.student}>{formatBoostBadge(boostCents)} · 100% to your driver</Text> : null}
+        {nudge ? <Text style={styles.fine}>{nudge.body}</Text> : null}
+        {canBump ? (
+          <TabSwipeRegion>
+            <BoostPicker
+              cents={0}
+              minimumCents={boostCents + 1}
+              heading={boostCents > 0 ? 'Raise the boost' : 'Add a boost'}
+              onChange={(cents) => {
+                bumpScheduledBoost(row.id, cents).then(() => reload()).catch((err: unknown) => {
+                  setError(err instanceof Error ? err.message : 'Could not update boost')
+                })
+              }}
+            />
+          </TabSwipeRegion>
+        ) : null}
+        {row.deposit_cents ? (
+          <Text style={styles.balance}>
+            {depositSurfaceCopy(
+              { fareCents: row.fare_cents || 0, depositCents: row.deposit_cents },
+              'upcoming',
+            )}
+          </Text>
+        ) : null}
+        {row.id !== checkoutTrip?.id && isOpenUnpaidAirportHold(row) ? (
+          <HoldExpiryNotice trip={row} onRequestAgain={() => requestAgain(row)} />
+        ) : null}
+        {!backup && (row.status === 'scheduled' || row.status === 'accepted') ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            onPress={() => {
+              cancelScheduledTrip(row.id).then(() => reload()).catch((err: unknown) => {
+                setError(err instanceof Error ? err.message : 'Could not cancel')
+              })
+            }}
+          >
+            <Text style={styles.cancel}>Cancel</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    )
+  }
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 12 }]}>
-      <ScrollView
+      <FlatList
+        style={{ flex: 1 }}
         ref={scrollRef}
+        data={upcoming}
+        keyExtractor={(row: ScheduledRow) => row.id}
+        renderItem={renderUpcoming}
+        {...RIDER_LIST_WINDOW}
         contentContainerStyle={styles.body}
         keyboardShouldPersistTaps="handled"
         onScroll={remeasureTabs}
@@ -817,7 +894,8 @@ export function ScheduleScreen() {
             }}
           />
         )}
-      >
+        ListHeaderComponent={(
+        <>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={styles.kicker}>RIDES · SCHEDULE</Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Ride history" hitSlop={10} onPress={() => router.replace('/history')} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -1169,82 +1247,15 @@ export function ScheduleScreen() {
         <Text style={styles.section}>Upcoming</Text>
         {loadingList ? <Skeleton height={64} /> : null}
         {!user ? <Text style={styles.copy}>Sign in to see rides saved on this account.</Text> : null}
-        {user && !loadingList && mine.filter((row: ScheduledRow) => row.status !== 'canceled').length === 0 ? (
+        {user && !loadingList && upcoming.length === 0 ? (
           <View style={styles.panel}>
             <Text style={styles.cardLine}>No upcoming rides</Text>
             <Text style={styles.copy}>Confirm a weekend airport or campus trip and it will show up here.</Text>
           </View>
         ) : null}
-        {mine.filter((row: ScheduledRow) => row.status !== 'canceled').map((row: ScheduledRow) => {
-          const reminder = reminderByTrip.get(row.id)
-          const backup = riderBackupPresentation(row)
-          const boostCents = readBoostCents(row)
-          const nudge = boostNudge(row, clock)
-          const canBump = boostIsEditable(row) && boostCents < BOOST_MAX_CENTS
-          return (
-            <View key={row.id} style={styles.panel}>
-            {reminder ? <Text style={styles.remindKicker}>{reminder.label}</Text> : null}
-            <Text style={styles.cardLine}>{row.pickup_label} → {row.dropoff_label}</Text>
-            <Text style={styles.fine}>
-              {rowPurpose(row)} · {riderStatusPhrase(row.status)} · {formatPickupAt(row.pickup_at || row.scheduled_for)}
-              {row.metadata?.recurrence?.weekdays?.length ? ` · weekly ${row.metadata.recurrence.weekdays.join(', ')}` : ''}
-            </Text>
-            {rideTypeName(String(row.tier || '')) ? <Text style={styles.student}>{rideTypeName(String(row.tier || ''))}</Text> : null}
-            {backup?.status ? <Text style={styles.student}>{backup.status}</Text> : null}
-            {backup?.status === LOOKING_FOR_BACKUP_LABEL ? <ScheduledRidesHint topic="looking" colors={colors} /> : null}
-            {backup?.notice ? <Text style={styles.fine}>{backup.notice}</Text> : null}
-            {backup ? (
-              <BackupActions
-                tripId={row.id}
-                backup={backup}
-                onDone={() => reload()}
-                onError={(message) => setError(message)}
-              />
-            ) : null}
-            {boostCents > 0 ? <Text style={styles.student}>{formatBoostBadge(boostCents)} · 100% to your driver</Text> : null}
-            {nudge ? <Text style={styles.fine}>{nudge.body}</Text> : null}
-            {canBump ? (
-              <TabSwipeRegion>
-<BoostPicker
-                cents={0}
-                minimumCents={boostCents + 1}
-                heading={boostCents > 0 ? 'Raise the boost' : 'Add a boost'}
-                onChange={(cents) => {
-                  bumpScheduledBoost(row.id, cents).then(() => reload()).catch((err: unknown) => {
-                    setError(err instanceof Error ? err.message : 'Could not update boost')
-                  })
-                }}
-              />
-</TabSwipeRegion>
-            ) : null}
-            {row.deposit_cents ? (
-              <Text style={styles.balance}>
-                {depositSurfaceCopy(
-                  { fareCents: row.fare_cents || 0, depositCents: row.deposit_cents },
-                  'upcoming',
-                )}
-              </Text>
-            ) : null}
-            {row.id !== checkoutTrip?.id && isOpenUnpaidAirportHold(row) ? (
-              <HoldExpiryNotice trip={row} onRequestAgain={() => requestAgain(row)} />
-            ) : null}
-            {!backup && (row.status === 'scheduled' || row.status === 'accepted') ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Cancel"
-                onPress={() => {
-                  cancelScheduledTrip(row.id).then(() => reload()).catch((err: unknown) => {
-                    setError(err instanceof Error ? err.message : 'Could not cancel')
-                  })
-                }}
-              >
-                <Text style={styles.cancel}>Cancel</Text>
-              </Pressable>
-            ) : null}
-          </View>
-          )
-        })}
-      </ScrollView>
+        </>
+        )}
+      />
       <SignInToBookSheet
         open={promptOpen}
         onClose={() => setPromptOpen(false)}

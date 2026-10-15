@@ -1,5 +1,5 @@
 import { Glyph } from 'rides-native/icons'
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
 import Constants from 'expo-constants'
 import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT, type MapStyleElement } from 'react-native-maps'
@@ -10,15 +10,15 @@ import { SIMULATED_FLEET_BADGE, refuseSimulatedDriverTap } from 'rides-native/si
 import { demoCarPaint, SEARCH_MAP_ZOOM_MS, searchMapRegion } from 'rides-native/searchPreview.js'
 import { useSimulatedFleet } from 'rides-native/useSimulatedFleet.js'
 import type { CampusMapHandle, CampusMapProps, LatLng, MapPin } from '@/components/mapTypes'
+import { StillMarker } from '@/components/StillMarker'
+import { markerLookKey } from '@/lib/markerRedraw'
 import { useTheme } from '@/lib/theme'
 
 function SearchFleetGlyph({
-  heading,
   livery,
   body,
   label,
 }: {
-  heading: number
   livery?: string
   body?: string
   label: string
@@ -35,7 +35,6 @@ function SearchFleetGlyph({
         backgroundColor: paint.fill,
         borderColor: paint.edge,
         borderWidth: 2,
-        transform: [{ rotate: `${heading}deg` }],
       }}
     />
   )
@@ -221,6 +220,20 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
     return () => clearInterval(id)
   }, [theater, searchMotion])
 
+  const theaterCars = useMemo(() => {
+    if (!theater || searchMotion) return []
+    return [0, 1, 2, 3].map((index) => ({ index, ...theaterCar(index, tick, colors.orange, colors.purple) }))
+  }, [theater, searchMotion, tick, colors.orange, colors.purple])
+  const searchCars = useMemo(() => (searchMotion ? simulatedFleet : []), [searchMotion, simulatedFleet])
+  const busyCars = useMemo(
+    () => (showSimulatedFleet && !searchMotion ? simulatedFleet : []),
+    [showSimulatedFleet, searchMotion, simulatedFleet],
+  )
+  const pinKey = pins
+    .map((pin) => markerLookKey([pin.id, pin.badge, pin.color, pin.latitude, pin.longitude, pin.heading, pin.title]))
+    .join('||')
+  const pinList = useMemo(() => pins, [pinKey])
+
   const tilesReady = nativeMapTilesReady(Platform.OS, {
     env: typeof process !== 'undefined' ? process.env : {},
     manifestKey: Constants.expoConfig?.android?.config?.googleMaps?.apiKey,
@@ -288,28 +301,24 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
             strokeWidth={2}
           />
         ) : null}
-        {theater && !searchMotion
-          ? [0, 1, 2, 3].map((index) => {
-              const car = theaterCar(index, tick, colors.orange, colors.purple)
-              return (
-                <Marker
-                  key={`preview-${index}`}
-                  coordinate={{ latitude: car.latitude, longitude: car.longitude }}
-                  title="Preview"
-                  description="Ambient car. Not a driver you can request."
-                  anchor={{ x: 0.5, y: 0.5 }}
-                >
-                  <View style={[styles.car, { backgroundColor: car.color }]}>
-                    <Glyph name="vehicle" size={18} color="#FFFFFF" active knockout="#F2701C" />
-                  </View>
-                </Marker>
-              )
-            })
-          : null}
+        {theaterCars.map((car) => (
+          <StillMarker
+            key={`preview-${car.index}`}
+            lookKey={markerLookKey(['preview', car.index, car.color])}
+            coordinate={{ latitude: car.latitude, longitude: car.longitude }}
+            title="Preview"
+            description="Ambient car. Not a driver you can request."
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={[styles.car, { backgroundColor: car.color }]}>
+              <Glyph name="vehicle" size={18} color="#FFFFFF" active knockout="#F2701C" />
+            </View>
+          </StillMarker>
+        ))}
         {route.length > 1 ? (
           <Polyline coordinates={route} strokeColor={colors.orange} strokeWidth={4} />
         ) : null}
-        {pins.map((pin: MapPin) => pin.id === 'driver' ? (
+        {pinList.map((pin: MapPin) => pin.id === 'driver' ? (
           <MovingDriverMarker
             key={pin.id}
             latitude={pin.latitude}
@@ -317,71 +326,75 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
             heading={pin.heading}
             title={pin.title}
           />
+        ) : pin.badge ? (
+          <StillMarker
+            key={pin.id}
+            lookKey={markerLookKey([pin.badge, pin.color])}
+            coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
+            title={pin.title}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={[styles.stop, { backgroundColor: pin.color }]}>
+              <Text style={styles.stopText}>{pin.badge}</Text>
+            </View>
+          </StillMarker>
         ) : (
           <Marker
             key={pin.id}
             coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
             title={pin.title}
-            pinColor={pin.badge ? undefined : pin.color}
-            anchor={pin.badge ? { x: 0.5, y: 0.5 } : { x: 0.5, y: 1 }}
-          >
-            {pin.badge ? (
-              <View style={[styles.stop, { backgroundColor: pin.color }]}>
-                <Text style={styles.stopText}>{pin.badge}</Text>
-              </View>
-            ) : null}
-          </Marker>
+            pinColor={pin.color}
+            anchor={{ x: 0.5, y: 1 }}
+            tracksViewChanges={false}
+          />
         ))}
         {userCoordinate ? (
           <Marker coordinate={userCoordinate} pinColor={colors.purple} title="You" anchor={{ x: 0.5, y: 1 }} />
         ) : null}
-        {searchMotion
-          ? simulatedFleet.map((car) => {
-              const who = car.firstName || car.title || 'Driver'
-              const vehicle = car.label || car.routeLabel
-              return (
-                <Marker
-                  key={`search-${car.id}`}
-                  coordinate={{ latitude: car.lat, longitude: car.lng }}
-                  title={who}
-                  description={vehicle}
-                  anchor={{ x: 0.5, y: 0.5 }}
-                  tracksViewChanges
-                  onPress={() => {
-                    refuseSimulatedDriverTap(car.id)
-                  }}
-                >
-                  <SearchFleetGlyph
-                    heading={car.heading}
-                    livery={car.livery}
-                    body={car.body}
-                    label={`${who}, ${vehicle}`}
-                  />
-                </Marker>
-              )
-            })
-          : null}
-        {showSimulatedFleet && !searchMotion
-          ? simulatedFleet.map((car) => (
-              <Marker
-                key={car.id}
-                coordinate={{ latitude: car.lat, longitude: car.lng }}
-                title={car.title}
-                description={car.description}
-                anchor={{ x: 0.5, y: 0.72 }}
-                tracksViewChanges
-                onPress={() => {
-                  refuseSimulatedDriverTap(car.id)
-                }}
-              >
-                <View style={styles.busyCar} accessibilityLabel={car.description}>
-                  <View style={{ transform: [{ rotate: `${car.heading}deg` }] }}>
-                    <View style={styles.busyGlyph} />
-                  </View>
-                </View>
-              </Marker>
-            ))
-          : null}
+        {searchCars.map((car) => {
+          const who = car.firstName || car.title || 'Driver'
+          const vehicle = car.label || car.routeLabel
+          return (
+            <StillMarker
+              key={`search-${car.id}`}
+              lookKey={markerLookKey(['search', car.id, car.livery, car.body])}
+              coordinate={{ latitude: car.lat, longitude: car.lng }}
+              title={who}
+              description={vehicle}
+              anchor={{ x: 0.5, y: 0.5 }}
+              flat
+              rotation={car.heading}
+              onPress={() => {
+                refuseSimulatedDriverTap(car.id)
+              }}
+            >
+              <SearchFleetGlyph
+                livery={car.livery}
+                body={car.body}
+                label={`${who}, ${vehicle}`}
+              />
+            </StillMarker>
+          )
+        })}
+        {busyCars.map((car) => (
+          <StillMarker
+            key={car.id}
+            lookKey={markerLookKey(['busy', car.id])}
+            coordinate={{ latitude: car.lat, longitude: car.lng }}
+            title={car.title}
+            description={car.description}
+            anchor={{ x: 0.5, y: 0.72 }}
+            flat
+            rotation={car.heading}
+            onPress={() => {
+              refuseSimulatedDriverTap(car.id)
+            }}
+          >
+            <View style={styles.busyCar} accessibilityLabel={car.description}>
+              <View style={styles.busyGlyph} />
+            </View>
+          </StillMarker>
+        ))}
       </MapView>
       {showSimulatedFleet && !searchMotion ? (
         <View pointerEvents="none" style={styles.busyBadge}>
