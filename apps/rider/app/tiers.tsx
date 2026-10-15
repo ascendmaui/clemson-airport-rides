@@ -248,7 +248,7 @@ export default function RideTiers() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   borderWidth: seats === count ? 2 : 1,
-                  borderColor: seats === count ? '#F56600' : 'rgba(82,45,128,0.25)',
+                  borderColor: seats === count ? colors.orange : colors.border,
                 }}
               >
                 <Text style={styles.name}>{count === 1 ? '1 seat' : '2 seats'}</Text>

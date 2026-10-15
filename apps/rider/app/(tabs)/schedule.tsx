@@ -70,6 +70,7 @@ import { NearTermSlots } from '@/components/NearTermSlots'
 import { BoostPicker } from '@/components/BoostPicker'
 
 function DriverFace({ card, role }: { card?: { name?: string; avatarUrl?: string | null; vehicleLabel?: string; ratingAvg?: number | null; ratingCount?: number } | null; role: string }) {
+  const { colors } = useTheme()
   if (!card) return null
   const rating = card.ratingAvg != null ? `${Number(card.ratingAvg).toFixed(1)} · ${card.ratingCount || 0}` : 'New'
   return (
@@ -77,13 +78,13 @@ function DriverFace({ card, role }: { card?: { name?: string; avatarUrl?: string
       {card.avatarUrl ? (
         <Image source={{ uri: card.avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} accessible={false} accessibilityIgnoresInvertColors />
       ) : (
-        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#522D80', alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ color: '#fff', fontWeight: '800' }}>{(card.name || 'D').slice(0, 1)}</Text>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.purple, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: colors.onAccent, fontWeight: '800' }}>{(card.name || 'D').slice(0, 1)}</Text>
         </View>
       )}
       <View>
-        <Text style={{ color: '#522D80', fontWeight: '800' }}>{role} · {card.name || 'Driver'}</Text>
-        <Text style={{ color: '#522D80' }}>{card.vehicleLabel || 'Vehicle'} · {rating}</Text>
+        <Text style={{ color: colors.link, fontWeight: '800' }}>{role} · {card.name || 'Driver'}</Text>
+        <Text style={{ color: colors.link }}>{card.vehicleLabel || 'Vehicle'} · {rating}</Text>
       </View>
     </View>
   )
@@ -123,26 +124,26 @@ function BackupActions({
       <DriverFace card={backup.backup} role="Backup" />
       {backup.canSwitch ? (
         <Pressable accessibilityRole="button" accessibilityLabel={`Switch to ${backupName}`} onPress={() => setSheet('switch')} style={{ marginTop: 8 }}>
-          <Text style={{ color: '#fff', backgroundColor: '#F56600', fontWeight: '800', overflow: 'hidden', borderRadius: 12, padding: 10 }}>{`Switch to ${backupName}`}</Text>
+          <Text style={{ color: colors.onAccent, backgroundColor: colors.orange, fontWeight: '800', overflow: 'hidden', borderRadius: 12, padding: 10 }}>{`Switch to ${backupName}`}</Text>
         </Pressable>
       ) : null}
       {backup.canSafetySwitch ? (
         <Pressable accessibilityRole="button" accessibilityLabel="Report a safety concern and switch" onPress={() => setSheet('safety')} style={{ marginTop: 8 }}>
-          <Text style={{ color: '#522D80', fontWeight: '700' }}>Report a safety concern and switch</Text>
+          <Text style={{ color: colors.link, fontWeight: '700' }}>Report a safety concern and switch</Text>
         </Pressable>
       ) : null}
       <Pressable accessibilityRole="button" accessibilityLabel="Cancel ride" onPress={() => setSheet('cancel')} style={{ marginTop: 8 }}>
-        <Text style={{ color: '#522D80', fontWeight: '700' }}>Cancel ride</Text>
+        <Text style={{ color: colors.link, fontWeight: '700' }}>Cancel ride</Text>
       </Pressable>
       {sheet ? (
         <View style={{ marginTop: 8, padding: 10, borderRadius: 12, backgroundColor: 'rgba(82,45,128,0.06)' }}>
           <ScheduledRidesHint topic={sheet === 'cancel' ? 'cancel' : 'switch'} colors={colors} />
           <Text>{sheet === 'cancel' ? backup.cancelCopy : backup.switchCopy}</Text>
           <Pressable accessibilityRole="button" accessibilityLabel={sheet === 'cancel' ? 'Confirm cancel' : 'Confirm switch'} onPress={confirm} disabled={busy} style={{ marginTop: 8 }}>
-            <Text style={{ color: '#F56600', fontWeight: '800' }}>{busy ? 'Saving…' : sheet === 'cancel' ? 'Confirm cancel' : 'Confirm switch'}</Text>
+            <Text style={{ color: colors.orangeInk, fontWeight: '800' }}>{busy ? 'Saving…' : sheet === 'cancel' ? 'Confirm cancel' : 'Confirm switch'}</Text>
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Keep ride" onPress={() => setSheet(null)} style={{ marginTop: 6 }}>
-            <Text style={{ color: '#522D80', fontWeight: '700' }}>Keep ride</Text>
+            <Text style={{ color: colors.link, fontWeight: '700' }}>Keep ride</Text>
           </Pressable>
         </View>
       ) : null}
@@ -274,12 +275,12 @@ function BackupPicker({
                 paddingHorizontal: 12,
                 paddingVertical: 8,
                 borderRadius: 999,
-                backgroundColor: on ? '#F56600' : colors.card,
+                backgroundColor: on ? colors.orange : colors.card,
                 borderWidth: 1,
-                borderColor: 'rgba(82,45,128,0.2)',
+                borderColor: colors.border,
               }}
             >
-              <Text style={{ color: on ? '#fff' : '#522D80', fontWeight: '800' }}>{choice.label}</Text>
+              <Text style={{ color: on ? colors.onAccent : colors.link, fontWeight: '800' }}>{choice.label}</Text>
             </Pressable>
           )
         })}

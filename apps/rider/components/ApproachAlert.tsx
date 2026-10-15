@@ -307,8 +307,7 @@ export function ApproachAlert({
 }
 
 function makeStyles(colors: Palette) {
-  const light = colors.statusBar === 'dark'
-  const accentText = light ? '#9A3F00' : '#FFC9A3'
+  const accentText = colors.orangeInk
   return {
     host: {
       ...StyleSheet.absoluteFill,
@@ -341,7 +340,7 @@ function makeStyles(colors: Palette) {
       width: 10,
       height: 10,
       borderRadius: 5,
-      backgroundColor: '#F56600',
+      backgroundColor: colors.orange,
     },
     copy: { flex: 1 },
     kicker: {
