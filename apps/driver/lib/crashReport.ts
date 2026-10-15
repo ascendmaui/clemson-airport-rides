@@ -7,7 +7,7 @@
  * same channel with a '[driver-crash]' tag.
  */
 
-export type CrashScope = 'app' | 'trip' | 'offers' | 'offer-alerts' | 'home'
+export type CrashScope = 'app' | 'trip' | 'offers' | 'offer-alerts' | 'home' | 'sync'
 
 export type CrashRecord = {
   scope: string

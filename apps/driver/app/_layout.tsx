@@ -22,6 +22,7 @@ import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
 import { reconcileTripBackgroundLocation } from '@/lib/backgroundLocation'
 import { DriverAgreementPrompt } from '@/components/DriverAgreementPrompt'
 import { CrashBoundary } from '@/components/CrashBoundary'
+import { SyncBanner } from '@/components/SyncBanner'
 import { quiet } from '@/lib/softFail'
 
 /** Shared glass toast (packages/rides-native/ToastHost). */
@@ -146,6 +147,9 @@ export default function RootLayout() {
                 <ActiveTripResume />
                 <PickupBeaconHost />
               </DriverAgreementPrompt>
+              <CrashBoundary scope="sync" compact>
+                <SyncBanner />
+              </CrashBoundary>
               <ToastMount />
               <DriverMoments />
             </Gate>

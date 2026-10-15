@@ -97,15 +97,15 @@ export default function MenuScreen() {
     { icon: 'speedometer', title: 'Safety score', subtitle: 'Estimate and tips', onPress: () => router.push('/safety-score') },
   ]
   const inbox: MenuRow[] = [
-    { icon: 'inbox', title: 'Inbox', subtitle: 'Messages from Clemson RIDES and riders', onPress: () => router.push('/inbox') },
+    { icon: 'inbox', title: 'Inbox', subtitle: 'Messages from Clemson Rides and riders', onPress: () => router.push('/inbox') },
     { icon: 'discover', title: 'Discover', subtitle: 'Busy spots, game days, and boosts', onPress: () => router.push('/discover') },
   ]
   const money: MenuRow[] = [
     { icon: 'calculator', title: 'Tax info', subtitle: 'Year-end mileage and earnings', onPress: () => router.push('/tax') },
   ]
   const supportRows: MenuRow[] = [
-    { icon: 'help', title: 'Help', subtitle: supportEmail(), onPress: () => { void Linking.openURL(supportMailto('Clemson RIDES help')) } },
-    { icon: 'chat', title: 'Support', subtitle: supportEmail(), onPress: () => { void Linking.openURL(supportMailto('Clemson RIDES support')) } },
+    { icon: 'help', title: 'Help', subtitle: supportEmail(), onPress: () => { void Linking.openURL(supportMailto('Clemson Rides help')) } },
+    { icon: 'chat', title: 'Support', subtitle: supportEmail(), onPress: () => { void Linking.openURL(supportMailto('Clemson Rides support')) } },
   ]
   const resources: MenuRow[] = [
     { icon: 'school', title: 'Learning Center', subtitle: quizLabel, onPress: () => router.push('/learning') },
