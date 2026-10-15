@@ -83,7 +83,7 @@ test('native service is idempotent and foreground/background throttle survives J
   assert.equal(options.deferredUpdatesInterval, 12000)
   assert.equal(options.pausesUpdatesAutomatically, false)
   assert.equal(options.showsBackgroundLocationIndicator, true)
-  assert.equal(options.foregroundService.notificationTitle, 'Clemson RIDES trip in progress')
+  assert.equal(options.foregroundService.notificationTitle, 'Clemson Rides trip in progress')
   await h.api.publishDriverLocation(h.client, 'driver-1', {
     lat: 34.68, lng: -82.84, tripId: 'trip-1', tripStatus: 'accepted',
   })

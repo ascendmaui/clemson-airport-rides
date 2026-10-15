@@ -61,7 +61,7 @@ export function DriverStatusCard({
       ? 'Application submitted! Our team is reviewing it. Approvals typically take 24–48 hours.'
       : status === 'rejected'
         ? 'Please update the flagged information above and resubmit for review.'
-        : 'Once all info and documents are submitted, Clemson RIDES admins will review your application.'
+        : 'Once all info and documents are submitted, Clemson Rides admins will review your application.'
 
   return (
     <Card style={styles.card}>

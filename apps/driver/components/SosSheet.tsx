@@ -73,7 +73,7 @@ export function SosSheet({ open, onClose, trip, userId, fix }: {
     const text = buildSosText({ lat: fix?.lat, lng: fix?.lng, tripId: trip.id })
     const action = channel === 'web_share'
       ? Share.share({
-        title: 'SOS Clemson RIDES',
+        title: 'SOS Clemson Rides',
         message: `${tripShareMessage({ pickup: trip.pickupLabel, dropoff: trip.dropoffLabel, status: trip.status })}\n\n${text}`,
       })
       : Linking.openURL(sosChannelHref(channel, text)!)

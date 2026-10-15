@@ -35,7 +35,7 @@ const NOTICES: Notice[] = [
   {
     id: 'split',
     title: 'Your fare split',
-    body: 'Open Earnings for the 80% you keep and the 20% Clemson RIDES platform fee on completed trips.',
+    body: 'Open Earnings for the 80% you keep and the 20% Clemson Rides platform fee on completed trips.',
   },
 ]
 
@@ -85,7 +85,7 @@ export default function InboxScreen() {
       <View style={styles.head}>
         <BackButton onPress={() => router.back()} />
         <DayHeader
-          kicker="CLEMSON RIDES"
+          kicker="Clemson Rides"
           title="Inbox"
           trailing={tab === 'notifications' && notices.length > 0 ? (
             <Pressable
@@ -147,7 +147,7 @@ export default function InboxScreen() {
               <Pressable
                 accessibilityRole="link"
                 accessibilityLabel={`Email support at ${supportEmail()}`}
-                onPress={() => { void Linking.openURL(supportMailto('Clemson RIDES support')) }}
+                onPress={() => { void Linking.openURL(supportMailto('Clemson Rides support')) }}
               >
                 <Text style={{ color: colors.orange, fontWeight: '800' }}>Email {supportEmail()}</Text>
               </Pressable>

@@ -68,7 +68,7 @@ export default function TripDetailsScreen() {
       {!trip ? <Text style={{ color: colors.inkSecondary }}>{id ? 'This trip is not on your account yet.' : 'Missing trip id.'}</Text> : null}
       {trip ? (
         <>
-          <Text style={{ color: colors.inkSecondary }}>Clemson RIDES · {when}</Text>
+          <Text style={{ color: colors.inkSecondary }}>Clemson Rides · {when}</Text>
           <Text style={{ color: colors.ink, fontSize: 40, fontWeight: '800' }}>{shownCents(trip.driverNetCents, earningsPrivate)}</Text>
           <Text style={{ color: colors.inkSecondary }}>{trip.status === 'cancelled_wait' ? `No-show fee · Rider charged ${shownCents(trip.waitFeeCents + trip.cancelFeeCents, earningsPrivate)}` : `Upfront fare ${shownCents(trip.fareCents, earningsPrivate)}`}</Text>
           {trip.status !== 'cancelled_wait' && trip.carpoolIncentiveId ? (
