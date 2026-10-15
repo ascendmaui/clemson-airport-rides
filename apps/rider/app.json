@@ -91,7 +91,7 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Clemson Rides uses your location to set your pickup point and show your driver approaching.",
-          "motionUsagePermission": false,
+          "motionUsagePermission": "Clemson Rides does not track your motion or activity. iOS requires this notice because a location library we use can read motion data.",
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false
         }

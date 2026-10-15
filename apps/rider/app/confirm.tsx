@@ -6,12 +6,15 @@ import { useEffect, useRef, useState } from 'react'
 import { Animated, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton, SheetHandle } from '@/components/Button'
+import { RetryAction } from '@/components/RetryAction'
 import { useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
 import type { CampusMapHandle } from '@/components/mapTypes'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
 import { logCaught } from '@/lib/caught'
+import { retryableFailure } from '@/lib/offlineBanner'
+import { useReconnectRetry } from '@/lib/useReconnectRetry'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { lookupCatalogPlace, placeFromStop, type Place } from 'rides-native/shared/carpool.js'
@@ -144,6 +147,8 @@ export default function ConfirmPickup() {
     }
   }
 
+  useReconnectRetry('confirm-pickup', () => onLocate('pickup'), retryableFailure(locateNote))
+
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
@@ -201,6 +206,9 @@ export default function ConfirmPickup() {
         <Text style={styles.title}>Confirm pickup spot</Text>
         <Text style={styles.hint}>Pickup uses your current location. Edit it if you need a different spot.</Text>
         {locateNote ? <Text style={styles.locateNote}>{locateNote}</Text> : null}
+        {retryableFailure(locateNote) ? (
+          <RetryAction hint="Tries to read your pickup location again" onPress={() => { void onLocate('pickup') }} />
+        ) : null}
         <NeighborhoodPicker
           liveSuggest
           label="Pickup address"
