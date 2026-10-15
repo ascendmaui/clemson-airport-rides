@@ -166,7 +166,10 @@ function DriverRoster({
             accessibilityHint={card.saved ? 'Removes this driver from your preferred list' : 'Saves this driver as preferred'}
             accessibilityState={{ selected: card.saved }}
           >
-            <Text style={card.saved ? styles.saveOn : styles.saveOff}>{card.saved ? '★ Saved' : '☆ Save'}</Text>
+            <View style={card.saved ? styles.saveOn : styles.saveOff}>
+              <Glyph name="star" size={12} active={card.saved} color={card.saved ? colors.onAccent : colors.orange} />
+              <Text style={card.saved ? styles.saveOnText : styles.saveOffText}>{card.saved ? 'Saved' : 'Save'}</Text>
+            </View>
           </Pressable>
         </View>
       </View>
@@ -457,7 +460,7 @@ function PickDriver() {
       return
     }
     if (chosen && tier === 'comfort' && !chosen.comfortClass) {
-      setError('Extra Comfort fleet only. That driver is not listed as Comfort.')
+      setError('Extra Comfort only.')
       return
     }
     if (!user) {
@@ -596,7 +599,10 @@ function PickDriver() {
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={styles.name}>{card.name}</Text>
-                            <Text style={styles.meta}>★ {card.rating} · {card.tripCountLabel} trips</Text>
+                            <View style={styles.ratingRow}>
+                              <Glyph name="star" size={12} active color={colors.orange} />
+                              <Text style={styles.meta}>{card.rating} · {card.tripCountLabel} trips</Text>
+                            </View>
                             <Text style={styles.sub}>{card.vehicleLabel}</Text>
                           </View>
                           <Text style={{ fontSize: 11, fontWeight: '700', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 5, overflow: 'hidden', backgroundColor: card.status === 'on_trip' ? colors.orangeSoft : colors.track, color: card.status === 'on_trip' ? colors.orange : colors.inkSecondary }}>{card.statusLabel}</Text>
@@ -725,8 +731,11 @@ function makeStyles(colors: Palette) {
     badges: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, alignItems: 'center' as const, marginTop: 4 },
     badgeOrange: { color: colors.orange, backgroundColor: colors.orangeSoft, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, fontWeight: '800' as const },
     badgePurple: { color: colors.link, backgroundColor: colors.purpleSoft, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, fontWeight: '800' as const },
-    saveOn: { color: colors.onAccent, backgroundColor: colors.purple, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, fontSize: 12, fontWeight: '800' as const },
-    saveOff: { color: colors.orange, fontSize: 12, fontWeight: '800' as const },
+    ratingRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
+    saveOn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: colors.purple, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+    saveOff: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
+    saveOnText: { color: colors.onAccent, fontSize: 12, fontWeight: '800' as const },
+    saveOffText: { color: colors.orange, fontSize: 12, fontWeight: '800' as const },
     footer: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 },
     student: { color: colors.orange, fontWeight: '800' as const, fontSize: 13 },
     comfortNotice: { color: colors.link, fontSize: 13, lineHeight: 18, fontWeight: '600' as const },
