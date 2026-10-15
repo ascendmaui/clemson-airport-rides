@@ -582,10 +582,8 @@ export function CampusMap({
   if (loadError || authFailed || mapError) {
     return (
       <div style={fallbackWrap}>
+        {/* No preview cars here: cars driving over "Map unavailable" reads as broken. */}
         <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} route={route} tigerZones={showHeat ? tigerZones : []} message={MAP_UNAVAILABLE} />
-        <PreviewFleetMotion enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
-        <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
-        {showSimulatedFleet ? <FleetBadge /> : null}
       </div>
     )
   }
