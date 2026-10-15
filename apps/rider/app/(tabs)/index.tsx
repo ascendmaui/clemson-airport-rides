@@ -53,6 +53,9 @@ import { useThemedStyles } from '@/lib/useThemedStyles'
 
 const MAP_KINDS: MapKind[] = ['standard', 'satellite', 'hybrid']
 
+/** Heat still follows showBusy. This control stays in the file and off the home screen. */
+const SHOW_BUSY_AREAS_TOGGLE = false
+
 const PLACES = [
   ...SHORTCUTS.map((shortcut) => ({ ...shortcut, glyph: 'campus' })),
   { id: 'gsp', label: 'GSP Airport', sub: 'GSP', glyph: 'airport' },
@@ -307,7 +310,7 @@ export function RiderHome() {
               </View>
               <View style={styles.brandCopy}>
                 <Text style={styles.brandKicker}>RIDE • GAME • REPEAT</Text>
-                <Text style={styles.brandTitle}>Clemson <Text style={styles.brandSoft}>RIDES</Text></Text>
+                <Text style={styles.brandTitle}>Clemson <Text style={styles.brandSoft}>Rides</Text></Text>
                 <Text style={styles.brandPillText}>TIGERS GET YOU THERE</Text>
               </View>
             </View>
@@ -610,22 +613,24 @@ export function RiderHome() {
                 <Text style={styles.mapTitle}>Campus map</Text>
                 <Text style={styles.busyDays}>Busy days</Text>
               </View>
-              <Pressable
-                onPress={() => {
-                  void tapHaptic()
-                  setShowBusy((value: boolean) => !value)
-                }}
-                style={[styles.busy, showBusy && styles.busyOn]}
-                accessibilityRole="button"
-                accessibilityLabel={showBusy ? 'Busy areas on' : 'Busy areas off'}
-                accessibilityHint="Shows or hides busy areas on the campus map"
-                accessibilityState={{ selected: showBusy }}
-                hitSlop={8}
-              >
-                <Text style={[styles.busyText, showBusy && styles.busyTextOn]}>
-                  {showBusy ? 'Busy Areas · On' : 'Busy Areas · Off'}
-                </Text>
-              </Pressable>
+              {SHOW_BUSY_AREAS_TOGGLE ? (
+                <Pressable
+                  onPress={() => {
+                    void tapHaptic()
+                    setShowBusy((value: boolean) => !value)
+                  }}
+                  style={[styles.busy, showBusy && styles.busyOn]}
+                  accessibilityRole="button"
+                  accessibilityLabel={showBusy ? 'Busy areas on' : 'Busy areas off'}
+                  accessibilityHint="Shows or hides busy areas on the campus map"
+                  accessibilityState={{ selected: showBusy }}
+                  hitSlop={8}
+                >
+                  <Text style={[styles.busyText, showBusy && styles.busyTextOn]}>
+                    {showBusy ? 'Busy Areas · On' : 'Busy Areas · Off'}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
             {spotsLoading ? (
               <Skeleton height={32} width="70%" />

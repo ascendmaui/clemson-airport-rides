@@ -12,11 +12,11 @@ Two current binaries. The frozen TestFlight app is a third package and must not 
 
 | App | Path | Android package | Version | Expo slug | EAS project | URL scheme |
 | --- | --- | --- | --- | --- | --- | --- |
-| Rider | `apps/rider` | `com.ascendmaui.clemsonrides.rider` | 1.1.0 | `clemson-rides-rider` | `d02319c9-69ef-4523-a0a5-6712c037d5fa` | `clemsonrides` |
+| Rider | `apps/rider` | `com.ascendmaui.clemsonrides.rider` | 1.2.0 | `clemson-rides-rider` | `d02319c9-69ef-4523-a0a5-6712c037d5fa` | `clemsonrides` |
 | Driver | `apps/driver` | `com.ascendmaui.clemsonrides.driver` | 1.1.0 | `clemson-rides-driver` | `090d10b8-2f52-4502-ac9d-e8bd0fe35033` | `clemsonrides-driver` |
 | Frozen (do not ship) | `apps/mobile` | `com.ascendmaui.clemsonairportrides` | 1.0.0 | `clemson-airport-rides` (`FROZEN_EXPO_SLUG`) | `1440e29e-13f0-4571-8f32-596ec81f3369` | `clemsonrides` (legacy) |
 
-Package names are `expo.android.package` in each `app.json`. They match the iOS bundle ids. Expo owner is `johnmatveyev`. Production `eas.json` sets `appVersionSource` to `remote` and `autoIncrement` on the production profile, so the Play `versionCode` is not in git.
+Package names are `expo.android.package` in each `app.json`. They match the iOS bundle ids. Expo owner is `johnmatveyev`. Rider `app.json` sets `android.versionCode` to 19, the same integer as the iOS build number. Production `eas.json` still sets `appVersionSource` to `remote` and `autoIncrement` on the production profile, so an EAS production build uses the remote versionCode instead of the value in git. Do not change `eas.json` to make the git value win.
 
 Declared Android permissions (manifest list in `app.json`). The driver app also requests background location during an active trip only, after an in-app disclosure (see `docs/driver-background-location.md`):
 
@@ -119,7 +119,7 @@ Create two apps. Package names must match the table above on the first upload. T
 ### Account and signing
 
 - [ ] Play Console developer account John will publish under (package prefix is `com.ascendmaui`).
-- [ ] App 1 name confirmation: display name in repo is `Clemson RIDES`, package `com.ascendmaui.clemsonrides.rider`.
+- [ ] App 1 name confirmation: display name in repo is `Clemson Rides`, package `com.ascendmaui.clemsonrides.rider`.
 - [ ] App 2 name confirmation: display name in repo is `Clemson RIDES Driver`, package `com.ascendmaui.clemsonrides.driver`.
 - [ ] Play App Signing enrollment for each app, and the upload key. The signing-cert SHA-1 is also what `docs/google-signin-setup.md` section 1.4 needs for the Android OAuth clients. It is not in git.
 - [ ] `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` set on the rider EAS project and the driver EAS project for preview and production. Without it, #306 keeps the map on the unavailable state.
