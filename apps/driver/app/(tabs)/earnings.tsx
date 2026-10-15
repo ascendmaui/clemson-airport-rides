@@ -40,6 +40,7 @@ import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { CASHOUT_COPY } from '../../../../shared/cashout.js'
 import { readPrepaidTipCents } from '../../../../shared/prepaidTip.js'
 import { quiet, quietly } from '@/lib/softFail'
+import { tipsColor } from '@/lib/palette'
 
 type EarningsState = Awaited<ReturnType<typeof loadEarnings>> | null
 
@@ -211,7 +212,7 @@ export default function EarningsHub() {
         { label: 'You', value: you, color: legendColor(colors, 'you') },
         { label: 'Clemson Rides', value: platform, color: legendColor(colors, 'platform') },
         { label: 'Boost', value: boostSum, color: colors.orange },
-        { label: 'Tips (100% yours)', value: tipSlice, color: '#22A04B' },
+        { label: 'Tips (100% yours)', value: tipSlice, color: tipsColor },
         { label: 'Other', value: other, color: legendColor(colors, 'other') },
       ]
 

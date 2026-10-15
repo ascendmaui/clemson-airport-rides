@@ -76,7 +76,7 @@ export default function DeleteAccountScreen() {
             onPress={confirmRequest}
             style={[styles.deleteButton, { backgroundColor: colors.danger, opacity: busy ? 0.55 : 1 }]}
           >
-            <Text style={[styles.deleteLabel, { color: scheme === 'dark' ? '#16121F' : '#FFFFFF' }]}>{busy ? 'Filing…' : 'File deletion request'}</Text>
+            <Text style={[styles.deleteLabel, { color: scheme === 'dark' ? colors.card : colors.onAccent }]}>{busy ? 'Filing…' : 'File deletion request'}</Text>
           </Pressable>
         ) : <Primary label="Sign in to request deletion" onPress={() => router.push('/sign-in')} />
       )}

@@ -57,13 +57,13 @@ test('purple text uses the dark-aware link token (brand purple on night cards is
   }
 })
 
-test('raw hex in driver screens stays under the ratchet', () => {
+test('no raw hex in driver screens: fixed colours are named tokens in lib/palette.ts', () => {
   let count = 0
   for (const file of driverSources()) {
     if (HEX_EXEMPT.has(file)) continue
     for (const line of codeLines(read(file))) count += (line.match(HEX) ?? []).length
   }
-  assert.ok(count <= 35, `driver screens have ${count} raw hex colours; use lib/palette.ts tokens`)
+  assert.ok(count <= 0, `driver screens have ${count} raw hex colours; use lib/palette.ts tokens`)
 })
 
 test('perks strip: every chip carries a brand rail and dark-aware purple text', () => {
@@ -72,4 +72,14 @@ test('perks strip: every chip carries a brand rail and dark-aware purple text', 
   assert.match(src, /borderLeftColor: tone === 'orange' \? colors\.orange : colors\.purple/)
   assert.match(src, /case 'purple':[\s\S]*?return colors\.link/)
   assert.match(src, /· Rating \$\{/)
+})
+
+test('map heat card colours are named tokens that follow the map style', () => {
+  const palette = read('apps/driver/lib/palette.ts')
+  const block = palette.slice(palette.indexOf('export const mapHeatColors'))
+  for (const mode of ['light', 'dark']) {
+    const row = block.match(new RegExp(`${mode}: \\{([^}]*)\\}`))?.[1] ?? ''
+    for (const key of ['surface', 'title', 'estimate', 'body', 'legend', 'border']) assert.match(row, new RegExp(`${key}: '`), `${mode}.${key}`)
+  }
+  assert.match(read('apps/driver/components/CampusMap.native.tsx'), /const heat = darkMap \? mapHeatColors\.dark : mapHeatColors\.light/)
 })
