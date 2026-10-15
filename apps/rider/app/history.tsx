@@ -15,6 +15,7 @@ import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { RequireAuth } from '@/components/RequireAuth'
+import { caughtMessage, logCaught } from '@/lib/caught'
 
 type RideRow = {
   id: string
@@ -51,6 +52,12 @@ function HistoryScreen() {
         if (!alive) return
         if (queryError) setError(queryError.message)
         else setRows((data || []) as RideRow[])
+        setLoading(false)
+      })
+      .catch((err: unknown) => {
+        if (!alive) return
+        logCaught('history', err)
+        setError(caughtMessage(err, 'Could not load your rides. Try again.'))
         setLoading(false)
       })
     return () => {
