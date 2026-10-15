@@ -67,12 +67,12 @@ test('lift: calculates elevation and shadow properties across elevation levels',
   assert.deepEqual(nightRest.shadowOffset, { width: 0, height: 6 })
 
   const nightFloat = lift(darkPalette, 'float')
-  assert.equal(nightFloat.shadowOpacity, 0.28)
+  assert.equal(nightFloat.shadowOpacity, 0.14)
   assert.equal(nightFloat.shadowRadius, 18)
   assert.deepEqual(nightFloat.shadowOffset, { width: 0, height: 10 })
 
   const nightBar = lift(darkPalette, 'bar')
-  assert.equal(nightBar.shadowOpacity, 0.28)
+  assert.equal(nightBar.shadowOpacity, 0.08)
   assert.equal(nightBar.shadowRadius, 12)
   assert.deepEqual(nightBar.shadowOffset, { width: 0, height: -4 })
 })
