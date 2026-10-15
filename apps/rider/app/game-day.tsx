@@ -14,14 +14,14 @@ export default function GameDayScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 8, borderBottomWidth: 2, borderBottomColor: colors.orange }}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back"
           onPress={() => router.back()}
-          style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: colors.purple, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text style={{ color: colors.title, fontSize: 18, fontWeight: '700' }}>←</Text>
+          <Text style={{ color: colors.onAccent, fontSize: 18, fontWeight: '700' }}>←</Text>
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={{ color: colors.orangeInk, fontSize: 12, fontWeight: '800', letterSpacing: 1.2 }}>GAME DAY</Text>
