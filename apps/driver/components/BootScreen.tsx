@@ -7,7 +7,7 @@ export function BootScreen() {
       <View style={styles.mark}>
         <Text style={styles.markLabel}>CD</Text>
       </View>
-      <Text style={styles.title}>Clemson RIDES Driver</Text>
+      <Text style={styles.title}>Clemson Rides Driver</Text>
       <ActivityIndicator color={ORANGE} style={styles.spinner} />
     </View>
   )

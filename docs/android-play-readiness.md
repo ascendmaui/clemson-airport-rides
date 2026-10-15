@@ -13,17 +13,17 @@ Two current binaries. The frozen TestFlight app is a third package and must not 
 | App | Path | Android package | Version | Expo slug | EAS project | URL scheme |
 | --- | --- | --- | --- | --- | --- | --- |
 | Rider | `apps/rider` | `com.ascendmaui.clemsonrides.rider` | 1.1.0 | `clemson-rides-rider` | `d02319c9-69ef-4523-a0a5-6712c037d5fa` | `clemsonrides` |
-| Driver | `apps/driver` | `com.ascendmaui.clemsonrides.driver` | 1.1.0 | `clemson-rides-driver` | `090d10b8-2f52-4502-ac9d-e8bd0fe35033` | `clemsonrides-driver` |
+| Driver | `apps/driver` | `com.ascendmaui.clemsonrides.driver` | 1.2.0 | `clemson-rides-driver` | `090d10b8-2f52-4502-ac9d-e8bd0fe35033` | `clemsonrides-driver` |
 | Frozen (do not ship) | `apps/mobile` | `com.ascendmaui.clemsonairportrides` | 1.0.0 | `clemson-airport-rides` (`FROZEN_EXPO_SLUG`) | `1440e29e-13f0-4571-8f32-596ec81f3369` | `clemsonrides` (legacy) |
 
-Package names are `expo.android.package` in each `app.json`. They match the iOS bundle ids. Expo owner is `johnmatveyev`. Production `eas.json` sets `appVersionSource` to `remote` and `autoIncrement` on the production profile, so the Play `versionCode` is not in git.
+Package names are `expo.android.package` in each `app.json`. They match the iOS bundle ids. Expo owner is `johnmatveyev`. Driver `app.json` sets `android.versionCode` to 19, the same integer as the iOS build number. Production `eas.json` still sets `appVersionSource` to `remote` and `autoIncrement` on the production profile, so an EAS production build uses the remote versionCode instead of the value in git. Do not change `eas.json` to make the git value win.
 
-Declared Android permissions (manifest list in `app.json`; background location is not requested):
+Declared Android permissions (manifest list in `app.json`). `ACCESS_BACKGROUND_LOCATION` is declared only on the driver app:
 
 | App | Permissions |
 | --- | --- |
-| Rider | `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION` |
-| Driver | `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`, `POST_NOTIFICATIONS`. The image-picker plugin also asks for camera and photo library for license, insurance, and vehicle documents. |
+| Rider | `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`. No `ACCESS_BACKGROUND_LOCATION`. |
+| Driver | `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`, `ACCESS_BACKGROUND_LOCATION`, `POST_NOTIFICATIONS`, `CAMERA`, `RECORD_AUDIO`. The image-picker plugin also asks for the photo library for license, insurance, and vehicle documents. Background location is requested only after the full-screen in-app disclosure on an active trip. |
 
 Both current apps declare `autoVerify` https intent filters for `clemsonrides.com` and `www.clemsonrides.com` with `pathPrefix: /`.
 
@@ -108,7 +108,7 @@ These are already merged. They are not a Play release.
 | --- | --- | --- |
 | [#303](https://github.com/ascendmaui/clemson-airport-rides/pull/303) | 2026-10-05 | Android Chrome location denial on confirm-pickup shows a short sentence instead of the raw `User denied Geolocation` string. A precise timeout retries once with coarse accuracy. Denial does not retry. |
 | [#305](https://github.com/ascendmaui/clemson-airport-rides/pull/305) | 2026-10-05 | Website tap targets on Android (home search, sign-in links, marketing nav) meet a 44px minimum. The viewport uses `interactive-widget=resizes-content` so the keyboard does not cover the phone shell. |
-| [#306](https://github.com/ascendmaui/clemson-airport-rides/pull/306) | 2026-10-05 | Rider and driver `app.config.js` write `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` into the Android manifest when the value is a real key. Empty or placeholder keys are omitted and the campus map says “Map unavailable” instead of a blank Google surface. Dark map style is shared. Driver local alerts use a `ride-requests` notification channel so `request.wav` can play on Android 8+. Background location is not requested. |
+| [#306](https://github.com/ascendmaui/clemson-airport-rides/pull/306) | 2026-10-05 | Rider and driver `app.config.js` write `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` into the Android manifest when the value is a real key. Empty or placeholder keys are omitted and the campus map says “Map unavailable” instead of a blank Google surface. Dark map style is shared. Driver local alerts use a `ride-requests` notification channel so `request.wav` can play on Android 8+. That change did not add a background-location request. The driver app now declares `ACCESS_BACKGROUND_LOCATION` and asks for it only after the in-app disclosure. |
 
 A physical Android device is still required to confirm map tiles after the key is set, and to hear the driver channel sound. That check is not a store submit.
 
@@ -120,7 +120,7 @@ Create two apps. Package names must match the table above on the first upload. T
 
 - [ ] Play Console developer account John will publish under (package prefix is `com.ascendmaui`).
 - [ ] App 1 name confirmation: display name in repo is `Clemson RIDES`, package `com.ascendmaui.clemsonrides.rider`.
-- [ ] App 2 name confirmation: display name in repo is `Clemson RIDES Driver`, package `com.ascendmaui.clemsonrides.driver`.
+- [ ] App 2 name confirmation: display name in repo is `Clemson Rides Driver`, package `com.ascendmaui.clemsonrides.driver`.
 - [ ] Play App Signing enrollment for each app, and the upload key. The signing-cert SHA-1 is also what `docs/google-signin-setup.md` section 1.4 needs for the Android OAuth clients. It is not in git.
 - [ ] `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` set on the rider EAS project and the driver EAS project for preview and production. Without it, #306 keeps the map on the unavailable state.
 
@@ -145,9 +145,10 @@ Use the binary and the privacy policy. Do not guess past what is listed here.
 - [ ] Content rating questionnaire (IARC), both apps.
 - [ ] Target audience. Privacy copy says the product is for university students and adults and does not knowingly collect data from children under 13. John confirms the target-audience and “designed for children” answers.
 - [ ] News app: no. Government app: no. John confirms.
-- [ ] Data safety, aligned with `PRIVACY_SECTIONS`: name, email, and auth ids; student-verification marker; trip pickup and dropoff labels and coordinates; fare, card-hold, and charge amounts; Stripe payment metadata (full card numbers are not stored on Clemson RIDES servers); optional phone and home/work labels; device or session signals for realtime updates. Precise location is while-in-use (`ACCESS_FINE_LOCATION`). Driver app adds the notification permission and camera or photo-library access for documents. Data is shared with Stripe, Supabase, and the driver assigned to the trip, as the policy states. John completes the form.
+- [ ] Data safety, aligned with `PRIVACY_SECTIONS`: name, email, and auth ids; student-verification marker; trip pickup and dropoff labels and coordinates; fare, card-hold, and charge amounts; Stripe payment metadata (full card numbers are not stored on Clemson RIDES servers); optional phone and home/work labels; device or session signals for realtime updates. Precise location is while-in-use (`ACCESS_FINE_LOCATION`) for the rider. The driver app also collects background location during an active trip. Driver app adds the notification permission and camera or photo-library access for documents. Data is shared with Stripe, Supabase, and the driver assigned to the trip, as the policy states. John completes the form.
 - [ ] Account deletion URL or in-app path. Account can file a confirmed support ticket (`shared/accountDeletion.js`, subject “Delete my Clemson RIDES account”). That path does not call `auth.admin.deleteUser`. John chooses the URL Play will show. The privacy page tells people to request deletion from Account.
-- [ ] Location declaration: foreground only. No background-location permission.
+- [ ] Location declaration: rider is foreground only (no `ACCESS_BACKGROUND_LOCATION`). Driver collects background location during an active trip, after a full-screen in-app disclosure, so the rider can see the car while the driver uses Maps or the phone is locked. Sharing stops when the trip ends. It is not used for ads.
+- [ ] Data safety SDKs. Rider: `@stripe/stripe-react-native` (payments), `@supabase/supabase-js`, `expo-location` (foreground), `expo-notifications`, `expo-image-picker`, `expo-audio`, `react-native-maps`, `react-native-webview`, `expo-secure-store`. Driver: `@supabase/supabase-js`, `expo-location` (background during an active trip), `expo-task-manager`, `expo-camera`, `expo-image-picker`, `expo-document-picker`, `expo-notifications`, `react-native-maps`, `expo-secure-store`. No ad SDK. No Stripe SDK in the driver app. John completes the form.
 - [ ] Photo and video permissions for the driver document picker, if Play asks.
 - [ ] Financial-features declaration for ride payments (card hold at booking, full fare captured at trip end, hold released on cancellation within policy), if Play asks. Payments stay on the existing Stripe paths. No live charge is part of this checklist.
 - [ ] Countries and regions.

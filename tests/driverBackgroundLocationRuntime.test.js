@@ -16,7 +16,7 @@ const fix = (timestamp, latitude = 34.68) => ({
 function harness({ storage = new Map(), started = false } = {}) {
   const state = {
     status: 'accepted', session: { user: { id: 'driver-1' } }, owner: 'driver-1',
-    foreground: 'granted', background: 'granted', now: 10000, started,
+    foreground: 'granted', background: 'granted', backgroundGranted: false, now: 10000, started,
     starts: [], stops: [], writes: [], permissions: [], readError: null,
   }
   let task
@@ -41,7 +41,14 @@ function harness({ storage = new Map(), started = false } = {}) {
   const location = {
     Accuracy: { High: 4 }, ActivityType: { AutomotiveNavigation: 1 },
     async requestForegroundPermissionsAsync() { state.permissions.push('foreground'); return { status: state.foreground } },
-    async requestBackgroundPermissionsAsync() { state.permissions.push('background'); return { status: state.background } },
+    async getBackgroundPermissionsAsync() {
+      return { status: state.backgroundGranted ? 'granted' : 'undetermined' }
+    },
+    async requestBackgroundPermissionsAsync() {
+      state.permissions.push('background')
+      if (state.background === 'granted') state.backgroundGranted = true
+      return { status: state.background }
+    },
     async hasStartedLocationUpdatesAsync() { return state.started },
     async startLocationUpdatesAsync(name, options) { state.started = true; state.starts.push({ name, options }) },
     async stopLocationUpdatesAsync(name) { state.started = false; state.stops.push(name) },
@@ -71,10 +78,10 @@ function harness({ storage = new Map(), started = false } = {}) {
 
 test('native service is idempotent and foreground/background throttle survives JS restart', async () => {
   const h = harness()
-  assert.equal(await h.api.startTripBackgroundLocation('trip-1'), 'started')
-  assert.equal(await h.api.startTripBackgroundLocation('trip-1'), 'started')
+  assert.equal(await h.api.startTripBackgroundLocation('trip-1', { backgroundConsent: true }), 'started')
+  assert.equal(await h.api.startTripBackgroundLocation('trip-1', { backgroundConsent: true }), 'started')
   assert.equal(h.state.starts.length, 1)
-  assert.deepEqual(h.state.permissions, ['foreground', 'background', 'foreground', 'background'])
+  assert.deepEqual(h.state.permissions, ['foreground', 'background', 'foreground'])
   const { options } = h.state.starts[0]
   assert.equal(options.accuracy, h.location.Accuracy.High)
   assert.equal(options.activityType, h.location.ActivityType.AutomotiveNavigation)
@@ -83,7 +90,7 @@ test('native service is idempotent and foreground/background throttle survives J
   assert.equal(options.deferredUpdatesInterval, 12000)
   assert.equal(options.pausesUpdatesAutomatically, false)
   assert.equal(options.showsBackgroundLocationIndicator, true)
-  assert.equal(options.foregroundService.notificationTitle, 'Clemson RIDES trip in progress')
+  assert.equal(options.foregroundService.notificationTitle, 'Clemson Rides trip in progress')
   await h.api.publishDriverLocation(h.client, 'driver-1', {
     lat: 34.68, lng: -82.84, tripId: 'trip-1', tripStatus: 'accepted',
   })
@@ -109,7 +116,7 @@ test('native service is idempotent and foreground/background throttle survives J
 test('background deliveries stop every terminal status even inside the throttle window', async () => {
   for (const status of ['completed', 'canceled', 'canceled_midride', 'cancelled_wait']) {
     const h = harness()
-    await h.api.startTripBackgroundLocation('trip-1')
+    await h.api.startTripBackgroundLocation('trip-1', { backgroundConsent: true })
     h.state.status = status
     await h.deliver([fix(10000)])
     assert.equal(h.state.started, false, status)
@@ -127,7 +134,7 @@ test('launch reconciliation stops missing/ended trips, missing sessions, and tri
     (state) => { state.owner = 'another-driver' },
   ]) {
     const h = harness()
-    await h.api.startTripBackgroundLocation('trip-1')
+    await h.api.startTripBackgroundLocation('trip-1', { backgroundConsent: true })
     const restarted = harness({ storage: h.storage, started: true })
     invalidate(restarted.state)
     await restarted.api.reconcileTripBackgroundLocation()
@@ -142,12 +149,12 @@ test('launch reconciliation stops missing/ended trips, missing sessions, and tri
 test('permission denial returns a nonblocking status without starting a service', async () => {
   const foreground = harness()
   foreground.state.foreground = 'denied'
-  assert.equal(await foreground.api.startTripBackgroundLocation('trip-1'), 'foreground-denied')
+  assert.equal(await foreground.api.startTripBackgroundLocation('trip-1', { backgroundConsent: true }), 'foreground-denied')
   assert.deepEqual(foreground.state.permissions, ['foreground'])
   assert.equal(foreground.state.started, false)
   const background = harness()
   background.state.background = 'denied'
-  assert.equal(await background.api.startTripBackgroundLocation('trip-1'), 'background-denied')
+  assert.equal(await background.api.startTripBackgroundLocation('trip-1', { backgroundConsent: true }), 'background-denied')
   assert.equal(background.state.started, false)
   assert.equal(background.storage.has('driver.active-trip-location'), false)
 })
@@ -158,14 +165,14 @@ test('a trip ending during permission prompts cannot leave tracking running', as
     h.state.status = 'canceled'
     return { status: 'granted' }
   }
-  assert.equal(await h.api.startTripBackgroundLocation('trip-1'), 'inactive')
+  assert.equal(await h.api.startTripBackgroundLocation('trip-1', { backgroundConsent: true }), 'inactive')
   assert.equal(h.state.starts.length, 0)
   assert.equal(h.storage.has('driver.active-trip-location'), false)
 })
 
 test('temporary server failure preserves tracking for retry; stale screen stops do not stop a newer trip', async () => {
   const h = harness()
-  await h.api.startTripBackgroundLocation('trip-2')
+  await h.api.startTripBackgroundLocation('trip-2', { backgroundConsent: true })
   await h.api.stopTripBackgroundLocation('trip-1')
   assert.equal(h.state.started, true)
   h.state.readError = new Error('Offline')
@@ -177,4 +184,16 @@ test('temporary server failure preserves tracking for retry; stale screen stops 
   h.state.session = null
   await h.deliver([fix(15000)])
   assert.equal(h.state.started, false)
+})
+
+test('in-app disclosure is required before the background permission prompt', async () => {
+  const pending = harness()
+  assert.equal(await pending.api.startTripBackgroundLocation('trip-1'), 'disclosure-required')
+  assert.deepEqual(pending.state.permissions, ['foreground'])
+  assert.equal(pending.state.starts.length, 0)
+  const already = harness()
+  already.state.backgroundGranted = true
+  assert.equal(await already.api.startTripBackgroundLocation('trip-1'), 'started')
+  assert.deepEqual(already.state.permissions, ['foreground'])
+  assert.equal(already.state.starts.length, 1)
 })

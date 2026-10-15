@@ -11,7 +11,7 @@ Not submitted. The App Store and Play Store listings are not live. Do not upload
 
 ## Driver
 
-- Name: Clemson RIDES Driver
+- Name: Clemson Rides Driver
 - Subtitle: Drive with Clemson RIDES.
 - Promotional text: New drivers are never auto-approved.
 - Description: Apply with your license, insurance, registration, car photos, and a background attestation. Authorized means you consented and disclosed nothing that needs a look. It is not a result from a screening company. Clemson RIDES reviews the application before you take trips. Driver net on a trip is 80% of the fare. The platform fee is 20%. A scheduled boost is all yours and is not part of that fee. Being the second driver on a scheduled ride pays $10 or $15 for being ready. If the rider switches or cancels, the first driver gets that fee. A switch never counts against you. Settled Tiger Heat pay can replace the default 80% net. Payouts are queued and retried if one fails. A payday is not published here.

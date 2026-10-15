@@ -3,7 +3,7 @@ import { Glyph } from 'rides-native/icons'
 import { createTrackingRefresh } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { AccessibilityInfo, AppState, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
@@ -150,6 +150,9 @@ export default function TripScreen() {
   const seenStatus = useRef<string | null>(null)
   const activeTrip = isActiveTripLocationStatus(trip?.status)
   const [backgroundNote, setBackgroundNote] = useState<string | null>(null)
+  const [backgroundDisclosure, setBackgroundDisclosure] = useState(false)
+  const declinedBackgroundRef = useRef(false)
+  const backgroundTripRef = useRef<string | null>(null)
   const [self, setSelf] = useState<{ latitude: number; longitude: number } | null>(null)
   const [rider, setRider] = useState<RiderFix | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -246,16 +249,32 @@ export default function TripScreen() {
 
   useEffect(() => {
     if (!trip) return undefined
+    if (backgroundTripRef.current !== trip.id) {
+      backgroundTripRef.current = trip.id
+      declinedBackgroundRef.current = false
+    }
     let alive = true
     const updateBackgroundLocation = async () => {
       if (!activeTrip || terminalTrip || !user) {
         await stopTripBackgroundLocation(trip.id)
-        if (alive) setBackgroundNote(null)
+        if (alive) {
+          setBackgroundNote(null)
+          setBackgroundDisclosure(false)
+        }
         return
       }
       try {
         const status = await startTripBackgroundLocation(trip.id)
-        if (alive) setBackgroundNote(status === 'background-denied'
+        if (!alive) return
+        if (status === 'disclosure-required') {
+          setBackgroundDisclosure(!declinedBackgroundRef.current)
+          setBackgroundNote(declinedBackgroundRef.current
+            ? 'Background location stays off until you allow it for this trip.'
+            : null)
+          return
+        }
+        setBackgroundDisclosure(false)
+        setBackgroundNote(status === 'background-denied'
           ? 'Set location to Always so your rider can still see you while you use Maps.'
           : null)
       } catch {
@@ -597,6 +616,30 @@ export default function TripScreen() {
     )
     : null
 
+  async function allowBackgroundLocation() {
+    if (!trip?.id) return
+    declinedBackgroundRef.current = false
+    setBackgroundDisclosure(false)
+    try {
+      const status = await startTripBackgroundLocation(trip.id, { backgroundConsent: true })
+      if (status === 'disclosure-required') {
+        setBackgroundDisclosure(true)
+        return
+      }
+      setBackgroundNote(status === 'background-denied'
+        ? 'Set location to Always so your rider can still see you while you use Maps.'
+        : null)
+    } catch {
+      setBackgroundNote('Background location could not start. Check location in Settings, then return to retry.')
+    }
+  }
+
+  function declineBackgroundLocation() {
+    declinedBackgroundRef.current = true
+    setBackgroundDisclosure(false)
+    setBackgroundNote('Background location stays off until you allow it for this trip.')
+  }
+
   return (
     <View style={styles.screen}>
       {/* Remaining road is the stored polyline when this car is on it. Otherwise the coordinate line stays. */}
@@ -759,11 +802,19 @@ export default function TripScreen() {
         {backgroundNote && activeTrip ? (
           <View>
             <Text style={styles.note}>{backgroundNote}</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="Open location settings"
-              onPress={() => { void Linking.openSettings().catch(() => setError('Could not open Settings. Open your phone’s Settings to update location permission.')) }}
-              style={styles.nav}>
-              <Text style={styles.navText}>Open Settings</Text>
-            </Pressable>
+            {backgroundNote === 'Background location stays off until you allow it for this trip.' ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="Review background location"
+                onPress={() => { declinedBackgroundRef.current = false; setBackgroundDisclosure(true) }}
+                style={styles.nav}>
+                <Text style={styles.navText}>Review background location</Text>
+              </Pressable>
+            ) : (
+              <Pressable accessibilityRole="button" accessibilityLabel="Open location settings"
+                onPress={() => { void Linking.openSettings().catch(() => setError('Could not open Settings. Open your phone’s Settings to update location permission.')) }}
+                style={styles.nav}>
+                <Text style={styles.navText}>Open Settings</Text>
+              </Pressable>
+            )}
           </View>
         ) : null}
         {locationTracking.error ? (
@@ -850,6 +901,18 @@ export default function TripScreen() {
         userId={user?.id ?? null}
         fix={self ? { lat: self.latitude, lng: self.longitude } : null}
       />
+      <Modal visible={backgroundDisclosure} animationType="fade" presentationStyle="fullScreen" onRequestClose={declineBackgroundLocation}>
+        <View style={[styles.disclosure, { paddingTop: insets.top + 28, paddingBottom: insets.bottom + 28 }]}>
+          <Text style={styles.disclosureTitle} accessibilityRole="header">Background location</Text>
+          <Text style={styles.disclosureBody}>
+            Clemson Rides collects your location in the background during an active trip so your rider can see your car, including while you use Maps or this phone is locked. Sharing stops when the trip ends. This location is not used for ads.
+          </Text>
+          <Primary label="Continue" onPress={() => { void allowBackgroundLocation() }} accessibilityLabel="Continue and allow background location" />
+          <Pressable accessibilityRole="button" accessibilityLabel="Not now" onPress={declineBackgroundLocation} style={styles.disclosureLater}>
+            <Text style={styles.disclosureLaterText}>Not now</Text>
+          </Pressable>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -876,6 +939,11 @@ function tripStyles(colors: Palette) {
     kicker: { color: colors.orange, ...typeScale.kickerSm },
     copy: { color: colors.inkSecondary, ...typeScale.body },
     note: { color: colors.orange, fontSize: 13, lineHeight: 18, fontWeight: '700' },
+    disclosure: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 24, justifyContent: 'center', gap: 16 },
+    disclosureTitle: { color: colors.title, fontSize: 32, fontWeight: '800', letterSpacing: -0.6 },
+    disclosureBody: { color: colors.ink, fontSize: 18, lineHeight: 26 },
+    disclosureLater: { alignItems: 'center', paddingVertical: 14 },
+    disclosureLaterText: { color: colors.inkSecondary, fontWeight: '700', fontSize: 16 },
     fare: { color: colors.ink, fontWeight: '800', fontSize: 16 },
     tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     navRow: { flexDirection: 'row', gap: 8 },
