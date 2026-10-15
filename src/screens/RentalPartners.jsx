@@ -326,7 +326,7 @@ export function PartnerDashboard() {
                 <strong>{r.driver.name}</strong> {r.driver.rating ? `★ ${r.driver.rating.toFixed(2)} (${r.driver.ratingCount})` : '· New driver'} · <span style={{ fontSize: 13 }}>{r.driver.checkStatus}</span>
                 <div style={{ fontSize: 13, color: '#4b3f5c' }}>{r.vehicle} · <span style={pill('#eef', '#335')}>{r.status}</span>{r.start_date ? ` · ${r.start_date}${r.end_date ? ` → ${r.end_date}` : ''}` : ''}</div>
                 {r.message && <div style={{ fontSize: 13 }}>“{r.message}”</div>}
-                <div style={{ fontSize: 13 }}>{r.driver.phone ? `📞 ${r.driver.phone} · ✉️ ${r.driver.email}` : 'Contact details appear after you accept.'}</div>
+                <div style={{ fontSize: 13 }}>{r.driver.phone ? `Phone ${r.driver.phone} · Email ${r.driver.email}` : 'Contact details appear after you accept.'}</div>
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 {nextStatuses(r.status, 'partner').map((to) => (

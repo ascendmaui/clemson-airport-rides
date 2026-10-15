@@ -4,6 +4,7 @@ import { FRIEND_PLACES } from '../lib/friendRides'
 import { hotCatalogPlaces, lookupCatalogPlace, placeFromStop, searchCatalogPlaces } from '../lib/placeCatalog'
 import { LOCATION_MISSING_MESSAGE, readBrowserPosition } from '../lib/currentPlace'
 import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
+import { SiteIcon } from './SiteIcon'
 
 const CURRENT = { label: 'Current location', lat: null, lng: null, _current: true }
 
@@ -227,7 +228,7 @@ export function PlacePicker({
           onClick={() => setConfirmOpen(true)}
           style={chipStyle(false)}
         >
-          ◎ Current location
+          <SiteIcon name="locate" size={16} style={{ verticalAlign: -3 }} /> Current location
         </button>
         {presets.map((p) => (
           <button

@@ -23,6 +23,7 @@ import {
   rememberedAmbassador,
 } from '../lib/friendRides'
 import { navigate } from '../lib/navigation'
+import { SiteIcon } from '../components/SiteIcon'
 
 const GRAND = NEIGHBORHOODS.find((n) => n.id === 'grand-marc')
 const COLLEGE = NEIGHBORHOODS.find((n) => n.id === 'college-ave')
@@ -267,7 +268,7 @@ export function CarpoolHub() {
 
           {result?.pool?.waiting && (
             <div style={{ ...card, textAlign: 'center' }} role="status" aria-live="polite">
-              <div style={{ fontSize: 24, marginBottom: 6 }} aria-hidden="true">⏳</div>
+              <div style={{ marginBottom: 6, color: '#522D80', display: 'grid', placeItems: 'center' }}><SiteIcon name="hourglass" size={24} /></div>
               <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--purple)' }}>You are in the queue</div>
               <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45, marginTop: 4 }}>
                 No one else is heading to {result.pool.neighborhoodLabel || 'that neighborhood'} inside the time window yet.

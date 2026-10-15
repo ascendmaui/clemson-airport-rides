@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { useGlassMotion } from './lib/glassMotion'
 import { bindKeyboardInset, scrollFocusedFieldIntoView } from './lib/keyboardInset'
 import { getHashRoute, navigate, redirectShareHashToPath } from './lib/navigation'
@@ -36,16 +36,9 @@ import { RiderHome } from './screens/RiderHome'
 import { ConfirmPickup } from './screens/ConfirmPickup'
 import { RideTiers } from './screens/RideTiers'
 import { ScheduleAirport } from './screens/ScheduleAirport'
-import { DriverHome } from './screens/DriverHome'
-import { DriverEarnings } from './screens/DriverEarnings'
-import { DriverW9 } from './screens/DriverW9'
-import { DriverPayouts } from './screens/DriverPayouts'
 import { FriendsScreen, AccountScreen } from './screens/FriendsAccount'
 import { SignInScreen, SignUpScreen } from './screens/AuthScreens'
-import { DriverOnboarding } from './screens/DriverOnboarding'
-import { SignAgreement } from './screens/SignAgreement'
 import { DriverSignup } from './screens/DriverSignup'
-import { AdminDesk } from './screens/AdminDesk'
 import { PickDriver } from './screens/PickDriver'
 import { Requested } from './screens/Requested'
 import { LegalPrivacy, LegalTerms } from './screens/LegalPages'
@@ -61,7 +54,6 @@ import { CarpoolHub } from './screens/CarpoolHub'
 import { PartyNightScreen } from './screens/PartyNight'
 import { AmbassadorScreen } from './screens/AmbassadorScreen'
 import { AffiliatesScreen, AffiliateLanding } from './screens/Affiliates'
-import { AffiliateAdmin } from './screens/AffiliateAdmin'
 import { AffiliateAttributionSync } from './components/AffiliateAttributionSync'
 import { ToastProvider, ToastStack } from './lib/toasts'
 import { RideToastWatcher } from './components/RideToastWatcher'
@@ -69,7 +61,6 @@ import { RiderMatchPopup } from './components/RiderMatchPopup'
 import { WeeklyCouponNotice } from './components/WeeklyCouponNotice'
 import { DriverOfferWatcher } from './components/DriverOfferWatcher'
 import { DriverBillingEntry } from './components/DriverBillingEntry'
-import { IncentivesAdmin } from './screens/IncentivesAdmin'
 import { LostFoundWatcher } from './components/LostFoundWatcher'
 import { TripMessageBanner } from './components/TripMessageBanner'
 import { RiderPickupStream } from './components/RiderPickupStream'
@@ -99,6 +90,20 @@ function AmbassadorAttributionSync() {
 }
 
 const PROTECTED = new Set(['drivers', 'rentals', 'driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'admin-dashboard', 'incentives', 'lost-found', 'history', 'earnings', 'sign-agreement'])
+/** Driver desk and admin screens load on demand so riders and visitors skip that code. */
+const DriverHome = lazy(() => import('./screens/DriverHome').then((m) => ({ default: m.DriverHome })))
+const DriverEarnings = lazy(() => import('./screens/DriverEarnings').then((m) => ({ default: m.DriverEarnings })))
+const DriverW9 = lazy(() => import('./screens/DriverW9').then((m) => ({ default: m.DriverW9 })))
+const DriverPayouts = lazy(() => import('./screens/DriverPayouts').then((m) => ({ default: m.DriverPayouts })))
+const DriverOnboarding = lazy(() => import('./screens/DriverOnboarding').then((m) => ({ default: m.DriverOnboarding })))
+const SignAgreement = lazy(() => import('./screens/SignAgreement').then((m) => ({ default: m.SignAgreement })))
+const AdminDesk = lazy(() => import('./screens/AdminDesk').then((m) => ({ default: m.AdminDesk })))
+const AffiliateAdmin = lazy(() => import('./screens/AffiliateAdmin').then((m) => ({ default: m.AffiliateAdmin })))
+const IncentivesAdmin = lazy(() => import('./screens/IncentivesAdmin').then((m) => ({ default: m.IncentivesAdmin })))
+
+/** Booking screens that switch to a map-plus-card layout on wide screens. */
+const WIDE_BOOKING_ROUTES = new Set(['home', 'confirm'])
+
 const SITE_ROUTES = new Set([
   'landing',
   '',
@@ -418,7 +423,7 @@ export default function App() {
   return (
     <ToastProvider>
       <div className={site ? 'desktop-frame desktop-frame--site' : 'desktop-frame'}>
-        <div className={site ? 'app-shell app-shell--site' : 'app-shell'} style={{ position: 'relative', height: '100%' }}>
+        <div className={site ? 'app-shell app-shell--site' : WIDE_BOOKING_ROUTES.has(path) ? 'app-shell app-shell--wide' : 'app-shell'} style={{ position: 'relative', height: '100%' }}>
           <AccessibleErrorBoundary fallback={() => null}><AmbassadorAttributionSync /></AccessibleErrorBoundary>
           <AccessibleErrorBoundary fallback={() => null}><AffiliateAttributionSync path={path} /></AccessibleErrorBoundary>
           <AccessibleErrorBoundary fallback={() => null}><RideToastWatcher /></AccessibleErrorBoundary>
@@ -441,7 +446,9 @@ export default function App() {
               key={routeKey}
               fallback={({ reset }) => <RouteErrorFallback path={path} params={params} reset={reset} />}
             >
-              <Screen path={path} params={params} />
+              <Suspense fallback={<div className="route-loading" role="status" aria-live="polite" style={{ padding: 24, color: 'var(--ink-secondary)' }}>Loading…</div>}>
+                <Screen path={path} params={params} />
+              </Suspense>
             </AccessibleErrorBoundary>
           </div>
           {path === 'driver' && <AccessibleErrorBoundary fallback={() => null}><DriverBillingEntry /></AccessibleErrorBoundary>}

@@ -3,6 +3,7 @@ import { useJsApiLoader } from '@react-google-maps/api'
 import { placeFromStop, searchCatalogPlaces } from '../lib/placeCatalog'
 import { LOCATION_MISSING_MESSAGE, placeFromCoordinates, readBrowserPosition, reverseGeocodeLabel } from '../lib/currentPlace'
 import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
+import { SiteIcon } from './SiteIcon'
 
 /**
  * Typed pickup or drop-off. Catalog matches show as the rider types.
@@ -135,7 +136,7 @@ export function AddressSuggest({ label, value, onChange, placeholder }) {
               fontSize: 18,
             }}
           >
-            {locating ? '…' : '◎'}
+            <SiteIcon name="locate" size={18} />
           </button>
         </span>
       </label>

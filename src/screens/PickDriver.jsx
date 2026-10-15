@@ -36,6 +36,7 @@ import { PREPAID_TIP_PRESETS_CENTS, formatTipDollars, parsePrepaidTipDollars } f
 import { paymentMethodRequiredError, riderPaymentMethodReady } from '../../shared/ridePaymentReady.js'
 import { saveRideRequestDraft } from '../lib/rideRequestDraft.js'
 import { webApplePaySetUp } from '../lib/applePayReady.js'
+import { SiteIcon } from '../components/SiteIcon'
 
 const browserStorage = {
   async getItem(key) {
@@ -277,7 +278,7 @@ export function PickDriver({
   return (
     <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '20px 20px 8px' }}>
-        <button type="button" className="pressable" onClick={() => navigate('tiers', { dest })} style={{ fontSize: 20 }}>←</button>
+        <button type="button" className="pressable" aria-label="Back to ride types" onClick={() => navigate('tiers', { dest })} style={{ fontSize: 20 }}><SiteIcon name="arrow-left" size={20} /></button>
         <h1 style={{ fontSize: 24, fontWeight: 700, marginTop: 12 }}>
           Pick a driver
         </h1>
@@ -369,7 +370,7 @@ export function PickDriver({
                       <div style={{ fontWeight: 700, fontSize: 16 }}>
                         {d.name}
                         <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--purple)' }}>
-                          ★ {lines.ratingLabel}
+                          <SiteIcon name="star" size={13} filled style={{ verticalAlign: -2 }} /> {lines.ratingLabel}
                         </span>
                       </div>
                       {d.standing === 'watch' && (
@@ -401,7 +402,7 @@ export function PickDriver({
                           }}
                           style={{ fontSize: 12, fontWeight: 800, color: saved ? '#fff' : 'var(--orange)', background: saved ? 'var(--purple)' : 'transparent', borderRadius: 999, padding: '4px 10px', minHeight: 44 }}
                         >
-                          <span aria-hidden="true">{saved ? '★' : '☆'}</span>
+                          <SiteIcon name="star" size={13} filled={saved} style={{ verticalAlign: -2 }} />
                           {' '}
                           {saved ? 'Saved' : 'Save'}
                         </button>
@@ -432,7 +433,7 @@ export function PickDriver({
                     <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: portrait.color, color: '#fff', fontWeight: 800 }}>{portrait.initials}</span>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 700 }}>{driver.name}</div>
-                      <div style={{ fontSize: 12, marginTop: 4 }}>★ {driver.rating} · {driver.tripCount.toLocaleString('en-US')} trips</div>
+                      <div style={{ fontSize: 12, marginTop: 4 }}><SiteIcon name="star" size={13} filled style={{ verticalAlign: -2 }} /> {driver.rating} · {driver.tripCount.toLocaleString('en-US')} trips</div>
                       <div style={{ fontSize: 13, marginTop: 4, color: 'var(--ink-secondary)' }}>{driver.vehicleLabel}</div>
                     </div>
                     <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '5px 8px', background: driver.status === 'on_trip' ? '#f4dfcc' : '#e5e5e5', color: driver.status === 'on_trip' ? '#855023' : '#555' }}>{driver.statusLabel}</span>

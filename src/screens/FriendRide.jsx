@@ -26,6 +26,7 @@ import {
   vehicleMaxSeats, capacityMessage, DEFAULT_MAX_PARTICIPANTS,
 } from '../lib/friendRides'
 import { OFFER_CARPOOL_MAPS_NOTE, OFFER_CARPOOL_STEPS } from '../lib/placeCatalog'
+import { SiteIcon } from '../components/SiteIcon'
 
 const card = {
   marginTop: 16, padding: 16, borderRadius: 16, background: 'var(--surface)',
@@ -329,8 +330,8 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
     return (
       <div className="route-fade" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
         <div style={{ flex: 1, padding: 24, paddingBottom: 96 }}>
-          <button type="button" className="pressable" onClick={() => navigate('friends')}
-            style={{ fontSize: 20, marginBottom: 12, width: 44, height: 44, borderRadius: 14, background: 'var(--surface)', boxShadow: 'var(--shadow-pill)' }}>←</button>
+          <button type="button" className="pressable" aria-label="Back to friends" onClick={() => navigate('friends')}
+            style={{ fontSize: 20, marginBottom: 12, width: 44, height: 44, borderRadius: 14, background: 'var(--surface)', boxShadow: 'var(--shadow-pill)' }}><SiteIcon name="arrow-left" size={20} /></button>
           <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--purple)' }}>
             {isCarpool ? 'Offer a carpool' : 'Ride with friends'}
           </h1>
@@ -455,8 +456,8 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
         <SosControl tripId={ride.trip_id} viewerRole={sosViewer} />
       )}
       <div style={{ flex: 1, padding: 24, paddingBottom: 96, overflow: 'auto' }}>
-        <button type="button" className="pressable" onClick={() => navigate('friends')}
-          style={{ fontSize: 20, marginBottom: 12, width: 44, height: 44, borderRadius: 14, background: 'var(--surface)', boxShadow: 'var(--shadow-pill)' }}>←</button>
+        <button type="button" className="pressable" aria-label="Back to friends" onClick={() => navigate('friends')}
+          style={{ fontSize: 20, marginBottom: 12, width: 44, height: 44, borderRadius: 14, background: 'var(--surface)', boxShadow: 'var(--shadow-pill)' }}><SiteIcon name="arrow-left" size={20} /></button>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--purple)' }}>
           {isCarpool
             ? (isOrganizer ? 'Carpool lobby' : 'Join carpool')
@@ -573,7 +574,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
                 )}
                 {p.rating_avg != null && (
                   <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-secondary)' }}>
-                    ★ {Number(p.rating_avg).toFixed(1)}
+                    <SiteIcon name="star" size={13} filled style={{ verticalAlign: -2 }} /> {Number(p.rating_avg).toFixed(1)}
                     {p.rating_count ? ` (${p.rating_count})` : ''}
                   </span>
                 )}

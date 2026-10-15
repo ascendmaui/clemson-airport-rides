@@ -1,0 +1,88 @@
+/*
+ * Booking screens on wide screens: the map fills the left, the booking card sits on
+ * the right (Lyft-style). Phones and tablets keep the single-column layout.
+ */
+
+@media (min-width: 1100px) {
+  .desktop-frame .app-shell.app-shell--wide {
+    max-width: 1320px;
+    width: 100%;
+  }
+
+  /* Confirm pickup: header over the map, map left, sheet right. */
+  .booking-confirm {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 440px;
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: 20px;
+    padding: 0 20px 20px;
+  }
+  .booking-confirm > .booking-confirm-head {
+    grid-column: 1 / -1;
+    padding: 20px 4px 12px !important;
+  }
+  .booking-confirm > .booking-confirm-map {
+    grid-column: 1;
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 0 !important;
+  }
+  .booking-confirm .booking-confirm-frame {
+    flex: 1;
+    min-height: 420px;
+    border-radius: 24px !important;
+    box-shadow: 0 24px 48px -24px rgba(23, 17, 31, 0.35) !important;
+  }
+  .booking-confirm > .booking-confirm-sheet {
+    grid-column: 2;
+    grid-row: 2;
+    margin-top: 0 !important;
+    border-radius: 24px !important;
+    padding: 20px 24px 24px !important;
+    box-shadow: 0 24px 48px -24px rgba(23, 17, 31, 0.35) !important;
+  }
+  .booking-confirm > .booking-confirm-sheet .sheet-handle {
+    display: none;
+  }
+  .booking-confirm > :not(.booking-confirm-head):not(.booking-confirm-map):not(.booking-confirm-sheet) {
+    grid-column: 1 / -1;
+  }
+
+  /* Rider home: booking column left, campus map right. */
+  .booking-home {
+    display: grid !important;
+    grid-template-columns: 480px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    height: 100%;
+  }
+  .booking-home > .booking-home-scroll {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 0;
+  }
+  .booking-home > .booking-home-side {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    display: flex;
+    min-height: 0;
+    padding: 20px 20px 20px 0;
+  }
+  .booking-home > .booking-home-side > .booking-home-map {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    margin: 0 !important;
+    border-radius: 24px !important;
+    box-shadow: 0 24px 48px -24px rgba(23, 17, 31, 0.35) !important;
+  }
+  .booking-home > .booking-home-side > .booking-home-map > :last-child {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+  }
+  .booking-home > :not(.booking-home-scroll):not(.booking-home-side) {
+    grid-column: 1;
+  }
+}
