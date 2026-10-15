@@ -63,3 +63,4 @@ test('rider screens keep hex in the palette only', () => {
   }
   assert.equal(count, 0)
 })
+
