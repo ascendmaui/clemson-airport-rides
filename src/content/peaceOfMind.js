@@ -312,4 +312,4 @@ export const AIRPORT_SECTION = {
   ],
 }
 
-export const APP_STORE_NOTE = 'iPhone apps are in public beta on TestFlight. The App Store and Play Store listings are not live yet.'
+export const APP_STORE_NOTE = 'The iPhone app is coming soon to the App Store. Until then, you can book and drive on clemsonrides.com.'

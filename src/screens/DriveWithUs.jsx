@@ -15,10 +15,10 @@ export function DriveWithUs() {
       <section aria-labelledby="drive-page-heading">
         <div className="mkt-section-head">
           <p className="mkt-kicker">Drive</p>
-          <h2 id="drive-page-heading">Drive with Clemson RIDES</h2>
+          <h2 id="drive-page-heading">Drive with Clemson Rides</h2>
           <p>
             The application asks for your account, then the documents below. New drivers are never auto-approved.
-            Clemson RIDES reviews the application before you can take trips.
+            Clemson Rides reviews the application before you can take trips.
           </p>
           <p>
             Driver net on a trip is 80% of the fare. The platform fee is 20% of fares, wait fees, and cancel fees. Tips are 100% yours.
@@ -27,9 +27,9 @@ export function DriveWithUs() {
           </p>
           <p>{APP_STORE_NOTE}</p>
         </div>
-        <div className="mkt-safety-live">
-          <article className="mkt-card mkt-feature">
-            <MarketingPhoto id="driver-student" />
+        <div className="mkt-safety-live site-card-grid">
+          <article className="mkt-card mkt-feature site-photo-card">
+            <MarketingPhoto id="driver-student" sizes="(min-width: 1200px) 580px, 92vw" />
             <h3>Onboarding</h3>
             <ol className="mkt-guide">
               {ONBOARDING_FLOW.map((step) => <li key={step.id}>{step.label}</li>)}
@@ -40,8 +40,8 @@ export function DriveWithUs() {
               result from a screening company.
             </p>
           </article>
-          <article className="mkt-card mkt-feature">
-            <MarketingPhoto id="safety-verified-driver" />
+          <article className="mkt-card mkt-feature site-photo-card">
+            <MarketingPhoto id="safety-verified-driver" sizes="(min-width: 1200px) 580px, 92vw" />
             <h3>After you submit</h3>
             <p>The application waits for review. New drivers are not auto-approved.</p>
           </article>
@@ -50,7 +50,7 @@ export function DriveWithUs() {
           <p className="mkt-kicker">Earnings</p>
           <h2>Earn more on scheduled rides</h2>
         </div>
-        <div className="mkt-safety-live">
+        <div className="mkt-safety-live site-card-grid site-card-grid--3">
           {DRIVER_EARNINGS.map((item, index) => (
             <article key={item.id} className="mkt-card mkt-feature">
               <p className="mkt-kicker">{index + 1}</p>
@@ -63,15 +63,17 @@ export function DriveWithUs() {
           ))}
         </div>
         <p className="mkt-release mkt-note">{RELEASE_NOTE}</p>
-        <button type="button" className="mkt-text pressable" onClick={() => navigate('driver-signup')}>
-          Start the driver application
-        </button>
-        <button type="button" className="mkt-text pressable" onClick={() => navigate('drivers/rentals')}>
-          No car? Rent one from a local partner
-        </button>
-        <button type="button" className="mkt-text pressable" onClick={() => navigate('partners/join')}>
-          Own rental cars? Become a Rental Partner
-        </button>
+        <div className="site-cta-row">
+          <button type="button" className="mkt-text pressable site-cta-primary" onClick={() => navigate('driver-signup')}>
+            Start the driver application
+          </button>
+          <button type="button" className="mkt-text pressable" onClick={() => navigate('drivers/rentals')}>
+            No car? Rent one from a local partner
+          </button>
+          <button type="button" className="mkt-text pressable" onClick={() => navigate('partners/join')}>
+            Own rental cars? Become a Rental Partner
+          </button>
+        </div>
       </section>
     </SitePage>
   )
