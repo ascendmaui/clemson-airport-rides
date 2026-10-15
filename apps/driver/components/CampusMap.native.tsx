@@ -6,6 +6,7 @@ import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT, type MapStyleEleme
 import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, ORANGE, PURPLE, STADIUM } from 'rides-native/places.js'
+import { color, shadowStyle } from 'rides-native/shared/theme.js'
 import type { BusySpot } from '@/lib/busySpots'
 import { describeCell, heatRgb, type DemandCell } from 'rides-native/demandHeat.js'
 import { DemandHeatLayer } from './DemandHeatLayer'
@@ -328,15 +329,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
     backgroundColor: '#522D80',
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.28)',
-    shadowColor: '#522D80', shadowOpacity: 0.28, shadowRadius: 14, shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    ...shadowStyle(PURPLE, 'rest', 'dark'),
   },
   peakText: { color: '#FFFFFF', fontWeight: '700', fontSize: 12, letterSpacing: 0.3 },
   heatCard: {
     position: 'absolute', left: 16, right: 16, top: 156,
     borderRadius: 22, padding: 16, paddingRight: 88, borderWidth: 1,
-    shadowColor: '#1A1033', shadowOpacity: 0.16, shadowRadius: 24, shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
+    ...shadowStyle(color.shadow, 'float'),
   },
   heatCardTitle: { fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
   heatCardEstimate: { fontSize: 14, fontWeight: '700', marginTop: 4, letterSpacing: -0.1 },
