@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Clemson RIDES",
+    "name": "Clemson Rides",
     "slug": "clemson-rides-rider",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "clemsonrides",
@@ -20,9 +20,9 @@
       "bundleIdentifier": "com.ascendmaui.clemsonrides.rider",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "Clemson RIDES uses your location to center the campus map, shares it on a trip link you send, and attaches GPS when you confirm an SOS.",
-        "NSMicrophoneUsageDescription": "Clemson RIDES uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone.",
-        "NSCameraUsageDescription": "Clemson RIDES uses the camera only when you start a video recording during an active ride. The clip stays on this phone."
+        "NSLocationWhenInUseUsageDescription": "Clemson Rides uses your location to center the campus map, shares it on a trip link you send, and attaches GPS when you confirm an SOS.",
+        "NSMicrophoneUsageDescription": "Clemson Rides uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone.",
+        "NSCameraUsageDescription": "Clemson Rides uses the camera only when you start a video recording during an active ride. The clip stays on this phone."
       },
       "associatedDomains": [
         "applinks:clemsonrides.com",
@@ -84,7 +84,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Clemson RIDES uses your location to center the campus map, shares it on a trip link you send, and attaches GPS when you confirm an SOS."
+          "locationWhenInUsePermission": "Clemson Rides uses your location to center the campus map, shares it on a trip link you send, and attaches GPS when you confirm an SOS."
         }
       ],
       [
@@ -98,15 +98,15 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Clemson RIDES uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone."
+          "microphonePermission": "Clemson Rides uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Clemson RIDES does not need your photo library for ride recording. Video clips you start are kept on this phone.",
-          "cameraPermission": "Clemson RIDES uses the camera only when you start a video recording during an active ride. The clip stays on this phone.",
-          "microphonePermission": "Clemson RIDES uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone."
+          "photosPermission": "Clemson Rides keeps a video you start during an active ride on this phone. It does not browse your photo library or upload the clip.",
+          "cameraPermission": "Clemson Rides uses the camera only when you start a video recording during an active ride. The clip stays on this phone.",
+          "microphonePermission": "Clemson Rides uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone."
         }
       ],
       "expo-apple-authentication",

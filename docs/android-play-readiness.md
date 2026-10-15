@@ -12,7 +12,7 @@ Two current binaries. The frozen TestFlight app is a third package and must not 
 
 | App | Path | Android package | Version | Expo slug | EAS project | URL scheme |
 | --- | --- | --- | --- | --- | --- | --- |
-| Rider | `apps/rider` | `com.ascendmaui.clemsonrides.rider` | 1.1.0 | `clemson-rides-rider` | `d02319c9-69ef-4523-a0a5-6712c037d5fa` | `clemsonrides` |
+| Rider | `apps/rider` | `com.ascendmaui.clemsonrides.rider` | 1.2.0 | `clemson-rides-rider` | `d02319c9-69ef-4523-a0a5-6712c037d5fa` | `clemsonrides` |
 | Driver | `apps/driver` | `com.ascendmaui.clemsonrides.driver` | 1.1.0 | `clemson-rides-driver` | `090d10b8-2f52-4502-ac9d-e8bd0fe35033` | `clemsonrides-driver` |
 | Frozen (do not ship) | `apps/mobile` | `com.ascendmaui.clemsonairportrides` | 1.0.0 | `clemson-airport-rides` (`FROZEN_EXPO_SLUG`) | `1440e29e-13f0-4571-8f32-596ec81f3369` | `clemsonrides` (legacy) |
 
