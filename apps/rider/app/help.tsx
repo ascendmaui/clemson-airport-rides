@@ -18,11 +18,11 @@ function HelpScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <StackHeader title="Help" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <Text style={styles.copy}>How Clemson RIDES works. This chat does not file tickets.</Text>
+        <Text style={styles.copy}>How Clemson Rides works. This chat does not file tickets.</Text>
         <Pressable
           accessibilityRole="link"
           accessibilityLabel={`Email help at ${supportEmail()}`}
-          onPress={() => { void Linking.openURL(supportMailto('Clemson RIDES help')) }}
+          onPress={() => { void Linking.openURL(supportMailto('Clemson Rides help')) }}
         >
           <Text style={styles.link}>Email {supportEmail()}</Text>
         </Pressable>

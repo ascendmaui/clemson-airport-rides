@@ -67,7 +67,7 @@ function StudentPlansScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <StackHeader title="Student plans" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={[styles.badge, { backgroundColor: PLAN_BADGE_COLOR }]}>CLEMSON RIDES · STUDENT</Text>
+        <Text style={[styles.badge, { backgroundColor: PLAN_BADGE_COLOR }]}>Clemson Rides · Student</Text>
 
         {!v?.emailVerified ? (
           <View style={styles.panel}>

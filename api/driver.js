@@ -1,6 +1,6 @@
 /**
  * POST /api/driver?action=signup|submit-review|offer-preview|tip|tip-choice|wait|trip-status|trip-stop|cancel-midride|payouts|cards
- * GET  /api/driver?action=earnings|tax-summary|w9|payouts|app-config
+ * GET  /api/driver?action=earnings|tax-summary|w9|payouts|app-config|payout-approvals
  * GET  /api/driver?action=earnings|payouts|app-config|forecast
  * Legacy paths are rewritten in vercel.json.
  * trip-wait body.action (arrive|tick|cancel|start|complete) is a sub-action, not the route.
@@ -34,6 +34,7 @@ import handleDriverPayoutMethods from '../server/endpoints/driverPayoutMethods.j
 import handleEarningsForecast from '../server/endpoints/earningsForecast.js'
 import handleProfilePhoto from '../server/endpoints/profilePhoto.js'
 import handleDocumentReview from '../server/endpoints/documentAiReview.js'
+import handlePayoutApprovals from '../server/endpoints/payoutApprovals.js'
 
 const HANDLERS = {
   'app-config': handleAppConfig,
@@ -65,6 +66,7 @@ const HANDLERS = {
   forecast: handleEarningsForecast,
   'profile-photo': handleProfilePhoto,
   'review-document': handleDocumentReview,
+  'payout-approvals': handlePayoutApprovals,
 }
 
 const LEGACY = {
@@ -84,7 +86,7 @@ export default async function handler(req, res, ...rest) {
   const handle = HANDLERS[action]
   if (!handle) {
     return json(res, 400, {
-      error: 'Unknown driver action. Use action=signup, submit-review, earnings, tax-summary, w9, offer-preview, tip, tip-choice, wait, trip-status, trip-stop, cancel-midride, payouts, payout-methods, inbox, cards, mark-offered, pass-offer, sign-agreement, clickwrap, backup-queue, trip-sweeps, perks, cashout, forecast, profile-photo, review-document, or app-config.',
+      error: 'Unknown driver action. Use action=signup, submit-review, earnings, tax-summary, w9, offer-preview, tip, tip-choice, wait, trip-status, trip-stop, cancel-midride, payouts, payout-methods, inbox, cards, mark-offered, pass-offer, sign-agreement, clickwrap, backup-queue, trip-sweeps, perks, cashout, forecast, profile-photo, review-document, payout-approvals, or app-config.',
     })
   }
   return handle(req, res, ...rest)

@@ -10,7 +10,7 @@ export default function SettingsScreen() {
   const router = useRouter()
   const { colors } = useTheme()
   const account: MenuRow[] = [
-    { icon: 'person', title: 'Manage Clemson RIDES account', subtitle: 'Name, email, and sign out', onPress: () => router.push('/account') },
+    { icon: 'person', title: 'Manage Clemson Rides account', subtitle: 'Name, email, and sign out', onPress: () => router.push('/account') },
     { icon: 'lock-closed', title: 'Privacy', subtitle: 'Hide earnings on this phone', onPress: () => router.push('/settings/privacy') },
     { icon: 'pencil', title: 'Edit address', subtitle: 'Home address is not saved yet', onPress: () => router.push('/settings/address') },
   ]
@@ -28,7 +28,7 @@ export default function SettingsScreen() {
   return (
     <StackPage title="Settings" onBack={() => router.back()}>
       <FadeIn style={{ gap: 12 }}>
-        <SoftNote>These choices stay on this phone. Your driver profile, documents, and payouts stay on your Clemson RIDES account.</SoftNote>
+        <SoftNote>These choices stay on this phone. Your driver profile, documents, and payouts stay on your Clemson Rides account.</SoftNote>
         <SectionLabel>Account</SectionLabel>
         <RowGroup rows={account} />
         <AdminAccountRow supabase={supabase} colors={colors} onPress={() => router.push('/admin')} />
