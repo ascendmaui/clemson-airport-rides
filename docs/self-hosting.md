@@ -35,7 +35,7 @@ Deploy SSH:
 | `VPS_SSH_KEY` | Private key for that user. Paste the PEM with real line breaks. |
 | `VPS_KNOWN_HOSTS` | One line from `ssh-keyscan -H 31.97.11.12`. |
 
-Build-time public values (Actions secrets so the log masks them). All five are passed as build args. The site is broken or half-broken if the required ones are empty.
+Build-time public values (Actions secrets so the log masks them). Each is passed as a build arg in `deploy-vps.yml`. The site is broken or half-broken if the required ones are empty.
 
 | Secret | Required at build | If it is missing |
 | --- | --- | --- |
@@ -43,6 +43,7 @@ Build-time public values (Actions secrets so the log masks them). All five are p
 | `VITE_SUPABASE_ANON_KEY` | Required | Sign-in, trips, and realtime do not start. |
 | `VITE_STRIPE_PUBLISHABLE_KEY` | Required | Card form and Apple Pay do not load. |
 | `VITE_GOOGLE_MAPS_API_KEY` | Optional | Map tiles stay blank. Fares still quote from the server key. |
+| `VITE_GEOAPIFY_API_KEY` | Optional | Street search and "current location" labels use Photon (OpenStreetMap) instead of Geoapify. Built-in Clemson stops always work. Free Geoapify plan, no card. Restrict the key to `clemsonrides.com` (and the staging host) in the Geoapify dashboard. Not needed in the VPS runtime `.env`. The Dockerfile accepts it; `deploy-vps.yml` build-args must include `VITE_GEOAPIFY_API_KEY=${{ secrets.VITE_GEOAPIFY_API_KEY }}` under `VITE_GOOGLE_MAPS_API_KEY` for it to reach the bundle. |
 | `VITE_APP_URL` | Optional | Checkout return URLs fall back to `https://clemsonrides.com`. Also read at runtime if set in the VPS env. |
 
 `NEXT_PUBLIC_*` is not inlined by Vite (the prefix Vite exposes is `VITE_`). Do not rely on those names in the browser bundle.
