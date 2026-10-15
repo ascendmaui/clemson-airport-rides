@@ -150,7 +150,25 @@ export function requestDriverTrip(
     isStudent?: boolean
     note?: string
     prepaidTipCents?: number
+    applePay?: boolean
+    promoCode?: string
+    deviceId?: string | null
   },
-): Promise<{ id: string; status: string; driver_id: string | null; dropoff_label?: string; fare_cents?: number | null; deposit_cents?: number | null }>
+): Promise<{
+  id: string
+  status: string
+  driver_id: string | null
+  dropoff_label?: string
+  fare_cents?: number | null
+  deposit_cents?: number | null
+  promo?: {
+    applied: boolean
+    code?: string
+    reason?: string
+    message?: string
+    discountCents?: number
+    riderFareCents?: number
+  } | null
+}>
 
 export function filterDriversForFleet<T extends { id: string }>(drivers: T[], tier?: string, viewerId?: string | null): T[]

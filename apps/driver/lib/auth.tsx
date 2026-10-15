@@ -9,6 +9,8 @@ const auth = createAuth({
   storage: authStorage,
   passwordResetRedirectTo: 'clemsonrides-driver://set-password',
   onSignOut: stopTripBackgroundLocation,
+  // The sign-up promo box claims driver-side campaign codes only.
+  promoSide: 'driver',
 })
 
 export const AuthProvider = auth.AuthProvider

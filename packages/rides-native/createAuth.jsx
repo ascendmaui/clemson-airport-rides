@@ -18,6 +18,8 @@ import {
   signupProfileMetadata,
   userWithDraft,
 } from './partyProfile.js'
+import { claimCampaignPromo, promoDeviceId } from './promoCodesClient.js'
+import { promoReasonMessage } from '../../shared/promoCodes.js'
 
 async function ensureStudentVerification(supabase, user, now) {
   if (!supabase || !user?.id || !user.email) return
@@ -48,7 +50,33 @@ async function ensureStudentVerification(supabase, user, now) {
   }
 }
 
-async function maybeClaimStoredPromo(supabase, storage, user, promoCode) {
+/**
+ * One promo box at sign-up. A campaign code (admin-generated) is claimed on
+ * the server first. Anything the campaign table does not know falls back to
+ * the rider-to-rider program (claim_rider_social_promo), rider app only.
+ */
+async function claimSignupCode(supabase, storage, code, side) {
+  let campaign = null
+  try {
+    campaign = await claimCampaignPromo(supabase, { code, side, deviceId: await promoDeviceId(storage) })
+  } catch (e) {
+    console.warn('[promo claim]', e?.message)
+    campaign = null
+  }
+  if (campaign?.ok) return { ok: true, claimed: true, campaign: true, code: campaign.code, side }
+  const reason = campaign?.reason
+  if (campaign && reason !== 'not_found' && reason !== 'promo_unavailable') {
+    return { ok: false, campaign: true, reason, error: promoReasonMessage(reason) }
+  }
+  if (side === 'driver') {
+    return campaign ? { ok: false, campaign: true, reason, error: promoReasonMessage(reason || 'not_found') } : null
+  }
+  const { data, error } = await supabase.rpc('claim_rider_social_promo', { p_code: code })
+  if (error) throw new Error(error.message)
+  return data || { ok: false, error: 'Promo claim failed' }
+}
+
+async function maybeClaimStoredPromo(supabase, storage, user, promoCode, side = 'rider') {
   if (!supabase || !user?.id) return null
   const { data: sessionData } = await supabase.auth.getSession()
   if (!sessionData?.session) return null
@@ -64,9 +92,8 @@ async function maybeClaimStoredPromo(supabase, storage, user, promoCode) {
   if (prev === `${user.id}:ok` || prev === `${user.id}:bad`) return null
 
   try {
-    const { data, error } = await supabase.rpc('claim_rider_social_promo', { p_code: code })
-    if (error) throw new Error(error.message)
-    const res = data || { ok: false, error: 'Promo claim failed' }
+    const res = await claimSignupCode(supabase, storage, code, side)
+    if (!res) return null
     const bad = Boolean(res?.error)
     const done = res?.claimed || res?.reason === 'already_referred' || bad
     if (done) {
@@ -83,7 +110,7 @@ async function maybeClaimStoredPromo(supabase, storage, user, promoCode) {
   }
 }
 
-async function ensureProfile(supabase, storage, user, { promoCode } = {}) {
+async function ensureProfile(supabase, storage, user, { promoCode, promoSide = 'rider' } = {}) {
   if (!supabase || !user?.id) return null
   let draft = null
   try {
@@ -129,7 +156,7 @@ async function ensureProfile(supabase, storage, user, { promoCode } = {}) {
   if (clemson) await ensureStudentVerification(supabase, user, now)
   const code = normalizePromoCode(promoCode || enriched?.user_metadata?.promo_code)
   if (!code) return null
-  return maybeClaimStoredPromo(supabase, storage, user, code)
+  return maybeClaimStoredPromo(supabase, storage, user, code, promoSide)
 }
 
 export function createAuth({
@@ -139,6 +166,7 @@ export function createAuth({
   passwordResetRedirectTo,
   onSignOut,
   onPasswordRecovery,
+  promoSide = 'rider',
 }) {
   const AuthContext = createContext(null)
 
@@ -158,13 +186,13 @@ export function createAuth({
         setSession(data.session)
         setUser(data.session?.user ?? null)
         setLoading(false)
-        if (data.session?.user) ensureProfile(supabase, storage, data.session.user)
+        if (data.session?.user) ensureProfile(supabase, storage, data.session.user, { promoSide })
       })
       const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
         setSession(next)
         setUser(next?.user ?? null)
         setLoading(false)
-        if (next?.user) ensureProfile(supabase, storage, next.user)
+        if (next?.user) ensureProfile(supabase, storage, next.user, { promoSide })
         if (event === 'PASSWORD_RECOVERY') onPasswordRecovery?.()
       })
       return () => {
@@ -216,7 +244,7 @@ export function createAuth({
           throw mapped
         }
         let promoClaim = null
-        if (data.user) promoClaim = await ensureProfile(supabase, storage, data.user, { promoCode: code })
+        if (data.user) promoClaim = await ensureProfile(supabase, storage, data.user, { promoCode: code, promoSide })
         return { ...data, promoClaim }
       },
       async signOut() {

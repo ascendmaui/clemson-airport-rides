@@ -585,6 +585,8 @@ export async function requestDriverTrip(supabase, {
   note = '',
   prepaidTipCents = 0,
   applePay = false,
+  promoCode = '',
+  deviceId = null,
 }) {
   void isStudent
   if (!supabase) throw new Error('Supabase is not configured')
@@ -616,8 +618,11 @@ export async function requestDriverTrip(supabase, {
       ...(riderNote ? { note: riderNote } : {}),
       ...(prepaidTipCents > 0 ? { prepaidTipCents: Math.round(prepaidTipCents) } : {}),
       ...(applePay === true ? { applePay: true } : {}),
+      // The server validates, applies the no-stack rule and reserves the code.
+      ...(promoCode ? { promoCode: String(promoCode) } : {}),
+      ...(deviceId ? { deviceId } : {}),
     },
   })
   if (!data?.trip?.id) throw new Error('Could not request trip')
-  return data.trip
+  return data.promo ? { ...data.trip, promo: data.promo } : data.trip
 }

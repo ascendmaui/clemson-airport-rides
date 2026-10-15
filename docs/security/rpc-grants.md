@@ -104,3 +104,17 @@ Source of truth: `supabase/migrations/20261014233000_security_lockdown.sql`. Cal
 | `trip_wait_apply` | service_role only (server/internal) |
 | `women_only_pair_allowed` | authenticated: driver app comfortPreference.js + server; caller must be one of the pair (guard added) |
 | `women_only_visible_trips` | authenticated: driver app comfortPreference.js; scoped to auth.uid() |
+
+## Promo campaign codes (20261015160000, not yet applied)
+
+Source: `supabase/migrations/20261015160000_promo_campaign_codes.sql`. Tables `promo_campaign_codes`, `promo_code_redemptions`, `promo_code_admin_events`, `promo_code_attempts` have RLS on and no anon/authenticated grants; only the server (service role) reads or writes them.
+
+| Function | Grant / reason |
+|---|---|
+| `promo_check_code` | service_role only: server/promoCodes.js (`/api/promo/check`) |
+| `promo_claim_code` | service_role only: server/promoCodes.js (`/api/promo/claim`, sign-up) |
+| `promo_reserve_for_trip` | service_role only: request-driver, row-locked, idempotent on trip_id |
+| `promo_release_for_trip` | service_role only: request-driver failure paths |
+| `promo_finalize_for_trip` | service_role only: tripSettle after capture |
+| `promo_compute_discount`, `promo_attempts_blocked`, `promo__fail`, `promo__unusable_reason` | service_role only: internal helpers |
+| `promo_trip_status_sync`, `promo_campaign_code_unique_guard` | trigger: no RPC grant |

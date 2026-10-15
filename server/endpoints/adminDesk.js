@@ -4,6 +4,7 @@
  *
  * GET  /api/admin?action=overview|notifications|people|trips|tickets|applicant-thread|inbox
  * POST /api/admin?action=mark-notification|ticket-reply|applicant-message|info-request
+ * GET|POST /api/admin?action=promo-codes|promo-export|promo-create|promo-update (owner only, ./promoAdmin.js)
  */
 import { isTicketStatus } from '../../shared/adminAccess.js'
 import { cors, json, parseBody, userFromAuth, admin } from '../friendRideLib.js'
@@ -12,6 +13,7 @@ import { loadStaffAccess } from '../staffAccess.js'
 import { sendApplicantNotice } from '../applicantMail.js'
 import { loadAdminInbox } from '../adminInbox.js'
 import { clientErrorMessage } from '../clientError.js'
+import handlePromoAdmin, { PROMO_ADMIN_ACTIONS } from './promoAdmin.js'
 
 function fail(res, error) {
   console.error('[admin]', error?.message || error)
@@ -49,8 +51,11 @@ function isUuid(value) {
   return UUID.test(String(value || ''))
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
+  // Promo codes: owner-only (johnmatveyev@gmail.com), stricter than the admin desk.
+  const promoAction = resolveRouteAction(req, { allowed: PROMO_ADMIN_ACTIONS })
+  if (promoAction) return handlePromoAdmin(req, res, promoAction, deps)
   const action = resolveRouteAction(req, { allowed: ACTIONS })
   if (!action) {
     return json(res, 400, {

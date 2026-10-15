@@ -106,11 +106,12 @@ function pinsFor(trip: LiveTrip | null): MapPin[] {
 function RequestedRide() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const params = useLocalSearchParams<{ dest?: string; trip?: string; driver?: string; session_id?: string; sessionId?: string; paid?: string }>()
+  const params = useLocalSearchParams<{ dest?: string; trip?: string; driver?: string; session_id?: string; sessionId?: string; paid?: string; promoNote?: string }>()
   const tripId = oneParam(params.trip, '')
   const dest = oneParam(params.dest, '')
   const driver = oneParam(params.driver, 'Your driver')
   const paid = oneParam(params.paid, '')
+  const promoNote = oneParam(params.promoNote, '').slice(0, 200)
   const checkoutReturn = paid === '1' || paid === 'true'
   const { user } = useAuth()
   const { trip, error: tripError, loading } = useTripById(tripId || null)
@@ -524,6 +525,7 @@ function RequestedRide() {
             ))}
             <Text style={styles.meta}>Trip {tripId.slice(0, 8)}</Text>
             <Text style={styles.body}>The final fare is charged when the trip ends.</Text>
+            {promoNote ? <Text style={styles.meta}>{promoNote}</Text> : null}
             {shown?.status === 'completed' ? (
               <PrimaryButton
                 label="Lost & found"
