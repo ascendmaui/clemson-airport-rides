@@ -1,28 +1,45 @@
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, Switch, Text, View } from 'react-native'
+import { Linking, Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native'
+import { supportEmail, supportMailto } from '../../../../shared/productLinks.js'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { TabSwipeRegion, useTabSwipeRemeasure } from '@/components/MainTabPager'
 import { loadAccount, saveProfile } from '@/lib/accountApi'
+import { caughtMessage, logCaught } from '@/lib/caught'
 import { useAuth } from '@/lib/auth'
 import { hapticsEnabled, playMatchChime, setHapticsEnabled, setSoundsEnabled, soundsEnabled, tapHaptic } from '@/lib/feedback'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
+import { nativeGlassAvailable } from 'rides-native/glass'
 import { Glyph } from 'rides-native/icons'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { displayFirstName } from 'rides-native/authErrors'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { FAVORITE_SPOTS } from 'rides-native/riderShell.js'
 import { TIGER_PASS_NAME } from 'rides-native/tigerPassClient'
+import { PLAN_BADGE_COLOR, loadStudentPlans } from 'rides-native/studentPlansClient.js'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
 import { WomenOnlyCard } from 'rides-native/WomenOnlyCard'
 import { loadComfortPreference, saveComfortPreference } from 'rides-native/comfortPreference.js'
 import { supabase } from '@/lib/supabase'
+import { homeTabClearance } from '@/lib/homeSheetSnap'
+import { SignInScreen } from 'rides-native/AuthScreens'
 
-type AccountHref = '/tiger-pass' | '/student' | '/community' | '/billing' | '/notifications' | '/help' | '/support' | '/lost-found' | '/safety'
-type AccountLink = { href: AccountHref; label: string; hint: string; icon: string }
+type AccountHref = '/tiger-pass' | '/student' | '/student-plans' | '/community' | '/billing' | '/notifications' | '/help' | '/support' | '/lost-found' | '/safety'
+type AccountLink = { href?: AccountHref; label: string; hint: string; icon: string; mailSubject?: string; badge?: string }
+
+const STUDENT_PLANS_LINK: AccountLink = { href: '/student-plans', label: 'Student plans', hint: 'Weekend Carpool Plan and your personalized plan', icon: 'pass', badge: 'NEW' }
+
+/** Inserts Student plans right after Student in Membership, only when the flag is on. */
+function withStudentPlans(groups: typeof GROUPS, on: boolean) {
+  if (!on) return groups
+  return groups.map((g) => (g.title !== 'Membership' ? g : {
+    ...g,
+    links: g.links.flatMap((l) => (l.href === '/student' ? [l, STUDENT_PLANS_LINK] : [l])),
+  }))
+}
 
 const GROUPS: { title: string; links: AccountLink[] }[] = [
   {
@@ -36,7 +53,7 @@ const GROUPS: { title: string; links: AccountLink[] }[] = [
   {
     title: 'Payments',
     links: [
-      { href: '/billing', label: 'Billing', hint: 'Card, deposits, and ride fares', icon: 'money' },
+      { href: '/billing', label: 'Billing', hint: 'Card, fare holds, and ride fares', icon: 'money' },
     ],
   },
   {
@@ -50,6 +67,8 @@ const GROUPS: { title: string; links: AccountLink[] }[] = [
     links: [
       { href: '/help', label: 'Help', hint: 'How booking, Schedule, friends, and billing work', icon: 'help' },
       { href: '/support', label: 'Support', hint: 'Charge, ride, bug, or safety tickets', icon: 'chat' },
+      { label: 'Email help', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson Rides help' },
+      { label: 'Email support', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson Rides support' },
       { href: '/lost-found', label: 'Lost & found', hint: 'An item left in the car after a ride', icon: 'lostFound' },
     ],
   },
@@ -59,7 +78,7 @@ export function AccountScreen() {
   const remeasureTabs = useTabSwipeRemeasure()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { user, configured, signOut } = useAuth()
+  const { user, configured, signOut, signIn, resetPassword } = useAuth()
   const student = useStudentStatus()
   const { colors, scheme, setDisplayMode } = useTheme()
   const styles = useThemedStyles(makeStyles)
@@ -77,13 +96,18 @@ export function AccountScreen() {
   const [womenOnly, setWomenOnly] = useState(false)
   const [comfortAvailable, setComfortAvailable] = useState(false)
   const [comfortNote, setComfortNote] = useState<string | null>(null)
+  const [studentPlansOn, setStudentPlansOn] = useState(false)
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Rider') : null
 
   useEffect(() => {
     let alive = true
-    hapticsEnabled().then(setHapticsOn).catch(() => {})
+    hapticsEnabled().then(setHapticsOn).catch((err: unknown) => {
+      logCaught('account-haptics', err)
+    })
     soundsEnabled().then((on) => {
       if (alive) setSoundsOn(on)
+    }).catch((err: unknown) => {
+      logCaught('account-sounds', err)
     })
     if (!user?.id) {
       setSpots([])
@@ -91,12 +115,23 @@ export function AccountScreen() {
         alive = false
       }
     }
+    if (supabase) {
+      loadStudentPlans(supabase).then((d: { enabled?: boolean }) => {
+        if (alive) setStudentPlansOn(d?.enabled === true)
+      }).catch((err: unknown) => {
+        logCaught('account-student-plans', err)
+      })
+    }
     loadAccount(user.id).then((account) => {
       if (!alive) return
       setSpots(account.profile?.favorite_spots || [])
       setFullName(account.profile?.full_name || user.user_metadata?.full_name || '')
       setBio(account.profile?.bio || '')
       if (account.error) setError(account.error)
+    }).catch((err: unknown) => {
+      if (!alive) return
+      logCaught('account-load', err)
+      setError(caughtMessage(err, 'Could not load your account. Try again.'))
     })
     if (supabase) {
       loadComfortPreference(supabase, user.id).then((comfort) => {
@@ -104,12 +139,18 @@ export function AccountScreen() {
         setGenderIdentity(comfort.genderIdentity)
         setWomenOnly(comfort.womenOnlyMatching)
         setComfortAvailable(comfort.available)
-      }).catch(() => {})
+      }).catch((err: unknown) => {
+        if (!alive) return
+        logCaught('account-comfort', err)
+        setComfortNote('Could not load the comfort preference.')
+      })
       loadRatingSummary(supabase, user.id).then((summary) => {
         if (!alive) return
         setRatingLine(summary.line)
         setPendingTrip(summary.pending?.id || null)
-      }).catch(() => {})
+      }).catch((err: unknown) => {
+        logCaught('account-rating', err)
+      })
     }
     return () => {
       alive = false
@@ -140,7 +181,7 @@ export function AccountScreen() {
 
   async function onSaveSpots() {
     if (!user?.id) {
-      router.push('/sign-in')
+      setNote('Sign in on this tab to save spots.')
       return
     }
     setBusy(true)
@@ -174,9 +215,20 @@ export function AccountScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
-      <ScrollView contentContainerStyle={styles.body} onScroll={remeasureTabs} scrollEventThrottle={32}>
+      <ScrollView contentContainerStyle={[styles.body, { paddingBottom: homeTabClearance(insets.bottom) + 24 }]} onScroll={remeasureTabs} scrollEventThrottle={32}>
         <Text style={styles.kicker}>ACCOUNT</Text>
         <Text style={styles.title}>{name || 'Guest'}</Text>
+        {!user ? (
+          <SignInScreen
+            embedded
+            signIn={signIn}
+            resetPassword={resetPassword}
+            onSuccess={() => setNote('Signed in')}
+            onCreateAccount={() => router.push('/sign-up')}
+            onForgotPassword={() => router.push('/forgot-password')}
+            onBack={() => {}}
+          />
+        ) : null}
         {user?.email ? <Text style={styles.copy}>{user.email}</Text> : null}
         {user ? <Text style={styles.badge}>{ratingLine}</Text> : null}
         {pendingTrip ? (
@@ -209,16 +261,31 @@ export function AccountScreen() {
             ? 'Payments, student pricing, promos, and alerts use the same account as the web app.'
             : 'Supabase anon key is missing. Add EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable, then rebuild.'}
         </Text>
-        {GROUPS.map((group) => (
+        {withStudentPlans(GROUPS, studentPlansOn).map((group) => (
           <View key={group.title} style={styles.group}>
             <Text style={styles.groupTitle}>{group.title}</Text>
             {group.links.map((link) => (
-              <Pressable key={link.href} onPress={() => router.push(link.href)} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
+              <Pressable
+                key={link.href || link.mailSubject || link.label}
+                onPress={() => {
+                  if (link.mailSubject) {
+                    void Linking.openURL(supportMailto(link.mailSubject))
+                    return
+                  }
+                  if (link.href) router.push(link.href)
+                }}
+                style={[styles.row, lift(colors, 'rest')]}
+                accessibilityRole={link.mailSubject ? 'link' : 'button'}
+                accessibilityLabel={link.mailSubject ? `${link.label}, ${supportEmail()}` : link.label}
+              >
                 <View style={styles.settingLine}>
                   <Glyph name={link.icon} size={22} color={colors.purple} scheme={scheme} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.rowTitle}>{link.label}</Text>
-                    <Text style={styles.copy}>{link.hint}</Text>
+                    {link.badge ? (
+                      <Text style={{ alignSelf: 'flex-start', backgroundColor: PLAN_BADGE_COLOR, color: '#FFFFFF', fontSize: 11, fontWeight: '800', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, overflow: 'hidden' }}>{link.badge}</Text>
+                    ) : null}
+                    <Text style={styles.copy}>{link.mailSubject ? supportEmail() : link.hint}</Text>
                   </View>
                   <Glyph name="forward" size={16} color={colors.inkSecondary} />
                 </View>
@@ -302,10 +369,7 @@ export function AccountScreen() {
         {user ? (
           <PrimaryButton label={busy ? 'Signing out…' : 'Sign out'} onPress={onSignOut} disabled={busy} tone="purple" />
         ) : (
-          <View style={{ gap: 10 }}>
-            <PrimaryButton label="Sign in" onPress={() => router.push('/sign-in')} />
-            <PrimaryButton label="Create account" onPress={() => router.push('/sign-up')} tone="ghost" />
-          </View>
+          <PrimaryButton label="Create account" onPress={() => router.push('/sign-up')} tone="ghost" />
         )}
       </ScrollView>
     </View>
@@ -342,7 +406,7 @@ function makeStyles(colors: Palette) {
     group: { gap: 8 },
     groupTitle: { color: colors.inkSecondary, fontWeight: '800' as const, fontSize: 12, letterSpacing: 1, textTransform: 'uppercase' as const, marginTop: 8 },
     settingLine: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
-    pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 8 },
+    pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 8, alignItems: 'flex-start' as const, flexGrow: 0 },
     note: { color: colors.link, fontWeight: '700' as const, fontSize: 13 },
     error: { color: colors.danger, fontSize: 13 },
   }
@@ -350,5 +414,6 @@ function makeStyles(colors: Palette) {
 
 
 export default function AccountScreenRoute() {
+  if (Platform.OS === 'ios' && nativeGlassAvailable()) return <AccountScreen />
   return null
 }

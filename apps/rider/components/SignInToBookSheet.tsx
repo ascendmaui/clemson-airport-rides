@@ -1,6 +1,7 @@
 import { Modal, Pressable, Text, View } from 'react-native'
+import { Glyph } from 'rides-native/icons'
+import { GlassSheet } from 'rides-native/glass'
 import { PrimaryButton, SheetHandle } from '@/components/Button'
-import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
@@ -16,7 +17,7 @@ export function SignInToBookSheet({
   onSignIn: () => void
   onSignUp: () => void
 }) {
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
   return (
     <Modal visible={open} animationType="slide" transparent onRequestClose={onClose} accessibilityViewIsModal>
@@ -28,10 +29,10 @@ export function SignInToBookSheet({
           accessibilityLabel="Dismiss sign in"
           accessibilityHint="Closes this sheet and keeps browsing"
         />
-        <View style={[styles.sheet, lift(colors, 'float')]}>
+        <GlassSheet app="rider" scheme={scheme} style={styles.sheet}>
           <SheetHandle />
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>🐯</Text>
+            <Glyph name="shield" size={22} color={colors.purple} />
           </View>
           <Text style={styles.title}>Sign in to book your ride</Text>
           <Text style={styles.body}>
@@ -58,7 +59,7 @@ export function SignInToBookSheet({
           >
             <Text style={styles.quietText}>Keep browsing</Text>
           </Pressable>
-        </View>
+        </GlassSheet>
       </View>
     </Modal>
   )
@@ -71,7 +72,6 @@ function makeStyles(colors: Palette) {
     sheet: {
       margin: 12,
       marginBottom: 16,
-      backgroundColor: colors.card,
       borderRadius: 28,
       paddingHorizontal: 22,
       paddingTop: 8,
@@ -87,7 +87,6 @@ function makeStyles(colors: Palette) {
       backgroundColor: colors.purpleSoft,
       marginBottom: 14,
     },
-    badgeText: { fontSize: 22 },
     title: { fontSize: 22, fontWeight: '700' as const, color: colors.title, letterSpacing: -0.4 },
     body: { marginTop: 8, marginBottom: 18, color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     link: { paddingVertical: 12, alignItems: 'center' as const },

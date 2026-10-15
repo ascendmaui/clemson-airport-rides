@@ -6,6 +6,7 @@ import { StackPage } from '@/components/shell'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { claimDriverReferral, loadDriverPerks, type ReferralSummary } from 'rides-native/driverDesk'
+import { quiet } from '@/lib/softFail'
 
 const CLAIM_COPY: Record<string, string> = {
   unknown_code: 'That code was not found.',
@@ -36,7 +37,7 @@ export default function ReferScreen() {
         <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
           {ref?.enabled
             ? `Earn ${bonus} when a driver you refer completes ${ref.targetTrips} trips. It lands in your payouts.`
-            : 'Share Clemson RIDES with a friend who wants to drive.'}
+            : 'Share Clemson Rides with a friend who wants to drive.'}
         </Text>
         {ref?.code ? (
           <Text selectable style={{ color: colors.orange, fontWeight: '800', fontSize: 24, letterSpacing: 2 }} accessibilityLabel={`Your code ${ref.code.split('').join(' ')}`}>
@@ -47,9 +48,9 @@ export default function ReferScreen() {
           label="Share link"
           onPress={() => {
             const msg = ref?.link
-              ? `Drive with Clemson RIDES. Sign up with my code ${ref.code}: ${ref.link}`
-              : 'Drive with Clemson RIDES. Campus and airport trips for Clemson students.'
-            Share.share({ message: msg }).catch(() => {})
+              ? `Drive with Clemson Rides. Sign up with my code ${ref.code}: ${ref.link}`
+              : 'Drive with Clemson Rides. Campus and airport trips for Clemson students.'
+            Share.share({ message: msg }).catch(quiet('share referral'))
           }}
         />
       </Card>

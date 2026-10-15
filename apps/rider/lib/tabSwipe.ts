@@ -105,7 +105,7 @@ export function swipeDirection(translationX: number, velocityX: number, width: n
 }
 
 export function tabRequiresAuth(id: string): boolean {
-  return id === 'schedule' || id === 'account'
+  return id === 'schedule'
 }
 
 export function normalizeTabPath(pathname: string): string {

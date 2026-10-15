@@ -46,15 +46,24 @@ exports[`Driver Offer Card snapshot 1`] = `
                       "children": []
                     },
                     {
-                      "name": "Text",
+                      "name": "View",
                       "children": [
                         {
-                          "type": "Conditional",
-                          "branches": []
+                          "name": "Glyph",
+                          "children": []
                         },
                         {
-                          "type": "Conditional",
-                          "branches": []
+                          "name": "Text",
+                          "children": [
+                            {
+                              "type": "Conditional",
+                              "branches": []
+                            },
+                            {
+                              "type": "Conditional",
+                              "branches": []
+                            }
+                          ]
                         }
                       ]
                     }
@@ -153,6 +162,14 @@ exports[`Driver Offer Card snapshot 1`] = `
             },
             {
               "name": "CommunityMatchChips",
+              "children": []
+            },
+            {
+              "name": "OfferRouteMap",
+              "children": []
+            },
+            {
+              "name": "View",
               "children": []
             },
             {

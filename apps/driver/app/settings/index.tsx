@@ -1,14 +1,16 @@
 import { useRouter } from 'expo-router'
 import { Text } from 'react-native'
+import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
 import { FadeIn, type MenuRow, RowGroup, SoftNote } from '@/components/day'
 import { SectionLabel, StackPage } from '@/components/shell'
+import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 
 export default function SettingsScreen() {
   const router = useRouter()
   const { colors } = useTheme()
   const account: MenuRow[] = [
-    { icon: 'person', title: 'Manage Clemson RIDES account', subtitle: 'Name, email, and sign out', onPress: () => router.push('/account') },
+    { icon: 'person', title: 'Manage Clemson Rides account', subtitle: 'Name, email, and sign out', onPress: () => router.push('/account') },
     { icon: 'lock-closed', title: 'Privacy', subtitle: 'Hide earnings on this phone', onPress: () => router.push('/settings/privacy') },
     { icon: 'pencil', title: 'Edit address', subtitle: 'Home address is not saved yet', onPress: () => router.push('/settings/address') },
   ]
@@ -20,14 +22,16 @@ export default function SettingsScreen() {
     { icon: 'volume-high', title: 'Sounds and voice', subtitle: 'Chime and vibration by ride type', onPress: () => router.push('/settings/sounds') },
     { icon: 'moon', title: 'Quiet hours', subtitle: 'Silent offers overnight, Clemson time', onPress: () => router.push('/settings/quiet-hours') },
     { icon: 'flash', title: 'Auto-accept', subtitle: 'Distance, hourly rate, favorite riders', onPress: () => router.push('/settings/auto-accept') },
+    { icon: 'sparkles', title: 'Priority mode', subtitle: 'Go first for new requests', onPress: () => router.push('/settings/priority') },
   ]
 
   return (
     <StackPage title="Settings" onBack={() => router.back()}>
       <FadeIn style={{ gap: 12 }}>
-        <SoftNote>These choices stay on this phone. Your driver profile, documents, and payouts stay on your Clemson RIDES account.</SoftNote>
+        <SoftNote>These choices stay on this phone. Your driver profile, documents, and payouts stay on your Clemson Rides account.</SoftNote>
         <SectionLabel>Account</SectionLabel>
         <RowGroup rows={account} />
+        <AdminAccountRow supabase={supabase} colors={colors} onPress={() => router.push('/admin')} />
         <SectionLabel>General</SectionLabel>
         <RowGroup rows={general} />
         <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>

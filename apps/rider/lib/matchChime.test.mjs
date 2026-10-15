@@ -58,6 +58,11 @@ const storageUrl = dataUrl(`
 
 const matchUrl = dataUrl(`export default ${MATCH}`)
 const wavUrl = dataUrl('export default 1')
+const caughtUrl = dataUrl(`
+  export function logCaught() {}
+  export function caughtMessage(_err, fallback) { return fallback }
+  export function toastCaught() {}
+`)
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -66,6 +71,7 @@ registerHooks({
     if (specifier === 'expo-audio') return { url: audioUrl, shortCircuit: true }
     if (specifier === 'expo-haptics') return { url: hapticsUrl, shortCircuit: true }
     if (specifier === '@/lib/storage') return { url: storageUrl, shortCircuit: true }
+    if (specifier === '@/lib/caught') return { url: caughtUrl, shortCircuit: true }
     if (specifier.endsWith('match-chime.m4a')) return { url: matchUrl, shortCircuit: true }
     if (specifier.endsWith('.wav')) return { url: wavUrl, shortCircuit: true }
     return nextResolve(specifier, context)
@@ -165,8 +171,8 @@ test('match chime asset exists, is at most two seconds, and replaces the old cue
   assert.ok(statSync(master).size > 1000)
   const seconds = m4aDuration(asset)
   const wav = wavInfo(master)
-  assert.ok(seconds > 0.8 && seconds <= 2, `match chime is ${seconds}s`)
-  assert.ok(wav.seconds > 0.8 && wav.seconds <= 2, `wav master is ${wav.seconds}s`)
+  assert.ok(seconds > 0.2 && seconds < 0.4, `match chime is ${seconds}s`)
+  assert.ok(wav.seconds > 0.2 && wav.seconds < 0.4, `wav master is ${wav.seconds}s`)
   assert.ok(wav.peak > 0 && wav.peak < 32767, `wav peak ${wav.peak} is outside the safe 16-bit range`)
   assert.equal(existsSync(path.join(ROOT, 'apps/rider/assets/sounds', OLD_SOUND_FILE)), false)
   const feedback = readFileSync(path.join(ROOT, 'apps/rider/lib/feedback.ts'), 'utf8')

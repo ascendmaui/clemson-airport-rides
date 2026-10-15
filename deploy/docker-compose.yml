@@ -93,6 +93,11 @@ x-staging-next-labels: &staging-next-labels
   - traefik.http.routers.clemson-staging-next.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
   - traefik.http.routers.clemson-staging-next.service=clemson-staging-next
 
+# Filled by the release workflow over SSH. The container only reads it.
+# App builds stay on EAS, never on this VPS.
+x-downloads-volume: &downloads-volume
+  - /opt/clemson-rides/downloads:/downloads:ro
+
 name: clemson-rides
 
 services:
@@ -108,6 +113,7 @@ services:
     ports:
       - "127.0.0.1:3080:3000"
     healthcheck: *app-healthcheck
+    volumes: *downloads-volume
     labels: *web-labels
 
   # Started only by deploy/remote-up.sh (--profile overlap) while web is replaced.
@@ -124,15 +130,19 @@ services:
     networks:
       - clemson
     healthcheck: *app-healthcheck
+    volumes: *downloads-volume
     labels: *web-next-labels
 
   staging:
     profiles: ["staging"]
     image: ghcr.io/ascendmaui/clemson-airport-rides:${STAGING_IMAGE_TAG:-staging}
     container_name: clemson-rides-staging
-    env_file: /opt/clemson-rides/.env
-    # Overrides the shared env file for this container only. Do not put these
-    # in /opt/clemson-rides/.env or production will refuse cron too.
+    # Staging has its own env file so it stays on Stripe TEST keys while
+    # production (/opt/clemson-rides/.env) runs live keys. Never point staging
+    # at the production file.
+    env_file: /opt/clemson-rides/.env.staging
+    # Overrides for this container only. Do not put these in
+    # /opt/clemson-rides/.env or production will refuse cron too.
     environment:
       DISABLE_CRON_ENDPOINTS: "1"
       ALLOW_STAGING_DRY_RUN: "1"
@@ -144,13 +154,14 @@ services:
     ports:
       - "127.0.0.1:3081:3000"
     healthcheck: *app-healthcheck
+    volumes: *downloads-volume
     labels: *staging-labels
 
   staging_next:
     profiles: ["overlap"]
     image: ghcr.io/ascendmaui/clemson-airport-rides:${STAGING_IMAGE_TAG:-staging}
     container_name: clemson-rides-staging-next
-    env_file: /opt/clemson-rides/.env
+    env_file: /opt/clemson-rides/.env.staging
     environment:
       DISABLE_CRON_ENDPOINTS: "1"
       ALLOW_STAGING_DRY_RUN: "1"
@@ -160,6 +171,7 @@ services:
     networks:
       - clemson
     healthcheck: *app-healthcheck
+    volumes: *downloads-volume
     labels: *staging-next-labels
 
 networks:

@@ -49,7 +49,7 @@ export function riderTripMoment(prev, row) {
       key: `completed:${row.id}`,
       tone: 'success',
       title: 'Trip complete',
-      body: row.dropoff_label ? `You made it to ${row.dropoff_label}.` : 'Thanks for riding with Clemson RIDES.',
+      body: row.dropoff_label ? `You made it to ${row.dropoff_label}.` : 'Thanks for riding with Clemson Rides.',
       cue: 'complete',
     }
   }
@@ -67,15 +67,41 @@ export function paymentFailedMoment(prevHold, row, role = 'rider') {
   if (!row?.id || prevHold === undefined) return null
   const hold = fareHoldStatus(row)
   if (hold !== 'failed' || prevHold === 'failed') return null
+  const code = row.metadata?.fare_authorization?.code || row.metadata?.outstanding_balance?.code || null
   const amount = row.metadata?.fare_authorization?.amountCents ?? row.metadata?.fare_authorization?.amount_cents
+  const needsMethod = role !== 'driver' && code === 'no_payment_method'
   return {
     key: `payment-failed:${row.id}`,
     tone: 'error',
-    title: role === 'driver' ? 'Rider payment hold failed' : 'Payment hold failed',
+    title: role === 'driver'
+      ? 'Rider payment hold failed'
+      : (needsMethod ? 'Add a payment method' : 'Payment hold failed'),
     body: role === 'driver'
       ? 'The rider’s card was declined. Wait for an update before you drive to pickup.'
-      : `We could not hold ${amount ? money(amount) : 'the fare'} on your card. Update your payment method to keep this ride.`,
+      : (needsMethod
+        ? 'Add a card or Apple Pay in Billing. This ride stays matched.'
+        : `We could not hold ${amount ? money(amount) : 'the fare'} on your card. Update your payment method in Billing.`),
     cue: 'error',
+    action: role === 'driver' ? null : 'billing',
+  }
+}
+
+/**
+ * Live ride screen copy for a failed hold. A null payment row is expected and
+ * must not throw. Only `no_payment_method` asks for a new card. Any other
+ * failed hold means the saved card did not authorize.
+ */
+export function failedHoldPrompt(trip) {
+  const auth = trip?.metadata?.fare_authorization
+  if (!auth || typeof auth !== 'object' || auth.status !== 'failed') return null
+  const code = auth.code || trip.metadata?.outstanding_balance?.code || null
+  const needsMethod = code === 'no_payment_method'
+  return {
+    title: needsMethod ? 'Add a payment method' : 'Payment hold failed',
+    body: needsMethod
+      ? 'Add a card or Apple Pay in Billing. This ride stays matched.'
+      : 'The fare hold did not go through. Update your payment method in Billing.',
+    pathname: '/billing',
   }
 }
 

@@ -1,0 +1,2506 @@
+/* Clemson Rides marketing site: layout, type scale, and spacing system.
+   Loaded after luxury.css and liquidGlass.css. Those files keep their locked
+   base rules (stadium photo, palette, glass fallbacks); this layer sets one
+   container, one type scale, one spacing rhythm, and one card style on the
+   public pages only. Every selector is scoped to `.site` (MarketingChrome),
+   so the rider and driver app screens never pick it up.
+
+   Palette: Clemson orange #F56600, Clemson purple #522D80, white. */
+
+.site {
+  /* Spacing tokens: a 4px base, doubling past 16px. */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+  --s-8: 64px;
+  --s-9: 96px;
+  --s-10: 128px;
+
+  /* One container for nav, hero, sections, and footer. */
+  --site-max: 1200px;
+  --site-gutter: clamp(20px, 4vw, 48px);
+  --nav-h: 72px;
+  --menu-h: 52px;
+
+  /* Type scale: fluid between 390px and 1440px, capped above. */
+  --font-display: Outfit, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-body: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --fs-display: clamp(2.375rem, 1.6rem + 2.6vw, 3.5rem);
+  --fs-h1: clamp(2.25rem, 1.5rem + 2.6vw, 3.75rem);
+  --fs-h2: clamp(1.75rem, 1.35rem + 1.5vw, 2.625rem);
+  --fs-h3: clamp(1.125rem, 1.05rem + 0.3vw, 1.3125rem);
+  --fs-lede: clamp(1.0625rem, 1rem + 0.3vw, 1.25rem);
+  --fs-body: 1rem;
+  --fs-small: 0.875rem;
+  --fs-kicker: 0.75rem;
+
+  /* Color */
+  --orange: #F56600;
+  --orange-hover: #E05A00;
+  --purple: #522D80;
+  --purple-hover: #43236B;
+  --purple-ink: #2A1844;
+  --ink: #17111F;
+  --ink-2: #4A4357;
+  --ink-3: #6E6878;
+  --cream: #F7F4F0;
+  --line: rgba(23, 17, 31, 0.08);
+  --line-strong: rgba(82, 45, 128, 0.18);
+
+  --radius-card: 20px;
+  --radius-lg: 28px;
+  --shadow-1: 0 1px 2px rgba(23, 17, 31, 0.05), 0 2px 8px -2px rgba(23, 17, 31, 0.06);
+  --shadow-2: 0 2px 4px rgba(23, 17, 31, 0.04), 0 16px 32px -12px rgba(42, 24, 68, 0.18);
+  --shadow-3: 0 6px 12px rgba(23, 17, 31, 0.05), 0 28px 56px -16px rgba(42, 24, 68, 0.32);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (min-width: 1680px) {
+  .site { --site-max: 1320px; }
+}
+
+@media (max-width: 759px) {
+  .site { --nav-h: 64px; --menu-h: 48px; }
+}
+
+/* ---------- Page frame ---------- */
+
+html body .site.mkt {
+  position: relative;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--cream);
+  color: var(--ink-2);
+  overflow-x: clip;
+  font-family: var(--font-body);
+}
+
+html body .site.mkt::before,
+html body .site.mkt::after {
+  content: none !important;
+  display: none !important;
+}
+
+html body .site .site-container {
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: calc(var(--site-max) + 2 * var(--site-gutter)) !important;
+  margin-inline: auto !important;
+  padding-inline: var(--site-gutter) !important;
+}
+
+/* The stadium photo fills the hero only, measured in MarketingChrome. */
+html body .site .mkt-stage-picture {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--mkt-hero-h, 560px);
+  overflow: hidden;
+  pointer-events: none;
+  background: #1a1024;
+}
+
+html body .site .mkt-stage-photo {
+  position: absolute !important;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 62%;
+  transform: none;
+  transform-origin: center 62%;
+  animation: site-hero-settle 1800ms var(--ease) both;
+}
+
+html body .site .mkt-stage-shade {
+  position: absolute !important;
+  z-index: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--mkt-hero-h, 560px);
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(16, 8, 28, 0.78) 0%, rgba(16, 8, 28, 0.52) 30%, rgba(30, 14, 52, 0.62) 72%, rgba(30, 14, 52, 0.86) 100%),
+    linear-gradient(90deg, rgba(42, 24, 68, 0.6) 0%, rgba(42, 24, 68, 0) 64%) !important;
+}
+
+/* Home keeps the stadium brighter: a subtle wash, darker only under the nav and at the seam. */
+html body .site.mkt-home .mkt-stage-shade {
+  background:
+    linear-gradient(180deg, rgba(16, 8, 28, 0.55) 0%, rgba(16, 8, 28, 0.12) 22%, rgba(16, 8, 28, 0.08) 62%, rgba(30, 14, 52, 0.5) 100%),
+    linear-gradient(90deg, rgba(42, 24, 68, 0.34) 0%, rgba(42, 24, 68, 0) 55%) !important;
+}
+
+@keyframes site-hero-settle {
+  from { transform: scale(1.06); }
+  to { transform: scale(1); }
+}
+
+html body .site .mkt-nav,
+html body .site .mkt-menu-bar,
+html body .site .mkt-stage,
+html body .site .mkt-main,
+html body .site .site-section,
+html body .site .site-footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- Type ---------- */
+
+html body .site.mkt,
+html body .site.mkt :is(p, li, span, label, a, button, summary, figcaption, strong) {
+  font-family: var(--font-body) !important;
+}
+
+html body .site.mkt :is(h1, h2, h3) {
+  font-family: var(--font-display) !important;
+  text-shadow: none !important;
+  margin: 0;
+  text-wrap: balance;
+}
+
+html body .site.mkt h1,
+html body .site.mkt .dp-hero h1 {
+  color: var(--ink) !important;
+  font-size: var(--fs-h1) !important;
+  font-weight: 600 !important;
+  line-height: 1.04 !important;
+  letter-spacing: -0.03em !important;
+  max-width: 18ch;
+}
+
+html body .site.mkt h2,
+html body .site.mkt .dp-group > h2,
+html body .site.mkt .mkt-section-head h2 {
+  color: var(--ink) !important;
+  font-size: var(--fs-h2) !important;
+  font-weight: 600 !important;
+  line-height: 1.1 !important;
+  letter-spacing: -0.025em !important;
+}
+
+html body .site.mkt h3,
+html body .site.mkt .mkt-feature h3,
+html body .site.mkt .dp-card h3,
+html body .site.mkt .dp-legend h3,
+html body .site.mkt .mkt-card h2 {
+  color: var(--ink) !important;
+  font-size: var(--fs-h3) !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+  letter-spacing: -0.012em !important;
+}
+
+html body .site.mkt p,
+html body .site.mkt li,
+html body .site.mkt .mkt-card p,
+html body .site.mkt .mkt-card li,
+html body .site.mkt .dp-card p,
+html body .site.mkt .dp-lede,
+html body .site.mkt .dp-sub,
+html body .site.mkt .mkt-note,
+html body .site.mkt .mkt-release {
+  color: var(--ink-2) !important;
+  font-size: var(--fs-body) !important;
+  font-weight: 400 !important;
+  line-height: 1.6 !important;
+  letter-spacing: 0 !important;
+  text-shadow: none !important;
+}
+
+html body .site.mkt .dp-fine,
+html body .site.mkt .mkt-card .dp-fine {
+  color: var(--ink-3) !important;
+  font-size: var(--fs-small) !important;
+  line-height: 1.55 !important;
+}
+
+html body .site.mkt strong {
+  color: var(--ink) !important;
+  font-weight: 600;
+}
+
+/* Kickers: purple on light, with a short orange rule. */
+html body .site.mkt .mkt-kicker,
+html body .site.mkt .mkt-feature .mkt-part .mkt-kicker,
+html body .site.mkt-home .mkt-feature .mkt-part .mkt-kicker,
+html body .site.mkt-info .mkt-feature .mkt-part .mkt-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: auto;
+  margin: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  color: var(--purple) !important;
+  font-size: var(--fs-kicker) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.14em !important;
+  line-height: 1.2 !important;
+  text-transform: uppercase;
+  box-shadow: none !important;
+}
+
+html body .site.mkt :is(.mkt-section-head, .site-head, .mkt-page-hero, .site-cta-copy) > .mkt-kicker::before {
+  content: "";
+  width: 20px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--orange);
+}
+
+/* Labels inside feature cards stay quiet. */
+html body .site.mkt .mkt-feature .mkt-part .mkt-kicker,
+html body .site.mkt-home .mkt-feature .mkt-part .mkt-kicker,
+html body .site.mkt-info .mkt-feature .mkt-part .mkt-kicker {
+  color: var(--ink-3) !important;
+  font-size: 0.6875rem !important;
+  letter-spacing: 0.12em !important;
+}
+
+/* ---------- Nav ---------- */
+
+html body .site .mkt-nav {
+  position: sticky !important;
+  top: 0;
+  z-index: 30;
+  display: block;
+  height: var(--nav-h);
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 1px solid transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: background-color 240ms var(--ease), border-color 240ms var(--ease);
+}
+
+html body .site .mkt-nav.mkt-nav--scrolled {
+  background: rgba(32, 18, 52, 0.86) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: saturate(1.4) blur(14px) !important;
+  -webkit-backdrop-filter: saturate(1.4) blur(14px) !important;
+}
+
+html body .site .site-nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  height: 100%;
+}
+
+html body .site.mkt .mkt-nav button.mkt-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin: 0 0 0 -6px;
+  padding: 4px 10px 4px 6px !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: #fff !important;
+  font-family: var(--font-display) !important;
+  font-size: 1.1875rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em !important;
+  text-shadow: none !important;
+  white-space: nowrap;
+}
+
+html body .site.mkt .mkt-nav .mkt-brand span {
+  font-family: var(--font-display) !important;
+  color: #fff !important;
+}
+
+html body .site .mkt-nav .mkt-brand-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+html body .site .mkt-nav .mkt-nav-links {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin: 0;
+  flex-wrap: nowrap;
+}
+
+html body .site.mkt .mkt-nav .mkt-nav-links button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 16px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: rgba(255, 255, 255, 0.88) !important;
+  font-size: 0.9375rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.005em !important;
+  text-shadow: none !important;
+  transition: background-color 180ms var(--ease), color 180ms var(--ease), transform 180ms var(--ease);
+}
+
+html body .site.mkt .mkt-nav .mkt-nav-links button:hover,
+html body .site.mkt .mkt-nav .mkt-nav-links button[aria-current="page"] {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #fff !important;
+}
+
+html body .site.mkt .mkt-nav .mkt-nav-links button.mkt-nav-cta {
+  margin-left: var(--s-2);
+  padding: 0 18px !important;
+  /* Deep Clemson orange: white 14px text needs 4.5:1, which #F56600 (3.1:1) misses. */
+  background: #C24E00 !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  box-shadow: 0 6px 18px -6px rgba(245, 102, 0, 0.7) !important;
+}
+
+html body .site.mkt .mkt-nav .mkt-nav-links button.mkt-nav-cta:hover {
+  background: #A94400 !important;
+  transform: translateY(-1px);
+}
+
+html body .site .mkt-nav .mkt-nav-cta .site-icon {
+  transition: transform 200ms var(--ease);
+}
+
+html body .site .mkt-nav .mkt-nav-cta:hover .site-icon {
+  transform: translateX(2px);
+}
+
+/* Info sub-nav: quiet tabs under the bar, solid once the page scrolls. */
+html body .site .mkt-menu-bar {
+  position: sticky !important;
+  top: var(--nav-h) !important;
+  z-index: 25;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: background-color 240ms var(--ease);
+}
+
+html body .site:has(.mkt-nav--scrolled) .mkt-menu-bar {
+  background: rgba(32, 18, 52, 0.86) !important;
+  backdrop-filter: saturate(1.4) blur(14px) !important;
+  -webkit-backdrop-filter: saturate(1.4) blur(14px) !important;
+}
+
+html body .site .site-menu-inner {
+  display: flex;
+  align-items: stretch;
+  height: var(--menu-h);
+}
+
+html body .site .mkt-menu-bar .mkt-menu {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: var(--s-1);
+  margin: 0 0 0 -12px;
+  padding: 0 !important;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+}
+
+html body .site.mkt .mkt-menu-bar .mkt-menu button,
+html body .site.mkt .mkt-menu-bar .mkt-menu button[aria-current="page"] {
+  position: relative;
+  flex: none;
+  min-height: 0;
+  height: 100%;
+  padding: 0 12px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: rgba(255, 255, 255, 0.72) !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  white-space: nowrap;
+  transition: color 180ms var(--ease);
+}
+
+html body .site.mkt .mkt-menu-bar .mkt-menu button.pressable::after {
+  content: "" !important;
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--orange);
+  transform: scaleX(0);
+  transition: transform 240ms var(--ease);
+  opacity: 1;
+  inset-block-start: auto;
+  width: auto;
+  animation: none;
+}
+
+html body .site.mkt .mkt-menu-bar .mkt-menu button:hover {
+  color: #fff !important;
+}
+
+html body .site.mkt .mkt-menu-bar .mkt-menu button[aria-current="page"] {
+  color: #fff !important;
+}
+
+html body .site.mkt .mkt-menu-bar .mkt-menu button.pressable[aria-current="page"]::after {
+  transform: scaleX(1);
+}
+
+/* ---------- Buttons ---------- */
+
+html body .site.mkt :is(button, a).pressable:focus-visible {
+  outline: 2px solid var(--orange) !important;
+  outline-offset: 3px;
+}
+
+/* Primary: Clemson orange. */
+html body .site.mkt button.mkt-choice,
+html body .site.mkt .site-cta-row button.site-cta-primary,
+html body .site.mkt .dp-btn-primary,
+html body .site.mkt button.dp-btn-primary,
+html body .site.mkt a.dp-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: auto;
+  min-height: 48px;
+  padding: 0 24px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--orange) !important;
+  color: #fff !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.005em !important;
+  text-decoration: none;
+  box-shadow: 0 8px 20px -8px rgba(245, 102, 0, 0.65) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: background-color 180ms var(--ease), transform 200ms var(--ease), box-shadow 200ms var(--ease) !important;
+}
+
+html body .site.mkt button.mkt-choice:hover,
+html body .site.mkt .site-cta-row button.site-cta-primary:hover,
+html body .site.mkt .dp-btn-primary:hover,
+html body .site.mkt button.dp-btn-primary:hover,
+html body .site.mkt a.dp-btn-primary:hover {
+  background: var(--orange-hover) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px -10px rgba(245, 102, 0, 0.7) !important;
+}
+
+/* Secondary: Clemson purple. */
+html body .site.mkt button.mkt-text,
+html body .site.mkt a.mkt-text,
+html body .site.mkt .dp-btn-ghost,
+html body .site.mkt button.dp-btn-ghost,
+html body .site.mkt a.dp-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  align-self: flex-start;
+  width: auto;
+  min-height: 44px;
+  padding: 0 20px !important;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  background: var(--purple) !important;
+  color: #fff !important;
+  font-size: 0.9375rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.005em !important;
+  text-decoration: none;
+  box-shadow: 0 6px 16px -8px rgba(82, 45, 128, 0.6) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: background-color 180ms var(--ease), transform 200ms var(--ease), box-shadow 200ms var(--ease) !important;
+}
+
+html body .site.mkt button.mkt-text:hover,
+html body .site.mkt a.mkt-text:hover,
+html body .site.mkt .dp-btn-ghost:hover,
+html body .site.mkt button.dp-btn-ghost:hover,
+html body .site.mkt a.dp-btn-ghost:hover {
+  background: var(--purple-hover) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -10px rgba(82, 45, 128, 0.7) !important;
+}
+
+/* On the dark hero, the secondary becomes a white outline. */
+html body .site.mkt .mkt-page-hero :is(.dp-btn-ghost, a.dp-btn-ghost, button.mkt-text) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  box-shadow: none !important;
+}
+
+html body .site.mkt .mkt-page-hero :is(.dp-btn-ghost, a.dp-btn-ghost, button.mkt-text):hover {
+  background: rgba(255, 255, 255, 0.16) !important;
+  border-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* The glass highlight sweep on every button is off on the site layer. */
+html body .site.mkt :is(button, a).pressable::before,
+html body .site.mkt :is(button, a).pressable::after,
+html body .site.mkt :is(button, a, a.mkt-text, a.dp-btn)::after {
+  content: none !important;
+  animation: none !important;
+}
+
+html body .site .site-cta-row,
+html body .site .site-hero-actions,
+html body .site .site-section-end,
+html body .site .dp-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  margin: 0;
+}
+
+/* ---------- Cards ---------- */
+
+html body .site.mkt .mkt-card,
+html body .site.mkt .mkt-home .mkt-card,
+html body .site.mkt .dp-card,
+html body .site.mkt .dp-legend,
+html body .site.mkt .dp-compare,
+html body .site.mkt .dp-rental,
+html body .site.mkt-home .mkt-card,
+html body .site.mkt-info .mkt-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--s-6) !important;
+  overflow: hidden;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-card) !important;
+  background: #fff !important;
+  color: var(--ink-2) !important;
+  box-shadow: var(--shadow-1) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: transform 360ms var(--ease), box-shadow 360ms var(--ease), border-color 360ms var(--ease) !important;
+}
+
+html body .site.mkt .mkt-card::before,
+html body .site.mkt .mkt-card::after,
+html body .site.mkt .dp-card::after,
+html body .site.mkt .dp-card::before {
+  content: none !important;
+}
+
+@media (hover: hover) {
+  html body .site.mkt :is(.mkt-card, .dp-card):not(.dp-rental):not(.dp-compare):not(.dp-legend):hover {
+    transform: translateY(-4px);
+    border-color: var(--line-strong) !important;
+    box-shadow: var(--shadow-3) !important;
+  }
+}
+
+/* Photos bleed to the card edge with one crop ratio. */
+html body .site .mkt-card > .mkt-photo,
+html body .site .mkt-card > picture.mkt-photo {
+  display: block;
+  margin: calc(-1 * var(--s-6)) calc(-1 * var(--s-6)) var(--s-2);
+  overflow: hidden;
+  border-radius: 0;
+  background: #e9e4ef;
+}
+
+html body .site .mkt-card .mkt-photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  object-position: center 40%;
+  border-radius: 0 !important;
+  transition: transform 900ms var(--ease);
+}
+
+@media (hover: hover) {
+  html body .site .mkt-card:hover .mkt-photo img {
+    transform: scale(1.04);
+  }
+}
+
+html body .site .mkt-glass-glyph {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+
+html body .site .site-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+html body .site .site-photo-card-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+html body .site.mkt .site-why-matters {
+  margin-top: auto !important;
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+
+/* Badge for "Only at Clemson Rides" and status pills. */
+html body .site.mkt .mkt-kicker.site-badge,
+html body .site.mkt .mkt-feature > .mkt-kicker:first-child {
+  align-self: flex-start;
+  padding: 6px 10px !important;
+  border-radius: 999px !important;
+  background: rgba(245, 102, 0, 0.1) !important;
+  color: #B34A00 !important;
+  font-size: 0.6875rem !important;
+  letter-spacing: 0.1em !important;
+}
+
+html body .site.mkt .mkt-feature > .mkt-kicker:first-child::before,
+html body .site.mkt .mkt-kicker.site-badge::before {
+  content: none;
+}
+
+html body .site .mkt-live,
+html body .site .mkt-soon {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 22px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(245, 102, 0, 0.12) !important;
+  color: #B34A00 !important;
+  font-size: 0.6875rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  vertical-align: 2px;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+
+html body .site .mkt-soon {
+  background: rgba(82, 45, 128, 0.1) !important;
+  color: var(--purple) !important;
+}
+
+html body .site.mkt .mkt-card > .mkt-live,
+html body .site.mkt .mkt-card > .mkt-soon {
+  display: inline-flex !important;
+  align-self: flex-start;
+  width: auto !important;
+  height: 22px !important;
+  margin: var(--s-3) 0 0 !important;
+}
+
+/* Ordered steps: numbered dots instead of browser numerals. */
+html body .site .mkt-guide {
+  display: grid;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0 !important;
+  list-style: none;
+  counter-reset: site-step;
+}
+
+html body .site.mkt .mkt-guide > li {
+  position: relative;
+  padding-left: 32px !important;
+  counter-increment: site-step;
+}
+
+html body .site .mkt-guide > li::before {
+  content: counter(site-step);
+  position: absolute;
+  left: 0;
+  top: 2px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(82, 45, 128, 0.08);
+  color: var(--purple);
+  font: 700 0.6875rem/1 var(--font-body);
+}
+
+/* ---------- Grids ---------- */
+
+html body .site .mkt-safety-live,
+html body .site .site-card-grid,
+html body .site .mkt-built {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-5);
+  align-items: stretch !important;
+}
+
+html body .site .dp-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-5);
+  align-items: stretch;
+}
+
+@media (min-width: 760px) {
+  html body .site .mkt-safety-live,
+  html body .site .site-card-grid,
+  html body .site .mkt-built,
+  html body .site .dp-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* An odd last card fills the row instead of leaving a hole. */
+  html body .site :is(.mkt-safety-live, .site-card-grid, .mkt-built, .dp-grid) > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1100px) {
+  html body .site .site-card-grid--3,
+  html body .site .mkt-built,
+  html body .site .dp-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  html body .site :is(.site-card-grid--3, .mkt-built, .dp-grid) > :last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+  html body .site .dp-grid:has(> :nth-child(2):last-child),
+  html body .site .dp-grid:has(> :nth-child(4):last-child) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  html body .site .dp-grid:has(> :nth-child(4):last-child) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  html body .site .mkt-built:has(> :nth-child(3n + 1):last-child) > :last-child,
+  html body .site .site-card-grid--3:has(> :nth-child(3n + 1):last-child) > :last-child {
+    grid-column: 1 / -1;
+  }
+  html body .site .mkt-built:has(> :nth-child(3n + 2):last-child) > :nth-last-child(-n + 2),
+  html body .site .site-card-grid--3:has(> :nth-child(3n + 2):last-child) > :nth-last-child(-n + 2) {
+    grid-column: span 1;
+  }
+}
+
+/* ---------- Home hero ---------- */
+
+html body .site.mkt-home .mkt-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100% !important;
+  min-height: min(calc(100svh - var(--nav-h)), 920px);
+  margin: 0 !important;
+  padding: var(--s-6) 0 var(--s-9) !important;
+  background: transparent;
+}
+
+html body .site .mkt-stage-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-6);
+  align-items: center;
+}
+
+html body .site.mkt-home .mkt-stage-copy {
+  position: relative;
+  width: 100% !important;
+  max-width: 520px !important;
+  margin: 0 !important;
+  padding: var(--s-6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.7) !important;
+  border-radius: var(--radius-lg) !important;
+  background: rgba(255, 255, 255, 0.97) !important;
+  box-shadow: 0 2px 6px rgba(16, 8, 28, 0.12), 0 40px 80px -24px rgba(16, 8, 28, 0.55) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  text-align: left;
+  animation: site-rise 900ms var(--ease) 120ms both;
+}
+
+html body .site.mkt-home .mkt-stage-copy::before {
+  content: none !important;
+}
+
+html body .site.mkt-home .mkt-stage-copy > * {
+  position: relative;
+  z-index: 1;
+}
+
+html body .site .mkt-hero-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-5);
+}
+
+html body .site .mkt-hero-brand .mkt-brand-mark {
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 12px !important;
+  box-shadow: 0 6px 16px -4px rgba(82, 45, 128, 0.4) !important;
+}
+
+html body .site.mkt p.mkt-hero-name {
+  margin: 0;
+  color: var(--purple) !important;
+  font-family: var(--font-display) !important;
+  font-size: 1.0625rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+}
+
+html body .site.mkt-home .mkt-stage h1,
+html body .site.mkt .mkt-stage h1 {
+  color: var(--ink) !important;
+  font-size: var(--fs-display) !important;
+  line-height: 1.02 !important;
+  letter-spacing: -0.035em !important;
+  max-width: 13ch;
+}
+
+html body .site.mkt-home .mkt-stage .mkt-lede {
+  max-width: 36ch;
+  margin: var(--s-3) 0 0;
+  color: var(--ink-2) !important;
+  font-size: var(--fs-lede) !important;
+  line-height: 1.5 !important;
+}
+
+html body .site.mkt-home .mkt-hero-actions {
+  display: block;
+  margin-top: var(--s-5);
+}
+
+html body .site.mkt .mkt-stage .mkt-book.primary-cta,
+html body .site.mkt .mkt-stage button.mkt-book.primary-cta {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  width: 100% !important;
+  min-height: 60px;
+  padding: 0 20px 0 24px !important;
+  border: 0 !important;
+  border-radius: 16px !important;
+  background: var(--orange) !important;
+  color: #fff !important;
+  font-size: 1.125rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  box-shadow: 0 12px 24px -10px rgba(245, 102, 0, 0.75) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: background-color 180ms var(--ease), transform 200ms var(--ease), box-shadow 200ms var(--ease) !important;
+}
+
+html body .site.mkt .mkt-stage .mkt-book.primary-cta:hover {
+  background: var(--orange-hover) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 18px 32px -12px rgba(245, 102, 0, 0.8) !important;
+}
+
+html body .site .mkt-book .site-icon {
+  transition: transform 200ms var(--ease);
+}
+
+html body .site .mkt-book:hover .site-icon {
+  transform: translateX(3px);
+}
+
+html body .site.mkt-home .mkt-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+}
+
+html body .site.mkt-home .mkt-stage button.mkt-choice {
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 16px !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 16px !important;
+  background: #fff !important;
+  color: var(--purple) !important;
+  font-size: 0.9375rem !important;
+  box-shadow: none !important;
+}
+
+html body .site.mkt-home .mkt-stage button.mkt-choice:hover {
+  border-color: var(--purple) !important;
+  background: rgba(82, 45, 128, 0.04) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -12px rgba(82, 45, 128, 0.5) !important;
+}
+
+html body .site .mkt-choice .site-icon {
+  flex: none;
+}
+
+html body .site .site-hero-links {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-top: var(--s-5);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+
+html body .site.mkt .site-hero-links button.mkt-ghost,
+html body .site.mkt .site-hero-links button.mkt-why-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 4px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: var(--ink-2) !important;
+  font-size: 0.9375rem !important;
+  font-weight: 600 !important;
+  transition: color 180ms var(--ease);
+}
+
+html body .site.mkt .site-hero-links button.mkt-why-link {
+  color: var(--purple) !important;
+}
+
+html body .site.mkt .site-hero-links button:hover {
+  color: var(--orange) !important;
+  transform: none;
+}
+
+/* Hero photos: a calm bento instead of tilted prints. */
+html body .site .mkt-home-hero.mkt-hero-collage {
+  position: relative !important;
+  inset: auto !important;
+  z-index: 1;
+  display: flex;
+  gap: var(--s-3);
+  width: auto !important;
+  height: auto;
+  margin: 0 calc(-1 * var(--site-gutter)) !important;
+  padding: 0 var(--site-gutter) var(--s-2);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--site-gutter);
+  scrollbar-width: none;
+}
+
+html body .site .mkt-home-hero .mkt-hero-shot {
+  position: relative !important;
+  inset: auto !important;
+  flex: 0 0 78%;
+  width: auto !important;
+  margin: 0;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  border-radius: 20px !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.55) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transform: none !important;
+  scroll-snap-align: start;
+  display: block !important;
+}
+
+html body .site .mkt-home-hero .mkt-hero-shot .mkt-photo {
+  margin: 0;
+  height: 100%;
+}
+
+html body .site .mkt-home-hero .mkt-hero-shot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 0 !important;
+}
+
+@media (min-width: 960px) {
+  html body .site .mkt-stage-layout {
+    grid-template-columns: minmax(400px, 500px) minmax(0, 1fr);
+    gap: clamp(40px, 5vw, 80px);
+  }
+  html body .site .mkt-home-hero.mkt-hero-collage {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: var(--s-4);
+    height: clamp(440px, 40vw, 600px);
+    margin: 0 !important;
+    padding: 0;
+    overflow: visible;
+  }
+  html body .site .mkt-home-hero .mkt-hero-shot {
+    flex: none;
+    animation: site-rise 1000ms var(--ease) both;
+  }
+  html body .site .mkt-home-hero .mkt-hero-shot--lead {
+    grid-row: 1 / 3;
+    grid-column: 1;
+    animation-delay: 220ms;
+  }
+  html body .site .mkt-home-hero .mkt-hero-shot--request {
+    grid-row: 1;
+    grid-column: 2;
+    animation-delay: 320ms;
+  }
+  html body .site .mkt-home-hero .mkt-hero-shot--backseat {
+    grid-row: 2;
+    grid-column: 2;
+    animation-delay: 420ms;
+  }
+  html body .site .mkt-home-hero .mkt-hero-shot img {
+    aspect-ratio: auto;
+  }
+  html body .site .mkt-home-hero .mkt-hero-shot--lead img {
+    object-position: 40% center;
+  }
+}
+
+@keyframes site-rise {
+  from { opacity: 0; transform: translate3d(0, 24px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+/* ---------- Sections ---------- */
+
+html body .site .site-section {
+  padding-block: var(--s-9) 0;
+}
+
+html body .site .site-head,
+html body .site .mkt-feature-section .mkt-section-head,
+html body .site.mkt-info .mkt-main .mkt-section-head:not(.mkt-page-hero) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  max-width: 720px;
+  margin: 0 0 var(--s-7) !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html body .site.mkt .site-head > p:not(.mkt-kicker),
+html body .site.mkt .mkt-main .mkt-section-head:not(.mkt-page-hero) > p:not(.mkt-kicker) {
+  max-width: 60ch;
+  font-size: var(--fs-lede) !important;
+  color: var(--ink-2) !important;
+}
+
+/* Ride types: Lyft-style tiles. */
+html body .site .site-type-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+html body .site.mkt .site-type-list > li.site-type {
+  padding: 0 !important;
+}
+
+html body .site.mkt .site-type-list > li.site-type::before {
+  content: none;
+}
+
+html body .site.mkt button.site-type-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto 1fr;
+  column-gap: var(--s-4);
+  row-gap: var(--s-1);
+  align-items: start;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: var(--s-5) var(--s-7) var(--s-5) var(--s-5) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-card) !important;
+  background: #fff !important;
+  box-shadow: var(--shadow-1) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: var(--ink-2) !important;
+  text-align: left;
+  transition: transform 320ms var(--ease), box-shadow 320ms var(--ease), border-color 320ms var(--ease) !important;
+}
+
+html body .site.mkt button.site-type-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--line-strong) !important;
+  box-shadow: var(--shadow-3) !important;
+}
+
+html body .site .site-type-icon {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(245, 102, 0, 0.1);
+  color: var(--orange);
+}
+
+html body .site .site-type-icon--wait,
+html body .site .site-type-icon--comfort {
+  background: rgba(82, 45, 128, 0.1);
+  color: var(--purple);
+}
+
+html body .site.mkt .site-type-name {
+  color: var(--ink) !important;
+  font-family: var(--font-display) !important;
+  font-size: 1.1875rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+}
+
+html body .site.mkt .site-type-detail {
+  color: var(--ink-2) !important;
+  font-size: var(--fs-small) !important;
+  font-weight: 400 !important;
+  line-height: 1.55;
+}
+
+html body .site .site-type-more {
+  position: absolute;
+  top: var(--s-5);
+  right: var(--s-5);
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(82, 45, 128, 0.06);
+  color: var(--purple);
+  transition: background-color 200ms var(--ease), color 200ms var(--ease), transform 200ms var(--ease);
+}
+
+html body .site .site-type-card:hover .site-type-more {
+  background: var(--purple);
+  color: #fff;
+  transform: translateX(2px);
+}
+
+@media (min-width: 760px) {
+  html body .site .site-type-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1100px) {
+  html body .site .site-type-list { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-5); }
+  html body .site.mkt button.site-type-card {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr;
+    row-gap: var(--s-2);
+    padding: var(--s-6) var(--s-5) var(--s-6) !important;
+  }
+  html body .site .site-type-icon { grid-row: auto; margin-bottom: var(--s-3); }
+}
+
+/* Moments: full-photo tiles with copy over a dark fade. */
+html body .site .site-moment-list {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 78%;
+  gap: var(--s-4);
+  margin: 0 calc(-1 * var(--site-gutter));
+  padding: 0 var(--site-gutter) var(--s-2);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--site-gutter);
+  scrollbar-width: none;
+}
+
+html body .site.mkt button.site-moment {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 5;
+  width: 100%;
+  margin: 0;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 0 !important;
+  border-radius: var(--radius-card) !important;
+  background: #2a1844 !important;
+  box-shadow: var(--shadow-2) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  text-align: left;
+  scroll-snap-align: start;
+  transition: transform 360ms var(--ease), box-shadow 360ms var(--ease) !important;
+}
+
+html body .site .site-moment .mkt-photo {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+}
+
+html body .site .site-moment .mkt-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0;
+  transition: transform 1000ms var(--ease);
+}
+
+html body .site.mkt button.site-moment.pressable::after {
+  content: "" !important;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(180deg, rgba(23, 12, 38, 0) 35%, rgba(23, 12, 38, 0.55) 62%, rgba(23, 12, 38, 0.92) 100%);
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+  width: auto !important;
+  pointer-events: none;
+}
+
+html body .site .site-moment-copy {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-5);
+}
+
+html body .site .site-moment-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: var(--s-1);
+  border-radius: 10px;
+  background: var(--orange);
+  color: #fff;
+}
+
+html body .site.mkt .site-moment-title {
+  color: #fff !important;
+  font-family: var(--font-display) !important;
+  font-size: 1.375rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+html body .site.mkt .site-moment-body {
+  color: rgba(255, 255, 255, 0.84) !important;
+  font-size: var(--fs-small) !important;
+  font-weight: 400 !important;
+  line-height: 1.5;
+}
+
+@media (hover: hover) {
+  html body .site.mkt button.site-moment:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-3) !important;
+  }
+  html body .site .site-moment:hover .mkt-photo img {
+    transform: scale(1.06);
+  }
+}
+
+@media (min-width: 760px) {
+  html body .site .site-moment-list {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+  }
+}
+
+@media (min-width: 1100px) {
+  html body .site .site-moment-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--s-5);
+  }
+}
+
+/* Home feature grid: the two exclusives lead, then even rows of three. */
+html body .site .mkt-feature-section {
+  padding-top: var(--s-9);
+}
+
+html body .site .mkt-feature-list {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: var(--s-5) !important;
+  align-items: stretch !important;
+}
+
+html body .site .mkt-feature-list > .mkt-feature {
+  scroll-margin-top: calc(var(--nav-h) + 24px);
+}
+
+html body .site .mkt-feature-list .mkt-feature > .mkt-kicker:first-child {
+  position: absolute;
+  top: var(--s-6);
+  right: var(--s-6);
+}
+
+html body .site .mkt-feature .mkt-part {
+  display: grid;
+  gap: var(--s-2);
+}
+
+html body .site .mkt-feature .mkt-part:last-child {
+  margin-top: auto;
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+
+html body .site .mkt-how {
+  border-top: 1px solid var(--line);
+  padding-top: var(--s-3);
+}
+
+html body .site.mkt .mkt-how summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--purple) !important;
+  font-size: 0.9375rem !important;
+  font-weight: 600 !important;
+}
+
+@media (min-width: 760px) and (max-width: 1099px) {
+  html body .site .mkt-feature-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  html body .site .mkt-feature-list > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1100px) {
+  html body .site .mkt-feature-list {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  }
+  html body .site .mkt-feature-list > .mkt-feature {
+    grid-column: span 2;
+  }
+  html body .site .mkt-feature-list > .mkt-feature:nth-child(-n + 2) {
+    grid-column: span 3;
+  }
+}
+
+/* Closing call to action. */
+html body .site .site-cta-band {
+  position: relative;
+  display: grid;
+  gap: var(--s-6);
+  align-items: center;
+  overflow: hidden;
+  padding: clamp(32px, 5vw, 72px);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(60% 120% at 100% 0%, rgba(245, 102, 0, 0.35), transparent 60%),
+    linear-gradient(135deg, #5B3290 0%, #3A1F5E 55%, #26143F 100%);
+  box-shadow: var(--shadow-3);
+}
+
+html body .site .site-cta-copy {
+  display: grid;
+  gap: var(--s-4);
+}
+
+html body .site.mkt .site-cta-band .mkt-kicker {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
+html body .site.mkt .site-cta-band h2 {
+  color: #fff !important;
+}
+
+html body .site .site-cta-band .mkt-reach {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: var(--s-2) 0 0;
+  padding: 0;
+}
+
+html body .site.mkt .site-cta-band .mkt-reach button.mkt-text {
+  min-height: 40px;
+  padding: 0 16px !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  box-shadow: none !important;
+  color: #fff !important;
+  font-size: 0.875rem !important;
+}
+
+html body .site.mkt .site-cta-band .mkt-reach button.mkt-text:hover {
+  border-color: rgba(255, 255, 255, 0.7) !important;
+  background: rgba(255, 255, 255, 0.14) !important;
+}
+
+html body .site .site-cta-band .mkt-close {
+  display: flex;
+  margin: 0;
+  padding: 0;
+}
+
+html body .site.mkt .site-cta-band .mkt-close button.mkt-choice {
+  min-height: 56px;
+  padding: 0 28px !important;
+  font-size: 1.0625rem !important;
+}
+
+@media (min-width: 960px) {
+  html body .site .site-cta-band {
+    grid-template-columns: 1fr auto;
+    gap: var(--s-7);
+  }
+}
+
+/* ---------- Info pages ---------- */
+
+html body .site.mkt-info .mkt-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-9) !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin: 0 auto;
+}
+
+html body .site.mkt-info .mkt-main > section:not(.mkt-safety-live):not(.site-card-grid) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+/* Page hero: white type on the stadium. */
+html body .site.mkt .mkt-page-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-4);
+  max-width: 760px;
+  margin: 0 !important;
+  padding: clamp(48px, 7vw, 104px) 0 clamp(56px, 7vw, 104px) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: #fff;
+}
+
+html body .site.mkt .mkt-page-hero.mkt-reveal {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+html body .site.mkt .mkt-page-hero > * {
+  animation: site-rise 800ms var(--ease) both;
+}
+
+html body .site.mkt .mkt-page-hero > :nth-child(2) { animation-delay: 80ms; }
+html body .site.mkt .mkt-page-hero > :nth-child(3) { animation-delay: 160ms; }
+html body .site.mkt .mkt-page-hero > :nth-child(n + 4) { animation-delay: 240ms; }
+
+html body .site.mkt .mkt-page-hero h1,
+html body .site.mkt .mkt-page-hero h2 {
+  color: #fff !important;
+  font-size: var(--fs-h1) !important;
+  line-height: 1.04 !important;
+  letter-spacing: -0.03em !important;
+  max-width: 18ch;
+}
+
+html body .site.mkt .mkt-page-hero p,
+html body .site.mkt .mkt-page-hero .dp-lede,
+html body .site.mkt .mkt-page-hero .mkt-why-intro {
+  max-width: 58ch;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86) !important;
+  font-size: var(--fs-lede) !important;
+  line-height: 1.55 !important;
+}
+
+html body .site.mkt .mkt-page-hero .mkt-kicker,
+html body .site.mkt .mkt-page-hero p.mkt-kicker {
+  color: #fff !important;
+  font-size: var(--fs-kicker) !important;
+  background: none !important;
+}
+
+html body .site .mkt-page-hero .site-hero-actions,
+html body .site .mkt-page-hero .dp-hero-actions {
+  margin-top: var(--s-3);
+}
+
+/* Drive hero: copy left, example offer right. */
+html body .site.mkt .dp-hero.mkt-page-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-6);
+  max-width: none;
+}
+
+html body .site .dp-hero-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-4);
+}
+
+html body .site.mkt .dp-hero .dp-offer.mkt-card {
+  max-width: 400px;
+  width: 100%;
+  padding: var(--s-5) !important;
+  box-shadow: 0 40px 80px -24px rgba(0, 0, 0, 0.6) !important;
+}
+
+@media (min-width: 960px) {
+  html body .site.mkt .dp-hero.mkt-page-hero {
+    grid-template-columns: minmax(0, 1fr) 400px;
+    align-items: center;
+    gap: var(--s-8);
+  }
+  html body .site.mkt .dp-hero .dp-offer.mkt-card {
+    justify-self: end;
+  }
+}
+
+/* Drive perk groups */
+html body .site.mkt .dp-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  margin: 0;
+  padding: 0;
+}
+
+html body .site.mkt .dp-group > h2 {
+  margin-bottom: var(--s-2);
+}
+
+html body .site.mkt .dp-highlight .dp-card-highlight {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--s-5);
+  border-color: rgba(245, 102, 0, 0.25) !important;
+  background: linear-gradient(90deg, rgba(245, 102, 0, 0.06), #fff 60%) !important;
+}
+
+html body .site.mkt .dp-highlight .dp-card-highlight h2 {
+  font-size: var(--fs-h3) !important;
+}
+
+html body .site .dp-icon-wrap {
+  flex: none;
+}
+
+html body .site.mkt .dp-compare {
+  padding: 0 !important;
+  gap: 0;
+}
+
+html body .site.mkt .dp-compare-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: 14px var(--s-6);
+  border-top: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: var(--fs-body);
+}
+
+html body .site.mkt .dp-compare-row:first-child {
+  border-top: 0;
+}
+
+html body .site.mkt .dp-compare-head {
+  background: rgba(82, 45, 128, 0.04);
+  color: var(--ink-3);
+  font-size: var(--fs-kicker);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+html body .site.mkt .dp-compare-row span {
+  color: inherit !important;
+}
+
+html body .site.mkt .dp-compare-row .dp-yes {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #15803d !important;
+  font-weight: 600;
+}
+
+html body .site.mkt .dp-rental {
+  gap: var(--s-4);
+  padding: clamp(24px, 4vw, 48px) !important;
+}
+
+html body .site.mkt .dp-rental .dp-grid {
+  margin-block: var(--s-3);
+}
+
+html body .site.mkt .dp-rental .dp-path {
+  background: var(--cream) !important;
+  box-shadow: none !important;
+}
+
+html body .site.mkt .dp-rental-list {
+  display: grid;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+html body .site.mkt .dp-rental-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+html body .site.mkt .dp-rental-list .dp-icon {
+  color: var(--orange);
+}
+
+html body .site.mkt .dp-legend ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: var(--s-4);
+  margin: var(--s-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Drive application section */
+html body .site.mkt .mkt-drive-earnings {
+  margin-top: var(--s-8) !important;
+}
+
+html body .site.mkt .mkt-release {
+  margin: var(--s-4) 0 0 !important;
+  padding: 0 !important;
+  color: var(--ink-3) !important;
+  font-size: var(--fs-small) !important;
+}
+
+html body .site .site-cta-row {
+  margin-top: var(--s-2);
+}
+
+/* Why page */
+html body .site.mkt section.mkt-why {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-7);
+}
+
+@media (min-width: 1100px) {
+  html body .site section.mkt-why .site-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  html body .site section.mkt-why .site-card-grid > .mkt-why-span {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: var(--s-7);
+    align-items: center;
+    padding: 0 var(--s-7) 0 0 !important;
+  }
+  html body .site section.mkt-why .mkt-why-span > .mkt-photo {
+    height: 100%;
+    margin: 0 !important;
+  }
+  html body .site section.mkt-why .mkt-why-span > .mkt-photo img {
+    height: 100%;
+    min-height: 340px;
+    aspect-ratio: auto;
+  }
+  html body .site section.mkt-why .mkt-why-span .site-photo-card-body {
+    padding-block: var(--s-7);
+  }
+}
+
+/* Service area */
+html body .site .site-split {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+html body .site .site-split-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+html body .site.mkt .site-steps > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  padding-left: 0 !important;
+}
+
+html body .site.mkt .site-steps > li::before {
+  content: none;
+}
+
+html body .site.mkt .site-steps > li .mkt-live {
+  margin-top: 2px;
+}
+
+@media (min-width: 960px) {
+  html body .site.mkt .mkt-card.site-split {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--s-7);
+    padding: 0 var(--s-7) 0 0 !important;
+    align-items: center;
+  }
+  html body .site.mkt .mkt-card.site-split > .mkt-photo {
+    height: 100%;
+    margin: 0 !important;
+  }
+  html body .site .site-split > .mkt-photo img {
+    height: 100%;
+    min-height: 420px;
+    aspect-ratio: auto;
+  }
+  html body .site .site-split .site-split-body {
+    padding-block: var(--s-7);
+  }
+}
+
+html body .site .site-area .lux-carousel {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 82%;
+  gap: var(--s-4);
+  margin: 0 calc(-1 * var(--site-gutter));
+  padding: 0 var(--site-gutter) var(--s-2);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+html body .site .site-area .lux-frame {
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  background: #0a0a0a;
+  box-shadow: var(--shadow-2);
+  scroll-snap-align: start;
+}
+
+html body .site .site-area .lux-frame > svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+html body .site.mkt .site-area .lux-frame figcaption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 18px;
+  color: rgba(255, 255, 255, 0.82) !important;
+  font-size: var(--fs-small) !important;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+html body .site .site-area .lux-frame figcaption .site-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--orange);
+}
+
+@media (min-width: 760px) {
+  html body .site .site-area .lux-carousel {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+  }
+}
+
+/* Generic info-page photo strips and collages keep one crop. */
+html body .site.mkt-info .mkt-hero-collage:not(.mkt-home-hero) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-4);
+  height: auto;
+}
+
+html body .site.mkt-info .mkt-hero-collage:not(.mkt-home-hero) .mkt-hero-shot {
+  position: relative !important;
+  inset: auto !important;
+  width: auto !important;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 0 !important;
+  border-radius: var(--radius-card) !important;
+  background: none !important;
+  box-shadow: var(--shadow-2) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transform: none !important;
+  display: block !important;
+}
+
+html body .site.mkt-info .mkt-hero-collage:not(.mkt-home-hero) .mkt-photo {
+  margin: 0;
+}
+
+html body .site.mkt-info .mkt-hero-collage:not(.mkt-home-hero) img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 0 !important;
+}
+
+@media (max-width: 759px) {
+  html body .site.mkt-info .mkt-hero-collage:not(.mkt-home-hero) {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: var(--s-3);
+    margin-inline: calc(-1 * var(--site-gutter)) !important;
+    padding: 0 var(--site-gutter) var(--s-2) !important;
+    scroll-padding-inline: var(--site-gutter);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  html body .site.mkt-info .mkt-hero-collage:not(.mkt-home-hero) .mkt-hero-shot {
+    flex: 0 0 78%;
+    scroll-snap-align: start;
+  }
+  html body .site .site-hero-links button {
+    font-size: 0.875rem !important;
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 760px) {
+  html body .site.mkt-info .mkt-hero-collage:not(.mkt-home-hero) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ---------- Footer ---------- */
+
+html body .site .site-footer {
+  margin: var(--s-10) 0 0 !important;
+  padding: var(--s-9) 0 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #1B1029 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+html body .site .site-footer .mkt-footer-inner {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-7);
+  padding-top: 0 !important;
+  padding-bottom: var(--s-8) !important;
+}
+
+html body .site .site-footer .mkt-footer-inner > * {
+  align-self: start;
+}
+
+html body .site.mkt .site-footer nav.site-footer-col {
+  display: block !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+
+html body .site .site-footer-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-4);
+  max-width: 360px;
+}
+
+html body .site.mkt .site-footer button.site-footer-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: #fff !important;
+  font-family: var(--font-display) !important;
+  font-size: 1.25rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em !important;
+}
+
+html body .site.mkt .site-footer button.site-footer-logo span {
+  font-family: var(--font-display) !important;
+  color: #fff !important;
+}
+
+html body .site .site-footer-logo img {
+  border-radius: 10px;
+}
+
+html body .site.mkt .site-footer p {
+  color: rgba(255, 255, 255, 0.66) !important;
+  font-size: var(--fs-small) !important;
+  line-height: 1.6 !important;
+}
+
+html body .site.mkt .site-footer a.site-footer-mail {
+  display: inline-flex;
+  min-height: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  color: #fff !important;
+  font-size: var(--fs-small) !important;
+  font-weight: 600 !important;
+  text-decoration: underline;
+  text-decoration-color: rgba(245, 102, 0, 0.8);
+  text-underline-offset: 4px;
+}
+
+html body .site.mkt .site-footer a.site-footer-mail:hover {
+  color: var(--orange) !important;
+}
+
+html body .site.mkt .site-footer p.site-footer-title {
+  margin: 0 0 var(--s-3);
+  color: #fff !important;
+  font-size: var(--fs-kicker) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase;
+}
+
+html body .site .site-footer-col ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+html body .site.mkt .site-footer-col li {
+  padding: 0 !important;
+}
+
+html body .site.mkt .site-footer-col li::before {
+  content: none;
+}
+
+html body .site.mkt .site-footer .site-footer-col button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  margin: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: rgba(255, 255, 255, 0.72) !important;
+  font-size: 0.9375rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  text-align: left;
+  transition: color 160ms var(--ease), transform 160ms var(--ease);
+}
+
+html body .site.mkt .site-footer .site-footer-col button:hover,
+html body .site.mkt .site-footer .site-footer-col button[aria-current="page"] {
+  color: #fff !important;
+  transform: translateX(2px);
+}
+
+html body .site .site-footer-base {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding-top: var(--s-5) !important;
+  padding-bottom: var(--s-6) !important;
+  background: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.1)) top / 100% 1px no-repeat;
+  background-origin: content-box;
+  background-clip: content-box;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.8125rem;
+}
+
+html body .site.mkt .site-footer-base span {
+  color: rgba(255, 255, 255, 0.5) !important;
+  font-size: 0.8125rem !important;
+}
+
+@media (min-width: 760px) {
+  html body .site .site-footer .mkt-footer-inner {
+    grid-template-columns: 1.6fr repeat(3, minmax(0, 1fr));
+    gap: var(--s-6);
+  }
+}
+
+/* ---------- Scroll reveal ---------- */
+
+html body .site .glass-motion .mkt-reveal,
+html body .glass-motion .site .mkt-reveal {
+  opacity: 0;
+  transform: translate3d(0, 28px, 0);
+}
+
+html body .site .glass-motion .mkt-reveal.is-in,
+html body .glass-motion .site .mkt-reveal.is-in {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  animation: site-rise 760ms var(--ease) backwards;
+  animation-delay: var(--mkt-delay, 0ms);
+}
+
+/* ---------- Phone ---------- */
+
+@media (max-width: 759px) {
+  html body .site.mkt .mkt-nav button.mkt-brand {
+    font-size: 1.0625rem !important;
+    gap: 8px;
+    padding-right: 4px !important;
+  }
+  html body .site .mkt-nav .mkt-brand-icon {
+    width: 28px;
+    height: 28px;
+  }
+  html body .site.mkt .mkt-nav .mkt-nav-links button {
+    padding: 0 10px !important;
+    font-size: 0.875rem !important;
+  }
+  html body .site.mkt .mkt-nav .mkt-nav-links button.mkt-nav-cta {
+    margin-left: 2px;
+    padding: 0 14px !important;
+  }
+  html body .site .mkt-nav .mkt-nav-cta .site-icon {
+    display: none;
+  }
+  html body .site.mkt-home .mkt-stage {
+    min-height: 0;
+    padding: var(--s-4) 0 var(--s-7) !important;
+  }
+  html body .site.mkt-home .mkt-stage-copy {
+    padding: var(--s-5) !important;
+    border-radius: 24px !important;
+  }
+  html body .site .mkt-hero-brand {
+    margin-bottom: var(--s-4);
+  }
+  html body .site .site-section {
+    padding-block: var(--s-8) 0;
+  }
+  html body .site .site-head,
+  html body .site .mkt-feature-section .mkt-section-head,
+  html body .site.mkt-info .mkt-main .mkt-section-head:not(.mkt-page-hero) {
+    margin-bottom: var(--s-6) !important;
+  }
+  html body .site.mkt .mkt-card,
+  html body .site.mkt .dp-card,
+  html body .site.mkt .dp-legend,
+  html body .site.mkt-home .mkt-card,
+  html body .site.mkt-info .mkt-card {
+    padding: var(--s-5) !important;
+  }
+  html body .site .mkt-card > .mkt-photo,
+  html body .site .mkt-card > picture.mkt-photo {
+    margin: calc(-1 * var(--s-5)) calc(-1 * var(--s-5)) var(--s-2);
+  }
+  html body .site .mkt-feature-list .mkt-feature > .mkt-kicker:first-child {
+    position: static;
+  }
+  html body .site.mkt-info .mkt-main {
+    gap: var(--s-8) !important;
+  }
+  html body .site.mkt .dp-compare-row {
+    padding: 12px var(--s-5);
+  }
+  html body .site.mkt .dp-highlight .dp-card-highlight {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  html body .site .site-footer {
+    margin-top: var(--s-9) !important;
+    padding-top: var(--s-8) !important;
+  }
+  html body .site .site-footer .mkt-footer-inner {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-6) var(--s-5);
+  }
+  html body .site .site-footer-brand {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 759px) {
+  html body .site .mkt-home-hero.mkt-hero-collage {
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+  }
+}
+
+/* Phones: Book stays in the header. The wordmark collapses to the app icon to make room. */
+@media (max-width: 439px) {
+  html body .site.mkt .mkt-nav button.mkt-brand .site-brand-word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  html body .site.mkt .mkt-nav .mkt-nav-links {
+    gap: 2px !important;
+  }
+}
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html body .site *,
+  html body .site *::before,
+  html body .site *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  html body .site .mkt-stage-photo {
+    transform: none !important;
+  }
+  html body .site .mkt-reveal,
+  html body .site .glass-motion .mkt-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  html body .site .mkt-card:hover,
+  html body .site .site-moment:hover,
+  html body .site .site-type-card:hover {
+    transform: none !important;
+  }
+}
+
+/* FeatureSections carries its own width from luxury.css; the site container owns it now. */
+html body .site .mkt-feature-section,
+html body .site .site-container > .mkt-feature-section {
+  width: auto !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding-inline: 0 !important;
+}
+
+/* Buttons inside stacked cards keep their own width. */
+html body .site.mkt :is(.mkt-card, .dp-card, .dp-rental) > :is(button, a) {
+  align-self: flex-start;
+}
+
+html body .site.mkt .dp-soon {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  margin-left: 8px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(245, 102, 0, 0.12) !important;
+  color: #B34A00 !important;
+  font-size: 0.6875rem !important;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+html body .site.mkt .dp-offer .dp-offer-meta {
+  color: var(--ink-3) !important;
+  font-size: var(--fs-small) !important;
+  opacity: 1 !important;
+}
+
+html body .site.mkt .dp-offer .dp-bar {
+  background: rgba(82, 45, 128, 0.1);
+}
+
+/* ---------- Home: six compact feature cards + See all ---------- */
+
+html body .site .site-features-compact .site-head-row {
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-5);
+}
+
+html body .site.mkt .site-see-all {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 4px !important;
+  border: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  color: var(--purple) !important;
+  font-weight: 700 !important;
+  font-size: var(--fs-body) !important;
+}
+
+html body .site.mkt .site-see-all:hover {
+  color: var(--orange) !important;
+}
+
+html body .site .site-feature-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-3);
+}
+
+@media (min-width: 760px) {
+  html body .site .site-feature-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-4);
+  }
+}
+
+@media (min-width: 1100px) {
+  html body .site .site-feature-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+html body .site.mkt button.mkt-card.site-feature-card {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--s-4);
+  width: 100%;
+  min-height: 0;
+  margin: 0 !important;
+  padding: var(--s-5) !important;
+  text-align: left;
+  white-space: normal;
+  color: var(--ink) !important;
+}
+
+html body .site .site-feature-card .mkt-glass-glyph {
+  margin: 0 !important;
+}
+
+html body .site .site-feature-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+html body .site .site-feature-title {
+  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-size: var(--fs-h3);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+html body .site .site-feature-what {
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+html body .site .site-feature-chevron {
+  margin-top: 4px;
+  color: var(--ink-3);
+  transition: transform 200ms var(--ease), color 200ms var(--ease);
+}
+
+@media (hover: hover) {
+  html body .site .site-feature-card:hover .site-feature-chevron {
+    color: var(--orange);
+    transform: translateX(3px);
+  }
+}
+
+/* ---------- Home on phones: keep it about four screens of content ---------- */
+
+@media (max-width: 759px) {
+  html body .site .site-type-list {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: var(--s-3) !important;
+  }
+  html body .site.mkt .site-type-card {
+    padding: var(--s-4) !important;
+    gap: 6px !important;
+    min-height: 0 !important;
+  }
+  html body .site .site-type-detail {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 0.8125rem !important;
+  }
+  html body .site .site-type-more {
+    display: none !important;
+  }
+  html body .site.mkt button.mkt-card.site-feature-card {
+    padding: var(--s-4) !important;
+    gap: var(--s-3);
+  }
+  html body .site .site-feature-what {
+    -webkit-line-clamp: 2;
+  }
+  html body .site.mkt-home .site-section {
+    padding-block: var(--s-7) 0 !important;
+  }
+  html body .site.mkt-home .site-footer {
+    margin-top: var(--s-8) !important;
+  }
+  html body .site .site-footer .mkt-footer-inner {
+    gap: var(--s-5) var(--s-4) !important;
+  }
+}
+
+/* ---------- First paint ----------
+   Above-the-fold motion is transform-only. Fading the route, page and hero
+   from opacity 0 held back first paint by about a second on phones. */
+@keyframes site-lift {
+  from { transform: translate3d(0, 18px, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+html body .route-fade.route-site,
+html body .site.mkt.fade-in {
+  animation-name: site-lift !important;
+}
+
+html body .site.mkt-home .mkt-stage-copy,
+html body .site .mkt-home-hero .mkt-hero-shot,
+html body .site.mkt .mkt-page-hero > * {
+  animation-name: site-lift !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html body .route-fade.route-site,
+  html body .site.mkt.fade-in,
+  html body .site.mkt-home .mkt-stage-copy,
+  html body .site .mkt-home-hero .mkt-hero-shot,
+  html body .site.mkt .mkt-page-hero > * {
+    animation: none !important;
+  }
+}

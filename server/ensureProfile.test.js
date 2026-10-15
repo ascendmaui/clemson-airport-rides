@@ -574,6 +574,11 @@ test('requestDriverTrip: runs ensureProfile before inserting trip', async () => 
   const sequence = []
   const { sb, tripsInserted } = createMockEndpointSb({
     onTripInsert: () => sequence.push('insertTrip'),
+    profileExisting: {
+      id: mockAuthedUser.id,
+      email: 'rider@clemson.edu',
+      stripe_default_pm_id: 'pm_test',
+    },
   })
 
   const res = await callHandler(

@@ -78,11 +78,12 @@ test('native service is idempotent and foreground/background throttle survives J
   const { options } = h.state.starts[0]
   assert.equal(options.accuracy, h.location.Accuracy.High)
   assert.equal(options.activityType, h.location.ActivityType.AutomotiveNavigation)
-  assert.equal(options.timeInterval, 5000)
-  assert.equal(options.distanceInterval, 15)
+  assert.equal(options.timeInterval, 12000)
+  assert.equal(options.distanceInterval, 0)
+  assert.equal(options.deferredUpdatesInterval, 12000)
   assert.equal(options.pausesUpdatesAutomatically, false)
   assert.equal(options.showsBackgroundLocationIndicator, true)
-  assert.equal(options.foregroundService.notificationTitle, 'Clemson RIDES trip in progress')
+  assert.equal(options.foregroundService.notificationTitle, 'Clemson Rides trip in progress')
   await h.api.publishDriverLocation(h.client, 'driver-1', {
     lat: 34.68, lng: -82.84, tripId: 'trip-1', tripStatus: 'accepted',
   })

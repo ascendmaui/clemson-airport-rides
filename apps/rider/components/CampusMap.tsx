@@ -4,9 +4,6 @@ import { DOWNTOWN, STADIUM } from 'rides-native/places.js'
 import { SIMULATED_FLEET_BADGE, refuseSimulatedDriverTap, simulatedFleetPercent } from 'rides-native/simulatedDrivers.js'
 import { demoCarPaint, SEARCH_MAP_DELTA_END, SEARCH_MAP_DELTA_START, SEARCH_MAP_ZOOM_MS } from 'rides-native/searchPreview.js'
 import { useSimulatedFleet } from 'rides-native/useSimulatedFleet.js'
-import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
-import type { TigerHeatZone } from 'rides-native/tigerHeat.js'
-import { DemandHeatLayer } from '@/components/DemandHeatLayer'
 import { mapKindLabel, type CampusMapHandle, type CampusMapProps, type MapPin } from '@/components/mapTypes'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -20,22 +17,6 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
   const styles = useThemedStyles(makeStyles)
   const simulatedFleet = useSimulatedFleet(showSimulatedFleet || searchMotion)
   const zoom = useRef(new Animated.Value(1)).current
-  const [tigerZones, setTigerZones] = useState<TigerHeatZone[]>([])
-  useEffect(() => {
-    if (!showHeat) {
-      setTigerZones([])
-      return undefined
-    }
-    let alive = true
-    fetchTigerHeatMap(heatWindow).then((result) => {
-      if (alive) setTigerZones(result.zones || [])
-    }).catch(() => {
-      if (alive) setTigerZones([])
-    })
-    return () => {
-      alive = false
-    }
-  }, [showHeat, heatWindow])
   useImperativeHandle(ref, () => ({
     animateTo() {},
   }))
@@ -101,7 +82,6 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
       {searchMotion ? null : (
       <>
       <View style={styles.wash} />
-      <DemandHeatLayer spots={spots} zones={tigerZones} scheme={scheme} enabled={showHeat} />
       <Text style={styles.kind}>{mapKindLabel(mapType)}</Text>
       {theater ? (
         <View style={styles.theaterRow}>
@@ -111,16 +91,6 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         </View>
       ) : null}
       <View style={styles.badges}>
-        {showHeat
-          ? tigerZones.map((zone: TigerHeatZone) => (
-              <Text
-                key={zone.id}
-                style={[styles.badge, zone.preview ? styles.tigerPreview : styles.tigerLive]}
-              >
-                {zone.bonusLabel}
-              </Text>
-            ))
-          : null}
         {gameDay ? <Text style={styles.badge}>{gameDayLabel || 'Game day'}</Text> : null}
         {surge ? <Text style={[styles.badge, styles.surge]}>Surge</Text> : null}
         {userCoordinate ? <Text style={styles.badge}>You</Text> : null}

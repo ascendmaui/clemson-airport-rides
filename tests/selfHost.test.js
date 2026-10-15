@@ -129,6 +129,20 @@ test('vercel.json rewrites resolve to the same destinations Vercel uses', () => 
 
   const unknown = applyRewrites('/api/does-not-exist', '', rules)
   assert.equal(unknown.pathname, '/api/does-not-exist')
+
+  const inboundMail = applyRewrites('/api/inbound-mail/hostinger', '', rules)
+  assert.equal(inboundMail.pathname, '/api/inbound-mail')
+  assert.equal(inboundMail.search, '')
+
+  const inboundToken = applyRewrites('/api/inbound-mail/hostinger', '?token=abc', rules)
+  assert.equal(inboundToken.pathname, '/api/inbound-mail')
+  assert.match(inboundToken.search, /token=abc/)
+
+  for (const kind of ['marketing', 'affiliate', 'outreach']) {
+    const agent = applyRewrites(`/api/agents/${kind}`, '', rules)
+    assert.equal(agent.pathname, '/api/agents')
+    assert.match(agent.search, new RegExp(`kind=${kind}`))
+  }
 })
 
 test('route discovery mounts every api handler file', async () => {
@@ -142,6 +156,47 @@ test('route discovery mounts every api handler file', async () => {
   }
   assert.equal(routes.get('/api/stripe-webhook').rawBody, true)
   assert.equal(routes.has('/api/stripeWebhookValidation.test'), false)
+})
+
+test('static assets are served br or gzip when the client accepts it, plain otherwise', async () => {
+  const { brotliDecompressSync, gunzipSync } = await import('node:zlib')
+  const distDir = await mkdtemp(path.join(tmpdir(), 'clemson-dist-gz-'))
+  const listener = await createApp({ distDir, apiDir: API_DIR, vercelPath: path.join(ROOT, 'vercel.json'), log() {} })
+  const server = http.createServer(listener)
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const { port } = server.address()
+  try {
+    await mkdir(path.join(distDir, 'assets'), { recursive: true })
+    await writeFile(path.join(distDir, 'index.html'), '<!doctype html><title>Clemson</title>')
+    const js = 'console.log("Clemson Rides asset");\n'.repeat(200)
+    await writeFile(path.join(distDir, 'assets', 'app-Gz123hash.js'), js)
+    await writeFile(path.join(distDir, 'photo.webp'), Buffer.alloc(4096, 7))
+    const assetPath = '/assets/app-Gz123hash.js'
+
+    const br = await httpRequest(port, { path: assetPath, headers: { 'accept-encoding': 'gzip, deflate, br' } })
+    assert.equal(br.status, 200)
+    assert.equal(br.headers['content-encoding'], 'br')
+    assert.equal(br.headers.vary, 'Accept-Encoding')
+    assert.match(String(br.headers['cache-control']), /immutable/)
+    assert.equal(Number(br.headers['content-length']), br.body.length)
+    assert.ok(br.body.length < js.length / 4)
+    assert.equal(brotliDecompressSync(br.body).toString('utf8'), js)
+
+    const gz = await httpRequest(port, { path: assetPath, headers: { 'accept-encoding': 'gzip' } })
+    assert.equal(gz.headers['content-encoding'], 'gzip')
+    assert.equal(gunzipSync(gz.body).toString('utf8'), js)
+
+    const plain = await httpRequest(port, { path: assetPath })
+    assert.equal(plain.headers['content-encoding'], undefined)
+    assert.equal(plain.text, js)
+
+    const img = await httpRequest(port, { path: '/photo.webp', headers: { 'accept-encoding': 'gzip, br' } })
+    assert.equal(img.headers['content-encoding'], undefined)
+    assert.equal(img.body.length, 4096)
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+    await rm(distDir, { recursive: true, force: true })
+  }
 })
 
 test('self-hosted server serves the SPA, health, rewrites, and raw Stripe body', async () => {

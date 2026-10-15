@@ -61,9 +61,9 @@ function OfferPreview() {
 export function DrivePerks() {
   return (
     <>
-      <section className="dp-hero" aria-labelledby="dp-hero-heading">
+      <section className="dp-hero mkt-page-hero" aria-labelledby="dp-hero-heading">
         <div className="dp-hero-copy">
-          <p className="mkt-kicker">Drive with Clemson RIDES</p>
+          <p className="mkt-kicker">Drive with Clemson Rides</p>
           <h1 id="dp-hero-heading">Know the pay. Keep the tips. Cash out today.</h1>
           <p className="dp-lede">Every offer shows per-hour pay, the rider’s photo and rating, and a color-coded worth-it gauge. Tips are 100% yours.</p>
           <div className="dp-hero-actions">
@@ -100,10 +100,10 @@ export function DrivePerks() {
 
       <section className="dp-group" aria-labelledby="dp-compare">
         <h2 id="dp-compare">Us vs. Uber &amp; Lyft</h2>
-        <p className="dp-sub">What you get with Clemson RIDES.</p>
-        <div className="mkt-card dp-compare" role="table" aria-label="What you get with Clemson RIDES">
+        <p className="dp-sub">What you get with Clemson Rides.</p>
+        <div className="mkt-card dp-compare" role="table" aria-label="What you get with Clemson Rides">
           <div className="dp-compare-row dp-compare-head" role="row">
-            <span role="columnheader">Feature</span><span role="columnheader">Clemson RIDES</span>
+            <span role="columnheader">Feature</span><span role="columnheader">Clemson Rides</span>
           </div>
           {COMPARISON_ROWS.map((row) => (
             <div key={row} className="dp-compare-row" role="row">

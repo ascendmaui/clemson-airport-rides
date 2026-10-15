@@ -1,8 +1,9 @@
+import { nativeGlassAvailable } from 'rides-native/glass'
 import { Glyph } from 'rides-native/icons'
 import { normalizeFlight } from 'rides-native/airportContext'
 import { useFocusEffect, useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, Image, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
+import { AccessibilityInfo, Image, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
@@ -15,6 +16,7 @@ import { loadRiderHoldTrip, loadSurfaceHold, type RiderHoldTrip } from '@/lib/ho
 import { oneParam } from '@/lib/oneParam'
 import { useAuth } from '@/lib/auth'
 import { successHaptic, tapHaptic } from '@/lib/feedback'
+import { logCaught, toastCaught } from '@/lib/caught'
 // duplicate oneParam import removed to fix TS2300
 import { openStripeCheckout } from '@/lib/openCheckout'
 import {
@@ -31,6 +33,7 @@ import {
 import { supabase } from '@/lib/supabase'
 import { RideTypeInfoButton } from 'rides-native/RideTypeSheet'
 import { formatUsd } from 'rides-native/places.js'
+import { riderStatusPhrase } from 'rides-native/liveTrip.js'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useStudentStatus } from '@/lib/useStudentStatus'
@@ -391,7 +394,8 @@ export function ScheduleScreen() {
       setPassActive(Boolean(status.active))
       setPassBps(status.active ? status.discountBps : 0)
       setPassName(status.name || TIGER_PASS_NAME)
-    }).catch(() => {
+    }).catch((err: unknown) => {
+      toastCaught('schedule-pass', err, 'Could not load Tiger Pass')
       if (!alive) return
       setPassActive(false)
       setPassBps(0)
@@ -476,7 +480,10 @@ export function ScheduleScreen() {
       .then((row) => {
         if (alive && row) setCheckoutTrip(row)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        logCaught('schedule-hold', err)
+        if (alive) setBanner('Could not load that ride hold. Try again.')
+      })
     return () => {
       alive = false
     }
@@ -490,7 +497,10 @@ export function ScheduleScreen() {
         if (!alive || !row) return
         setCheckoutTrip((current: RiderHoldTrip | null) => (current && current.id !== row.id ? current : row))
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        logCaught('schedule-surface-hold', err)
+        if (alive) setBanner('Could not load your ride hold. Try again.')
+      })
     return () => {
       alive = false
     }
@@ -508,8 +518,8 @@ export function ScheduleScreen() {
         try {
           const rows = await listScheduledTrips(riderId)
           if (alive) setMine(rows)
-        } catch {
-          /* Leave the list in place. The countdown text still ticks. */
+        } catch (err) {
+          logCaught('schedule-hold-list', err)
         }
         if (!checkoutTripId) return
         try {
@@ -517,8 +527,8 @@ export function ScheduleScreen() {
           if (!alive || !row) return
           setCheckoutTrip(row)
           if (isUnpaidHoldTtlCancel(row)) setBanner(null)
-        } catch {
-          /* Leave the checkout hold in place until the next tick. */
+        } catch (err) {
+          logCaught('schedule-hold-tick', err)
         }
       })()
     }, HOLD_COUNTDOWN_TICK_MS)
@@ -615,8 +625,8 @@ export function ScheduleScreen() {
           .then((held) => {
             if (!ignoreEarlyHold && held) setCheckoutTrip(held)
           })
-          .catch(() => {
-            /* The countdown appears once the trip row can be read. */
+          .catch((err: unknown) => {
+            logCaught('schedule-checkout-hold', err)
           })
       }
       setBanner(`Opening checkout. The final fare ${formatCents(farePaid)} is charged when the trip ends.`)
@@ -645,7 +655,8 @@ export function ScheduleScreen() {
       if (!settled.settled && !reconciledPaid) {
         try {
           close = await abandonAirportCheckout(supabase, { tripId, sessionId })
-        } catch {
+        } catch (err) {
+          logCaught('schedule-abandon-checkout', err)
           close = null
         }
       }
@@ -653,7 +664,8 @@ export function ScheduleScreen() {
       let held: RiderHoldTrip | null = null
       try {
         held = await loadRiderHoldTrip(tripId)
-      } catch {
+      } catch (err) {
+        logCaught('schedule-hold-after-checkout', err)
         held = null
       }
       if (outcome !== 'paid' && isUnpaidHoldTtlCancel(held)) {
@@ -882,7 +894,7 @@ export function ScheduleScreen() {
         <Text style={styles.fine}>Friday 9:00 PM is filled in. Change it for another slot, at least 30 minutes ahead.</Text>
         <Text style={styles.label}>Pickup</Text>
         <TabSwipeRegion>
-<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroller} contentContainerStyle={styles.pills}>
           {RIDE_PLACES.map((place) => (
             <Pill key={`wpu-${place.label}`} label={place.label} active={weekendPickup.label === place.label} onPress={() => setWeekendPickup(place)} />
           ))}
@@ -892,7 +904,7 @@ export function ScheduleScreen() {
           <>
             <Text style={styles.label}>Drop-off</Text>
             <TabSwipeRegion>
-<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroller} contentContainerStyle={styles.pills}>
               {RIDE_PLACES.map((place) => (
                 <Pill key={`wdo-${place.label}`} label={place.label} active={weekendDropoff.label === place.label} onPress={() => setWeekendDropoff(place)} />
               ))}
@@ -1122,7 +1134,7 @@ export function ScheduleScreen() {
         <TextInput value={campusTime} onChangeText={setCampusTime} placeholder="HH:MM" placeholderTextColor={colors.placeholder} style={styles.input} autoCapitalize="none" accessibilityLabel="Ride pickup time" />
         <Text style={styles.label}>Pickup</Text>
         <TabSwipeRegion>
-<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroller} contentContainerStyle={styles.pills}>
           {RIDE_PLACES.map((place) => (
             <Pill key={`pu-${place.label}`} label={place.label} active={pickup.label === place.label} onPress={() => setPickup(place)} />
           ))}
@@ -1130,7 +1142,7 @@ export function ScheduleScreen() {
 </TabSwipeRegion>
         <Text style={styles.label}>Drop-off</Text>
         <TabSwipeRegion>
-<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroller} contentContainerStyle={styles.pills}>
           {RIDE_PLACES.map((place) => (
             <Pill key={`do-${place.label}`} label={place.label} active={dropoff.label === place.label} onPress={() => setDropoff(place)} />
           ))}
@@ -1174,7 +1186,7 @@ export function ScheduleScreen() {
             {reminder ? <Text style={styles.remindKicker}>{reminder.label}</Text> : null}
             <Text style={styles.cardLine}>{row.pickup_label} → {row.dropoff_label}</Text>
             <Text style={styles.fine}>
-              {rowPurpose(row)} · {row.status} · {formatPickupAt(row.pickup_at || row.scheduled_for)}
+              {rowPurpose(row)} · {riderStatusPhrase(row.status)} · {formatPickupAt(row.pickup_at || row.scheduled_for)}
               {row.metadata?.recurrence?.weekdays?.length ? ` · weekly ${row.metadata.recurrence.weekdays.join(', ')}` : ''}
             </Text>
             {rideTypeName(String(row.tier || '')) ? <Text style={styles.student}>{rideTypeName(String(row.tier || ''))}</Text> : null}
@@ -1317,7 +1329,8 @@ function makeStyles(colors: Palette) {
       overflow: 'hidden' as const,
     },
     link: { color: colors.link, fontWeight: '700' as const, marginTop: 14, marginBottom: 8 },
-    pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
+    pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, alignItems: 'flex-start' as const, flexGrow: 0 },
+    chipScroller: { flexGrow: 0, alignSelf: 'stretch' as const },
     cardLine: { fontWeight: '800' as const, color: colors.ink },
     student: { color: colors.orange, fontWeight: '700' as const, fontSize: 12 },
     cancel: { color: colors.danger, fontWeight: '700' as const, marginTop: 6 },
@@ -1350,5 +1363,6 @@ function rowPurpose(row: ScheduledRow) {
 
 
 export default function ScheduleScreenRoute() {
+  if (Platform.OS === 'ios' && nativeGlassAvailable()) return <ScheduleScreen />
   return null
 }

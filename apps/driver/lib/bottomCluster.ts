@@ -1,47 +1,16 @@
-/** Distance the bottom cluster travels when the driver taps END. */
-export const BOTTOM_CLUSTER_SHIFT = 120
+/** Minimum distance home clutter travels when the driver goes online. */
+export const HOME_CLUTTER_SHIFT = 720
 
-export type ShiftControl = 'END' | 'GO'
-
-/** One translate for the bar, the GO button, and the side icons. */
-export type ClusterTranslate = {
-  translateY: number
-  bar: number
-  go: number
-  sideIcons: number
-}
-
-/** Online rests the cluster. END (offline) slides the whole cluster down. */
-export function bottomClusterTranslateY(online: boolean): number {
-  return online ? 0 : BOTTOM_CLUSTER_SHIFT
-}
-
-function clusterFrame(online: boolean): ClusterTranslate {
-  const translateY = bottomClusterTranslateY(online)
-  return { translateY, bar: translateY, go: translateY, sideIcons: translateY }
-}
+export const HOME_CLUTTER_SPRING = { damping: 18, stiffness: 160, mass: 0.85 }
 
 /**
- * END and GO flip one online flag. Every piece of the bottom cluster reads that
- * same translate, so the bar, GO button, and side icons cannot drift apart.
+ * Online slides clutter off the map. A fixed 720pt shift leaves the earnings
+ * pill and Busy areas on a tall phone, over GO. Use the window height when
+ * it is taller than that floor. Offline springs clutter back to rest.
  */
-export function createBottomCluster(online = true) {
-  let current = online
-  return {
-    tap(control: ShiftControl): ClusterTranslate {
-      switch (control) {
-        case 'END':
-          current = false
-          break
-        case 'GO':
-          current = true
-          break
-        default: {
-          const unknown: never = control
-          return unknown
-        }
-      }
-      return clusterFrame(current)
-    },
-  }
+export function homeClutterTranslateY(online: boolean, viewportHeight = HOME_CLUTTER_SHIFT): number {
+  if (!online) return 0
+  const height = Number(viewportHeight)
+  if (!Number.isFinite(height) || height <= 0) return HOME_CLUTTER_SHIFT
+  return Math.max(HOME_CLUTTER_SHIFT, height)
 }

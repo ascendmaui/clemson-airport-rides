@@ -1,3 +1,4 @@
+import { supportEmail } from '../shared/productLinks.js'
 import { PRODUCT_BRIEF, action, bestTopic, sanitizeActions } from './productKnowledge.js'
 import { STUDENT_CONFIRM_EMAIL_COPY, STUDENT_EMAIL_REQUIRED_COPY } from '../src/lib/studentDomain.js'
 import { contextForPrompt } from './userContext.js'
@@ -120,7 +121,7 @@ export function buildHelpTurn({ messages, context, roleVariant }) {
   const actions = []
 
   if (issue) {
-    paragraphs.push('I only walk through how Clemson RIDES works. I cannot file a ticket, reverse a charge, or change a trip. Open Account → Support and describe what happened. Email rides@clemsonrides.com if you would rather write a person directly.')
+    paragraphs.push(`I only walk through how Clemson RIDES works. I cannot file a ticket, reverse a charge, or change a trip. Open Account → Support and describe what happened. Email ${supportEmail()} if you would rather write a person directly.`)
     actions.push(action('Open Support', 'account', { tab: 'support' }))
   }
 

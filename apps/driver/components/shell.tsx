@@ -1,14 +1,20 @@
-import { Glyph, PressScale } from 'rides-native/icons'
+import { GlassButton, GlassSurface, glassTextColor } from 'rides-native/glass'
+import { Glyph } from 'rides-native/icons'
 import type { ReactNode } from 'react'
-import { LinearGradient } from 'expo-linear-gradient'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useRef } from 'react'
+import { Animated, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { motion, radius, type as typeScale } from 'rides-native/shared/theme.js'
+import { color, glowStyle, motion, radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { Enter } from '@/lib/enterMotion'
 import { useTheme } from '@/lib/theme'
-import { useCardShadow, useLift } from '@/components/chrome'
+import { useLift } from '@/components/chrome'
 
 type IconName = string
+type GoTone = 'orange' | 'purple' | 'green'
+
+function isChevron(icon: string) {
+  return icon === 'chevron-back' || icon === 'back' || icon === 'chevron-forward' || icon === 'forward'
+}
 
 export function CircleButton({
   icon,
@@ -19,74 +25,80 @@ export function CircleButton({
   label: string
   onPress: () => void
 }) {
-  const { colors } = useTheme()
-  const shadow = useCardShadow()
+  const { scheme } = useTheme()
+  const chevron = isChevron(icon)
+  const ink = glassTextColor({ app: 'driver', scheme, variant: 'fab' })
   return (
-    <PressScale
+    <GlassButton
+      app="driver"
+      scheme={scheme}
+      variant="fab"
+      showStreak={!chevron}
       onPress={onPress}
-      accessibilityRole="button"
       accessibilityLabel={label}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      style={[styles.circle, shadow, { backgroundColor: colors.card }]}
+      style={styles.circle}
     >
-      <Glyph name={icon} size={22} color={colors.title} />
-    </PressScale>
+      <Glyph name={icon} size={22} color={ink} strokeWidth={chevron ? 2.6 : undefined} />
+    </GlassButton>
   )
 }
 
 export function GoButton({
   online,
   busy,
-  disabled = false,
-  disabledReason,
+  tone = 'orange',
+  cue = 0,
   onPress,
 }: {
   online: boolean
   busy: boolean
-  disabled?: boolean
-  disabledReason?: string | null
+  tone?: GoTone
+  cue?: number
   onPress: () => void
 }) {
-  const { colors } = useTheme()
-  const isDisabled = Boolean(busy || disabled)
-  const label = disabled
-    ? (disabledReason ? `Go online disabled: ${disabledReason}` : 'Go online disabled')
-    : (online ? 'Go offline' : 'Go online')
-  const gradient = disabled
-    ? [colors.card, colors.track] as const
-    : online
-      ? [colors.purple, '#3C1E66'] as const
-      : [colors.goStart, colors.orange] as const
+  const { scheme } = useTheme()
+  const accent: GoTone = online ? 'purple' : tone
+  const ink = glassTextColor({ app: 'driver', scheme, variant: 'fab', accent })
+  const scale = useRef(new Animated.Value(1)).current
+  useEffect(() => {
+    scale.setValue(1)
+  }, [online, scale])
+  useEffect(() => {
+    if (!cue) return undefined
+    scale.setValue(1)
+    const anim = Animated.sequence([
+      Animated.timing(scale, { toValue: 0.86, duration: 90, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, friction: 5, useNativeDriver: true }),
+    ])
+    anim.start(({ finished }) => {
+      if (finished) scale.setValue(1)
+    })
+    return () => anim.stop()
+  }, [cue, scale])
+  const label = online ? 'Go offline' : tone === 'green' ? 'Going online' : 'Go online'
 
   return (
-    <PressScale
-      onPress={onPress}
-      disabled={isDisabled}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityHint={disabled && disabledReason ? disabledReason : online ? 'Takes you offline' : 'Goes online to receive ride requests'}
-      accessibilityState={{ disabled: isDisabled, busy }}
-      style={{ opacity: isDisabled ? 0.45 : 1 }}
-      scaleTo={isDisabled ? 1 : 0.95}
-    >
-      <LinearGradient
-        colors={gradient}
-        start={{ x: 0.72, y: 0 }}
-        end={{ x: 0.28, y: 1 }}
-        style={[styles.go, {
-          shadowColor: colors.shadow,
-          shadowOpacity: 0.16,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 8 },
-          elevation: 6,
-        }]}
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <GlassButton
+        app="driver"
+        scheme={scheme}
+        variant="fab"
+        accent={accent}
+        onPress={onPress}
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityHint={online ? 'Takes you offline' : 'Goes online to receive ride requests'}
+        accessibilityState={{ disabled: busy, busy }}
+        style={styles.go}
       >
-        <Glyph name="online" size={22} color={disabled ? colors.inkSecondary : colors.onAccent} />
-        <Text style={[styles.goText, { color: disabled ? colors.inkSecondary : colors.onAccent }]}>
+        <Glyph name="online" size={22} color={ink} />
+        <Text style={[styles.goText, { color: ink }]}>
           {online ? 'END' : 'GO'}
         </Text>
-      </LinearGradient>
-    </PressScale>
+      </GlassButton>
+    </Animated.View>
   )
 }
 
@@ -123,28 +135,33 @@ export function Segmented<T extends string>({
   value: T
   onChange: (id: T) => void
 }) {
-  const { colors } = useTheme()
+  const { scheme } = useTheme()
+  const ink = glassTextColor({ app: 'driver', scheme, variant: 'chip' })
   return (
-    <View style={[styles.segments, { backgroundColor: colors.segment }]}>
+    <GlassSurface app="driver" scheme={scheme} variant="chip" style={styles.segments}>
       {options.map((option) => {
         const active = option.id === value
         return (
-          <Pressable
+          <GlassButton
             key={option.id}
+            app="driver"
+            scheme={scheme}
+            variant="chip"
+            accent={active ? 'orange' : 'purple'}
+            selected={active}
             onPress={() => onChange(option.id)}
-            accessibilityRole="button"
             accessibilityLabel={option.label}
             accessibilityState={{ selected: active }}
             hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-            style={[styles.segment, active && { backgroundColor: colors.segmentOn }]}
+            style={styles.segment}
           >
-            <Text style={{ color: active ? colors.segmentTextOn : colors.segmentText, fontWeight: '800', letterSpacing: typeScale.meta.letterSpacing }}>
+            <Text style={{ color: ink, fontWeight: '800', letterSpacing: typeScale.meta.letterSpacing }}>
               {option.label}
             </Text>
-          </Pressable>
+          </GlassButton>
         )
       })}
-    </View>
+    </GlassSurface>
   )
 }
 
@@ -207,7 +224,7 @@ export function StackPage({
   right?: ReactNode
 }) {
   const insets = useSafeAreaInsets()
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const barShadow = useLift('bar')
   return (
     <View style={[styles.page, { backgroundColor: colors.background, paddingTop: insets.top + 8 }]}>
@@ -220,9 +237,9 @@ export function StackPage({
         <Enter style={styles.pageBody}>{children}</Enter>
       </ScrollView>
       {footer ? (
-        <View style={[styles.footer, barShadow, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: insets.bottom + 12 }]}>
+        <GlassSurface app="driver" scheme={scheme} variant="header" style={[styles.footer, barShadow, { paddingBottom: insets.bottom + 12 }]}>
           {footer}
-        </View>
+        </GlassSurface>
       ) : null}
     </View>
   )
@@ -233,6 +250,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
+    padding: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -240,15 +258,22 @@ const styles = StyleSheet.create({
     width: 84,
     height: 84,
     borderRadius: 42,
+    padding: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#F56600',
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    // Orange glow; on Android also a soft orange ring, since elevation shadows draw grey there.
+    ...glowStyle(color.orange, Platform.OS),
   },
-  goText: { fontSize: 26, fontWeight: '800', letterSpacing: 0.5 },
+  goText: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 30,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    width: 84,
+  },
   switch: { width: 52, height: 30, borderRadius: 999, padding: 3, justifyContent: 'center' },
   knob: { width: 24, height: 24, borderRadius: 12 },
   segments: { flexDirection: 'row', borderRadius: radius.pill, padding: 4 },

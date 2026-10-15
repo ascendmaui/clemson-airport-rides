@@ -17,7 +17,6 @@ import { approachHaptic, arrivalCue, playApproachPing } from '@/lib/feedback'
 import {
   approachPulseMotion,
   crowdCue,
-  formatApproachFeet,
   type ApproachPulseEasing,
   type ApproachPulseMode,
 } from '@/lib/approachAlert'
@@ -197,7 +196,7 @@ export function ApproachAlert({
   const styles = useThemedStyles(makeStyles)
   const paused = useSosEngaged()
   const reduceMotion = useReducedMotion() === true
-  const { active, reading, direction, attention, statusLine, waiting } = useDriverApproach(status, driverId, tripId)
+  const { active, reading, attention, statusLine, waiting } = useDriverApproach(status, driverId, tripId)
   const cue = crowdCue(reading?.feet)
   // Latest cue for the crowd loop. GPS updates change the distance every second or so;
   // the loop reads this ref instead of restarting, so a new fix can never fire an extra buzz.
@@ -258,18 +257,20 @@ export function ApproachAlert({
     }
   }, [active, inCrowd, paused])
 
-  if (!active || paused) return null
+  // The compass distance bubble (feet, heading, meters) is retired.
+  // PickupBeaconHost is the close-range screen. This card only covers a missing fix.
+  if (!active || paused || reading) return null
 
-  const primary = approachPrimaryLine(reading?.feet)
+  const primary = waiting || "Waiting for your driver's location"
   const kicker = statusLine.split(' · ')[0]
-  const secondary = reading?.secondary ?? waiting ?? statusLine
+  const secondary = statusLine && statusLine !== primary ? statusLine : ''
   const body = (
     <View pointerEvents="box-none" style={styles.host}>
       <View pointerEvents="none" style={[styles.dock, { bottom: Math.max(insets.bottom, 10) + 74 }]}>
-        <View style={[styles.glowFrame, reading ? styles.glowFrameBubble : styles.glowFrameCard]}>
+        <View style={[styles.glowFrame, styles.glowFrameCard]}>
           {pulseMode === 'off' ? null : (
             <ApproachGlow
-              round={Boolean(reading)}
+              round={false}
               orange={colors.orange}
               purple={colors.purple}
               reduceMotion={reduceMotion}
@@ -280,30 +281,15 @@ export function ApproachAlert({
             accessible
             accessibilityRole="text"
             accessibilityLiveRegion="polite"
-            accessibilityLabel={reading
-              ? `${direction?.compass || 'Driver'} ${primary}. ${direction?.facing || reading.secondary}. ${statusLine}`
-              : `${primary}. ${waiting ?? statusLine}`}
-            style={reading ? [styles.bubble, lift(colors, 'float')] : [styles.card, lift(colors, 'float')]}
+            accessibilityLabel={`${primary}. ${waiting ?? statusLine}`}
+            style={[styles.card, lift(colors, 'float')]}
           >
-            {reading ? (
-              <>
-                <View style={[styles.arrowWrap, { transform: [{ rotate: `${direction?.bearing ?? 0}deg` }] }]}>
-                  <Text style={styles.arrow}>▲</Text>
-                </View>
-                <Text style={styles.feet}>{formatApproachFeet(reading.feet)}</Text>
-                <Text style={styles.compass}>{direction?.compass || 'Driver'}</Text>
-                <Text style={styles.facing}>{direction?.facing || secondary}</Text>
-              </>
-            ) : (
-              <>
-                <View style={styles.dot} />
-                <View style={styles.copy}>
-                  <Text style={styles.kicker}>{kicker.toUpperCase()}</Text>
-                  <Text style={styles.primary}>{primary}</Text>
-                  <Text style={styles.secondary}>{secondary}</Text>
-                </View>
-              </>
-            )}
+            <View style={styles.dot} />
+            <View style={styles.copy}>
+              <Text style={styles.kicker}>{kicker.toUpperCase()}</Text>
+              <Text style={styles.primary}>{primary}</Text>
+              <Text style={styles.secondary}>{secondary}</Text>
+            </View>
           </View>
         </View>
       </View>
@@ -320,15 +306,9 @@ export function ApproachAlert({
   return body
 }
 
-function approachPrimaryLine(feet: number | null | undefined): string {
-  const label = formatApproachFeet(feet)
-  return label === 'nearby' ? 'Nearby' : label
-}
-
 function makeStyles(colors: Palette) {
   const light = colors.statusBar === 'dark'
   const accentText = light ? '#9A3F00' : '#FFC9A3'
-  const feetColor = light ? '#522D80' : '#E6D4FF'
   return {
     host: {
       ...StyleSheet.absoluteFill,
@@ -342,10 +322,6 @@ function makeStyles(colors: Palette) {
     },
     glowFrame: {
       position: 'relative' as const,
-    },
-    glowFrameBubble: {
-      alignSelf: 'center' as const,
-      width: 176,
     },
     glowFrameCard: {
       alignSelf: 'stretch' as const,
@@ -387,50 +363,6 @@ function makeStyles(colors: Palette) {
       fontWeight: '500' as const,
       lineHeight: 18,
       marginTop: 2,
-    },
-    bubble: {
-      width: 176,
-      height: 176,
-      borderRadius: 88,
-      borderWidth: 2,
-      borderColor: light ? 'rgba(245,102,0,0.55)' : 'rgba(255,201,163,0.7)',
-      backgroundColor: colors.card,
-      alignItems: 'center' as const,
-      justifyContent: 'center' as const,
-      paddingHorizontal: 16,
-    },
-    arrowWrap: {
-      width: 28,
-      height: 28,
-      alignItems: 'center' as const,
-      justifyContent: 'center' as const,
-    },
-    arrow: {
-      color: accentText,
-      fontSize: 16,
-      fontWeight: '700' as const,
-    },
-    feet: {
-      color: feetColor,
-      fontSize: 28,
-      fontWeight: '700' as const,
-      letterSpacing: -0.6,
-      fontVariant: ['tabular-nums' as const],
-    },
-    compass: {
-      color: accentText,
-      fontSize: 13,
-      fontWeight: '700' as const,
-      letterSpacing: 0.6,
-      marginTop: 2,
-    },
-    facing: {
-      color: colors.inkSecondary,
-      fontSize: 12,
-      fontWeight: '600' as const,
-      textAlign: 'center' as const,
-      lineHeight: 16,
-      marginTop: 4,
     },
   }
 }

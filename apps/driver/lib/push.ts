@@ -149,15 +149,18 @@ async function storeToken(supabase: SupabaseClient | null, driverId: string, tok
     expo_push_token: token,
     updated_at: updatedAt,
   })
-  if (!status.error) return true
-  if (!/expo_push_token|column|schema cache/i.test(status.error.message || '')) return false
+  const legacyOk = !status.error
+  // A permission error on the legacy column is not a reason to try the private table.
+  if (!legacyOk && !/expo_push_token|column|schema cache/i.test(status.error?.message || '')) return false
   const row = { driver_id: driverId, token, platform: Platform.OS, updated_at: updatedAt }
   // features tells the server this build handles trip status pushes (Arrived?, rider canceled).
+  // Write them even when the legacy driver_status column accepts the token. Offer pushes
+  // can read that column; closed-app status pushes only read driver_push_tokens.features.
   const table = await supabase.from('driver_push_tokens').upsert({ ...row, features: [TRIP_STATUS_PUSH_FEATURE] })
   if (!table.error) return true
-  if (!/features|schema cache/i.test(table.error.message || '')) return false
+  if (!/features|schema cache/i.test(table.error.message || '')) return legacyOk
   const plain = await supabase.from('driver_push_tokens').upsert(row)
-  return !plain.error
+  return !plain.error || legacyOk
 }
 
 export async function notifyAcceptedRide(card: {

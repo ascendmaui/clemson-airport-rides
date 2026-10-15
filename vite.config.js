@@ -99,6 +99,11 @@ function devApiPlugin() {
 
 export default defineConfig({
   plugins: [react(), devApiPlugin()],
+  define: {
+    'process.env.SUPPORT_EMAIL': JSON.stringify(process.env.SUPPORT_EMAIL || ''),
+    'process.env.VITE_SUPPORT_EMAIL': JSON.stringify(process.env.VITE_SUPPORT_EMAIL || ''),
+    'process.env.EXPO_PUBLIC_SUPPORT_EMAIL': JSON.stringify(process.env.EXPO_PUBLIC_SUPPORT_EMAIL || ''),
+  },
   build: {
     outDir: 'dist',
   },

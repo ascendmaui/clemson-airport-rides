@@ -7,11 +7,13 @@ import { useAuth } from '@/lib/auth'
 import { registerDriverPush, type PushState } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { displayFirstName } from 'rides-native/authErrors'
+import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
 import { WomenOnlyCard } from 'rides-native/WomenOnlyCard'
 import { loadComfortPreference, saveComfortPreference } from 'rides-native/comfortPreference.js'
 import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
+import { quiet } from '@/lib/softFail'
 
 export default function AccountScreen() {
   const router = useRouter()
@@ -33,7 +35,7 @@ export default function AccountScreen() {
       setGenderIdentity(comfort.genderIdentity)
       setWomenOnly(comfort.womenOnlyMatching)
       setComfortAvailable(comfort.available)
-    }).catch(() => {})
+    }).catch(quiet('account load'))
     registerDriverPush(supabase, user.id).then(setPush).catch((err) => {
       setPush({
         granted: false,
@@ -93,6 +95,7 @@ export default function AccountScreen() {
       </Text>
       {push?.detail ? <Text style={styles.copy}>{push.detail}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      <AdminAccountRow supabase={supabase} colors={colors} onPress={() => router.push('/admin')} />
       {user ? (
         <>
           <Pressable

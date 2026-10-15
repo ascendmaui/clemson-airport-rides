@@ -4,6 +4,7 @@
  */
 import { readDriverPushToken } from './driverPushToken.js'
 import { sendExpoPush } from './expoPush.js'
+import { noteExpoPushResult } from './expoPushReceipts.js'
 import { sendApplicantNotice } from './applicantMail.js'
 import { lostItemNoticeBody } from '../shared/copy/messaging.js'
 import { sanitizeRiderNotice } from '../shared/riderDriverPrivacy.js'
@@ -127,6 +128,8 @@ export async function notifyTripCounterpart(input, deps = {}) {
     data: { tripId, kind: kind === 'lost-item' ? 'trip_lost_item' : 'trip_message' },
     channelId: 'ride-requests',
   }))
+  const recipientRole = recipientId === trip.driver_id ? 'driver' : 'rider'
+  await noteExpoPushResult(sb, { push, token, ownerId: recipientId, ownerRole: recipientRole })
 
   let email = { emailed: false, reason: 'not_requested' }
   if (copy.email) {

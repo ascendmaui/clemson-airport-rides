@@ -1,13 +1,14 @@
 import { GlassBadge, Glyph } from 'rides-native/icons'
 import { MainTabs } from '@/components/MainTabs'
-import { useFocusEffect, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import * as Linking from 'expo-linking'
 import * as WebBrowser from 'expo-web-browser'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { useAuth } from '@/lib/auth'
+import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
 import { parseCheckoutSessionId } from 'rides-native/checkoutReturn.js'
 import {
@@ -26,9 +27,11 @@ import {
   startPaymentMethodSetup,
   updateSavedPaymentMethod,
 } from 'rides-native/riderMoney.js'
+import { caughtMessage, logCaught, toastCaught } from '@/lib/caught'
 import { nativePaymentSheetAvailable, presentNativeSetupSheet } from '@/lib/nativePaymentSheet'
 import type { NativeSetupResult } from '@/lib/nativePaymentSheetTypes'
 import { formatCents } from 'rides-native/tripTags.js'
+import { riderStatusPhrase } from 'rides-native/liveTrip.js'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
@@ -60,7 +63,7 @@ const MONEY_SHORTCUTS: { href: '/promo' | '/tiger-pass' | '/student' | '/history
   { href: '/promo', label: 'Promos', icon: 'promo', tone: 'orange' },
   { href: '/tiger-pass', label: 'Tiger Pass', icon: 'pass', tone: 'purple' },
   { href: '/student', label: 'Student', icon: 'student', tone: 'purple' },
-  { href: '/history', label: 'Tips', icon: 'tip', tone: 'orange' },
+  { href: '/history', label: 'History', icon: 'history', tone: 'orange' },
 ]
 
 function paymentGlyph(type: string): string {
@@ -71,6 +74,24 @@ function paymentGlyph(type: string): string {
 
 function BillingScreen() {
   const router = useRouter()
+  const params = useLocalSearchParams<{
+    returnTo?: string
+    add?: string
+    dest?: string
+    pickup?: string
+    tier?: string
+    note?: string
+    pickupLat?: string
+    pickupLng?: string
+    destLat?: string
+    destLng?: string
+    passengers?: string
+    tip?: string
+    driver?: string
+  }>()
+  const returnTo = oneParam(params.returnTo)
+  const addCard = oneParam(params.add) === '1'
+  const autoOpened = useRef(false)
   const insets = useSafeAreaInsets()
   const { user } = useAuth()
   const [card, setCard] = useState<Card | null>(null)
@@ -107,6 +128,12 @@ function BillingScreen() {
       const problems = [result.profileError, result.paymentsError, result.ridesError].filter(Boolean)
       setNote(problems.length ? problems.join(' ') : null)
       setLoading(false)
+    }).catch((err: unknown) => {
+      if (!alive) return
+      setLoading(false)
+      const message = caughtMessage(err, 'Could not load billing. Try again.')
+      setNote(message)
+      toastCaught('billing-load', err, 'Could not load billing', message)
     })
     loadPrepaidCredits(supabase).then((result) => {
       if (!alive) return
@@ -115,13 +142,21 @@ function BillingScreen() {
       setCreditsLoaded(true)
       setCreditsError(result.error)
       setTiers((result.tiers || []) as PrepaidTier[])
+    }).catch((err: unknown) => {
+      if (!alive) return
+      const message = caughtMessage(err, 'Could not load your credit balance.')
+      setCreditsLoaded(true)
+      setCreditsUnavailable(true)
+      setCreditsError(message)
+      toastCaught('billing-credits', err, 'Could not load credits', message)
     })
     listSavedPaymentMethods(supabase).then((result) => {
       if (!alive || result?.error) return
       setMethods(result.methods || [])
       setDefaultPmId(result.defaultPmId || null)
-    }).catch(() => {
-      /* The profile card still shows when the saved-method list is down. */
+    }).catch((err: unknown) => {
+      logCaught('billing-methods', err)
+      if (alive) setNote('Saved cards could not be loaded. Your profile card still shows.')
     })
     return () => {
       alive = false
@@ -129,6 +164,32 @@ function BillingScreen() {
   }, [user])
 
   useFocusEffect(load)
+
+  function returnToRequest(message: string) {
+    setNote(message)
+    load()
+    if (returnTo !== 'pick-driver') return
+    if (router.canGoBack()) {
+      router.back()
+      return
+    }
+    router.replace({
+      pathname: '/pick-driver',
+      params: {
+        dest: oneParam(params.dest),
+        pickup: oneParam(params.pickup),
+        tier: oneParam(params.tier),
+        note: oneParam(params.note),
+        pickupLat: oneParam(params.pickupLat),
+        pickupLng: oneParam(params.pickupLng),
+        destLat: oneParam(params.destLat),
+        destLng: oneParam(params.destLng),
+        passengers: oneParam(params.passengers),
+        tip: oneParam(params.tip),
+        driver: oneParam(params.driver),
+      },
+    })
+  }
 
   async function finishCheckout(methodId: string, returnUrl: string) {
     if (!supabase) return
@@ -148,9 +209,14 @@ function BillingScreen() {
       return
     }
     await saveCheckoutPaymentMethod(supabase, sessionId)
-    setNote('Payment method saved.')
-    load()
+    returnToRequest('Payment method saved.')
   }
+
+  useEffect(() => {
+    if (!addCard || autoOpened.current || !user || !supabase) return
+    autoOpened.current = true
+    void onPickMethod(ADD_ANOTHER_PAYMENT_METHOD_ID)
+  }, [addCard, user])
 
   async function onPickMethod(methodId: string) {
     if (!supabase || busy) return
@@ -174,8 +240,7 @@ function BillingScreen() {
               return
             }
             await saveSetupPaymentMethod(supabase, setup.setupIntentId)
-            setNote('Payment method saved.')
-            load()
+            returnToRequest('Payment method saved.')
             return
           }
           const sheetNote = setupSheetNote(presented)
@@ -264,12 +329,12 @@ function BillingScreen() {
           <Text style={styles.creditsLabel} accessibilityRole="header">credits</Text>
         </View>
         <View style={[styles.card, lift(colors, 'rest')]} accessibilityLabel="credits">
-          <Text style={styles.cardLast}>
+          <Text style={[styles.cardLast, { fontSize: 40, fontWeight: '800', color: '#F56600' }]}>
             {!creditsLoaded
               ? '…'
               : creditsUnavailable || creditsCents == null
                 ? 'Balance unavailable'
-                : formatCents(creditsCents)}
+                : `$${(creditsCents / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`}
           </Text>
           {creditsError ? <Text style={styles.error}>{creditsError}</Text> : null}
         </View>
@@ -355,12 +420,12 @@ function BillingScreen() {
           )}
         </View>
 
-        <Text style={styles.kicker}>DEPOSITS</Text>
+        <Text style={styles.kicker}>PAYMENTS</Text>
         {deposits.length === 0 ? <Text style={styles.copy}>{loading ? 'Loading payments…' : 'No fare payments on this account.'}</Text> : null}
         {deposits.map((row: Deposit) => (
           <View key={row.id} style={[styles.card, lift(colors, 'rest')]}>
             <Text style={styles.rowTitle}>{formatCents(row.amount_cents || 0)}</Text>
-            <Text style={styles.copy}>{row.status || 'recorded'} · {row.created_at ? new Date(row.created_at).toLocaleString() : 'deposit'}</Text>
+            <Text style={styles.copy}>{row.status || 'recorded'} · {row.created_at ? new Date(row.created_at).toLocaleString() : 'payment'}</Text>
           </View>
         ))}
 
@@ -370,7 +435,7 @@ function BillingScreen() {
           <View key={row.id} style={[styles.card, lift(colors, 'rest')]}>
             <Text style={styles.rowTitle}>{row.dropoff_label || 'Ride'}</Text>
             <Text style={styles.copy}>
-              {row.pickup_label || 'Pickup'} · {row.status || 'requested'}
+              {row.pickup_label || 'Pickup'} · {riderStatusPhrase(row.status)}
             </Text>
             <Text style={styles.copy}>
               Fare {formatCents(row.fare_cents || 0)}

@@ -1,7 +1,7 @@
 import { useFocusEffect, usePathname, useRouter } from 'expo-router'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ScrollView, Share, Switch, Text, TextInput, View } from 'react-native'
+import { Platform, ScrollView, Share, Switch, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
@@ -11,6 +11,7 @@ import { Card, EmptyState, ErrorText, Field, SkeletonBlock } from '@/components/
 import { TabSwipeRegion, useTabSwipeRemeasure } from '@/components/MainTabPager'
 import { normalizeTabPath } from '@/lib/tabSwipe'
 import { loadAmbassadorCode } from '@/lib/ambassadorCode'
+import { caughtMessage, logCaught } from '@/lib/caught'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { successHaptic, tapHaptic } from '@/lib/feedback'
@@ -24,6 +25,7 @@ import {
 } from '@/lib/friendsApi'
 import { supabase } from '@/lib/supabase'
 import { useRegisteredVehicle } from '@/lib/useRegisteredVehicle'
+import { nativeGlassAvailable } from 'rides-native/glass'
 import { ambassadorSavedCopy } from 'rides-native/shared/ambassadorAttribution.js'
 import {
   apiErrorMessage,
@@ -126,7 +128,9 @@ export function CarpoolHubScreen() {
       .then((code) => {
         if (alive) setAmbassadorCode(code)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        logCaught('friends-ambassador', err)
+      })
     return () => {
       alive = false
     }
@@ -144,7 +148,9 @@ export function CarpoolHubScreen() {
       .then((data) => {
         if (alive) setFirstRide(data)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        logCaught('friends-first-ride', err)
+      })
       .finally(() => {
         if (alive) setFirstRideLoaded(true)
       })
@@ -172,7 +178,10 @@ export function CarpoolHubScreen() {
       .then((rows) => {
         if (alive) setActivity(rows)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        if (alive) setFriendError(caughtMessage(err, 'Could not load friend rides.'))
+        logCaught('friends-activity', err)
+      })
     return () => {
       alive = false
     }
@@ -230,8 +239,9 @@ export function CarpoolHubScreen() {
       const url = inviteUrl(data.token, 'carpool')
       try {
         await Share.share({ message: url })
-      } catch {
-        /* the lobby still has the link */
+      } catch (err) {
+        const message = caughtMessage(err, '')
+        if (!/cancel|dismiss/i.test(message)) logCaught('friends-share', err)
       }
       router.push(`/carpool/${data.token}`)
     } catch (err) {
@@ -320,7 +330,7 @@ export function CarpoolHubScreen() {
           end={{ x: 0.85, y: 1 }}
           style={[styles.hero, { paddingTop: insets.top + 28 }]}
         >
-          <Text style={styles.brand}>CLEMSON RIDES</Text>
+          <Text style={styles.brand}>Clemson Rides</Text>
           <Text style={styles.heroTitle}>Split the surge.</Text>
           <Text style={styles.heroBody}>
             One person to Grand Marc or College Ave on a game night is about {formatUsd(pitch.soloCents)}.
@@ -566,10 +576,11 @@ function makeStyles(colors: Palette) {
       marginTop: 8,
       marginBottom: 8,
     },
-    friendPills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 8, marginBottom: 8 },
+    friendPills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 8, marginBottom: 8, alignItems: 'flex-start' as const, flexGrow: 0 },
   }
 }
 
 export default function FriendsRoute() {
+  if (Platform.OS === 'ios' && nativeGlassAvailable()) return <CarpoolHubScreen />
   return null
 }

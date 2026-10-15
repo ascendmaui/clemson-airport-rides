@@ -7,6 +7,7 @@ import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { postAgent, supportTicketRequest } from 'rides-native/assistClient.js'
+import { supportEmail } from '../../../shared/productLinks.js'
 import { categoryLabel } from 'rides-native/agentChips.js'
 
 type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string }
@@ -107,14 +108,14 @@ export function AssistChat({
         id: nextId(),
         role: 'assistant',
         content: id
-          ? `Ticket ${id} is open. Email rides@clemsonrides.com and mention that id if you need a person sooner.`
+          ? `Ticket ${id} is open. Email ${supportEmail()} and mention that id if you need a person sooner.`
           : 'The ticket was filed.',
       }])
     } catch (err) {
       setMessages((current: ChatMessage[]) => [...current, {
         id: nextId(),
         role: 'assistant',
-        content: err instanceof Error ? err.message : 'Could not file the ticket. Email rides@clemsonrides.com.',
+        content: err instanceof Error ? err.message : `Could not file the ticket. Email ${supportEmail()}.`,
       }])
     } finally {
       setFiling(false)

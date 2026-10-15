@@ -177,22 +177,25 @@ export function RideStyleChips({ value, onChange, colors = LIGHT_PARTY }) {
 
 export function CounterpartCard({ person, eta = null, colors = LIGHT_PARTY }) {
   const styles = usePartyStyles(colors)
-  if (!person) return null
+  if (!person || typeof person !== 'object') return null
+  const roleLabel = typeof person.roleLabel === 'string' && person.roleLabel.trim() ? person.roleLabel : 'Driver'
+  const name = typeof person.name === 'string' && person.name.trim() ? person.name : 'Driver'
+  const spots = Array.isArray(person.spots) ? person.spots.filter((spot) => typeof spot === 'string' && spot.trim()) : []
   const carLine = person.vehicleLine || pickerVehicleLine(person.vehicle, person.plate)
   return (
     <View style={styles.card}>
-      <Text style={styles.kicker}>{person.roleLabel.toUpperCase()}</Text>
+      <Text style={styles.kicker}>{roleLabel.toUpperCase()}</Text>
       <View style={styles.row}>
         {person.photoUrl ? (
           <Image source={{ uri: person.photoUrl }} style={[styles.avatar, styles.photo]} accessibilityIgnoresInvertColors />
         ) : (
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{person.initial}</Text>
+            <Text style={styles.avatarText}>{typeof person.initial === 'string' && person.initial.trim() ? person.initial : name.slice(0, 1)}</Text>
           </View>
         )}
         <View style={{ flex: 1 }}>
-          <Text style={styles.name}>{person.name}</Text>
-          <Text style={styles.rating}>{person.ratingLine}</Text>
+          <Text style={styles.name}>{name}</Text>
+          <Text style={styles.rating}>{typeof person.ratingLine === 'string' ? person.ratingLine : ''}</Text>
           {carLine ? <Text style={styles.copy}>{carLine}</Text> : null}
           {eta ? <Text style={styles.eta}>{eta}</Text> : null}
         </View>
@@ -200,7 +203,7 @@ export function CounterpartCard({ person, eta = null, colors = LIGHT_PARTY }) {
       {person.student ? <Text style={styles.copy}>Clemson student</Text> : null}
       {person.rideStyle ? <Text style={styles.copy}>Ride style · {person.rideStyle}</Text> : null}
       {person.bio ? <Text style={styles.copy}>{person.bio}</Text> : null}
-      {person.spots.length ? <Text style={styles.copy}>Spots · {person.spots.join(', ')}</Text> : null}
+      {spots.length ? <Text style={styles.copy}>Spots · {spots.join(', ')}</Text> : null}
     </View>
   )
 }

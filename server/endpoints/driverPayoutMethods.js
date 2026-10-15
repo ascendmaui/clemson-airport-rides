@@ -2,13 +2,12 @@
  * GET  /api/driver?action=payout-methods
  * POST /api/driver?action=payout-methods  { op: 'setup' | 'cashout', method, feeCents, confirm }
  *
- * Stripe Connect Express in test mode. STRIPE_SECRET_KEY must be sk_test_.
- * sk_live_ is refused before any Stripe call.
+ * Stripe Connect Express. STRIPE_SECRET_KEY may be test or live; live money needs admin approval.
  */
 import { admin, cors, json, parseBody, stripeClient, userFromAuth } from '../friendRideLib.js'
 import { appOrigin } from './driverW9.js'
 import { cashOutDriver, loadPayoutDesk, startDirectDeposit } from '../driverPayoutMethods.js'
-import { expressTestKeyAllowed } from '../../shared/driverPayoutMethods.js'
+import { expressKeyAllowed } from '../../shared/driverPayoutMethods.js'
 
 export default async function handleDriverPayoutMethods(req, res, deps = {}) {
   if (cors(req, res)) return
@@ -18,7 +17,7 @@ export default async function handleDriverPayoutMethods(req, res, deps = {}) {
     return json(res, 405, { error: 'Method not allowed' })
   }
   const env = deps.env || process.env
-  if (!expressTestKeyAllowed(env.STRIPE_SECRET_KEY)) {
+  if (!expressKeyAllowed(env.STRIPE_SECRET_KEY)) {
     return json(res, 403, { error: 'live_keys_blocked' })
   }
   const sb = deps.sb !== undefined ? deps.sb : (deps.admin ? deps.admin() : admin())
@@ -49,6 +48,7 @@ export default async function handleDriverPayoutMethods(req, res, deps = {}) {
         method: body.method,
         expectedFeeCents: body.feeCents,
         env,
+        now: deps.now,
       })
       const { status = 200, quote, ...rest } = result
       if (quote) delete quote.connectAccountId

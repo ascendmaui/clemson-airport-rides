@@ -67,6 +67,12 @@ export function etaLineFor(
   from: LatLng | null | undefined,
   places: Parameters<typeof etaTargetForStatus>[1],
 ): string | null
+export function pickupToDropoffRouteLine(trip: unknown): string | null
+export function liveRideDistanceLine(
+  status: string | null | undefined,
+  from: LatLng | null | undefined,
+  places: unknown,
+): string | null
 export function activeTripRouteLine(
   trip: unknown,
   driver?: { lat?: number | null; lng?: number | null; latitude?: number | null; longitude?: number | null } | null,

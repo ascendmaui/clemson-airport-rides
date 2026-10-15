@@ -15,6 +15,8 @@ export type DocumentRow = {
   storage_path?: string | null
   review_status?: string | null
   review_note?: string | null
+  ai_reason?: string | null
+  ai_verdict?: string | null
   inspection_source?: string | null
   match_status?: string | null
   created_at?: string | null

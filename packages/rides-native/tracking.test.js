@@ -16,6 +16,16 @@ test('freshness follows every active phase and stops at terminal phases', () => 
     assert.equal(trackingIssue(status, null, now), null)
   }
 })
+
+test('a fresh driver heartbeat hides a stalled or missing pin while the driver is stationary', () => {
+  const fresh = new Date(now - 4000).toISOString()
+  const stale = new Date(now - 31000).toISOString()
+  for (const status of ['accepted', 'arriving', 'arrived', 'in_progress']) {
+    assert.equal(trackingIssue(status, stale, now, fresh), null)
+    assert.equal(trackingIssue(status, null, now, fresh), null)
+    assert.match(trackingIssue(status, stale, now, new Date(now - 31000).toISOString()), /stalled/)
+  }
+})
 test('ETA changes toward drop-off instead of repeating stored whole-route duration', () => {
   const places = { dropoffLat: 34.68, dropoffLng: -82.84, metadata: { route_duration_s: 600 } }
   const far = etaLineFor('in_progress', { lat: 34.7, lng: -82.9 }, places)

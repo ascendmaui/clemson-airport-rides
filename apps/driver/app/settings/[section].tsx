@@ -10,11 +10,12 @@ import { useAuth } from '@/lib/auth'
 import { registerDriverPush, type PushState } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { useTheme, type NavApp, type RideAlertMode, type RideAlertTier } from '@/lib/theme'
-import { loadDriverProfile } from 'rides-native/driverDesk'
+import { loadDriverDesk, loadDriverProfile, setPriorityMode } from 'rides-native/driverDesk'
 import { riderDriverFirstName } from '../../../../shared/riderDriverPrivacy.js'
 import { QuietHoursChoices } from '@/components/QuietHoursChoices'
+import { quietly } from '@/lib/softFail'
 
-const SECTIONS = ['display', 'privacy', 'address', 'accessibility', 'communication', 'navigation', 'sounds', 'auto-accept', 'quiet-hours'] as const
+const SECTIONS = ['display', 'privacy', 'address', 'accessibility', 'communication', 'navigation', 'sounds', 'auto-accept', 'quiet-hours', 'priority'] as const
 type Section = (typeof SECTIONS)[number]
 
 function isSection(value: string): value is Section {
@@ -41,6 +42,8 @@ function sectionTitle(section: Section): string {
       return 'Auto-accept'
     case 'quiet-hours':
       return 'Quiet hours'
+    case 'priority':
+      return 'Priority mode'
     default: {
       const unknown: never = section
       return unknown
@@ -59,6 +62,8 @@ export default function SettingsSection() {
   const [phone, setPhone] = useState<string | null>(null)
   const [push, setPush] = useState<PushState | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [priorityOn, setPriorityOn] = useState(false)
+  const [priorityBusy, setPriorityBusy] = useState(false)
 
   useEffect(() => {
     if (!user || !supabase || section !== 'address') return
@@ -67,6 +72,34 @@ export default function SettingsSection() {
       setPhone(value)
     }).catch((err) => setError(err instanceof Error ? err.message : 'Could not load your profile'))
   }, [section, user])
+
+  useEffect(() => {
+    if (!user || !supabase || section !== 'priority') return undefined
+    let alive = true
+    loadDriverDesk(supabase, user.id).then((desk) => {
+      if (alive) setPriorityOn(Boolean(desk.priority))
+    }).catch((err) => {
+      if (alive) setError(err instanceof Error ? err.message : 'Could not load priority mode')
+    })
+    return () => {
+      alive = false
+    }
+  }, [section, user])
+
+  async function onPriorityToggle() {
+    if (!user || !supabase || priorityBusy) return
+    const next = !priorityOn
+    setPriorityBusy(true)
+    setError(null)
+    try {
+      await setPriorityMode(supabase, user.id, next)
+      setPriorityOn(next)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update priority mode')
+    } finally {
+      setPriorityBusy(false)
+    }
+  }
 
   useEffect(() => {
     if (!user || section !== 'communication') return
@@ -131,6 +164,19 @@ export default function SettingsSection() {
         {section === 'sounds' ? <SoundChoices /> : null}
         {section === 'auto-accept' ? <AutoAcceptChoices /> : null}
         {section === 'quiet-hours' ? <QuietHoursChoices /> : null}
+        {section === 'priority' ? (
+          <Card>
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.ink, fontWeight: '800' }}>Priority mode</Text>
+                <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+                  While you are online, new requests reach you ahead of drivers who leave this off.
+                </Text>
+              </View>
+              <Toggle on={priorityOn} onPress={() => { void onPriorityToggle() }} label="Priority mode" />
+            </View>
+          </Card>
+        ) : null}
         {error ? <ErrorText>{error}</ErrorText> : null}
       </FadeIn>
     </StackPage>
@@ -198,7 +244,7 @@ function usePersistDriverAlerts() {
       if (cancel || res.error) return null
       const next = { ...(res.data?.notification_prefs || {}), ride_alerts: rideAlerts, auto_accept: autoAccept }
       return client.from('profiles').update({ notification_prefs: next }).eq('id', user.id)
-    }).catch(() => null)
+    }).catch(quietly('settings load', null))
     return () => {
       cancel = true
     }
@@ -222,7 +268,7 @@ function SoundChoices() {
       </Card>
       {ALERT_TIERS.map((tier) => (
         <View key={tier.id} style={{ gap: 8 }}>
-          <Text style={{ color: colors.purple, fontWeight: '800' }}>{tier.label}</Text>
+          <Text style={{ color: colors.link, fontWeight: '800' }}>{tier.label}</Text>
           <ChoiceCards
             options={ALERT_MODES}
             value={theme.rideAlerts[tier.id]}
@@ -263,7 +309,7 @@ function AutoAcceptChoices() {
                 accessibilityState={{ selected: on }}
                 style={[styles.chip, { backgroundColor: on ? colors.orange : colors.segment }]}
               >
-                <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800' }}>{miles} mi</Text>
+                <Text style={{ color: on ? colors.onAccent : colors.title, fontWeight: '800' }}>{miles} mi</Text>
               </Pressable>
             )
           })}
@@ -286,7 +332,7 @@ function AutoAcceptChoices() {
                 accessibilityState={{ selected: on }}
                 style={[styles.chip, { backgroundColor: on ? colors.purple : colors.segment }]}
               >
-                <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800' }}>${dollars}/hr</Text>
+                <Text style={{ color: on ? colors.onAccent : colors.title, fontWeight: '800' }}>${dollars}/hr</Text>
               </Pressable>
             )
           })}

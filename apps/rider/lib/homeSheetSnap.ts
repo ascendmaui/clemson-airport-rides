@@ -2,6 +2,11 @@
  * Snap points for the rider home sheet. Heights are the sheet's own height:
  * larger means more open. A positive velocity is a finger moving down, which
  * shortens the sheet toward the collapsed snap.
+ *
+ * Every helper worklet is declared before the worklets that call it. The
+ * worklets plugin captures callees by value when it initializes each worklet,
+ * and the Expo preset then lowers those bindings to `var`. A helper declared
+ * later is undefined on the first call.
  */
 
 /** How long a release velocity is projected when picking a detent, in seconds. */
@@ -13,6 +18,14 @@ export const HOME_SHEET_MAP_MAX_RATIO = 0.64
 
 /** Gap under the search field so it sits above the tab bar, clear of the home indicator. */
 export const HOME_SHEET_BOTTOM_PADDING = 12
+
+/** Native tab bar content above the home indicator. The screen pads by this plus the inset. */
+export const NATIVE_TAB_CONTENT_HEIGHT = 56
+
+export function homeTabClearance(bottomInset: number): number {
+  const inset = Number.isFinite(bottomInset) ? Math.max(0, bottomInset) : 0
+  return inset + NATIVE_TAB_CONTENT_HEIGHT
+}
 
 /** Until the handle lays out: paddingTop 8 + handle margins and bar (4 + 4 + 10). */
 export const HOME_SHEET_HANDLE_FALLBACK = 26
@@ -31,6 +44,43 @@ export const HOME_SHEET_SPRING = {
 }
 
 export type HomeSheetDetent = 'collapsed' | 'expanded'
+
+function pushUnique(points: number[], height: number) {
+  'worklet'
+  for (let i = 0; i < points.length; i++) {
+    if (points[i] === height) return
+  }
+  points.push(height)
+}
+
+function sortAscending(points: number[]): number[] {
+  'worklet'
+  for (let i = 1; i < points.length; i++) {
+    const value = points[i]
+    let j = i - 1
+    while (j >= 0 && points[j] > value) {
+      points[j + 1] = points[j]
+      j -= 1
+    }
+    points[j + 1] = value
+  }
+  return points
+}
+
+function nearestSnap(points: readonly number[], position: number): number {
+  'worklet'
+  let best = points[0]
+  let bestDist = Math.abs(position - best)
+  for (let i = 1; i < points.length; i++) {
+    const point = points[i]
+    const dist = Math.abs(position - point)
+    if (dist < bestDist || (dist === bestDist && point > best)) {
+      best = point
+      bestDist = dist
+    }
+  }
+  return best
+}
 
 export function collapsedSheetPadding(handleHeight: number, bottomPadding: number): number {
   'worklet'
@@ -75,6 +125,16 @@ export function homeSheetSnapPoints(input: {
     const height = expanded[i]
     if (!Number.isFinite(height) || height <= collapsed) continue
     pushUnique(points, height)
+  }
+  return sortAscending(points)
+}
+
+function finiteSorted(values: readonly number[]): number[] {
+  'worklet'
+  const points: number[] = []
+  for (let i = 0; i < values.length; i++) {
+    const height = values[i]
+    if (Number.isFinite(height)) pushUnique(points, height)
   }
   return sortAscending(points)
 }
@@ -129,51 +189,4 @@ export function snapHomeSheet(input: {
   const height = nearestSnap(points, projected)
   const detent: HomeSheetDetent = height === collapsed ? 'collapsed' : 'expanded'
   return { height, detent }
-}
-
-function nearestSnap(points: readonly number[], position: number): number {
-  'worklet'
-  let best = points[0]
-  let bestDist = Math.abs(position - best)
-  for (let i = 1; i < points.length; i++) {
-    const point = points[i]
-    const dist = Math.abs(position - point)
-    if (dist < bestDist || (dist === bestDist && point > best)) {
-      best = point
-      bestDist = dist
-    }
-  }
-  return best
-}
-
-function finiteSorted(values: readonly number[]): number[] {
-  'worklet'
-  const points: number[] = []
-  for (let i = 0; i < values.length; i++) {
-    const height = values[i]
-    if (Number.isFinite(height)) pushUnique(points, height)
-  }
-  return sortAscending(points)
-}
-
-function pushUnique(points: number[], height: number) {
-  'worklet'
-  for (let i = 0; i < points.length; i++) {
-    if (points[i] === height) return
-  }
-  points.push(height)
-}
-
-function sortAscending(points: number[]): number[] {
-  'worklet'
-  for (let i = 1; i < points.length; i++) {
-    const value = points[i]
-    let j = i - 1
-    while (j >= 0 && points[j] > value) {
-      points[j + 1] = points[j]
-      j -= 1
-    }
-    points[j + 1] = value
-  }
-  return points
 }

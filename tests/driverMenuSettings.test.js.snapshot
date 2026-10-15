@@ -42,7 +42,7 @@ exports[`Driver Menu snapshot 1`] = `
     {
       "icon": "inbox",
       "title": "Inbox",
-      "subtitle": "Messages from Clemson RIDES and riders"
+      "subtitle": "Messages from Clemson Rides and riders"
     },
     {
       "icon": "discover",
@@ -55,6 +55,18 @@ exports[`Driver Menu snapshot 1`] = `
       "icon": "calculator",
       "title": "Tax info",
       "subtitle": "Year-end mileage and earnings"
+    }
+  ],
+  "supportRows": [
+    {
+      "icon": "help",
+      "title": "Help",
+      "subtitle": "[Function: supportEmail]"
+    },
+    {
+      "icon": "chat",
+      "title": "Support",
+      "subtitle": "[Function: supportEmail]"
     }
   ],
   "resources": [
@@ -94,7 +106,7 @@ exports[`Driver Settings snapshot 1`] = `
   "account": [
     {
       "icon": "person",
-      "title": "Manage Clemson RIDES account",
+      "title": "Manage Clemson Rides account",
       "subtitle": "Name, email, and sign out"
     },
     {
@@ -143,6 +155,11 @@ exports[`Driver Settings snapshot 1`] = `
       "icon": "flash",
       "title": "Auto-accept",
       "subtitle": "Distance, hourly rate, favorite riders"
+    },
+    {
+      "icon": "sparkles",
+      "title": "Priority mode",
+      "subtitle": "Go first for new requests"
     }
   ]
 }

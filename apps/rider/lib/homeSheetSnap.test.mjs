@@ -12,6 +12,7 @@ import {
   HOME_SHEET_SNAP_PROJECTION_S,
   HOME_SHEET_SPRING,
   buildHomeSheetSnapPoints,
+  homeTabClearance,
   collapsedSheetHeight,
   collapsedSheetPadding,
   expandedSheetHeights,
@@ -24,6 +25,16 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 function read(rel) {
   return readFileSync(path.join(root, rel), 'utf8')
 }
+
+test('native tabs keep the home sheet above the tab bar and the home indicator', () => {
+  assert.equal(homeTabClearance(34), 90)
+  assert.equal(homeTabClearance(0), 56)
+  assert.equal(homeTabClearance(Number.NaN), 56)
+  const home = read('apps/rider/app/(tabs)/index.tsx')
+  assert.match(home, /homeTabClearance\(insets\.bottom\)/)
+  assert.match(home, /nativeTabs \? \{ paddingBottom: homeTabClearance\(insets\.bottom\) \}/)
+  assert.match(home, /liveTrip \? liveCardH \+ 12 : 0/)
+})
 
 test('collapsed snap height is the search field plus padding', () => {
   assert.equal(collapsedSheetHeight(56, 20), 76)
@@ -90,6 +101,34 @@ test('the spring config is a clamped UI-thread spring', () => {
   assert.equal(typeof HOME_SHEET_SPRING.damping, 'number')
   assert.equal(typeof HOME_SHEET_SPRING.stiffness, 'number')
   assert.equal(HOME_SHEET_SPRING.overshootClamping, true)
+})
+
+test('worklet helpers are declared before the worklets that call them', () => {
+  // The worklets plugin captures callees by value at initialization. Node's
+  // test runner loads the TypeScript as-is, so a later helper still works
+  // here. The declaration order is what Hermes actually executes.
+  const source = read('apps/rider/lib/homeSheetSnap.ts')
+  const at = (name) => {
+    const index = source.search(new RegExp(`function ${name}\\b`))
+    assert.notEqual(index, -1, `${name} is declared`)
+    return index
+  }
+  const before = (helper, caller) => {
+    assert.ok(at(helper) < at(caller), `${helper} is declared before ${caller}`)
+  }
+
+  before('sortAscending', 'expandedSheetHeights')
+  before('sortAscending', 'homeSheetSnapPoints')
+  before('sortAscending', 'finiteSorted')
+  before('pushUnique', 'homeSheetSnapPoints')
+  before('pushUnique', 'finiteSorted')
+  before('nearestSnap', 'snapHomeSheet')
+  before('finiteSorted', 'snapHomeSheet')
+  before('collapsedSheetHeight', 'homeSheetSnapPoints')
+  before('collapsedSheetHeight', 'buildHomeSheetSnapPoints')
+  before('collapsedSheetPadding', 'buildHomeSheetSnapPoints')
+  before('expandedSheetHeights', 'buildHomeSheetSnapPoints')
+  before('homeSheetSnapPoints', 'buildHomeSheetSnapPoints')
 })
 
 test('rider home wires the snap helper through gesture-handler and does not touch the driver swipe', () => {

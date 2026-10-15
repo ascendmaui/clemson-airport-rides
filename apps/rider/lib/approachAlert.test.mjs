@@ -350,6 +350,7 @@ test('approach pulse is a soft eased breath, not a 0/1 flash', () => {
   assert.deepEqual(still.peak, moving.peak)
 
   const src = readFileSync(new URL('../components/ApproachAlert.tsx', import.meta.url), 'utf8')
+  assert.match(src, /if \(!active \|\| paused \|\| reading\) return null/)
   assert.match(src, /approachPulseMotion/)
   assert.match(src, /useReducedMotion/)
   assert.match(src, /if \(!next\.enabled\)/)
@@ -395,4 +396,11 @@ test('metersToFeet converts without clamping negatives', () => {
   assert.equal(Math.round(metersToFeet(1609.344)), 5280)
   assert.ok(metersToFeet(-2) < 0)
   assert.equal(Number.isFinite(metersToFeet(Number.NaN)), false)
+})
+
+test('the missing-fix card does not call the driver Nearby', () => {
+  const card = readFileSync(new URL('../components/ApproachAlert.tsx', import.meta.url), 'utf8')
+  assert.match(card, /waiting \|\| "Waiting for your driver's location"/)
+  assert.doesNotMatch(card, /approachPrimaryLine/)
+  assert.doesNotMatch(card, /formatApproachFeet/)
 })

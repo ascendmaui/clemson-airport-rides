@@ -16,6 +16,8 @@ import {
 } from 'rides-native/safetyCapture.js'
 import { keepClipOnDevice } from '@/lib/localClip'
 import { useTheme } from '@/lib/theme'
+import { quiet } from '@/lib/softFail'
+import { useSecondClock } from '@/lib/useSecondClock'
 
 type CaptureSession = {
   phase: string
@@ -39,8 +41,8 @@ export function DashcamCard({ status, active = true }: { status: string | null; 
   const [cameraReady, setCameraReady] = useState(false)
   const [arming, setArming] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [now, setNow] = useState(() => Date.now())
   const recording = session.phase === 'recording'
+  const now = useSecondClock(recording)
   recordingRef.current = recording
   const blocked = recordingBlockReason({ status, permission, mode: 'video' })
 
@@ -54,18 +56,11 @@ export function DashcamCard({ status, active = true }: { status: string | null; 
           setPermission('granted')
         }
       })
-      .catch(() => {})
+      .catch(quiet('dashcam permission check'))
     return () => {
       alive = false
     }
   }, [])
-
-  useEffect(() => {
-    if (!recording) return undefined
-    setNow(Date.now())
-    const clock = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(clock)
-  }, [recording])
 
   useEffect(() => () => {
     const pending = pendingRef.current
@@ -75,7 +70,7 @@ export function DashcamCard({ status, active = true }: { status: string | null; 
     void pending.then((result) => {
       if (!result?.uri) return
       try { keepClipOnDevice(result.uri, localClipName('video')) } catch { /* cache copy remains on this phone */ }
-    }).catch(() => {})
+    }).catch(quiet('dashcam stop on unmount'))
   }, [])
 
   useEffect(() => {
@@ -99,6 +94,7 @@ export function DashcamCard({ status, active = true }: { status: string | null; 
       armRef.current = false
       setArming(false)
       pendingRef.current = result.pending
+      // Marks the recording promise handled; endRef awaits it and reports its outcome.
       void result.pending.catch(() => {})
       setSession({ phase: 'recording', mode: 'video', startedAt: result.startedAt, uri: null, note: null })
       return

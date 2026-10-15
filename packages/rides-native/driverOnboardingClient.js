@@ -17,18 +17,24 @@ import {
   displayTinLast4,
   firstIncompleteStepId,
   flowStep,
+  forwardCtaDisabled,
   isRequiredDocType,
   legacyStatusFor,
+  nextStepHint,
+  nextStepTargetId,
   onboardingLabel,
   progressSnapshot,
   resolveResumeStep,
+  showNextStepHint,
   statusAfterInfoSave,
   stepIsComplete,
   submissionBlockers,
+  w9SubstepReady,
 } from '../../shared/driverOnboarding.js'
 import { vehicleAccountErrors, withVehicleYear, writeVehicleWithYearFallback } from '../../shared/vehicleYear.js'
 import { titleStatusError, withTitleStatus, writeVehicleWithTitleFallback } from '../../shared/vehicleTitle.js'
 import { isInspectionDocType, isInspectionSource } from './vehicleInspection.js'
+import { isAiReviewedDocument } from '../../shared/documentAiReview.js'
 import { resolveSignupApplicantEmail, submittedApplicantEmail, writeDriverApplication } from '../../shared/applicantEmail.js'
 import {
   BACKGROUND_CONSENT_VERSION,
@@ -52,10 +58,15 @@ export {
   canOpenStep,
   displayTinLast4,
   flowStep,
+  forwardCtaDisabled,
+  nextStepHint,
+  nextStepTargetId,
   onboardingLabel,
   progressSnapshot,
+  showNextStepHint,
   stepIsComplete,
   submissionBlockers,
+  w9SubstepReady,
 }
 
 const MAX_BYTES = 8 * 1024 * 1024
@@ -122,10 +133,17 @@ export async function fetchMyDriverDocuments(supabase, userId) {
   if (!supabase || !userId) return []
   const rich = await supabase
     .from('driver_documents')
-    .select('id, doc_type, storage_path, created_at, review_status, review_note, match_status, inspection_source')
+    .select('id, doc_type, storage_path, created_at, review_status, review_note, match_status, inspection_source, ai_reason, ai_verdict')
     .eq('profile_id', userId)
   if (!rich.error) return rich.data || []
   const richMessage = rich.error.message || ''
+  if (/ai_reason|ai_verdict/i.test(richMessage)) {
+    const withoutAi = await supabase
+      .from('driver_documents')
+      .select('id, doc_type, storage_path, created_at, review_status, review_note, match_status, inspection_source')
+      .eq('profile_id', userId)
+    if (!withoutAi.error) return withoutAi.data || []
+  }
   if (/inspection_source/i.test(richMessage)) {
     const withoutSource = await supabase
       .from('driver_documents')
@@ -135,7 +153,7 @@ export async function fetchMyDriverDocuments(supabase, userId) {
     if (!/review_status|match_status|review_note|schema cache/i.test(withoutSource.error.message || '')) {
       throw new Error(withoutSource.error.message)
     }
-  } else if (!/review_status|match_status|review_note|schema cache/i.test(richMessage)) {
+  } else if (!/review_status|match_status|review_note|ai_reason|ai_verdict|schema cache|column/i.test(richMessage)) {
     throw new Error(richMessage)
   }
   const basic = await supabase
@@ -277,7 +295,26 @@ export async function uploadDriverDocument(supabase, userId, docType, file, meta
   if (previous?.storage_path && previous.storage_path !== path) {
     await supabase.storage.from('driver-documents').remove([previous.storage_path])
   }
-  return { doc_type: docType, storage_path: path, bytes, reviewStatus: meta.reviewStatus || null, matchStatus: meta.matchStatus || null }
+  let review = null
+  if (isAiReviewedDocument(docType)) {
+    try {
+      review = await authedJson(supabase, '/api/driver?action=review-document', {
+        method: 'POST',
+        body: { docType, storagePath: path, width: file.width, height: file.height },
+      })
+    } catch {
+      review = null
+    }
+  }
+  return {
+    doc_type: docType,
+    storage_path: path,
+    bytes,
+    reviewStatus: review?.reviewStatus || meta.reviewStatus || null,
+    matchStatus: meta.matchStatus || null,
+    aiReason: review?.aiReason || null,
+    driverMessage: review?.driverMessage || null,
+  }
 }
 
 export async function recordFormSignature(supabase, userId, row) {

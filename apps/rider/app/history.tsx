@@ -9,11 +9,13 @@ import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { isShareableTripStatus } from 'rides-native/safety.js'
 import { formatCents } from 'rides-native/tripTags.js'
+import { riderStatusPhrase } from 'rides-native/liveTrip.js'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { RequireAuth } from '@/components/RequireAuth'
+import { caughtMessage, logCaught } from '@/lib/caught'
 
 type RideRow = {
   id: string
@@ -50,6 +52,12 @@ function HistoryScreen() {
         if (!alive) return
         if (queryError) setError(queryError.message)
         else setRows((data || []) as RideRow[])
+        setLoading(false)
+      })
+      .catch((err: unknown) => {
+        if (!alive) return
+        logCaught('history', err)
+        setError(caughtMessage(err, 'Could not load your rides. Try again.'))
         setLoading(false)
       })
     return () => {
@@ -96,7 +104,7 @@ function HistoryScreen() {
               <Glyph name={row.status === 'completed' ? 'complete' : row.status === 'canceled' || row.status === 'cancelled' ? 'close' : 'clock'} size={20} color={row.status === 'completed' ? colors.online : colors.purple} />
               <Text style={[styles.cardTitle, { flex: 1 }]}>{row.dropoff_label || 'Ride'}</Text>
             </View>
-            <Text style={styles.copy}>{row.pickup_label || 'Pickup'} · {row.status || 'requested'}</Text>
+            <Text style={styles.copy}>{row.pickup_label || 'Pickup'} · {riderStatusPhrase(row.status)}</Text>
             <Text style={styles.copy}>Fare {formatCents(row.fare_cents || 0)}{row.deposit_cents ? ` · already paid ${formatCents(row.deposit_cents)}` : ''}</Text>
             {row.status === 'completed' && row.driver_id ? (
               <Pressable

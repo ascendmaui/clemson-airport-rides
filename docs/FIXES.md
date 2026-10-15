@@ -2,6 +2,25 @@
 
 Persistent knowledge base for recurring failures. When a matching issue appears, apply the saved fix first.
 
+## 2026-10-13 — Matching edges keep cancel, decline, and offline copy
+
+- **What was wrong:** Updating the matching-edge branch onto current main split the driver home. The newer home hid the offer card behind trip reconciliation and the pass-offer decline, and the older branch hid an offline offer without the shift pulse or the end-trip sheet. British spelling `cancelled` no longer shared a headline with `canceled`.
+- **What changed:** `canceled` and `cancelled` share the canceled headline and detail. Decline uses `declineDriverOffer` and still shows the pass sentence when the rider stays searching. Going offline still uses the shift pulse and, when a searching or offered card was up, the offline-while-offered sentence. The offer card stays hidden while the driver is offline. Favorites, the driving ETA, and the end-trip sheet stay on the card. Demo and synthetic offers stay out of the live offer list. An expired exclusive offer now opens the pool instead of jumping to a third driver, and the edge test follows that.
+- **Files touched:** `packages/rides-native/tripTags.js`, `src/screens/DriverHome.jsx`, `apps/driver/app/(tabs)/index.tsx`, `apps/driver/app/queue.tsx`, `server/matchingEdge.test.js`, `package.json`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/matchingEdge.test.js tests/driverTerminalTrip.test.js` and `npm test` (3579 pass, 0 fail).
+## 2026-10-13 — Onboarding keeps next-step holds and the background attestation
+
+- **What was wrong:** The friction branch still used the old eligibility form and a Continue button that ignored a salvage title. Current main records a three-step background attestation and does not treat consent as a completed check.
+- **What changed:** Account Continue stays disabled until the quiz and vehicle fields are valid, and also while the title is salvage. Document, W-9, agreement, and submit buttons still use `forwardCtaDisabled`. The employment step stays the attestation wizard, and Sign stays disabled until that attestation, eligibility, and the earlier gap are done. The authorization label stays “Background attestation (consent is not a completed check).”
+- **Files touched:** `src/screens/DriverOnboarding.jsx`, `apps/driver/app/onboarding.tsx`, `shared/driverOnboarding.js`, `tests/onboardingFriction.test.js`, `package.json`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test tests/onboardingFriction.test.js tests/driverOnboarding.test.js tests/backgroundCheck.test.js tests/vehicleTitle.test.js` and `npm test` (3584 pass, 0 fail).
+## 2026-10-13 — Live trip screen keeps chip height and later trip controls
+
+- **What was wrong:** Updating the live-trip polish onto current main collided in `Requested.jsx`. Main sized the map with a fixed 280/220 split and offered Cancel this ride through `isMidrideStatus`, which is only true after the trip is already `canceled_midride`. The polish branch dropped the unread message ids, the lost-item report, and Change driver.
+- **What changed:** The map height comes from `liveTripMapHeight`. Cancel stays on the secondary list and only while the trip is `in_progress`. The message button still receives `tripId` and `userId`. Report a lost item and Change driver stay on the card, and the rider switch sheet still opens. The root test script keeps every main file and adds the two live-trip tests.
+- **Files touched:** `src/screens/Requested.jsx`, `package.json`, `packages/rides-native/liveTripCard.test.js`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/liveTripStatusChip.test.js packages/rides-native/liveTripCard.test.js tests/driverCancelUi.test.js tests/webLiveTrackingPolish.test.js` (14/14).
+
 ## 2026-10-07 — [agy] GA97: GA audit & tests - expire-unpaid holds timestamp safety, client guards, and Stripe webhook retryable resilience
 
 - **Track / machine:** Clemson RIDES · MacBook Max · `agy/ga-audit-expire-holds-webhook-hardening-ga97`
@@ -52,6 +71,155 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - `package.json`
   - `docs/FIXES.md`
 - **Verified:** `node --test tests/gaAuditReconcileAirportCheckoutHardening.test.js` (6/6 passing) and full test runner `npm test`.
+
+## 2026-10-05 — Matching edge messages for cancel, decline rebroadcast, and offline offer cards
+
+- **Track / machine:** Clemson RIDES · deputy/matching-edge-cases
+- **What was wrong:** The cancel, decline, and offline helpers existed, but the screens did not say what those edges do. A rider cancel of an unassigned searching ride cleared the driver card with no "That ride is no longer available." line. A decline was described as always returning the ride to the open pool, so a next-driver rebroadcast looked like the search had stopped. Going offline dropped a searching or offered card with no offline-while-offered sentence. The British spelling `cancelled` still read as an open ride request.
+- **What changed:** `searchingCancelOfferMessage`, `declinePassMessage`, and `riderDeclineRebroadcastMessage` turn the existing helper decisions into copy. The web driver home toasts the cancel and offline sentences, and the pass result when a decline keeps the rider searching. The searching and offered card now says the offer goes to the next driver, or back to the open pool if nobody is left. The rider live card adds the pass note and treats `cancelled` like `canceled`. The driver app hides the offer card while offline and shows the same offline and decline sentences. No migration and no payment change.
+- **Files touched:**
+  - `server/matchingEdge.js`
+  - `server/matchingEdge.test.js`
+  - `packages/rides-native/matchingMessages.js`
+  - `packages/rides-native/matchingMessages.d.ts`
+  - `packages/rides-native/tripTags.js`
+  - `packages/rides-native/liveTrip.js`
+  - `src/screens/DriverHome.jsx`
+  - `src/screens/Requested.jsx`
+  - `src/lib/tripPhase.js`
+  - `src/lib/tripPhase.test.js`
+  - `src/lib/liveDispatchA11y.js`
+  - `apps/driver/app/(tabs)/index.tsx`
+  - `apps/driver/app/queue.tsx`
+  - `docs/MATCHING_EDGE_CASES.md`
+  - `docs/FIXES.md`
+- **Verified:** `node --test server/matchingEdge.test.js src/lib/tripPhase.test.js packages/rides-native/liveTrip.test.js src/lib/driverShift.test.js tests/driverStopShift.test.js tests/driverOfferCard.test.js tests/webLiveDispatchA11y.test.js tests/matchingE2E.test.js server/matchingRebroadcast.test.js` (66/66) and `npm test` (2335/2335).
+
+## 2026-10-05 — Matching edge helpers for cancel, decline rebroadcast, and offline offer cards
+
+- **Track / machine:** Clemson RIDES · deputy/matching-edge-cases
+- **What was wrong:** Cancel-while-searching, decline-then-rebroadcast, and offline-while-offered had no shared helper. Those edges were only implied by broader desk, SQL, and sweep tests, so a later accept after a searching cancel, a decline's rebroadcast flags, and an offline driver's offer card could drift apart.
+- **What changed:** Added pure helpers in `server/matchingEdge.js` and focused unit tests in `server/matchingEdge.test.js`. A rider cancel of an unassigned searching ride blocks a later accept. A targeted driver decline stamps the rebroadcast path flags (`offer_tried_driver_ids`, next or open `offer_driver_id`, `match`, `offer_release_reason`, `offer_rebroadcast_reason`) and leaves the rider searching. An offline driver does not keep an active searching or offered card, and gets the offline-while-offered message. This does not implement SQL expire-stale-offers.
+- **Files touched:**
+  - `server/matchingEdge.js`
+  - `server/matchingEdge.test.js`
+  - `docs/MATCHING_EDGE_CASES.md`
+  - `package.json`
+  - `docs/FIXES.md`
+- **Verified:** `node --test server/matchingEdge.test.js` (4/4), the acceptance list of the first five `server/*match*.test.js` / `tests/*match*` files (41/41), and `npm test` (2334/2334).
+## 2026-10-05 — driver onboarding friction UX (t2)
+
+- **What was wrong:** The year, W-9, and unsigned-agreement hints existed only as helpers. The application screens still let a driver tap Continue, Sign, or Submit before the prerequisite was done, and they did not say which single step was next. A blank account form looked ready. Native W-9 Next advanced through empty pages. Employment and agreement sign buttons accepted a tap and then showed an error. A missing vehicle year did not hold later steps, so the driver could leave Account behind. The unsigned agreement was easy to mix up with a blocked submit.
+- **What changed:** The web and driver-app application screens show `nextStepHint` inline on the step it names, on Agreement when the next action is Submit, and on a later step when that gap is holding the forward button. A W-9 hint on a later step waits until W-9 is the earliest unfinished step, so missing documents stay ahead of it. A missing year still shows on every later step, because year is not its own onboarding step. Account Continue stays disabled until the quiz and vehicle fields, including year, are valid, and the first non-year reason is shown next to that button. Document, employment, W-9, agreement, and review forward buttons use `forwardCtaDisabled`: a missing year holds every step after Account, a pending W-9 holds Agreement and Submit, and an unsigned agreement does not disable Submit. Native W-9 Next stays disabled until that page's field is filled. Employment sign and in-app agreement sign stay disabled until eligibility or the review checkbox, the typed name, and the date are present. Native Agreement also offers Continue to Submit, which is the emailed-signature path. No email is sent. Approval blockers and payout rules are unchanged.
+- **Files touched:**
+  - `shared/driverOnboarding.js`
+  - `src/screens/DriverOnboarding.jsx`
+  - `apps/driver/app/onboarding.tsx`
+  - `packages/rides-native/driverOnboardingClient.js`
+  - `packages/rides-native/driverOnboardingClient.d.ts`
+  - `tests/onboardingFriction.test.js`
+  - `docs/FIXES.md`
+
+## 2026-10-05 — driver onboarding next-step hints (t1)
+
+- **What was wrong:** Incomplete onboarding still used generic copy, and three different gaps were easy to mix up. A missing vehicle year was only `Year must be from 1980 to {max}.` and did not send the driver back to Account after the status had already moved on. A pending W-9 showed up as the noun `W-9 legal name and TIN` (or a single field error). An unsigned agreement showed up as `Signed independent contractor agreement`, while submit stayed open and the review list used submission blockers, so the driver was not told that approval is what waits. Skip-ahead, photo, and review copy stayed generic: `Finish the current step before skipping ahead.`, `Add the photos on this step`, `Continue required steps`, and `Still needed · {label}`.
+- **What changed:** Added `vehicleYearNextStepHint`, `w9NextStepHint`, `agreementUnsignedNextStepHint`, and `nextStepHint` in `shared/driverOnboarding.js`. Year wins over a pending W-9, which wins over an unsigned agreement. The hints do not add approval blockers and do not change payout rules. Tests inventory the remaining screen messages and lock the three hints apart.
+- **Files touched:**
+  - `shared/driverOnboarding.js`
+  - `tests/onboardingFriction.test.js`
+  - `package.json`
+  - `docs/FIXES.md`
+## 2026-10-05 — Weekend/party schedule UX tests already run under npm test
+
+- **Track / machine:** Clemson RIDES · deputy/weekend-party-schedule-ux · pkg-weekend-party-schedule-ux t3
+- **What was wrong:** The root `npm test` script is an explicit file list. The passenger-label, party-capacity, and weekend-window checks added in t1 and t2 would be skipped if those files were missing from the script.
+- **What changed:** No second copy was added. `server/scheduleTrip.test.js` is already listed once, immediately before `server/releaseScheduledRides.test.js`. `src/lib/scheduledRideModel.test.js` is already listed once, between `src/lib/placeCatalog.test.js` and `src/lib/fareRates.test.js`. Passenger and weekend-window coverage lives in those two files (`src/lib/schedulePartyCopy.js` has no separate suite). Fare math and the 10% schedule-ahead discount (1000 bps) were not changed. `package.json` was not edited.
+- **Files touched:**
+  - `docs/FIXES.md`
+- **Verified:** `npm test` — 2333 pass, 0 fail, 0 skipped (66 suites).
+
+## 2026-10-05 — Weekend/party schedule UX: web stepper, capacity, and window helper
+
+- **Track / machine:** Clemson RIDES · deputy/weekend-party-schedule-ux · t2
+- **What was wrong:** The web schedule form said "Friday night through Sunday" and had no passenger control. Riders could not see the count ("1 passenger" / "4 passengers"), the 4-seat cap for Standard, Wait & Save, and Extra Comfort, or whether the chosen pickup was inside Friday 5:00 PM through Sunday, Eastern time. Confirming a ride did not send the passenger count.
+- **What changed:** Added a 44px passenger stepper, the party-capacity sentence, and the fare note that passenger count does not change the server fare. Weekend / party shows the Eastern window overview. The date and time fields share a live helper that says whether the pickup is inside that window. The stepper stops at 4. The quote request still omits passengers. Schedule-ahead discount stays 10% (1000 bps).
+- **Files touched:**
+  - `src/components/SchedulePartyFields.jsx`
+  - `src/components/ScheduledRidePlanner.jsx`
+  - `src/lib/schedulePartyCopy.js`
+  - `src/lib/scheduledRideModel.js`
+  - `src/lib/scheduledRides.js`
+  - `src/lib/scheduledRideModel.test.js`
+  - `server/scheduleTrip.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/scheduleTrip.test.js` renders the stepper and weekend helper. Fare quote calls do not take a passenger count. `npm test` passed (2333 tests).
+
+## 2026-10-05 — Weekend/party schedule UX: passenger display and window copy
+
+- **Track / machine:** Clemson RIDES · deputy/weekend-party-schedule-ux · t1
+- **What was wrong:** `scheduleTrip` stored a passenger count but the response had no rider-facing passenger label, party-capacity message, or weekend-window sentence. "Friday night through Sunday" did not state the Eastern window (Friday 5:00 PM through Sunday) that surge and the driver Weekend filter already use. Party size was easy to misread as a fare input.
+- **What changed:** Added pure helpers for the passenger label, the 4-seat cap message (Standard, Wait & Save, Extra Comfort), and weekend-window copy. The schedule response includes them. Stored passenger parsing is unchanged. Fare, deposit, schedule-ahead 10% (1000 bps), and surge are not inputs of passenger count.
+- **Files touched:**
+  - `src/lib/schedulePartyCopy.js`
+  - `server/endpoints/scheduleTrip.js`
+  - `server/scheduleTrip.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/scheduleTrip.test.js` (65 pass) and `tests/retiredCopy.test.js`. `npm test` passes after the new tests avoid retired fleet words.
+
+## 2026-10-05 — Game-day pickup tests already run under npm test (pkg-gameday-pickup-ux t3)
+
+- **Date:** 2026-10-05
+- **Track / machine:** Clemson RIDES · deputy/gameday-pickup-ux · pkg-gameday-pickup-ux-20261005014743 t3
+- **What was wrong:** t1 and t2 put campus-event pickup labels, meeting-spot details, and surge-window copy in `server/gameDayPricing.test.js`. A missing or duplicated path on the root `package.json` `test` script would let `npm test` skip those checks.
+- **What changed:** Left the `test` script unchanged. `server/gameDayPricing.test.js` is listed once. `shared/gameDayPickupCopy.js` has no tests of its own; the schedule cases import it from that file. Surge multipliers and cent amounts are unchanged.
+- **Files touched:** `docs/FIXES.md`
+- **Verified:** `npm test` (2326 pass, 0 fail, 63 suites). Passing cases in that run include `special pickup labels map known campus points and keep other server zones`, `schedule copy maps the pickup zone and surge banner without fare fields`, `web schedule flow renders shared pickup labels and surge banner copy`, and `pickup option labels name the meeting spot and surge windows skip prices`.
+
+## 2026-10-05 — clearer game-day pickup picker and surge-window copy
+
+- **What was wrong:** Game-day pickup choices were color-only pills. "Memorial Stadium" and "Memorial Stadium · Lot 5" share one map pin, and the chips did not say which meeting spot was which. The schedule notice named the rider fare multiplier and did not say which clock window the campus event surge follows.
+- **What changed:** Pickup cards now show the meeting-spot detail, a Selected state in text, and an Event pickup mark when the quote zone matches that point. The place list uses the same longer label. A separate surge-window sentence names the campus event, weekend, or airport rush hours and does not include a price. Surge multipliers and cent amounts are unchanged.
+- **Files touched:**
+  - `shared/gameDayPickupCopy.js`
+  - `src/components/ScheduledRidePlanner.jsx`
+  - `src/components/PlacePicker.jsx`
+  - `server/gameDayPricing.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/gameDayPricing.test.js` (12/12) and `npm test` (2326/2326). No browser tools were available, so the schedule screen was not clicked in a browser. A gitignored `dist/` build was removed first because it made the retired-copy scan fail.
+
+## 2026-10-05 — game-day pickup labels and surge banner copy on the web schedule
+
+- **What was wrong:** The schedule screen could save a game-day ride, but it never showed the campus event pickup zone or when the surge note should appear. Quote responses dropped `pickup_zone_label` after reading it for the multiplier. Home and ride-option screens already had that copy; the scheduler did not share it.
+- **What changed:** Added `shared/gameDayPickupCopy.js` for special pickup labels, surge-banner visibility, and schedule sentences. The web scheduler uses those helpers for game-day pickup chips and the quote notice. The fare quote now returns the event id, title, and zone only. Surge multipliers and cent amounts are unchanged.
+- **Files touched:**
+  - `shared/gameDayPickupCopy.js`
+  - `src/components/ScheduledRidePlanner.jsx`
+  - `src/lib/scheduledRides.js`
+  - `server/endpoints/quoteFare.js`
+  - `server/gameDayPricing.test.js`
+  - `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test server/gameDayPricing.test.js` (11/11) and `npm test` (2325/2325). No browser session was available, so the schedule screen was not clicked in a browser.
+
+## 2026-10-05 — Favorite-driver tests already run under npm test
+
+- **What was wrong:** The favorite-driver cases (empty-list copy, favorites-then-approach sort, and a visible error when a save fails) were added to `packages/rides-native/drivers.test.js`. That file was already on the root `package.json` `test` script, so `npm test` would skip them only if the listing were missing or duplicated.
+- **What changed:** Left the `test` script unchanged. `packages/rides-native/drivers.test.js` is listed once, and this package added no other test file. Confirmed the three cases run as part of `npm test`.
+- **Files touched:** `docs/FIXES.md`
+- **Verified:** `npm test` (2324 pass, 0 fail). Passing cases in that run: `empty favorites list copy tells the rider to save a driver`, `sortPreferredDrivers keeps favorites first then approach`, `toggle favorite persistence failure surfaces a user-visible error`.
+
+## 2026-10-05 — Favorite star accessible name on pick-driver
+
+- **What was wrong:** The pick-driver favorite control read only as Save or Saved. Web had no `aria-label` or pressed state, and the native label did not name the driver, so the star did not say who would be saved or removed. A failed save on native was plain footer text with no alert announcement.
+- **What changed:** The control shows ★ when saved and ☆ when not. Web sets `aria-pressed` and `aria-label` (`Save {name}` / `Remove {name} from saved drivers`) and gives the empty-favorites status `aria-live="polite"`. Native sets the same label, `accessibilityState.selected`, and announces save failures with `accessibilityRole="alert"`. Empty-list copy and the account/phone error strings stay as they are.
+- **Files touched:** `src/screens/PickDriver.jsx`, `apps/rider/app/pick-driver.tsx`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/drivers.test.js` (37 pass) and `npm test` (2324 pass).
+
+## 2026-10-05 — Favorite drivers: empty-list copy and visible save errors
+
+- **What was wrong:** Pick a driver hid an empty favorites list with no explanation. `saveFavoriteDriverIds` treated an account or phone write failure as a quiet note (`Saved on this phone.`) or swallowed the storage error, and both pick-driver screens never put that failure on the error alert.
+- **What changed:** Added `EMPTY_FAVORITES_COPY` and show it on web and native when the rider has no saved drivers. Account or phone save failures now return `FAVORITE_ACCOUNT_SAVE_ERROR` or `FAVORITE_PERSIST_ERROR`, and both screens call `setError` with that string. Sort stays favorites first, then approach (ETA) inside the same online and dispatch-rank bucket. No fare math changes.
+- **Files touched:** `packages/rides-native/drivers.js`, `packages/rides-native/drivers.d.ts`, `packages/rides-native/drivers.test.js`, `src/screens/PickDriver.jsx`, `apps/rider/app/pick-driver.tsx`, `docs/FIXES.md`
+- **Verified:** `node --experimental-strip-types --test packages/rides-native/drivers.test.js`
 
 ## 2026-10-05 — Web ride-offer file chime skipped when rewind threw
 
@@ -2005,6 +2173,20 @@ Persistent knowledge base for recurring failures. When a matching issue appears,
   - Wired `tests/gaAuditExpireHoldsSanitization.test.js` into root `package.json` test script.
 - **Files touched:** `server/endpoints/expireUnpaidAirportHolds.js`, `tests/gaAuditExpireHoldsSanitization.test.js`, `package.json`, `docs/FIXES.md`
 - **Verified:** `npm test` passing with 0 failures.
+
+## 2026-10-05 — Live trip status chip labels (pkg-live-trip-ui-polish t1)
+
+- **What was wrong:** The rider live-trip map chip was a hardcoded "Looking for a driver" string on the web search map (`src/screens/Requested.jsx`) and only rendered while the open-pool search theater was up. After a driver was accepted, that chip disappeared. Native tracking (`apps/rider/app/requested.tsx`) has no map chip; the accepted driver shows on the counterpart card and the phase kicker. `tripStatusLabel` covers searching/accepted/arriving/arrived/in_progress/completed, but it has no `en_route` chip key, and `riderLiveCopy` labels `accepted` with the kicker "EN ROUTE", so accepted and en route were the same phrase. No shared pure helper mapped the chip set searching / accepted / en_route / arrived / in_progress / completed.
+- **What changed:** Added `liveTripStatusChipLabel` with a frozen label map. `accepted` is "Driver accepted". `en_route` is "En route". The stored trip status `arriving` (and `enroute` / "en route" / "en-route") uses the en route chip. `offered` keeps the searching chip, matching the current search theater. Unknown, blank, and non-string statuses return null so a chip can hide. Did not change GPS ping or location publish code, and did not restyle the map chrome.
+- **Files touched:** `packages/rides-native/liveTripStatusChip.js`, `packages/rides-native/liveTripStatusChip.test.js`, `package.json`, `docs/FIXES.md`
+- **Verified:** `node --test packages/rides-native/liveTripStatusChip.test.js` (3/3) and `npm test` (2333 pass, 0 fail).
+
+## 2026-10-05 — Live trip card chrome (pkg-live-trip-ui-polish t2)
+
+- **What was wrong:** After a driver was accepted, the web live-trip map dropped the status chip and shrank from 280px to 220px, so the pin sat under a short map. The chip was centered and could crowd the right-hand map control. The route line kept an empty driver prefix once the driver card was on screen. Cancel this ride used `isMidrideStatus`, which is only true for `canceled_midride`, so the secondary action showed up after the trip was already canceled and stayed hidden while the trip was actually in progress. Message, lost-and-found, and rate controls were mixed into the primary button stack even when none of them applied.
+- **What changed:** The map chip now uses `liveTripMapChip` for searching, accepted, en route, arrived, in trip, and completed, with the spinner only while searching. The chip sits in the top-left band and leaves 64px clear on the right. The map stays 280px while a preview, a driver pin, or a status chip is up. The route prefix is omitted when the driver card is showing. Secondary actions render only when the list is non-empty. Cancel is offered only while the trip is `in_progress`. No GPS, location publish, or Arrived-step code was changed.
+- **Files touched:** `packages/rides-native/liveTripCard.js`, `packages/rides-native/liveTripCard.test.js`, `package.json`, `src/screens/Requested.jsx`, `src/index.css`, `src/components/CounterpartChip.jsx`, `docs/FIXES.md`
+- **Verified:** `node --test packages/rides-native/liveTripCard.test.js` (5/5) and `npm test` (2338 pass, 0 fail). Headless Chrome screenshots of the no-trip route and a phone-width chip fixture: chip stays left of the zoom control, accepted and en route labels are distinct, and the card with no secondary actions shows only Share and Back home.
 
 ## 2026-10-07 — [agy] GA97: Stripe webhook retryable 500 classification and dependency injection across tips, credits, and deposits
 

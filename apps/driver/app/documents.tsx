@@ -1,4 +1,4 @@
-import { useRouter, useFocusEffect } from 'expo-router'
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import * as DocumentPicker from 'expo-document-picker'
 import * as ImagePicker from 'expo-image-picker'
 import { useCallback, useState } from 'react'
@@ -17,6 +17,7 @@ import {
   uploadDriverDocument,
 } from 'rides-native/driverOnboardingClient'
 import {
+  ATTENTION_COPY,
   DOCUMENT_CATEGORIES,
   categoryAttention,
   categorySlots,
@@ -25,6 +26,7 @@ import {
   type DocumentCategoryId,
   type DocumentRow,
 } from 'rides-native/documentCategories'
+import { attentionScreenItems } from 'rides-native/goPress'
 import {
   INSPECTION_FORM_TYPE,
   INSPECTION_OVERDUE_COPY,
@@ -39,6 +41,7 @@ import {
 } from 'rides-native/vehicleInspection'
 import { extractReadableText, licensePendingCopy, matchRegistration, reviewLicenseImage } from 'rides-native/documentReview'
 import { Glyph } from 'rides-native/icons'
+import { quietly } from '@/lib/softFail'
 
 type PickedFile = { uri: string; name?: string; mimeType?: string; size?: number; width?: number; height?: number }
 type DocumentsTabId = DocumentCategoryId | 'inspection'
@@ -168,6 +171,8 @@ async function reviewMeta(docType: string, file: PickedFile, vehicle: VehicleRow
 
 export default function DocumentsScreen() {
   const router = useRouter()
+  const params = useLocalSearchParams<{ attention?: string }>()
+  const attentionMode = params.attention === '1'
   const { colors, scheme } = useTheme()
   const { user } = useAuth()
   const [tabId, setTabId] = useState<DocumentsTabId>('license')
@@ -193,8 +198,8 @@ export default function DocumentsScreen() {
     try {
       const [docs, car, deadline] = await Promise.all([
         fetchMyDriverDocuments(supabase, user.id),
-        loadVehicle(supabase, user.id).catch(() => null),
-        fetchInspectionDeadline(supabase, user.id).catch(() => null),
+        loadVehicle(supabase, user.id).catch(quietly('documents vehicle', null)),
+        fetchInspectionDeadline(supabase, user.id).catch(quietly('documents inspection deadline', null)),
       ])
       setDocuments(docs)
       setInspectionDueAt(deadline?.inspection_due_at ?? null)
@@ -220,6 +225,7 @@ export default function DocumentsScreen() {
   const sectionLabel = inspectionOpen ? INSPECTION_TAB_LABEL : active.label
   const sectionKicker = inspectionOpen || active.id === 'vehicle' ? 'VEHICLE CHECK' : String(active.label).toUpperCase()
   const inspectionReminder = inspectionCountdown({ documents, dueAt: inspectionDueAt, now: new Date() })?.message || ''
+  const attentionItems = attentionScreenItems({ documents, dueAt: inspectionDueAt, now: new Date() }).items
   const inspectionGate = inspectionGoOnlineGate({ documents, dueAt: inspectionDueAt, now: new Date() })
   const inspectionInReview = inspectionSubmitted(documents) && !sectionStatus.approved
 
@@ -241,13 +247,13 @@ export default function DocumentsScreen() {
     setNotice(null)
     try {
       const reviewed = await reviewMeta(docType, file, vehicle)
-      await uploadDriverDocument(supabase, user.id, docType, file, {
+      const saved = await uploadDriverDocument(supabase, user.id, docType, file, {
         ...reviewed.meta,
         inspectionSource: docType === INSPECTION_FORM_TYPE ? inspectionSource : null,
       })
       setChooser(null)
       await refresh()
-      setNotice(reviewed.notice)
+      setNotice(saved.driverMessage || reviewed.notice)
       if (docType === 'registration' && reviewed.meta.matchStatus && reviewed.meta.matchStatus !== 'matched') {
         setError(reviewed.notice)
       }
@@ -259,7 +265,7 @@ export default function DocumentsScreen() {
   }
 
   return (
-    <StackPage title="Documents" onBack={() => router.back()}>
+    <StackPage title={attentionMode ? ATTENTION_COPY : 'Documents'} onBack={() => router.back()}>
       <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
         Each tab is approved only when every required file in it is approved. Anything else needs your attention.
       </Text>
@@ -323,6 +329,18 @@ export default function DocumentsScreen() {
         </Card>
       ) : (
         <Card>
+          {attentionMode ? (
+            <View style={{ gap: 6 }}>
+              <Text style={[styles.sectionTitle, { color: colors.title }]}>{ATTENTION_COPY}</Text>
+              {attentionItems.length === 0 ? (
+                <Text style={{ color: colors.inkSecondary }}>Nothing else is required.</Text>
+              ) : attentionItems.map((item) => (
+                <Text key={item.id} style={{ color: colors.ink, fontWeight: '700' }}>
+                  {item.section} · {item.label} · {item.reason}
+                </Text>
+              ))}
+            </View>
+          ) : null}
           <Text style={{ color: colors.orange, ...typeScale.kickerSm }}>{sectionKicker}</Text>
           <Text style={[styles.sectionTitle, { color: colors.title }]}>{sectionLabel}</Text>
           <StatusMark status={sectionStatus} scheme={scheme} />

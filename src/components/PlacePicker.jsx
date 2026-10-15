@@ -3,7 +3,9 @@ import { useJsApiLoader } from '@react-google-maps/api'
 import { FRIEND_PLACES } from '../lib/friendRides'
 import { hotCatalogPlaces, lookupCatalogPlace, placeFromStop, searchCatalogPlaces } from '../lib/placeCatalog'
 import { LOCATION_MISSING_MESSAGE, readBrowserPosition } from '../lib/currentPlace'
+import { keepInputUsable } from '../lib/placesFallback'
 import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
+import { SiteIcon } from './SiteIcon'
 
 const CURRENT = { label: 'Current location', lat: null, lng: null, _current: true }
 
@@ -92,6 +94,7 @@ export function PlacePicker({
       componentRestrictions: { country: 'us' },
     })
     acRef.current = ac
+    const releaseInput = keepInputUsable(inputRef.current, inputRef.current.getAttribute('placeholder'))
     const listener = ac.addListener('place_changed', () => {
       const place = ac.getPlace()
       const loc = place?.geometry?.location
@@ -104,6 +107,7 @@ export function PlacePicker({
     })
     return () => {
       if (listener) listener.remove()
+      releaseInput()
       acRef.current = null
     }
   }, [mode, isLoaded, apiKey, onChange])
@@ -156,7 +160,7 @@ export function PlacePicker({
             <option value={selectedLabel}>{selectedLabel}</option>
           ) : null}
           {presets.map((p) => (
-            <option key={p.label} value={p.label}>{p.label}</option>
+            <option key={p.label} value={p.label}>{p.menuLabel || p.label}</option>
           ))}
         </select>
       ) : null}
@@ -214,7 +218,7 @@ export function PlacePicker({
 
       {selectedLabel ? (
         <div style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 6 }}>
-          Selected: <strong style={{ color: 'var(--ink-secondary)' }}>{selectedLabel}</strong>
+          Selected: <strong style={{ color: 'var(--ink-secondary)' }}>{value?.menuLabel || selectedLabel}</strong>
           {showCoordinates && value?.lat != null && value?.lng != null ? ` · ${Number(value.lat).toFixed(4)}, ${Number(value.lng).toFixed(4)}` : ''}
         </div>
       ) : null}
@@ -227,7 +231,7 @@ export function PlacePicker({
           onClick={() => setConfirmOpen(true)}
           style={chipStyle(false)}
         >
-          ◎ Current location
+          <SiteIcon name="locate" size={16} style={{ verticalAlign: -3 }} /> Current location
         </button>
         {presets.map((p) => (
           <button
@@ -237,7 +241,7 @@ export function PlacePicker({
             onClick={() => onChange?.(p)}
             style={chipStyle(selectedLabel === p.label)}
           >
-            {p.label}
+            {p.menuLabel || p.label}
           </button>
         ))}
       </div>

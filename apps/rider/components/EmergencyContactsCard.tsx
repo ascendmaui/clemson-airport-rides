@@ -15,6 +15,7 @@ import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
+import { caughtMessage, logCaught } from '@/lib/caught'
 
 type Draft = {
   id?: string
@@ -57,6 +58,11 @@ export function EmergencyContactsCard({
       if (!alive) return
       setError(result.error)
       publish(result.contacts)
+      setLoading(false)
+    }).catch((err: unknown) => {
+      if (!alive) return
+      logCaught('emergency-contacts', err)
+      setError(caughtMessage(err, 'Could not load emergency contacts.'))
       setLoading(false)
     })
     return () => {
@@ -115,7 +121,7 @@ export function EmergencyContactsCard({
     <View style={[styles.card, lift(colors, 'rest')]}>
       <Text style={styles.kicker}>PEOPLE YOU TRUST</Text>
       <Text style={styles.title}>Emergency contacts</Text>
-      <Text style={styles.body}>Add, edit, or call someone from this phone. The list stays on your Clemson RIDES account.</Text>
+      <Text style={styles.body}>Add, edit, or call someone from this phone. The list stays on your Clemson Rides account.</Text>
       {loading ? <Text style={styles.body}>Loading contacts…</Text> : null}
       {!loading && contacts.length === 0 ? (
         <View style={styles.empty}>

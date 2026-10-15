@@ -44,7 +44,7 @@ async function call(handler, body, deps) {
   return { status: res.statusCode, json }
 }
 
-function createSb({ balance = 0, balanceMode = 'row' } = {}) {
+function createSb({ balance = 0, balanceMode = 'row', paymentMethodId = 'pm_test' } = {}) {
   const state = { trips: [], creditWrites: [], balance }
   function chain(table) {
     const api = {
@@ -70,7 +70,13 @@ function createSb({ balance = 0, balanceMode = 'row' } = {}) {
           if (balanceMode === 'missing-table') {
             return { data: null, error: { message: 'column credit_balance_cents does not exist' } }
           }
-          return { data: { credit_balance_cents: 0 }, error: null }
+          return {
+            data: {
+              credit_balance_cents: 0,
+              ...(paymentMethodId ? { stripe_default_pm_id: paymentMethodId } : {}),
+            },
+            error: null,
+          }
         }
         return { data: null, error: null }
       },
@@ -117,6 +123,13 @@ function createSb({ balance = 0, balanceMode = 'row' } = {}) {
         return done
       },
       then(resolve) {
+        if (table === 'rider_credit_lots') {
+          if (balanceMode === 'error') { resolve({ data: null, error: { message: 'timeout' } }); return }
+          if (balanceMode === 'missing-table') { resolve({ data: null, error: { message: 'relation "rider_credit_lots" does not exist' } }); return }
+          if (balanceMode === 'empty') { resolve({ data: [], error: null }); return }
+          resolve({ data: state.balance > 0 ? [{ remaining_cents: state.balance }] : [], error: null })
+          return
+        }
         if (table === 'profiles') {
           resolve({ data: [{ id: 'driver-1', email: 'driver@example.com' }], error: null })
           return
@@ -170,7 +183,7 @@ const campus = {
   destLng: -82.8374,
 }
 
-test('a missing credit account starts at zero and does not grant a balance', async () => {
+test('no credit lots starts at zero and does not grant a balance', async () => {
   const empty = createSb({ balanceMode: 'empty' })
   const none = await readRideCreditBalance(empty, 'rider-1')
   assert.equal(none.known, true)
@@ -317,6 +330,27 @@ test('selecting credits records the choice and does not debit or charge', async 
   assert.equal(short.state.creditWrites.length, 0)
 })
 
+test('a ride request without a saved card or Apple Pay is rejected before the trip is inserted', async () => {
+  const sb = createSb({ balance: 0, paymentMethodId: null })
+  const denied = await call(requestDriverTrip, {
+    driverId: 'driver-1',
+    ...campus,
+  }, depsFor(sb, rider('fan@gmail.com')))
+  assert.equal(denied.status, 402)
+  assert.equal(denied.json.code, 'payment_method_required')
+  assert.match(denied.json.error, /payment method/i)
+  assert.equal(sb.state.trips.length, 0)
+
+  const apple = createSb({ balance: 0, paymentMethodId: null })
+  const allowed = await call(requestDriverTrip, {
+    driverId: 'driver-1',
+    ...campus,
+    applePay: true,
+  }, depsFor(apple, rider('fan@gmail.com')))
+  assert.equal(allowed.status, 200, JSON.stringify(allowed.json))
+  assert.equal(apple.state.trips.length, 1)
+})
+
 test('campus rides still complete with no card, and airport pick-a-driver does not open a charge', async () => {
   const sb = createSb({ balance: 0 })
   const campusRide = await call(requestDriverTrip, {
@@ -416,7 +450,8 @@ test('the billing handler does not call Stripe or write a credit debit', () => {
   assert.doesNotMatch(src, /credit_ledger/)
   assert.doesNotMatch(lib, /credit_ledger/)
   assert.doesNotMatch(lib, /credit_balance_cents/)
-  assert.match(lib, /from\('credit_accounts'\)\.select\('balance_cents'\)/)
+  assert.doesNotMatch(lib, /credit_accounts/)
+  assert.match(lib, /from\('rider_credit_lots'\)/)
   assert.match(sql, /credit_ledger already exists/)
   assert.equal(sql.replace(/--[^\n]*/g, '').trim(), '')
 })

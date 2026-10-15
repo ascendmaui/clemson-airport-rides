@@ -1,4 +1,5 @@
 import { depositReceiptLines } from '../../packages/rides-native/riderMoney.js'
+import { supportEmail } from '../../shared/productLinks.js'
 import { maskCompletedTripForDriver } from './privacyDisplay.js'
 
 export function money(cents) {
@@ -6,7 +7,7 @@ export function money(cents) {
 }
 
 export function buildReceiptText(trip, { forDriver = false } = {}) {
-  if (!trip) return 'Clemson RIDES receipt'
+  if (!trip) return 'Clemson Rides receipt'
   const view = forDriver ? maskCompletedTripForDriver(trip) : trip
   const fare = Number(trip.fare_cents) || 0
   const tip = Number(trip.tip_cents) || 0
@@ -15,7 +16,7 @@ export function buildReceiptText(trip, { forDriver = false } = {}) {
     ? new Date(trip.completed_at).toLocaleString()
     : ''
   return [
-    'Clemson RIDES receipt',
+    'Clemson Rides receipt',
     `Trip ${trip.id}`,
     `From: ${view.pickup_label || 'Pickup'}`,
     `To: ${view.dropoff_label || 'Dropoff'}`,
@@ -25,12 +26,13 @@ export function buildReceiptText(trip, { forDriver = false } = {}) {
     wait > 0 ? `Wait time: ${money(wait)}` : null,
     `Tip: ${money(tip)}`,
     `Total: ${money(fare + tip + wait)}`,
+    `Questions: ${supportEmail()}`,
   ].filter(Boolean).join('\n')
 }
 
 export async function shareReceipt(trip, { forDriver = false, url } = {}) {
   const text = buildReceiptText(trip, { forDriver })
-  const title = 'Clemson RIDES receipt'
+  const title = 'Clemson Rides receipt'
   if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
     try {
       await navigator.share({ title, text, url })

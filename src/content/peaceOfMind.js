@@ -87,7 +87,7 @@ export const BUILT_IN = [
     imageId: null,
     title: 'Carpool',
     what: 'Carpool is half the Standard fare per seat when 3 or 4 riders share the trip.',
-    how: 'Riders group when pickup and drop-off are each nearby and the times are close. When 3 riders are in, the group books, up to 4. Each rider is pre-authorized for their own seat. There is no deposit. Demo cars do not count.',
+    how: 'Riders group when pickup and drop-off are each nearby and the times are close. When 3 riders are in, the group books, up to 4. Each rider gets a hold on their card for their own seat, and the full seat fare is charged when the trip ends. Demo cars do not count.',
     why: 'Splitting the ride costs less than booking Standard alone.',
   },
   {
@@ -255,7 +255,7 @@ export const CARPOOL_SECTION = {
   kicker: 'Carpool',
   title: 'Half of Standard, per seat.',
   what: 'Carpool is 50% of the Standard fare per seat when 3 or 4 riders split the trip.',
-  why: 'Nearby pickups and drop-offs share one car. Each rider pays for their own seat. There is no deposit.',
+  why: 'Nearby pickups and drop-offs share one car. Each rider pays for their own seat: a hold at booking, the full fare at trip end.',
   steps: [
     {
       title: 'Choose Carpool',
@@ -267,7 +267,7 @@ export const CARPOOL_SECTION = {
     },
     {
       title: 'The group books',
-      body: 'At 3 riders the trip merges, up to 4. Each seat is pre-authorized. There is no deposit.',
+      body: 'At 3 riders the trip merges, up to 4. Each seat gets a hold on the rider’s card, and the full fare is charged when the trip ends.',
     },
   ],
   diagramCaption: 'Same or similar pickup. Same or similar drop-off. One car.',
@@ -312,4 +312,4 @@ export const AIRPORT_SECTION = {
   ],
 }
 
-export const APP_STORE_NOTE = 'iPhone apps are in public beta on TestFlight. The App Store and Play Store listings are not live yet.'
+export const APP_STORE_NOTE = 'The iPhone app is coming soon to the App Store. Until then, you can book and drive on clemsonrides.com.'

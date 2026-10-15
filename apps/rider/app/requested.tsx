@@ -6,6 +6,8 @@ import { reconcileCheckout } from 'rides-native/riderMoney.js'
 import { AppState, AccessibilityInfo, Animated, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { FlowErrorBoundary } from '@/components/FlowErrorBoundary'
+import { MidrideCancelSheet } from '@/components/MidrideCancelSheet'
 import { useEnterMotion } from '@/components/enter'
 import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
 import { CampusMap } from '@/components/CampusMap'
@@ -22,6 +24,7 @@ import { loadLiveTrip, subscribeLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 import { useTripById } from '@/lib/useRiderTrip'
 import { isActiveRideStatus, listEmergencyContacts, type EmergencyContact } from 'rides-native/safety.js'
 import { driverCancelNotice, etaHoldLine, liveDriverTitle, orderedLiveStops, RIDER_SEARCH_MOTION_COPY, riderLiveView, showSearchTheater, type LiveStopPin } from 'rides-native/liveTrip'
+import { failedHoldPrompt } from 'rides-native/rideMoments'
 import { followEtaLine, followMapCoordinates } from 'rides-native/roadFollow'
 import { holdAirportCode, isOpenUnpaidAirportHold, isUnpaidHoldTtlCancel } from 'rides-native/holdExpiryNotice.js'
 import { LivePhase } from 'rides-native/LivePhase'
@@ -30,14 +33,17 @@ import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { CounterpartCard, partyColorsFromPalette } from 'rides-native/PartyScreens'
 import { CommunityMatchChips } from 'rides-native/CommunityMatchChips'
 import { loadCounterpart, type CounterpartView } from 'rides-native/partyProfile.js'
+import { safeCounterpart, textField } from '@/lib/driverFields'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
+import { logCaught, toastCaught } from '@/lib/caught'
 import { registerRiderPush } from '@/lib/push'
 import { riderFlightView } from 'rides-native/flightStatus'
 import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
 import { canDriverEnd } from '../../../shared/driverEndTrip.js'
+import { loadMidrideStarted, riderMayCancelMidride } from '../../../shared/riderMidrideCancel.js'
 
 const CHECKOUT_RETURN_COPY = 'You\'re back from checkout. This ride is in the open pool. The final fare is charged when the trip ends.'
 
@@ -95,7 +101,7 @@ function pinsFor(trip: LiveTrip | null): MapPin[] {
   return pins
 }
 
-export default function Requested() {
+function RequestedRide() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const params = useLocalSearchParams<{ dest?: string; trip?: string; driver?: string; session_id?: string; sessionId?: string; paid?: string }>()
@@ -115,6 +121,9 @@ export default function Requested() {
   const [refreshing, setRefreshing] = useState(false)
   const [sosOpen, setSosOpen] = useState(false)
   const [switchOpen, setSwitchOpen] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [midrideStarted, setMidrideStarted] = useState(false)
+  const [endedTripId, setEndedTripId] = useState<string | null>(null)
   const [contacts, setContacts] = useState<EmergencyContact[]>([])
   const [person, setPerson] = useState<CounterpartView | null>(null)
   const { colors } = useTheme()
@@ -122,19 +131,40 @@ export default function Requested() {
   const sheetMotion = useEnterMotion(12)
   const rideLive = isActiveRideStatus(trip?.status)
   const located = live?.driverLat != null && live?.driverLng != null
-  const driverName = live?.driverName || driver
+  const driverName = textField(live?.driverName, textField(driver, 'Your driver'))
   const error = tripError || mapError
   const reconciledSessions = useRef(new Set<string>())
 
   // Ask for notification permission once a ride exists, so "on the way / here" can reach a locked phone.
   useEffect(() => {
     if (!user?.id || !tripId) return
-    registerRiderPush(supabase, user.id, { prompt: true }).catch(() => {})
+    registerRiderPush(supabase, user.id, { prompt: true }).catch((err: unknown) => {
+      toastCaught('requested-push', err, 'Ride alerts could not be turned on')
+    })
   }, [user?.id, tripId])
 
   const mapRequest = useRef(0)
   const mapPending = useRef(false)
   useEffect(() => () => { mapRequest.current++; mapPending.current = false }, [tripId])
+  function retryTracking() {
+    try {
+      setTrackingNow(Date.now())
+      void reloadMap(true)
+    } catch (err) {
+      logCaught('requested-retry', err)
+      setMapError('Could not refresh tracking')
+    }
+  }
+
+  function openBilling() {
+    try {
+      router.push('/billing')
+    } catch (err) {
+      logCaught('requested-billing', err)
+      setMapError('Could not open billing')
+    }
+  }
+
   async function reloadMap(recover = false) {
     if (!tripId || (mapPending.current && !recover)) return
     mapPending.current = true
@@ -184,7 +214,7 @@ export default function Requested() {
       clearInterval(id)
     }
   }, [tripId, live?.driver_id])
-  const shown = (trip && live ? { ...trip, status: live.status } : trip) || (tripId
+  const loadedShown = (trip && live ? { ...trip, status: live.status } : trip) || (tripId
     ? {
         id: tripId,
         status: live?.status ?? null,
@@ -193,6 +223,21 @@ export default function Requested() {
         rider_id: user?.id || null,
       }
     : null)
+  const endedAs = endedTripId && endedTripId === (loadedShown?.id || tripId) ? 'canceled' : null
+  const serverStatus = loadedShown?.status ?? null
+  const shown = loadedShown && endedAs && serverStatus !== 'canceled' && serverStatus !== 'canceled_midride' && serverStatus !== 'cancelled_wait' && serverStatus !== 'completed'
+    ? { ...loadedShown, status: endedAs }
+    : loadedShown
+  useEffect(() => {
+    let alive = true
+    loadMidrideStarted(supabase, { id: shown?.id || tripId, status: shown?.status }).then((started) => {
+      if (alive) setMidrideStarted(started)
+    }).catch((err: unknown) => {
+      toastCaught('requested-cancel', err, 'Could not check cancel options')
+    })
+    return () => { alive = false }
+  }, [shown?.id, shown?.status, tripId])
+  const canCancelMidride = riderMayCancelMidride(shown?.status, midrideStarted)
   const seenDriverCancels = useRef(new Map<string, string>())
   const [cancelNotice, setCancelNotice] = useState<{ tripId: string; at: string; message: string } | null>(null)
   useEffect(() => {
@@ -222,13 +267,30 @@ export default function Requested() {
     ? { ...livePhase, title: flightView.waitingTitle, body: 'Head to the Arrivals curb. The trip starts once you are in the car.' }
     : livePhase
   const phase = ttlCanceled
-    ? { ...basePhase, kicker: 'HOLD EXPIRED', title: 'Deposit hold expired', body: '', steps: [], stepIndex: -1 }
+    ? { ...basePhase, kicker: 'HOLD EXPIRED', title: 'Hold expired', body: '', steps: [], stepIndex: -1 }
     : basePhase
-  const locationIssue = trackingIssue(shown?.status, live?.driverLocationAt, trackingNow)
-  const driverFix = live?.driverLat != null && live.driverLng != null ? { lat: live.driverLat, lng: live.driverLng } : null
-  const driverEta = followEtaLine(shown?.status || null, driverFix, live)
-  const heldEta = etaHoldLine(shown?.status || null, driverEta)
-  const etaLine = staleEtaLine(locationIssue, heldEta, { placeholder: !driverEta })
+  let locationIssue: string | null = null
+  let holdPrompt: ReturnType<typeof failedHoldPrompt> = null
+  let driverFix: { lat: number; lng: number } | null = null
+  let driverEta: string | null = null
+  let etaLine: string | null = null
+  try {
+    locationIssue = trackingIssue(shown?.status, live?.driverLocationAt, trackingNow, live?.driverHeartbeatAt)
+    holdPrompt = failedHoldPrompt({
+      metadata: live?.metadata ?? trip?.metadata ?? null,
+    })
+    driverFix = live?.driverLat != null && live.driverLng != null ? { lat: live.driverLat, lng: live.driverLng } : null
+    driverEta = followEtaLine(shown?.status || null, driverFix, live)
+    const heldEta = etaHoldLine(shown?.status || null, driverEta)
+    etaLine = staleEtaLine(locationIssue, heldEta, { placeholder: !driverEta })
+  } catch (err) {
+    logCaught('requested-live', err)
+    locationIssue = null
+    holdPrompt = null
+    driverFix = null
+    driverEta = null
+    etaLine = null
+  }
   const preview = showSearchTheater(shown?.status || null)
   const searchingMap = shown?.status === 'searching' && !located
   const approachLive = isApproachStatus(shown?.status || null)
@@ -266,6 +328,8 @@ export default function Requested() {
     let alive = true
     listEmergencyContacts(supabase, user.id).then((result) => {
       if (alive) setContacts(result.contacts)
+    }).catch((err: unknown) => {
+      toastCaught('requested-contacts', err, 'Could not load emergency contacts')
     })
     return () => {
       alive = false
@@ -282,7 +346,8 @@ export default function Requested() {
       driver_id: live?.driver_id || trip?.driver_id || null,
     }, user.id).then((next) => {
       if (alive) setPerson(next)
-    }).catch(() => {
+    }).catch((err: unknown) => {
+      toastCaught('requested-driver', err, 'Could not load your driver')
       if (alive) setPerson(null)
     })
     return () => {
@@ -319,8 +384,14 @@ export default function Requested() {
             refreshing={refreshing}
             tintColor={colors.orange}
             onRefresh={() => {
-              setRefreshing(true)
-              reloadMap().finally(() => setRefreshing(false))
+              try {
+                setRefreshing(true)
+                void reloadMap().finally(() => setRefreshing(false))
+              } catch (err) {
+                logCaught('requested-retry', err)
+                setRefreshing(false)
+                setMapError('Could not refresh tracking')
+              }
             }}
           />
         )}
@@ -333,6 +404,24 @@ export default function Requested() {
               router.push(code ? { pathname: '/schedule', params: { airport: code } } : '/schedule')
             }}
           />
+        ) : null}
+        {holdPrompt ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${holdPrompt.title}. ${holdPrompt.body}`}
+            onPress={() => {
+              try {
+                openBilling()
+              } catch (err) {
+                logCaught('requested-billing', err)
+                setMapError('Could not open billing')
+              }
+            }}
+            style={{ padding: 14, borderRadius: 14, backgroundColor: colors.orangeSoft }}
+          >
+            <Text style={styles.body} accessibilityLiveRegion="polite">{holdPrompt.title}</Text>
+            <Text style={styles.body}>{holdPrompt.body}</Text>
+          </Pressable>
         ) : null}
         {cancelNotice?.tripId === tripId && shown?.status === 'searching' ? (
           <View style={{ padding: 14, borderRadius: 14, backgroundColor: colors.orangeSoft }}>
@@ -367,14 +456,14 @@ export default function Requested() {
         ) : (
           <View style={[styles.summary, lift(colors, 'rest')]}>
             <CounterpartCard
-              person={person}
+              person={safeCounterpart(person)}
               eta={located ? staleEtaLine(locationIssue, driverEta, { placeholder: !driverEta }) : null}
               colors={partyColorsFromPalette(colors)}
             />
             {person && tripId ? <CommunityMatchChips supabase={supabase} tripId={tripId} colors={colors} /> : null}
             {ttlCanceled ? null : (
               <>
-              {locationIssue ? <View accessibilityLiveRegion="polite"><Text style={{ color: colors.title }}>{locationIssue}</Text><Pressable accessibilityRole="button" onPress={() => void reloadMap(true)}><Text style={{ color: colors.title }}>Retry tracking</Text></Pressable></View> : null}
+              {locationIssue ? <View accessibilityLiveRegion="polite"><Text style={{ color: colors.title }}>{locationIssue}</Text><Pressable accessibilityRole="button" accessibilityLabel="Retry tracking" onPress={() => { try { retryTracking() } catch (err) { logCaught('requested-retry', err); setMapError('Could not refresh tracking') } }}><Text style={{ color: colors.title }}>Retry tracking</Text></Pressable></View> : null}
               <LivePhase
                 kicker={phase.kicker}
                 title=""
@@ -404,6 +493,11 @@ export default function Requested() {
             ) : null}
             {(shown?.status === 'accepted' || shown?.status === 'arriving') && (shown?.driver_id || live?.driver_id) ? (
               <PrimaryButton label="Change driver" tone="purple" onPress={() => setSwitchOpen(true)} />
+            ) : null}
+            {canCancelMidride && tripId ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="Cancel this ride" onPress={() => setCancelOpen(true)} hitSlop={8}>
+                <Text style={styles.cancelRide}>Cancel this ride</Text>
+              </Pressable>
             ) : null}
             {shown?.status === 'completed' ? (
               <PrimaryButton label="Rate your driver" onPress={() => router.push({ pathname: '/rate', params: { trip: tripId } })} />
@@ -512,6 +606,17 @@ export default function Requested() {
           }}
         />
       ) : null}
+      {tripId ? (
+        <MidrideCancelSheet
+          tripId={tripId}
+          open={cancelOpen}
+          onClose={() => setCancelOpen(false)}
+          onCanceled={() => {
+            setCancelOpen(false)
+            setEndedTripId(tripId)
+          }}
+        />
+      ) : null}
       <SosSheet
         open={sosOpen}
         onClose={() => setSosOpen(false)}
@@ -521,6 +626,14 @@ export default function Requested() {
         contacts={contacts}
       />
     </View>
+  )
+}
+
+export default function Requested() {
+  return (
+    <FlowErrorBoundary title="Live ride" fill>
+      <RequestedRide />
+    </FlowErrorBoundary>
   )
 }
 
@@ -550,5 +663,6 @@ function makeStyles(colors: Palette) {
     sosCard: { backgroundColor: colors.card, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: colors.border, gap: 4 },
     cardTitle: { color: colors.title, fontSize: 20, fontWeight: '700' as const, letterSpacing: -0.3, marginTop: 2, marginBottom: 6 },
     link: { color: colors.link, fontWeight: '700' as const, fontSize: 15 },
+    cancelRide: { color: colors.danger, fontWeight: '700' as const, paddingVertical: 4 },
   }
 }

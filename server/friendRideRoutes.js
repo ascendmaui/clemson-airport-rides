@@ -18,6 +18,7 @@ import {
 } from './friendRideLib.js'
 import { chargeFriendShare as chargeMeteredShare } from './chargeShare.js'
 import { chargeFriendShare as chargeHeldShare } from './chargeFriendShare.js'
+import { clientErrorMessage } from './clientError.js'
 import {
   loadDriverVehicle,
   vehicleMaxSeats,
@@ -222,7 +223,7 @@ export async function handleFriendRideGet(req, res, deps = {}) {
 
     return json(res, 200, summary)
   } catch (e) {
-    return json(res, 500, { error: e.message || 'Server error' })
+    return json(res, 500, { error: clientErrorMessage(e, 'Server error') })
   }
 }
 
@@ -353,7 +354,7 @@ export async function handleFriendRideJoin(req, res, deps = {}) {
       },
     })
   } catch (e) {
-    return json(res, 500, { error: e.message || 'Server error' })
+    return json(res, 500, { error: clientErrorMessage(e, 'Server error') })
   }
 }
 
@@ -398,7 +399,7 @@ export async function handleFriendRideRecompute(req, res, deps = {}) {
     })
   } catch (e) {
     console.error('[friend-rides-recompute]', e)
-    return json(res, 500, { error: e.message || 'Server error' })
+    return json(res, 500, { error: clientErrorMessage(e, 'Server error') })
   }
 }
 
@@ -600,7 +601,7 @@ export async function handleFriendRideConfirmCharges(req, res, deps = {}) {
     return json(res, 200, outcome.charged)
   } catch (e) {
     console.error('[confirm-charges]', e)
-    return json(res, 500, { error: e.message || 'Server error' })
+    return json(res, 500, { error: clientErrorMessage(e, 'Server error') })
   }
 }
 
@@ -663,6 +664,6 @@ export async function handleFriendRideRetryCharge(req, res, deps = {}) {
       failure: failed ? charged.result : null,
     })
   } catch (e) {
-    return json(res, 500, { error: e.message || 'Server error' })
+    return json(res, 500, { error: clientErrorMessage(e, 'Server error') })
   }
 }

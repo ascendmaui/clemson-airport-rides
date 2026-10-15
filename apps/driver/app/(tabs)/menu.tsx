@@ -1,7 +1,8 @@
 import { Glyph } from 'rides-native/icons'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { supportEmail, supportMailto } from '../../../../shared/productLinks.js'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Primary, useCardShadow } from '@/components/chrome'
 import { EmptyState, FadeIn, type MenuRow, RowGroup } from '@/components/day'
@@ -14,6 +15,8 @@ import { displayFirstName } from 'rides-native/authErrors'
 import { loadDriverPerks, loadVehicle, setLeaderboardOptOut, type Leaderboard, type VehicleRow } from 'rides-native/driverDesk'
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
+import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
+import { quietly } from '@/lib/softFail'
 
 function vehicleSubtitle(vehicle: VehicleRow | null): string {
   if (!vehicle) return 'Add the car riders will see'
@@ -47,8 +50,8 @@ export default function MenuScreen() {
     if (!user || !supabase) return
     const [nextVehicle, summary, quiz] = await Promise.all([
       loadVehicle(supabase, user.id),
-      loadRatingSummary(supabase, user.id).catch(() => null),
-      loadKnowledgeQuiz(supabase, user.id).catch(() => null),
+      loadRatingSummary(supabase, user.id).catch(quietly('menu rating', null)),
+      loadKnowledgeQuiz(supabase, user.id).catch(quietly('menu quiz', null)),
     ])
     setVehicle(nextVehicle)
     loadDriverPerks(supabase).then((p) => {
@@ -94,11 +97,15 @@ export default function MenuScreen() {
     { icon: 'speedometer', title: 'Safety score', subtitle: 'Estimate and tips', onPress: () => router.push('/safety-score') },
   ]
   const inbox: MenuRow[] = [
-    { icon: 'inbox', title: 'Inbox', subtitle: 'Messages from Clemson RIDES and riders', onPress: () => router.push('/inbox') },
+    { icon: 'inbox', title: 'Inbox', subtitle: 'Messages from Clemson Rides and riders', onPress: () => router.push('/inbox') },
     { icon: 'discover', title: 'Discover', subtitle: 'Busy spots, game days, and boosts', onPress: () => router.push('/discover') },
   ]
   const money: MenuRow[] = [
     { icon: 'calculator', title: 'Tax info', subtitle: 'Year-end mileage and earnings', onPress: () => router.push('/tax') },
+  ]
+  const supportRows: MenuRow[] = [
+    { icon: 'help', title: 'Help', subtitle: supportEmail(), onPress: () => { void Linking.openURL(supportMailto('Clemson Rides help')) } },
+    { icon: 'chat', title: 'Support', subtitle: supportEmail(), onPress: () => { void Linking.openURL(supportMailto('Clemson Rides support')) } },
   ]
   const resources: MenuRow[] = [
     { icon: 'school', title: 'Learning Center', subtitle: quizLabel, onPress: () => router.push('/learning') },
@@ -144,10 +151,13 @@ export default function MenuScreen() {
           <RowGroup rows={manage} />
           <SectionLabel>Tax</SectionLabel>
           <RowGroup rows={money} />
+          <SectionLabel>Help and support</SectionLabel>
+          <RowGroup rows={supportRows} />
           <SectionLabel>Resources</SectionLabel>
           <RowGroup rows={resources} />
           <SectionLabel>Settings</SectionLabel>
           <RowGroup rows={account} />
+          <AdminAccountRow supabase={supabase} colors={colors} onPress={() => router.push('/admin')} />
           {user && onLeaderboard != null ? (
             <View style={[styles.toggleRow, { backgroundColor: colors.card }]}>
               <View style={styles.deleteCopy}>

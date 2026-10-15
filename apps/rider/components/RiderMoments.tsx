@@ -3,6 +3,8 @@ import { useRouter } from 'expo-router'
 import { useEffect, useRef } from 'react'
 import { showToast } from 'rides-native/toastStore.js'
 import { paymentFailedMoment, riderTripMoment, riderTripSnapshot, type Moment, type RiderTripSnapshot } from 'rides-native/rideMoments.js'
+import { afterRiderModal, riderModalIsOpen } from '@/lib/afterModal'
+import { logCaught } from '@/lib/caught'
 import { useAuth } from '@/lib/auth'
 import { hapticsEnabled, playApproachPing, playCompleteCue, successHaptic, warningHaptic } from '@/lib/feedback'
 import { supabase } from '@/lib/supabase'
@@ -11,7 +13,9 @@ const COLS = 'id, status, pickup_label, dropoff_label, metadata'
 
 async function errorHaptic() {
   if (!(await hapticsEnabled())) return
-  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
+  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch((err: unknown) => {
+    logCaught('haptic-error', err)
+  })
 }
 
 /** Haptic + sound for a moment. Every part honors the rider's haptics / sounds settings and the mute switch. */
@@ -54,23 +58,56 @@ export function RiderMoments() {
     seen.current = new Map()
 
     function onRow(row: any) {
-      const next = riderTripSnapshot(row)
-      if (!next) return
-      const prev = seen.current.get(row.id) ?? null
-      seen.current.set(row.id, next)
-      if (!primed || !prev) return
-      const moments = [riderTripMoment(prev, row), paymentFailedMoment(prev.hold, row, 'rider')].filter(Boolean) as Moment[]
-      for (const moment of moments) {
-        showToast({
-          key: moment.key,
-          tone: moment.tone,
-          title: moment.title,
-          body: moment.body,
-          onPress: moment.cue === 'error'
-            ? () => router.push('/account')
-            : () => router.push({ pathname: '/requested', params: { trip: row.id } }),
-        })
-        playRiderMoment(moment)
+      try {
+        const next = riderTripSnapshot(row)
+        if (!next) return
+        const prev = seen.current.get(row.id) ?? null
+        seen.current.set(row.id, next)
+        if (!primed || !prev) return
+        let failed: Moment | null = null
+        try {
+          failed = paymentFailedMoment(prev.hold, row, 'rider')
+        } catch (err) {
+          logCaught('rider-moment-hold', err)
+          failed = null
+        }
+        let tripMoment: Moment | null = null
+        try {
+          tripMoment = riderTripMoment(prev, row)
+        } catch (err) {
+          logCaught('rider-moment-trip', err)
+          tripMoment = null
+        }
+        const moments = [tripMoment, failed].filter(Boolean) as Moment[]
+        const matched = ['accepted', 'arriving', 'arrived', 'in_progress'].includes(String(row.status || ''))
+        for (const moment of moments) {
+          // The match sheet already shows Add a payment method. A second banner
+          // that navigates in the same tick fights that modal.
+          if (moment.cue === 'error' && matched && riderModalIsOpen()) continue
+          try {
+            showToast({
+              key: moment.key,
+              tone: moment.tone,
+              title: moment.title,
+              body: moment.body,
+              onPress: () => {
+                try {
+                  const href = moment.cue === 'error' || moment.action === 'billing'
+                    ? { pathname: '/billing' as const }
+                    : { pathname: '/requested' as const, params: { trip: row.id } }
+                  afterRiderModal(() => router.push(href))
+                } catch (err) {
+                  logCaught('rider-moment-open', err)
+                }
+              },
+            })
+            playRiderMoment(moment)
+          } catch (err) {
+            logCaught('rider-moment', err)
+          }
+        }
+      } catch (err) {
+        logCaught('rider-moment-row', err)
       }
     }
 

@@ -95,3 +95,17 @@ export function shadowStyle(
   level?: ElevationLevel,
   scheme?: SchemeName,
 ): ShadowRecipe & { shadowColor: string }
+
+export const glow: { shadowOpacity: number; shadowRadius: number; shadowOffset: { width: number; height: number }; elevation: number }
+export function glowStyle(
+  glowColor: string,
+  platform?: string,
+): {
+  shadowColor: string
+  shadowOpacity: number
+  shadowRadius: number
+  shadowOffset: { width: number; height: number }
+  elevation: number
+  borderWidth?: number
+  borderColor?: string
+}

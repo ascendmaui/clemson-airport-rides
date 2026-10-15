@@ -13,6 +13,7 @@ import { SafetyHub } from '../components/SafetyHub'
 import { loadComfortPreference, saveComfortPreference } from '../../packages/rides-native/comfortPreference.js'
 import { useAuth } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
+import { supportMailto } from '../../shared/productLinks.js'
 import { fetchProfile, updateMyProfile, findPendingRatingTrip } from '../lib/ratings'
 import {
   CAMPUS_SPOTS, RIDE_STYLES, PRIVACY_OPTIONS, GALLERY_KINDS,
@@ -25,7 +26,8 @@ import {
 import { useToasts, pushToast } from '../lib/toasts'
 import { supabase } from '../lib/supabase'
 import { STUDENT_CLAIM_COPY, STUDENT_DISCOUNT_LABEL, markStudentVerified, studentStatus } from '../../packages/rides-native/riderMoney.js'
-import { fetchMyDriverApplication, isAdminIdentity, onboardingLabel } from '../lib/driverOnboarding'
+import { fetchMyDriverApplication, onboardingLabel } from '../lib/driverOnboarding'
+import { fetchAdminInbox } from '../lib/adminDesk'
 import { SignedAgreementCopy } from '../components/SignedAgreementCopy'
 import { ReferFriendsPanel } from './ReferFriends'
 import { isIncentiveAdmin } from '../lib/driverIncentiveMath'
@@ -119,11 +121,29 @@ export function AccountScreen() {
   const [comfortBusy, setComfortBusy] = useState(false)
   const [comfortNote, setComfortNote] = useState(null)
   const isDriver = profile?.role === 'driver' || profile?.role === 'both'
-  const isAdmin = isAdminIdentity({
-    jwtEmail: user?.email,
-    role: profile?.role,
-    isAdmin: profile?.is_admin,
-  })
+  const [serverAdmin, setServerAdmin] = useState(false)
+  const [inboxTotal, setInboxTotal] = useState(0)
+
+  useEffect(() => {
+    if (!user?.id) {
+      setServerAdmin(false)
+      setInboxTotal(0)
+      return undefined
+    }
+    let alive = true
+    fetchAdminInbox()
+      .then((data) => {
+        if (!alive) return
+        setServerAdmin(true)
+        setInboxTotal(Number(data.total) || 0)
+      })
+      .catch(() => {
+        if (!alive) return
+        setServerAdmin(false)
+        setInboxTotal(0)
+      })
+    return () => { alive = false }
+  }, [user?.id])
 
   async function reload() {
     if (!user?.id) return
@@ -384,6 +404,13 @@ export function AccountScreen() {
         >
         {tab === 'profile' && (
           <>
+            {serverAdmin && (
+              <button type="button" className="pressable" onClick={() => navigate('admin')}
+                style={{ display: 'block', width: '100%', marginTop: 14, padding: 12, borderRadius: 14, fontWeight: 700,
+                  color: '#fff', background: 'linear-gradient(135deg, #522D80, #6b3fa0)' }}>
+                Admin dashboard{inboxTotal ? ` · ${inboxTotal}` : ''}
+              </button>
+            )}
             <div className="glass-panel glass-panel--elevated" style={{ padding: 18, borderRadius: 22, marginTop: 14,
               background: 'linear-gradient(160deg, rgba(255,255,255,0.78), rgba(82,45,128,0.08) 55%, rgba(245,102,0,0.10))' }}>
               <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
@@ -660,13 +687,6 @@ export function AccountScreen() {
                 color: '#fff', background: 'linear-gradient(135deg, var(--orange), #ff7a1a)' }}>
               {application?.onboarding_status === 'approved' ? 'View driver application' : 'Continue driver application'}
             </button>
-            {isAdmin && (
-              <button type="button" className="pressable" onClick={() => navigate('admin')}
-                style={{ display: 'block', width: '100%', marginTop: 10, padding: 12, borderRadius: 14, fontWeight: 700,
-                  color: '#fff', background: 'linear-gradient(135deg, #522D80, #6b3fa0)' }}>
-                Admin dashboard
-              </button>
-            )}
             <button type="button" className="pressable" onClick={() => navigate('earnings')}
               style={{ display: 'block', width: '100%', marginTop: 10, padding: 12, borderRadius: 14, fontWeight: 700,
                 color: 'var(--purple)', border: '1.5px solid rgba(82,45,128,0.3)', background: 'rgba(255,255,255,0.55)' }}>
@@ -803,7 +823,7 @@ export function AccountScreen() {
         {tab === 'help' && (
           <Section title="Also in Help" subtitle="Email, lost and found, and policies" icon={IconHelp}>
             <a
-              href="mailto:rides@clemsonrides.com?subject=Clemson%20RIDES%20help"
+              href={supportMailto('Clemson Rides help')}
               className="pressable"
               style={{
                 display: 'block', padding: 14, borderRadius: 14, fontWeight: 700, color: 'var(--purple)',
@@ -878,7 +898,7 @@ export function AccountScreen() {
             {deleteBusy ? 'Filing deletion request…' : 'Request account deletion'}
           </button>
           {deleteNote ? <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12 }}>{deleteNote}</div> : null}
-          <p className="lux-version">Clemson RIDES · 1.2.0</p>
+          <p className="lux-version">Clemson Rides · 1.2.0</p>
           <button type="button" className="pressable lux-signout" onClick={onSignOut}>
             <IconSignOut size={18} color="#f4f1ea" />
             Sign Out

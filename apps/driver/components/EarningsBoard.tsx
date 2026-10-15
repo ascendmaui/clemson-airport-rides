@@ -7,7 +7,7 @@ import { shownCents } from '@/lib/shown'
 import { useTheme } from '@/lib/theme'
 import type { EarningBar } from '@/lib/earningsMath'
 import { formatPayoutEta } from 'rides-native/earningsDashboard.js'
-import { radius, type as typeScale } from 'rides-native/shared/theme.js'
+import { color, radius, shadowStyle, type as typeScale } from 'rides-native/shared/theme.js'
 import type {
   ForecastHighlights,
   PayoutTimeline,
@@ -102,7 +102,7 @@ export function EarningsHero({
 }) {
   const { colors, scheme } = useTheme()
   const onDark = scheme === 'dark'
-  const ink = onDark ? colors.ink : '#FFFFFF'
+  const ink = onDark ? colors.ink : color.white
   const muted = onDark ? colors.inkSecondary : 'rgba(255,255,255,0.84)'
   const body = (
     <>
@@ -120,7 +120,7 @@ export function EarningsHero({
     )
   }
   return (
-    <LinearGradient colors={['#522D80', '#3C1E66']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+    <LinearGradient colors={[color.purple, '#3C1E66']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
       {body}
     </LinearGradient>
   )
@@ -149,7 +149,7 @@ export function PeriodCharts({
       <View style={styles.periodRow}>
         {PERIODS.map((item) => {
           const on = item.id === selected
-          const tileInk = on ? '#FFFFFF' : colors.ink
+          const tileInk = on ? colors.onAccent : colors.ink
           const tileMuted = on ? 'rgba(255,255,255,0.82)' : colors.inkSecondary
           return (
             <Pressable
@@ -268,7 +268,7 @@ export function StreakCardView({
       ) : null}
       {board.bonuses.length ? (
         <View style={{ gap: 8 }}>
-          <Text style={[styles.subhead, { color: colors.purple }]}>Bonuses</Text>
+          <Text style={[styles.subhead, { color: colors.link }]}>Bonuses</Text>
           {board.bonuses.slice(0, 4).map((bonus) => (
             <View key={`${bonus.kind}-${bonus.at}`} style={styles.lineTight}>
               <Text style={{ color: colors.ink, fontWeight: '700', flex: 1 }}>{bonus.label}</Text>
@@ -317,7 +317,7 @@ export function ForecastPanel({
       ))}
       {forecast.zones.length ? (
         <View style={{ gap: 8 }}>
-          <Text style={[styles.subhead, { color: colors.purple }]}>Zones</Text>
+          <Text style={[styles.subhead, { color: colors.link }]}>Zones</Text>
           {forecast.zones.map((zone) => (
             <View key={zone.zone || zone.zoneLabel} style={[styles.zone, { backgroundColor: scheme === 'dark' ? colors.elevated : colors.purpleSoft }]}>
               <Text style={{ color: colors.title, fontWeight: '800', flex: 1 }}>{zone.zoneLabel}</Text>
@@ -354,7 +354,7 @@ export function PayoutPanel({
           : 'Nothing is waiting to pay out. Completed rides land here after Stripe records them.'}
       </Text>
       <Text style={{ color: colors.inkSecondary }}>Paid out {money(timeline.paidCents)}</Text>
-      {timeline.history.length ? <Text style={[styles.subhead, { color: colors.purple }]}>Payout history</Text> : null}
+      {timeline.history.length ? <Text style={[styles.subhead, { color: colors.link }]}>Payout history</Text> : null}
       {timeline.history.slice(0, 6).map((row) => (
         <View key={row.id} style={[styles.line, { borderTopColor: colors.border }]}>
           <View style={{ flex: 1, gap: 2 }}>
@@ -442,8 +442,8 @@ export function LinkRow({ label, hint, onPress }: { label: string; hint: string;
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       style={[styles.link, { backgroundColor: scheme === 'dark' ? colors.elevated : colors.card, borderColor: colors.border }]}
     >
-      <Text style={{ color: colors.purple, fontWeight: '800' }}>{label}</Text>
-      <Text style={{ color: colors.purple, fontWeight: '800' }}>›</Text>
+      <Text style={{ color: colors.link, fontWeight: '800' }}>{label}</Text>
+      <Text style={{ color: colors.link, fontWeight: '800' }}>›</Text>
     </Pressable>
   )
 }
@@ -459,11 +459,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 22,
     gap: 4,
-    shadowColor: '#522D80',
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
+    ...shadowStyle(color.purple, 'float'),
   },
   heroDark: {
     borderWidth: 1,

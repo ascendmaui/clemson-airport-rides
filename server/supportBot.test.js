@@ -16,7 +16,7 @@ const rider = {
 test('unknown gmail addresses are not admins', () => {
   assert.equal(serverIsAdmin({ jwtEmail: 'john@gmail.com' }), false)
   assert.equal(serverIsAdmin({ jwtEmail: 'johnmatveev@gmail.com' }), false)
-  assert.equal(serverIsAdmin({ jwtEmail: 'jmat2019@icloud.com' }), true)
+  assert.equal(serverIsAdmin({ jwtEmail: 'jmat2019@icloud.com' }), false)
   assert.equal(isAdminIdentity({ jwtEmail: 'john@gmail.com' }), false)
   assert.equal(isAdminIdentity({ jwtEmail: 'student@clemson.edu', role: 'support' }), false)
 })

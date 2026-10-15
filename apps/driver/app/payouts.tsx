@@ -13,6 +13,8 @@ import { type as typeScale } from 'rides-native/shared/theme.js'
 import { cashOutPayout, loadPayoutDesk, startPayoutSetup } from 'rides-native/driverPayoutsClient'
 import { payoutChipLabel } from '../../../shared/driverPayoutMethods.js'
 import { CASHOUT_COPY } from '../../../shared/cashout.js'
+import { PAYOUT_APPROVAL_COPY } from '../../../shared/payoutApproval.js'
+import { quiet } from '@/lib/softFail'
 
 type Pending = {
   tripId?: string
@@ -61,6 +63,15 @@ type Desk = {
   standard?: Quote
   stripeConnect?: boolean
   detailsSubmitted?: boolean
+  needsReonboard?: boolean
+  approvals?: ApprovalRow[]
+}
+
+type ApprovalRow = {
+  id: string
+  kindLabel?: string
+  amountCents?: number
+  statusLabel?: string
 }
 
 function money(cents?: number) {
@@ -153,7 +164,9 @@ export default function PayoutsScreen() {
     setError(null)
     try {
       const result = await cashOutPayout(supabase, { method: kind, feeCents })
-      if (result?.ok) {
+      if (result?.ok && result.pendingApproval) {
+        setNote(PAYOUT_APPROVAL_COPY.cashoutPending)
+      } else if (result?.ok) {
         setNote(result.method === 'instant'
           ? `${money(result.netCents)} is on its way to your debit card or bank.`
           : `${money(result.netCents)} is on a standard payout (free, 1-2 days).`)
@@ -165,7 +178,7 @@ export default function PayoutsScreen() {
       setError(err instanceof Error ? err.message : 'Cash out was not sent.')
     } finally {
       setBusy(null)
-      refresh().catch(() => {})
+      refresh().catch(quiet('payouts refresh'))
     }
   }
 
@@ -257,6 +270,21 @@ export default function PayoutsScreen() {
           accessibilityLabel="Open the Stripe Express dashboard to manage or remove a payout method"
         />
       </Card>
+      {desk?.needsReonboard ? (
+        <Card>
+          <Text style={{ color: colors.danger, fontWeight: '700' }} accessibilityRole="alert">{PAYOUT_APPROVAL_COPY.reonboard}</Text>
+        </Card>
+      ) : null}
+      {(desk?.approvals || []).length > 0 ? (
+        <Card>
+          <Text style={{ color: colors.title, fontWeight: '800' }}>{PAYOUT_APPROVAL_COPY.sectionTitle}</Text>
+          {(desk?.approvals || []).map((row) => (
+            <Text key={row.id} style={{ color: colors.ink, fontWeight: '700' }}>
+              {shownCents(row.amountCents || 0, earningsPrivate)} · {row.kindLabel || 'Payout'} · {row.statusLabel || 'Pending approval'}
+            </Text>
+          ))}
+        </Card>
+      ) : null}
       <Card>
         <Text style={{ color: colors.title, fontWeight: '800' }}>Payout history</Text>
         {history.length === 0 ? (

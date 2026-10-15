@@ -1,5 +1,13 @@
 export type MomentCue = 'arrived' | 'complete' | 'canceled' | 'error' | 'tip' | 'chat' | 'online'
-export type Moment = { key: string; tone: 'info' | 'success' | 'warning' | 'error'; title: string; body: string; cue: MomentCue }
+export type Moment = {
+  key: string
+  tone: 'info' | 'success' | 'warning' | 'error'
+  title: string
+  body: string
+  cue: MomentCue
+  action?: 'billing' | null
+}
+export function failedHoldPrompt(trip: any): { title: string; body: string; pathname: string } | null
 export type RiderTripSnapshot = { status: string | null; driverCancels: number; hold: string | null }
 export function fareHoldStatus(row: any): string | null
 export function riderTripSnapshot(row: any): RiderTripSnapshot | null

@@ -198,23 +198,27 @@ export async function computeRoutes(origin, destination, intermediates) {
     }))
     body.optimizeWaypointOrder = intermediates.length > 1
   }
-  const res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_ROUTES_API_KEY || googleMapsKey,
-      'X-Goog-FieldMask':
-        'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.optimizedIntermediateWaypointIndex,routes.legs.distanceMeters,routes.legs.duration',
-    },
-    body: JSON.stringify(body),
-  })
+  let res
+  try {
+    res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_ROUTES_API_KEY || googleMapsKey,
+        'X-Goog-FieldMask':
+          'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.optimizedIntermediateWaypointIndex,routes.legs.distanceMeters,routes.legs.duration',
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    })
+  } catch (err) {
+    console.error('[routes]', err?.message || err)
+    return { error: 'Route calculation failed', code: 'routes_api_error' }
+  }
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    return {
-      error: data?.error?.message || `Routes API HTTP ${res.status}`,
-      code: 'routes_api_error',
-      detail: data,
-    }
+    console.error('[routes]', res.status)
+    return { error: 'Route calculation failed', code: 'routes_api_error' }
   }
   const route = data.routes?.[0]
   if (!route) return { error: 'No route returned', code: 'no_route' }

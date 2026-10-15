@@ -22,6 +22,16 @@ async function readRows(supabase, table, apply) {
   }
 }
 
+async function hasSession(supabase) {
+  if (typeof supabase?.auth?.getSession !== 'function') return true
+  try {
+    const { data } = await supabase.auth.getSession()
+    return Boolean(data?.session)
+  } catch {
+    return true
+  }
+}
+
 export async function loadGameDaySources(supabase, { driverId = null, now = new Date() } = {}) {
   if (!supabase) {
     return {
@@ -41,7 +51,12 @@ export async function loadGameDaySources(supabase, { driverId = null, now = new 
   const windows = await readRows(supabase, 'game_day_zone_windows', (query) => query.eq('active', true).limit(20))
   const prep = await readRows(supabase, 'game_day_prep_items', (query) => query.eq('active', true).limit(20))
   const calendar = await readRows(supabase, 'clemson_events', (query) => query.eq('active', true).limit(40))
-  const config = await readRows(supabase, 'driver_perk_config', (query) => query.eq('key', 'game_day_surge').limit(1))
+  // driver_perk_config needs a signed-in session. Skip it when signed out so a visitor
+  // does not fire a 401 request; the result is the same empty config either way.
+  const signedIn = await hasSession(supabase)
+  const config = signedIn
+    ? await readRows(supabase, 'driver_perk_config', (query) => query.eq('key', 'game_day_surge').limit(1))
+    : { ok: false, rows: [] }
 
   const surgeRow = config.ok ? config.rows[0] : null
   const surgeConfig = surgeRow && surgeRow.value && typeof surgeRow.value === 'object' ? surgeRow.value : null

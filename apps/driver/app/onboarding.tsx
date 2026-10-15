@@ -19,7 +19,12 @@ import {
   canOpenStep,
   displayTinLast4,
   driverQuizError,
+  forwardCtaDisabled,
+  nextStepHint,
+  nextStepTargetId,
+  showNextStepHint,
   vehicleAccountErrors,
+  w9SubstepReady,
   loadOnboarding,
   onboardingLabel,
   progressSnapshot,
@@ -50,6 +55,7 @@ import {
   backgroundStatusLabel,
   emptyDisclosures,
 } from '../../../shared/backgroundCheck.js'
+import { quiet, quietly } from '@/lib/softFail'
 
 const HEADLINE = 'Become a driver'
 const TAGLINE = 'For Clemson University students and experienced rideshare drivers.'
@@ -198,8 +204,8 @@ export default function OnboardingScreen() {
     setStepId(next.stepId)
     if (next.application?.onboarding_status === 'approved') return
     const [profile, vehicle] = await Promise.all([
-      loadDriverProfile(supabase, user.id).catch(() => null),
-      loadVehicle(supabase, user.id).catch(() => null),
+      loadDriverProfile(supabase, user.id).catch(quietly('onboarding profile', null)),
+      loadVehicle(supabase, user.id).catch(quietly('onboarding vehicle', null)),
     ])
     setBundle(next)
     setStepId(next.stepId)
@@ -272,7 +278,7 @@ export default function OnboardingScreen() {
         setInboxMessages(data.messages || [])
         setInboxRequests(data.requests || [])
       })
-      .catch(() => {})
+      .catch(quiet('onboarding load'))
     return () => { alive = false }
   }, [stepId])
 
@@ -546,6 +552,19 @@ export default function OnboardingScreen() {
   const docsContinueDisabled = step?.id === 'registration'
     ? !stepIsComplete('registration', bundle?.ctx || {})
     : stepDocs.some((doc) => !uploaded.has(doc.id))
+  const hintCtx = { ...ctx, vehicleYear: year }
+  const hint = nextStepHint(hintCtx)
+  const hintVisible = showNextStepHint(step?.id || 'account', hintCtx)
+  const stepTarget = nextStepTargetId(hintCtx)
+  const accountIssues = vehicleAccountErrors({ fullName, phone, make, model, color, plate, year })
+  const accountQuizIssue = driverQuizError({
+    hasCar: answers.hasCar,
+    hasInsurance: answers.hasInsurance,
+    attestation,
+  })
+  const salvageTitle = titleStatus === 'salvage'
+  const accountReady = !accountQuizIssue && Object.keys(accountIssues).length === 0 && !salvageTitle
+  const accountBlockReason = accountQuizIssue || (accountIssues.year ? null : Object.values(accountIssues)[0] || null) || (salvageTitle ? titleStatusError(titleStatus) : null)
   const backgroundAssessment = assessBackgroundAttestation({
     legalName: bgLegalName,
     disclosures,
@@ -553,6 +572,17 @@ export default function OnboardingScreen() {
     signatureName: signature,
     signedOn,
   })
+  const employmentReady = backgroundAssessment.complete && Boolean(eligibility) && signature.trim().length >= 2 && Boolean(signedOn.trim())
+  const agreementSignReady = readAgreement && signature.trim().length >= 2 && Boolean(signedOn.trim())
+  const w9Fields = {
+    legalName,
+    address,
+    tin,
+    taxClass,
+    taxSaved: Boolean(bundle?.ctx?.taxSaved),
+    signature,
+    signedOn,
+  }
 
   if (!user) {
     return (
@@ -594,7 +624,7 @@ export default function OnboardingScreen() {
           onPress={() => { void Linking.openURL(WEB_DRIVER_RENTALS_URL) }}
           accessibilityRole="link"
           accessibilityLabel="No car? Rent one"
-          accessibilityHint="Opens weekly rentals from Clemson RIDES partners. Available after your license and background check pass."
+          accessibilityHint="Opens weekly rentals from Clemson Rides partners. Available after your license and background check pass."
         >
           <Text style={styles.link}>No car? Rent one from a rental partner</Text>
         </Pressable>
@@ -604,6 +634,7 @@ export default function OnboardingScreen() {
         <Text style={styles.progressLabel}>
           Step {progress.stepNumber} of {progress.total} · {progress.label} · {progress.percent}%
         </Text>
+        {hintVisible && hint ? <Text style={styles.nextStep} accessibilityRole="text">{hint}</Text> : null}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.steps}>
           {ONBOARDING_FLOW.map((item) => {
             const done = bundle ? stepIsComplete(item.id, bundle.ctx) : false
@@ -621,7 +652,7 @@ export default function OnboardingScreen() {
                 style={[styles.stepChip, item.id === stepId && styles.stepChipOn]}
               >
                 <Text style={[styles.stepChipText, item.id === stepId && styles.stepChipTextOn]}>
-                  {done ? '✓ ' : ''}{item.label}
+                  {item.label}
                 </Text>
               </Pressable>
             )
@@ -698,7 +729,8 @@ export default function OnboardingScreen() {
                 <Text style={styles.checkCopy}>List this car as Extra Comfort</Text>
               </View>
             </Pressable>
-            <Primary label={busy ? 'Saving…' : 'Continue to license'} onPress={onSaveAccount} disabled={busy || titleStatus === 'salvage'} />
+            {accountBlockReason ? <Text style={styles.hint}>{accountBlockReason}</Text> : null}
+            <Primary label={busy ? 'Saving…' : 'Continue to license'} onPress={onSaveAccount} disabled={busy || !accountReady} />
           </Card>
         ) : null}
 
@@ -729,7 +761,7 @@ export default function OnboardingScreen() {
                 onError={setError}
               />
             ))}
-            <Primary label="Continue" disabled={docsContinueDisabled} onPress={advance} />
+            <Primary label="Continue" disabled={docsContinueDisabled || forwardCtaDisabled(step?.id || 'account', hintCtx)} onPress={advance} />
           </Card>
         ) : null}
 
@@ -790,7 +822,7 @@ export default function OnboardingScreen() {
                 >
                   <View style={[styles.box, backgroundAuthorized && styles.boxOn]} />
                   <Text style={styles.checkCopy}>
-                    I authorize Clemson RIDES to request a background check, including motor-vehicle records, if a screening vendor is connected later. Signing this does not mean a check was completed.
+                    I authorize Clemson Rides to request a background check, including motor-vehicle records, if a screening vendor is connected later. Signing this does not mean a check was completed.
                   </Text>
                 </Pressable>
                 <Field label="Type your legal name to sign" value={signature} onChangeText={setSignature} />
@@ -822,7 +854,7 @@ export default function OnboardingScreen() {
                 <Text style={styles.hint}>{ELIGIBILITY_TEXT}</Text>
                 <SignaturePad onChange={setMark} />
                 <Primary label="Back" onPress={() => setBgStep(1)} />
-                <Primary label={busy ? 'Saving…' : 'Sign and continue'} onPress={onSaveEmployment} disabled={busy} />
+                <Primary label={busy ? 'Saving…' : 'Sign and continue'} onPress={onSaveEmployment} disabled={busy || !employmentReady || forwardCtaDisabled('employment', hintCtx)} />
               </>
             ) : null}
           </Card>
@@ -831,7 +863,7 @@ export default function OnboardingScreen() {
         {kind === 'tax' ? (
           <Card>
             <Text style={styles.cardTitle}>W-9</Text>
-            <Text style={styles.hint}>Clemson RIDES contractor tax info. This is not legal or tax advice. The full TIN is stored by the database function. This screen keeps the last four.</Text>
+            <Text style={styles.hint}>Clemson Rides contractor tax info. This is not legal or tax advice. The full TIN is stored by the database function. This screen keeps the last four.</Text>
             {w9Step === 0 ? <Field label="Legal name" value={legalName} onChangeText={setLegalName} /> : null}
             {w9Step === 1 ? <Field label="Business name (if any)" value={businessName} onChangeText={setBusinessName} placeholder="Optional" /> : null}
             {w9Step === 2 ? (
@@ -875,9 +907,9 @@ export default function OnboardingScreen() {
             {bundle?.tax?.tin_last4 ? <Text style={styles.saved}>On file: {displayTinLast4(bundle.tax.tin_last4)}</Text> : null}
             <Text style={styles.hint}>Step {w9Step + 1} of 6</Text>
             {w9Step < 5 ? (
-              <Primary label="Next" onPress={() => setW9Step((stepIndex: number) => stepIndex + 1)} />
+              <Primary label="Next" onPress={() => setW9Step((stepIndex: number) => stepIndex + 1)} disabled={!w9SubstepReady(w9Step, w9Fields)} />
             ) : (
-              <Primary label={busy ? 'Saving…' : 'Sign W-9 and continue'} onPress={onSaveTax} disabled={busy} />
+              <Primary label={busy ? 'Saving…' : 'Sign W-9 and continue'} onPress={onSaveTax} disabled={busy || !w9SubstepReady(5, w9Fields) || forwardCtaDisabled('w9', hintCtx)} />
             )}
           </Card>
         ) : null}
@@ -904,7 +936,8 @@ export default function OnboardingScreen() {
             <Field label="Date" value={signedOn} onChangeText={setSignedOn} />
             <SignaturePad onChange={setMark} />
             {bundle?.agreement?.signed_at ? <Text style={styles.saved}>Signed {new Date(String(bundle.agreement.signed_at)).toLocaleString()}</Text> : null}
-            <Primary label={busy ? 'Signing…' : 'Sign and continue'} onPress={onSign} disabled={busy || !readAgreement} tone="purple" />
+            <Primary label="Continue to Submit" onPress={() => go('review')} disabled={forwardCtaDisabled('agreement', hintCtx)} />
+            <Primary label={busy ? 'Signing…' : 'Sign and continue'} onPress={onSign} disabled={busy || !agreementSignReady || forwardCtaDisabled('agreement', hintCtx)} tone="purple" />
           </Card>
         ) : null}
 
@@ -923,7 +956,9 @@ export default function OnboardingScreen() {
               <Text key={code} style={styles.blocker}>Still needed · {blockerLabel(code)}</Text>
             ))}
             {status === 'pending_review' && bundle?.blockers.length === 0 ? <Tag label="Waiting on admin" /> : null}
-            {status !== 'approved' && (bundle?.blockers.length || 0) > 0 ? <Primary label="Continue required steps" onPress={() => go(bundle!.stepId)} /> : null}
+            {status !== 'approved' && ((bundle?.blockers.length || 0) > 0 || stepTarget === 'account') ? (
+              <Primary label="Continue required steps" onPress={() => go(stepTarget === 'account' ? 'account' : bundle!.stepId)} />
+            ) : null}
             {inboxRequests.filter((row: { status: string }) => row.status === 'open').map((row: { id: string; prompt: string }) => (
               <Text key={row.id} style={styles.copy}>More information needed. {row.prompt}</Text>
             ))}
@@ -941,7 +976,7 @@ export default function OnboardingScreen() {
             {status === 'pending_review' || status === 'approved' ? (
               <Primary label="Enter the app" onPress={() => router.replace('/')} />
             ) : (
-              <Primary label={busy ? 'Submitting…' : 'Submit application'} onPress={onSubmit} disabled={busy || (bundle?.blockers.length || 0) > 0} />
+              <Primary label={busy ? 'Submitting…' : 'Submit application'} onPress={onSubmit} disabled={busy || (bundle?.blockers.length || 0) > 0 || forwardCtaDisabled('review', hintCtx)} />
             )}
           </Card>
         ) : null}
@@ -1113,7 +1148,7 @@ function useOnboardingStyles() {
     kicker: { color: colors.orange, ...typeScale.kicker, marginTop: 12 },
     title: { ...typeScale.title, color: colors.title },
     copy: { color: colors.inkSecondary, ...typeScale.body },
-    link: { color: colors.purple, fontSize: 14, fontWeight: '800' as const, lineHeight: 20 },
+    link: { color: colors.link, fontSize: 14, fontWeight: '800' as const, lineHeight: 20 },
     progressTrack: { height: 8, borderRadius: 999, backgroundColor: colors.track, overflow: 'hidden' as const },
     progressFill: { height: '100%' as const, backgroundColor: colors.orange, borderRadius: 999 },
     progressLabel: { color: colors.title, fontWeight: '700' as const, fontSize: 13 },
@@ -1136,6 +1171,7 @@ function useOnboardingStyles() {
     boxOn: { backgroundColor: colors.orange, borderColor: colors.orange },
     checkCopy: { flex: 1, color: colors.ink, fontSize: 14, lineHeight: 20 },
     hint: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18 },
+    nextStep: { color: colors.link, fontWeight: '700' as const, fontSize: 14, lineHeight: 20 },
     saved: { color: colors.title, fontWeight: '700' as const, fontSize: 13 },
     agreement: { maxHeight: 180, backgroundColor: colors.input, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 12 },
     agreementTall: { maxHeight: 280, backgroundColor: colors.input, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 12 },

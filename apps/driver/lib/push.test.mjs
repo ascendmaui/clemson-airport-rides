@@ -299,12 +299,10 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
     assert.equal(state().tokenOpts.length, 0)
   })
 
-  await t.test('registerDriverPush stores the expo token on the happy path', async () => {
-    let payload = null
+  await t.test('registerDriverPush stores the expo token and the status-push feature', async () => {
+    const payloads = []
     const client = supabaseClient((op) => {
-      payload = op.payload
-      assert.equal(op.table, 'driver_status')
-      assert.equal(op.action, 'upsert')
+      payloads.push(op)
       return { error: null }
     })
     const result = await push.registerDriverPush(client, 'driver-1')
@@ -315,11 +313,18 @@ test('driver push offline and error states', { concurrency: false }, async (t) =
       detail: REGISTERED,
     })
     assertHuman(result.detail)
-    assert.equal(payload.driver_id, 'driver-1')
-    assert.equal(payload.expo_push_token, 'ExponentPushToken[abc]')
-    assert.equal('platform' in payload, false)
-    assertIso(payload.updated_at)
+    assert.equal(payloads[0].table, 'driver_status')
+    assert.equal(payloads[0].action, 'upsert')
+    assert.equal(payloads[0].payload.driver_id, 'driver-1')
+    assert.equal(payloads[0].payload.expo_push_token, 'ExponentPushToken[abc]')
+    assert.equal('platform' in payloads[0].payload, false)
+    assertIso(payloads[0].payload.updated_at)
+    assert.equal(payloads[1].table, 'driver_push_tokens')
+    assert.equal(payloads[1].payload.token, 'ExponentPushToken[abc]')
+    assert.deepEqual(payloads[1].payload.features, ['trip_status_v1'])
+    assert.equal(payloads[1].payload.updated_at, payloads[0].payload.updated_at)
     assert.equal(state().scheduled.length, 0)
+    assert.equal(state().ops.length, 2)
   })
 
   await t.test('registerDriverPush uses the eas project id when the expo one is blank', async () => {

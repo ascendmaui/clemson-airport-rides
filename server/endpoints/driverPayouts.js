@@ -13,6 +13,7 @@
  * DISABLE_CRON_ENDPOINTS=1 refuses the sweep and a signed-in retry POST.
  * Dry-run of the sweep is allowed only when ALLOW_STAGING_DRY_RUN=1.
  */
+import { timingSafeEqual } from 'node:crypto'
 import {
   admin, cors, json, userFromAuth, stripeClient,
 } from '../friendRideLib.js'
@@ -28,7 +29,11 @@ export function cronAuthorized(req, secretOverride) {
   const trimmed = String(header).trim()
   const match = trimmed.match(/^Bearer\s+(.+)$/i)
   if (!match) return false
-  return match[1].trim() === secret
+  const token = match[1].trim()
+  const left = Buffer.from(token)
+  const right = Buffer.from(secret)
+  if (left.length === 0 || left.length !== right.length) return false
+  return timingSafeEqual(left, right)
 }
 
 /** Documented Vercel Cron user-agent. https://vercel.com/docs/cron-jobs */
@@ -197,7 +202,7 @@ export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
     // A driver may have claimed this payout for instant cash-out since the list was read.
     if (await claimedByCashout(sb, trip.id)) continue
     const account = connectAccountId || await loadAccountFn(sb, trip.driver_id)
-    const attempt = await attemptFn({ trip, stripe, connectAccountId: account, now })
+    const attempt = await attemptFn({ trip, stripe, connectAccountId: account, now, sb, env: deps.env || process.env })
     await writeFn(sb, trip, attempt.payout)
     results.push({
       tripId: trip.id,

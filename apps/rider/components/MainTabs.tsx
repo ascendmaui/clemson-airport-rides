@@ -69,6 +69,7 @@ export function MainTabs({ active }: { active: RiderTab | LegacyTab }) {
       tabs={RIDER_TABS.map((tab) => ({ id: tab.id, label: tab.label, icon: tab.icon }))}
       activeIndex={index < 0 ? 0 : index}
       scheme={scheme}
+      app="rider"
       bottomInset={insets.bottom}
       onSelect={(_tab: { id: string }, selected: number) => {
         const next = applyTabNavigation(index < 0 ? tabIndexForPath('/') : index, { type: 'tap', index: selected })

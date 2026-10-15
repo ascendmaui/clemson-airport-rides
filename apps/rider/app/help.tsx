@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router'
-import { ScrollView, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
+import { supportEmail, supportMailto } from '../../../shared/productLinks.js'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AssistChat } from '@/components/AssistChat'
 import { RequireAuth } from '@/components/RequireAuth'
@@ -17,7 +18,14 @@ function HelpScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <StackHeader title="Help" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <Text style={styles.copy}>How Clemson RIDES works. This chat does not file tickets.</Text>
+        <Text style={styles.copy}>How Clemson Rides works. This chat does not file tickets.</Text>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={`Email help at ${supportEmail()}`}
+          onPress={() => { void Linking.openURL(supportMailto('Clemson Rides help')) }}
+        >
+          <Text style={styles.link}>Email {supportEmail()}</Text>
+        </Pressable>
         <AssistChat
           endpoint={apiUrl('/api/admin-drivers?action=help-chat')}
           welcome="Rider Help walks you through booking, Schedule, friends, student discount, and billing. I do not file tickets. For a bad charge or a bug, open Support."
@@ -34,6 +42,7 @@ function makeStyles(colors: Palette) {
     screen: { flex: 1, backgroundColor: colors.background },
     body: { padding: 16, gap: 12, paddingBottom: 40 },
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
+    link: { color: colors.orange, fontWeight: '800' as const, fontSize: 16, lineHeight: 22 },
   }
 }
 

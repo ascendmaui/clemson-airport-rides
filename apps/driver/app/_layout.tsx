@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from '@/lib/auth'
 import { FeedbackProvider } from '@/lib/feedback'
 import { OfferBridge } from '@/components/OfferBridge'
 import { ActiveTripResume } from '@/components/ActiveTripResume'
+import { PickupBeaconHost } from '@/components/PickupBeaconHost'
 import { DriverMoments } from '@/components/DriverMoments'
 import { LostItemBanner } from 'rides-native/LostItemBanner.jsx'
 import { ToastHost } from 'rides-native/ToastHost.jsx'
@@ -20,6 +21,9 @@ import { ProfileRequiredGate } from 'rides-native/PartyScreens'
 import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
 import { reconcileTripBackgroundLocation } from '@/lib/backgroundLocation'
 import { DriverAgreementPrompt } from '@/components/DriverAgreementPrompt'
+import { CrashBoundary } from '@/components/CrashBoundary'
+import { SyncBanner } from '@/components/SyncBanner'
+import { quiet } from '@/lib/softFail'
 
 /** Shared glass toast (packages/rides-native/ToastHost). */
 function ToastMount() {
@@ -50,7 +54,7 @@ function Gate({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (loading) return undefined
     const reconcile = () => {
-      void reconcileTripBackgroundLocation().catch(() => {})
+      void reconcileTripBackgroundLocation().catch(quiet('reconcile trip location'))
     }
     reconcile()
     const listener = AppState.addEventListener('change', (state) => {
@@ -83,7 +87,7 @@ function PushBridge() {
       setRideAlertSurface({ online: false })
       return undefined
     }
-    registerDriverPush(supabase, user.id).catch(() => {})
+    registerDriverPush(supabase, user.id).catch(quiet('register push'))
     const opened = new Set<string>()
     const openFromPush = (response: Notifications.NotificationResponse | null) => {
       if (!response) return
@@ -100,7 +104,7 @@ function PushBridge() {
     const sub = Notifications.addNotificationResponseReceivedListener(openFromPush)
     // A tap that launches a closed app is already the last response when this listener attaches.
     const readLast = (Notifications as { getLastNotificationResponseAsync?: () => Promise<Notifications.NotificationResponse | null> }).getLastNotificationResponseAsync
-    readLast?.().then(openFromPush).catch(() => {})
+    readLast?.().then(openFromPush).catch(quiet('last notification'))
     return () => sub.remove()
   }, [router, user])
   return null
@@ -128,23 +132,31 @@ function ThemedStack() {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <CrashBoundary scope="app" title="Clemson Rides" fill>
       <ThemeProvider>
         <AuthProvider>
           <FeedbackProvider>
             <Gate>
               <PasswordRecoveryListener />
               <PushBridge />
-              <OfferBridge />
+              <CrashBoundary scope="offer-alerts" compact>
+                <OfferBridge />
+              </CrashBoundary>
               <DriverAgreementPrompt>
                 <ThemedStack />
                 <ActiveTripResume />
+                <PickupBeaconHost />
               </DriverAgreementPrompt>
+              <CrashBoundary scope="sync" compact>
+                <SyncBanner />
+              </CrashBoundary>
               <ToastMount />
               <DriverMoments />
             </Gate>
           </FeedbackProvider>
         </AuthProvider>
       </ThemeProvider>
+      </CrashBoundary>
     </GestureHandlerRootView>
   )
 }

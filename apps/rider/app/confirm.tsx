@@ -1,3 +1,4 @@
+import { GlassSheet } from 'rides-native/glass'
 import { Glyph } from 'rides-native/icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Location from 'expo-location'
@@ -10,6 +11,7 @@ import { CampusMap } from '@/components/CampusMap'
 import type { CampusMapHandle } from '@/components/mapTypes'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
+import { logCaught } from '@/lib/caught'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { lookupCatalogPlace, placeFromStop, type Place } from 'rides-native/shared/carpool.js'
@@ -56,7 +58,7 @@ export default function ConfirmPickup() {
   const mapRef = useRef<CampusMapHandle>(null)
   const pickupEdited = useRef(false)
   const [promptOpen, setPromptOpen] = useState(false)
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const sheetMotion = useEnterMotion(18)
 
@@ -114,7 +116,8 @@ export default function ConfirmPickup() {
       let position
       try {
         position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation })
-      } catch {
+      } catch (err) {
+        logCaught('confirm-locate', err)
         position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
       }
       const lat = position.coords.latitude
@@ -123,7 +126,8 @@ export default function ConfirmPickup() {
       try {
         const reversed = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng })
         label = addressFromGeocode(reversed[0]) || label
-      } catch {
+      } catch (err) {
+        logCaught('confirm-address', err)
         label = 'Current location'
       }
       const place = { label, lat, lng }
@@ -186,6 +190,7 @@ export default function ConfirmPickup() {
       </View>
       <Animated.View style={[styles.sheetWrap, lift(colors, 'float'), sheetMotion]}>
       <View style={styles.sheet}>
+      <GlassSheet app="rider" scheme={scheme} pointerEvents="none" style={styles.sheetGlass} />
       <ScrollView
         style={styles.sheetScroll}
         contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}
@@ -265,7 +270,8 @@ async function placeFromGps(): Promise<Place> {
   let position
   try {
     position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation })
-  } catch {
+  } catch (err) {
+    logCaught('confirm-locate', err)
     position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
   }
   const lat = position.coords.latitude
@@ -277,7 +283,8 @@ async function placeFromGps(): Promise<Place> {
   try {
     const reversed = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng })
     label = addressFromGeocode(reversed[0]) || label
-  } catch {
+  } catch (err) {
+    logCaught('confirm-address', err)
     label = 'Current location'
   }
   return { label, lat, lng }
@@ -321,12 +328,13 @@ function makeStyles(colors: Palette) {
     sheet: {
       flex: 1,
       overflow: 'hidden' as const,
-      backgroundColor: colors.elevated,
+      backgroundColor: 'transparent',
       borderTopLeftRadius: 28,
       borderTopRightRadius: 28,
       paddingHorizontal: 20,
       paddingTop: 6,
     },
+    sheetGlass: { position: 'absolute' as const, top: 0, right: 0, bottom: 0, left: 0 },
     sheetScroll: { flex: 1 },
     fieldLabel: { fontSize: 13, fontWeight: '700' as const, color: colors.title, marginBottom: 8, letterSpacing: 0.1 },
     input: {

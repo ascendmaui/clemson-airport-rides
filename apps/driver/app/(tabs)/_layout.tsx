@@ -1,7 +1,11 @@
+import { NativeTabs } from 'expo-router/unstable-native-tabs'
 import { Tabs } from 'expo-router'
+import { Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GlassTabBar } from 'rides-native/icons'
+import { nativeGlassAvailable } from 'rides-native/glass'
 import { useTheme } from '@/lib/theme'
+import { color as brand } from 'rides-native/shared/theme.js'
 
 const DRIVER_TABS = [
   { id: 'index', label: 'Home', icon: 'home' },
@@ -24,6 +28,7 @@ function DriverTabBar({ state, navigation }: BarProps) {
       tabs={DRIVER_TABS}
       activeIndex={Math.max(0, DRIVER_TABS.findIndex((tab) => tab.id === activeName))}
       scheme={scheme}
+      app="driver"
       bottomInset={insets.bottom}
       onSelect={(tab: { id: string }) => {
         const route = state.routes.find((item) => item.name === tab.id)
@@ -35,7 +40,7 @@ function DriverTabBar({ state, navigation }: BarProps) {
   )
 }
 
-export default function DriverTabs() {
+function DriverJsTabs() {
   return (
     <Tabs
       tabBar={(props) => <DriverTabBar {...(props as unknown as BarProps)} />}
@@ -45,9 +50,34 @@ export default function DriverTabs() {
       <Tabs.Screen name="rides" options={{ title: 'Rides' }} />
       <Tabs.Screen name="earnings" options={{ title: 'Money' }} />
       <Tabs.Screen name="menu" options={{ title: 'Account' }} />
-      {/* Still routable at /discover and /inbox; reached from Home and Account. */}
-      <Tabs.Screen name="discover" options={{ href: null }} />
-      <Tabs.Screen name="inbox" options={{ href: null }} />
     </Tabs>
   )
+}
+
+function DriverNativeTabs() {
+  return (
+    <NativeTabs minimizeBehavior="never" tintColor={brand.orange}>
+      <NativeTabs.Trigger name="index">
+        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="house.fill" md="home" />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="rides">
+        <NativeTabs.Trigger.Label>Rides</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="car.fill" md="directions_car" />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="earnings">
+        <NativeTabs.Trigger.Label>Money</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="dollarsign.circle.fill" md="payments" />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="menu">
+        <NativeTabs.Trigger.Label>Account</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="person.crop.circle" md="account_circle" />
+      </NativeTabs.Trigger>
+    </NativeTabs>
+  )
+}
+
+export default function DriverTabs() {
+  if (Platform.OS === 'ios' && nativeGlassAvailable()) return <DriverNativeTabs />
+  return <DriverJsTabs />
 }

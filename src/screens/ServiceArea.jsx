@@ -3,6 +3,7 @@ import { MarketingChrome } from '../components/MarketingChrome'
 import { MarketingPhoto } from '../components/MarketingPhoto'
 import { StatusPill } from '../components/FeatureBlock'
 import { AIRPORT_SECTION } from '../content/peaceOfMind.js'
+import { SiteIcon } from '../components/SiteIcon'
 
 function MapCanvas({ label, children }) {
   return (
@@ -96,43 +97,53 @@ const LEARN = [
 export function ServiceArea() {
   return (
     <MarketingChrome current="service-area">
-      <div className="mkt-section-head">
+      <div className="mkt-section-head mkt-page-hero">
         <p className="mkt-kicker">{AIRPORT_SECTION.kicker}</p>
         <h1>{AIRPORT_SECTION.title}</h1>
         <p>{AIRPORT_SECTION.what}</p>
+        <div className="site-hero-actions">
+          <button type="button" className="mkt-choice pressable" onClick={() => navigate('schedule')}>
+            <SiteIcon name="calendar" size={18} />
+            <span>Schedule for later</span>
+          </button>
+        </div>
       </div>
-      <article className="mkt-card mkt-feature">
-        <MarketingPhoto id="airport-on-time" />
-        <ol className="mkt-guide">
-          {AIRPORT_SECTION.points.map((point) => (
-            <li key={point.id}>
-              <StatusPill status={point.status} />
-              <strong>{point.title}. </strong>
-              {point.body}
-            </li>
-          ))}
-        </ol>
-        <p><strong>Why it matters. </strong>{AIRPORT_SECTION.why}</p>
-        <button type="button" className="mkt-text pressable" onClick={() => navigate('schedule')}>
-          Schedule for later
-        </button>
+      <article className="mkt-card mkt-feature site-split">
+        <MarketingPhoto id="airport-on-time" sizes="(min-width: 1200px) 560px, 92vw" />
+        <div className="site-split-body">
+          <ol className="mkt-guide site-steps">
+            {AIRPORT_SECTION.points.map((point) => (
+              <li key={point.id}>
+                <StatusPill status={point.status} />
+                <span><strong>{point.title}. </strong>{point.body}</span>
+              </li>
+            ))}
+          </ol>
+          <p className="site-why-matters"><strong>Why it matters. </strong>{AIRPORT_SECTION.why}</p>
+          <button type="button" className="mkt-text pressable" onClick={() => navigate('schedule')}>
+            Schedule for later
+          </button>
+        </div>
       </article>
-      <article className="mkt-card mkt-feature">
-        <h2>Service area</h2>
-        <p>Clemson, downtown, and scheduled trips to Greenville-Spartanburg and Charlotte. If a stop is outside this area, booking says so before you confirm.</p>
-      </article>
-      <div className="lux-carousel" aria-label="Service area maps">
-        {FRAMES.map((frame) => {
-          const Map = frame.Map
-          return (
-            <figure key={frame.label} className="lux-frame">
-              <Map />
-              <figcaption>{frame.label}</figcaption>
-            </figure>
-          )
-        })}
-      </div>
-      <section className="mkt-safety-live" aria-label="Learn more">
+      <section className="site-area" aria-labelledby="service-area-heading">
+        <div className="mkt-section-head">
+          <p className="mkt-kicker">Where we ride</p>
+          <h2 id="service-area-heading">Service area</h2>
+          <p>Clemson, downtown, and scheduled trips to Greenville-Spartanburg and Charlotte. If a stop is outside this area, booking says so before you confirm.</p>
+        </div>
+        <div className="lux-carousel" aria-label="Service area maps">
+          {FRAMES.map((frame) => {
+            const Map = frame.Map
+            return (
+              <figure key={frame.label} className="lux-frame">
+                <Map />
+                <figcaption><SiteIcon name="map-pin" size={14} />{frame.label}</figcaption>
+              </figure>
+            )
+          })}
+        </div>
+      </section>
+      <section className="mkt-safety-live site-card-grid site-card-grid--3" aria-label="Learn more">
         {LEARN.map((card) => (
           <article key={card.title} className="mkt-card mkt-feature">
             <h2>{card.title}</h2>

@@ -141,6 +141,22 @@
       "destination": "/api/admin-drivers?action=ticket"
     },
     {
+      "source": "/api/agents/marketing",
+      "destination": "/api/agents?kind=marketing"
+    },
+    {
+      "source": "/api/agents/affiliate",
+      "destination": "/api/agents?kind=affiliate"
+    },
+    {
+      "source": "/api/agents/outreach",
+      "destination": "/api/agents?kind=outreach"
+    },
+    {
+      "source": "/api/inbound-mail/hostinger",
+      "destination": "/api/inbound-mail"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },
@@ -161,6 +177,10 @@
     {
       "path": "/api/weekly-coupon?slot=est",
       "schedule": "0 17 * * 5"
+    },
+    {
+      "path": "/api/stripe-payment-methods?action=student-plans&op=nightly",
+      "schedule": "0 7 * * *"
     }
   ]
 }

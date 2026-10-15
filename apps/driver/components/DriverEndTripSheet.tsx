@@ -13,7 +13,9 @@ import {
   validateDriverEnd,
 } from '../../../shared/driverEndTrip.js'
 import { useTheme } from '@/lib/theme'
+import { GlassSheet } from 'rides-native/glass'
 import { ErrorText, Primary } from '@/components/chrome'
+import { logSoft } from '@/lib/softFail'
 
 export function DriverEndTripSheet({ supabase, tripId, disabled, onEnded }: {
   supabase: unknown
@@ -21,9 +23,9 @@ export function DriverEndTripSheet({ supabase, tripId, disabled, onEnded }: {
   disabled?: boolean
   onEnded: () => void
 }) {
-  const { colors } = useTheme()
+  const { colors, scheme } = useTheme()
   const light = colors.statusBar === 'dark'
-  const selectedColor = light ? '#522D80' : '#E6D4FF'
+  const selectedColor = light ? colors.purple : colors.link
   const insets = useSafeAreaInsets()
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
@@ -42,6 +44,7 @@ export function DriverEndTripSheet({ supabase, tripId, disabled, onEnded }: {
     try {
       await driverEndTrip(supabase, tripId, reason, reason === 'other' ? note.trim() : undefined)
     } catch (err) {
+      logSoft('driver end trip', err)
       setError(err instanceof Error ? err.message : 'Could not end this trip. Try again.')
       sending.current = false
       setBusy(false)
@@ -58,7 +61,8 @@ export function DriverEndTripSheet({ supabase, tripId, disabled, onEnded }: {
     </Pressable>
     <Modal visible={open} transparent animationType="slide" onRequestClose={() => { if (!busy) setOpen(false) }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}>
-        <View accessibilityViewIsModal style={{ maxHeight: '90%', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 10, paddingBottom: insets.bottom + 16, backgroundColor: colors.card, shadowColor: '#1A1033', shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: -8 }, elevation: 12 }}>
+        <View accessibilityViewIsModal style={{ maxHeight: '90%', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 10, paddingBottom: insets.bottom + 16, backgroundColor: 'transparent', overflow: 'hidden' }}>
+          <GlassSheet app="driver" scheme={scheme} pointerEvents="none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
           <ScrollView keyboardShouldPersistTaps="handled">
             <View accessible={false} style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: 14 }} />
             <Text accessibilityRole="header" style={{ color: colors.ink, fontSize: 22, fontWeight: '700', letterSpacing: -0.4 }}>{DRIVER_END_TITLE}</Text>

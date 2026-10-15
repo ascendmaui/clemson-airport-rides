@@ -2,7 +2,7 @@
  * Admin dashboard API. Service role reads after an admin check.
  * Support staff cannot call this — driver documents and rider PII stay admin-only.
  *
- * GET  /api/admin?action=overview|notifications|people|trips|tickets|applicant-thread
+ * GET  /api/admin?action=overview|notifications|people|trips|tickets|applicant-thread|inbox
  * POST /api/admin?action=mark-notification|ticket-reply|applicant-message|info-request
  */
 import { isTicketStatus } from '../../shared/adminAccess.js'
@@ -10,6 +10,13 @@ import { cors, json, parseBody, userFromAuth, admin } from '../friendRideLib.js'
 import { resolveRouteAction } from '../routeAction.js'
 import { loadStaffAccess } from '../staffAccess.js'
 import { sendApplicantNotice } from '../applicantMail.js'
+import { loadAdminInbox } from '../adminInbox.js'
+import { clientErrorMessage } from '../clientError.js'
+
+function fail(res, error) {
+  console.error('[admin]', error?.message || error)
+  return json(res, 500, { error: clientErrorMessage(error, 'Could not complete that request') })
+}
 
 const ACTIONS = [
   'overview',
@@ -18,6 +25,7 @@ const ACTIONS = [
   'trips',
   'tickets',
   'applicant-thread',
+  'inbox',
   'mark-notification',
   'ticket-reply',
   'applicant-message',
@@ -31,6 +39,7 @@ const GET_ACTIONS = new Set([
   'trips',
   'tickets',
   'applicant-thread',
+  'inbox',
 ])
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -45,7 +54,7 @@ export default async function handler(req, res) {
   const action = resolveRouteAction(req, { allowed: ACTIONS })
   if (!action) {
     return json(res, 400, {
-      error: 'Unknown admin action. Use overview, notifications, people, trips, tickets, applicant-thread, mark-notification, ticket-reply, applicant-message, or info-request.',
+      error: 'Unknown admin action. Use overview, notifications, people, trips, tickets, applicant-thread, inbox, mark-notification, ticket-reply, applicant-message, or info-request.',
     })
   }
   const expectsGet = GET_ACTIONS.has(action)
@@ -62,13 +71,13 @@ export default async function handler(req, res) {
   if (!access.admin) return json(res, 403, { error: 'Admin only' })
 
   const url = new URL(req.url || '/', 'http://localhost')
-  if (req.method === 'GET') return read(sb, res, action, url)
+  if (req.method === 'GET') return read(sb, res, action, url, access)
   const { body, error } = parseBody(req)
   if (error) return json(res, 400, { error })
   return write(sb, res, action, user, body)
 }
 
-async function read(sb, res, action, url) {
+async function read(sb, res, action, url, access) {
   switch (action) {
     case 'overview':
       return overview(sb, res)
@@ -82,6 +91,8 @@ async function read(sb, res, action, url) {
       return tickets(sb, res, url.searchParams.get('status') || '', url.searchParams.get('id') || '')
     case 'applicant-thread':
       return applicantThread(sb, res, url.searchParams.get('profile_id') || '')
+    case 'inbox':
+      return inbox(sb, res, access)
     default: {
       const unknown = action
       return json(res, 400, { error: `Unknown admin read: ${unknown}` })
@@ -104,6 +115,12 @@ async function write(sb, res, action, user, body) {
       return json(res, 400, { error: `Unknown admin write: ${unknown}` })
     }
   }
+}
+
+async function inbox(sb, res, access) {
+  const loaded = await loadAdminInbox(sb)
+  // Native admin entry shows only when profiles.is_admin is true, read server-side with the service role.
+  return json(res, 200, { ...loaded, isAdmin: access?.profile?.is_admin === true })
 }
 
 async function safeCount(sb, table, column, value) {
@@ -147,7 +164,7 @@ async function notifications(sb, res) {
         error: 'Apply supabase/migrations/20260924190000_admin_support.sql',
       })
     }
-    return json(res, 500, { error: error.message })
+    return fail(res, error)
   }
   return json(res, 200, { notifications: data || [] })
 }
@@ -162,7 +179,7 @@ async function people(sb, res, role) {
     if (role && role !== 'all') query = query.eq('role', role)
     result = await query
   }
-  if (result.error) return json(res, 500, { error: result.error.message })
+  if (result.error) return fail(res, result.error)
   return json(res, 200, { people: result.data || [] })
 }
 
@@ -176,7 +193,7 @@ async function trips(sb, res, status) {
     if (status) query = query.eq('status', status)
     result = await query
   }
-  if (result.error) return json(res, 500, { error: result.error.message })
+  if (result.error) return fail(res, result.error)
   const rows = result.data || []
   const ids = [...new Set(rows.flatMap((row) => [row.rider_id, row.driver_id]).filter(Boolean))]
   let names = {}
@@ -244,7 +261,7 @@ function ticketError(res, error) {
       error: 'Apply supabase/migrations/20260924190000_admin_support.sql',
     })
   }
-  return json(res, 500, { error: error.message })
+  return fail(res, error)
 }
 
 async function applicantThread(sb, res, profileId) {
@@ -262,8 +279,8 @@ async function applicantThread(sb, res, profileId) {
       error: 'Apply supabase/migrations/20260924190000_admin_support.sql',
     })
   }
-  if (messages.error) return json(res, 500, { error: messages.error.message })
-  if (requests.error) return json(res, 500, { error: requests.error.message })
+  if (messages.error) return fail(res, messages.error)
+  if (requests.error) return fail(res, requests.error)
   return json(res, 200, { messages: messages.data || [], requests: requests.data || [] })
 }
 
@@ -271,13 +288,13 @@ async function markNotification(sb, res, body) {
   const now = new Date().toISOString()
   if (body.all === true) {
     const { error } = await sb.from('admin_notifications').update({ read_at: now }).is('read_at', null)
-    if (error) return json(res, 500, { error: error.message })
+    if (error) return fail(res, error)
     return json(res, 200, { ok: true })
   }
   const id = String(body.id || '')
   if (!isUuid(id)) return json(res, 400, { error: 'id must be a uuid' })
   const { error } = await sb.from('admin_notifications').update({ read_at: now }).eq('id', id)
-  if (error) return json(res, 500, { error: error.message })
+  if (error) return fail(res, error)
   return json(res, 200, { ok: true })
 }
 
@@ -292,7 +309,7 @@ async function ticketReply(sb, res, user, body) {
   }
 
   const existing = await sb.from('support_tickets').select('id').eq('id', ticketId).maybeSingle()
-  if (existing.error) return json(res, 500, { error: existing.error.message })
+  if (existing.error) return fail(res, existing.error)
   if (!existing.data) return json(res, 404, { error: 'Ticket not found' })
 
   const message = await sb.from('support_ticket_messages').insert({
@@ -301,14 +318,14 @@ async function ticketReply(sb, res, user, body) {
     author_role: 'admin',
     body: text,
   })
-  if (message.error) return json(res, 500, { error: message.error.message })
+  if (message.error) return fail(res, message.error)
 
   const patch = {
     status,
     escalation_reason: status === 'escalated' ? 'admin' : null,
   }
   const update = await sb.from('support_tickets').update(patch).eq('id', ticketId).select('id, status').maybeSingle()
-  if (update.error) return json(res, 500, { error: update.error.message })
+  if (update.error) return fail(res, update.error)
   return json(res, 200, { ok: true, ticket: update.data })
 }
 
@@ -332,7 +349,7 @@ async function infoRequest(sb, res, user, body) {
   if (text.length < 4 || text.length > 2000) return json(res, 400, { error: 'Describe the details you need (4–2000 characters)' })
 
   const profile = await sb.from('profiles').select('id, email, full_name').eq('id', profileId).maybeSingle()
-  if (profile.error) return json(res, 500, { error: profile.error.message })
+  if (profile.error) return fail(res, profile.error)
   if (!profile.data) return json(res, 404, { error: 'Applicant not found' })
 
   const notice = await sendApplicantNotice({
@@ -353,7 +370,7 @@ async function infoRequest(sb, res, user, body) {
     if (MISSING.test(request.error.message || '')) {
       return json(res, 503, { error: 'Apply supabase/migrations/20260924190000_admin_support.sql' })
     }
-    return json(res, 500, { error: request.error.message })
+    return fail(res, request.error)
   }
 
   await sb.from('driver_application_messages').insert({
@@ -375,7 +392,7 @@ async function infoRequest(sb, res, user, body) {
 
 async function storeApplicantNote(sb, res, user, { profileId, text, kind, subject }) {
   const profile = await sb.from('profiles').select('id, email').eq('id', profileId).maybeSingle()
-  if (profile.error) return json(res, 500, { error: profile.error.message })
+  if (profile.error) return fail(res, profile.error)
   if (!profile.data) return json(res, 404, { error: 'Applicant not found' })
 
   const notice = await sendApplicantNotice({
@@ -396,7 +413,7 @@ async function storeApplicantNote(sb, res, user, { profileId, text, kind, subjec
     if (MISSING.test(inserted.error.message || '')) {
       return json(res, 503, { error: 'Apply supabase/migrations/20260924190000_admin_support.sql' })
     }
-    return json(res, 500, { error: inserted.error.message })
+    return fail(res, inserted.error)
   }
   return json(res, 200, {
     ok: true,

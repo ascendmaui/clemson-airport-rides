@@ -139,13 +139,13 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
       void setAudioModeAsync({
         playsInSilentMode: false,
         interruptionMode: 'mixWithOthers',
-      }).catch(() => {})
+      }).catch((err: unknown) => console.warn('[driver] audio mode', err instanceof Error ? err.message : err))
     } catch {
       /* audio session setup can fail closed */
     }
     const player = createCuePlayer(requestSound, 0.35)
-    const go = createCuePlayer(goSound, 0.7)
-    const end = createCuePlayer(endSound, 0.35)
+    const go = createCuePlayer(goSound, 1)
+    const end = createCuePlayer(endSound, 1)
     if (alive) {
       playerRef.current = player
       goRef.current = go
