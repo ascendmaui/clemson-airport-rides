@@ -6,9 +6,13 @@ const home = readFileSync(new URL('../apps/rider/app/(tabs)/index.tsx', import.m
 
 test('home map keeps Game day and Surge and drops the Busy Areas control', () => {
   assert.doesNotMatch(home, /Busy Areas/)
+  assert.doesNotMatch(home, /SHOW_BUSY_AREAS_TOGGLE/)
+  assert.doesNotMatch(home, /\bshowBusy\b/)
   assert.doesNotMatch(home, /HEAT_WINDOWS/)
   assert.doesNotMatch(home, /setHeatWindow/)
+  assert.doesNotMatch(home, /useState\('now'\)/)
   assert.doesNotMatch(home, /Busy areas are hidden/)
+  assert.match(home, /heatWindow="now"/)
   assert.match(home, /Game day…/)
   assert.match(home, /Surge · On/)
   assert.match(home, /label=\{surge \? 'Surge · On' : 'Surge'\}/)
