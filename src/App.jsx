@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { useGlassMotion } from './lib/glassMotion'
 import { bindKeyboardInset, scrollFocusedFieldIntoView } from './lib/keyboardInset'
 import { getHashRoute, navigate, redirectShareHashToPath } from './lib/navigation'
@@ -17,64 +17,9 @@ import {
 } from './lib/friendRides'
 import { RequireAuth } from './components/RequireAuth'
 import { AccessibleAlert, AccessibleErrorBoundary } from './components/AccessibleAlert'
-import { AppDownloadPage } from './screens/AppDownload'
 import { Marketing } from './screens/Marketing'
-import { WhyClemsonRides } from './screens/WhyClemsonRides'
-import { DriveWithUs } from './screens/DriveWithUs'
-import { PartnerJoin, PartnerDashboard, DriverRentals } from './screens/RentalPartners'
-import {
-  FaqPage,
-  GetTheAppPage,
-  HowItWorks,
-  PromosPage,
-  RideTypesPage,
-  SafetyPage,
-  SupportPage,
-  TigerPassPage,
-} from './screens/MarketingInfo'
-import { RiderHome } from './screens/RiderHome'
-import { ConfirmPickup } from './screens/ConfirmPickup'
-import { RideTiers } from './screens/RideTiers'
-import { ScheduleAirport } from './screens/ScheduleAirport'
-import { DriverHome } from './screens/DriverHome'
-import { DriverEarnings } from './screens/DriverEarnings'
-import { DriverW9 } from './screens/DriverW9'
-import { DriverPayouts } from './screens/DriverPayouts'
-import { FriendsScreen, AccountScreen } from './screens/FriendsAccount'
-import { SignInScreen, SignUpScreen } from './screens/AuthScreens'
-import { DriverOnboarding } from './screens/DriverOnboarding'
-import { SignAgreement } from './screens/SignAgreement'
-import { DriverSignup } from './screens/DriverSignup'
-import { AdminDesk } from './screens/AdminDesk'
-import { PickDriver } from './screens/PickDriver'
-import { Requested } from './screens/Requested'
-import { LegalPrivacy, LegalTerms } from './screens/LegalPages'
-import { ServiceArea } from './screens/ServiceArea'
-import { LiveShare } from './screens/LiveShare'
-import { ProfileView } from './screens/ProfileView'
-import { RateRide } from './screens/RateRide'
-import { TipRide } from './screens/TipRide'
-import { ReceiptScreen } from './screens/ReceiptScreen'
-import { FriendRideScreen } from './screens/FriendRide'
-import { CarpoolScreen } from './screens/CarpoolScreen'
-import { CarpoolHub } from './screens/CarpoolHub'
-import { PartyNightScreen } from './screens/PartyNight'
-import { AmbassadorScreen } from './screens/AmbassadorScreen'
-import { AffiliatesScreen, AffiliateLanding } from './screens/Affiliates'
-import { AffiliateAdmin } from './screens/AffiliateAdmin'
 import { AffiliateAttributionSync } from './components/AffiliateAttributionSync'
 import { ToastProvider, ToastStack } from './lib/toasts'
-import { RideToastWatcher } from './components/RideToastWatcher'
-import { RiderMatchPopup } from './components/RiderMatchPopup'
-import { WeeklyCouponNotice } from './components/WeeklyCouponNotice'
-import { DriverOfferWatcher } from './components/DriverOfferWatcher'
-import { DriverBillingEntry } from './components/DriverBillingEntry'
-import { IncentivesAdmin } from './screens/IncentivesAdmin'
-import { LostFoundWatcher } from './components/LostFoundWatcher'
-import { TripMessageBanner } from './components/TripMessageBanner'
-import { RiderPickupStream } from './components/RiderPickupStream'
-import { LostFound } from './screens/LostFound'
-import { RidesHistory } from './screens/RidesHistory'
 
 function AmbassadorAttributionSync() {
   const { user } = useAuth()
@@ -99,6 +44,73 @@ function AmbassadorAttributionSync() {
 }
 
 const PROTECTED = new Set(['drivers', 'rentals', 'driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'admin-dashboard', 'incentives', 'lost-found', 'history', 'earnings', 'sign-agreement'])
+/** Driver desk and admin screens load on demand so riders and visitors skip that code. */
+/** Signed-in watchers load right after first paint; they render nothing until a trip or offer exists. */
+const RideToastWatcher = lazy(() => import('./components/RideToastWatcher').then((m) => ({ default: m.RideToastWatcher })))
+const RiderMatchPopup = lazy(() => import('./components/RiderMatchPopup').then((m) => ({ default: m.RiderMatchPopup })))
+const WeeklyCouponNotice = lazy(() => import('./components/WeeklyCouponNotice').then((m) => ({ default: m.WeeklyCouponNotice })))
+const DriverOfferWatcher = lazy(() => import('./components/DriverOfferWatcher').then((m) => ({ default: m.DriverOfferWatcher })))
+const LostFoundWatcher = lazy(() => import('./components/LostFoundWatcher').then((m) => ({ default: m.LostFoundWatcher })))
+const TripMessageBanner = lazy(() => import('./components/TripMessageBanner').then((m) => ({ default: m.TripMessageBanner })))
+const RiderPickupStream = lazy(() => import('./components/RiderPickupStream').then((m) => ({ default: m.RiderPickupStream })))
+const DriverBillingEntry = lazy(() => import('./components/DriverBillingEntry').then((m) => ({ default: m.DriverBillingEntry })))
+/** Marketing pages other than home load on demand too. */
+const AppDownloadPage = lazy(() => import('./screens/AppDownload').then((m) => ({ default: m.AppDownloadPage })))
+const WhyClemsonRides = lazy(() => import('./screens/WhyClemsonRides').then((m) => ({ default: m.WhyClemsonRides })))
+const DriveWithUs = lazy(() => import('./screens/DriveWithUs').then((m) => ({ default: m.DriveWithUs })))
+const FaqPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.FaqPage })))
+const GetTheAppPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.GetTheAppPage })))
+const HowItWorks = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.HowItWorks })))
+const PromosPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.PromosPage })))
+const RideTypesPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.RideTypesPage })))
+const SafetyPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.SafetyPage })))
+const SupportPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.SupportPage })))
+const TigerPassPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.TigerPassPage })))
+/** Rider booking, account and legal screens also load on demand so the marketing home paints fast. */
+const PartnerJoin = lazy(() => import('./screens/RentalPartners').then((m) => ({ default: m.PartnerJoin })))
+const PartnerDashboard = lazy(() => import('./screens/RentalPartners').then((m) => ({ default: m.PartnerDashboard })))
+const DriverRentals = lazy(() => import('./screens/RentalPartners').then((m) => ({ default: m.DriverRentals })))
+const RiderHome = lazy(() => import('./screens/RiderHome').then((m) => ({ default: m.RiderHome })))
+const ConfirmPickup = lazy(() => import('./screens/ConfirmPickup').then((m) => ({ default: m.ConfirmPickup })))
+const RideTiers = lazy(() => import('./screens/RideTiers').then((m) => ({ default: m.RideTiers })))
+const ScheduleAirport = lazy(() => import('./screens/ScheduleAirport').then((m) => ({ default: m.ScheduleAirport })))
+const FriendsScreen = lazy(() => import('./screens/FriendsAccount').then((m) => ({ default: m.FriendsScreen })))
+const AccountScreen = lazy(() => import('./screens/FriendsAccount').then((m) => ({ default: m.AccountScreen })))
+const SignInScreen = lazy(() => import('./screens/AuthScreens').then((m) => ({ default: m.SignInScreen })))
+const SignUpScreen = lazy(() => import('./screens/AuthScreens').then((m) => ({ default: m.SignUpScreen })))
+const DriverSignup = lazy(() => import('./screens/DriverSignup').then((m) => ({ default: m.DriverSignup })))
+const PickDriver = lazy(() => import('./screens/PickDriver').then((m) => ({ default: m.PickDriver })))
+const Requested = lazy(() => import('./screens/Requested').then((m) => ({ default: m.Requested })))
+const LegalPrivacy = lazy(() => import('./screens/LegalPages').then((m) => ({ default: m.LegalPrivacy })))
+const LegalTerms = lazy(() => import('./screens/LegalPages').then((m) => ({ default: m.LegalTerms })))
+const ServiceArea = lazy(() => import('./screens/ServiceArea').then((m) => ({ default: m.ServiceArea })))
+const LiveShare = lazy(() => import('./screens/LiveShare').then((m) => ({ default: m.LiveShare })))
+const ProfileView = lazy(() => import('./screens/ProfileView').then((m) => ({ default: m.ProfileView })))
+const RateRide = lazy(() => import('./screens/RateRide').then((m) => ({ default: m.RateRide })))
+const TipRide = lazy(() => import('./screens/TipRide').then((m) => ({ default: m.TipRide })))
+const ReceiptScreen = lazy(() => import('./screens/ReceiptScreen').then((m) => ({ default: m.ReceiptScreen })))
+const FriendRideScreen = lazy(() => import('./screens/FriendRide').then((m) => ({ default: m.FriendRideScreen })))
+const CarpoolScreen = lazy(() => import('./screens/CarpoolScreen').then((m) => ({ default: m.CarpoolScreen })))
+const CarpoolHub = lazy(() => import('./screens/CarpoolHub').then((m) => ({ default: m.CarpoolHub })))
+const PartyNightScreen = lazy(() => import('./screens/PartyNight').then((m) => ({ default: m.PartyNightScreen })))
+const AmbassadorScreen = lazy(() => import('./screens/AmbassadorScreen').then((m) => ({ default: m.AmbassadorScreen })))
+const AffiliatesScreen = lazy(() => import('./screens/Affiliates').then((m) => ({ default: m.AffiliatesScreen })))
+const AffiliateLanding = lazy(() => import('./screens/Affiliates').then((m) => ({ default: m.AffiliateLanding })))
+const LostFound = lazy(() => import('./screens/LostFound').then((m) => ({ default: m.LostFound })))
+const RidesHistory = lazy(() => import('./screens/RidesHistory').then((m) => ({ default: m.RidesHistory })))
+const DriverHome = lazy(() => import('./screens/DriverHome').then((m) => ({ default: m.DriverHome })))
+const DriverEarnings = lazy(() => import('./screens/DriverEarnings').then((m) => ({ default: m.DriverEarnings })))
+const DriverW9 = lazy(() => import('./screens/DriverW9').then((m) => ({ default: m.DriverW9 })))
+const DriverPayouts = lazy(() => import('./screens/DriverPayouts').then((m) => ({ default: m.DriverPayouts })))
+const DriverOnboarding = lazy(() => import('./screens/DriverOnboarding').then((m) => ({ default: m.DriverOnboarding })))
+const SignAgreement = lazy(() => import('./screens/SignAgreement').then((m) => ({ default: m.SignAgreement })))
+const AdminDesk = lazy(() => import('./screens/AdminDesk').then((m) => ({ default: m.AdminDesk })))
+const AffiliateAdmin = lazy(() => import('./screens/AffiliateAdmin').then((m) => ({ default: m.AffiliateAdmin })))
+const IncentivesAdmin = lazy(() => import('./screens/IncentivesAdmin').then((m) => ({ default: m.IncentivesAdmin })))
+
+/** Booking screens that switch to a map-plus-card layout on wide screens. */
+const WIDE_BOOKING_ROUTES = new Set(['home', 'confirm'])
+
 const SITE_ROUTES = new Set([
   'landing',
   '',
@@ -418,16 +430,16 @@ export default function App() {
   return (
     <ToastProvider>
       <div className={site ? 'desktop-frame desktop-frame--site' : 'desktop-frame'}>
-        <div className={site ? 'app-shell app-shell--site' : 'app-shell'} style={{ position: 'relative', height: '100%' }}>
+        <div className={site ? 'app-shell app-shell--site' : WIDE_BOOKING_ROUTES.has(path) ? 'app-shell app-shell--wide' : 'app-shell'} style={{ position: 'relative', height: '100%' }}>
           <AccessibleErrorBoundary fallback={() => null}><AmbassadorAttributionSync /></AccessibleErrorBoundary>
           <AccessibleErrorBoundary fallback={() => null}><AffiliateAttributionSync path={path} /></AccessibleErrorBoundary>
-          <AccessibleErrorBoundary fallback={() => null}><RideToastWatcher /></AccessibleErrorBoundary>
-          <AccessibleErrorBoundary fallback={() => null}><RiderMatchPopup /></AccessibleErrorBoundary>
-          <AccessibleErrorBoundary fallback={() => null}><WeeklyCouponNotice /></AccessibleErrorBoundary>
-          <AccessibleErrorBoundary fallback={() => null}><DriverOfferWatcher /></AccessibleErrorBoundary>
-          <AccessibleErrorBoundary fallback={() => null}><LostFoundWatcher /></AccessibleErrorBoundary>
-          <AccessibleErrorBoundary fallback={() => null}><TripMessageBanner /></AccessibleErrorBoundary>
-          <AccessibleErrorBoundary fallback={() => null}><RiderPickupStream /></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><Suspense fallback={null}><RideToastWatcher /></Suspense></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><Suspense fallback={null}><RiderMatchPopup /></Suspense></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><Suspense fallback={null}><WeeklyCouponNotice /></Suspense></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><Suspense fallback={null}><DriverOfferWatcher /></Suspense></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><Suspense fallback={null}><LostFoundWatcher /></Suspense></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><Suspense fallback={null}><TripMessageBanner /></Suspense></AccessibleErrorBoundary>
+          <AccessibleErrorBoundary fallback={() => null}><Suspense fallback={null}><RiderPickupStream /></Suspense></AccessibleErrorBoundary>
           <ToastStack />
           <div
             key={routeKey}
@@ -441,10 +453,12 @@ export default function App() {
               key={routeKey}
               fallback={({ reset }) => <RouteErrorFallback path={path} params={params} reset={reset} />}
             >
-              <Screen path={path} params={params} />
+              <Suspense fallback={<div className="route-loading" role="status" aria-live="polite" style={{ padding: 24, color: 'var(--ink-secondary)' }}>Loading…</div>}>
+                <Screen path={path} params={params} />
+              </Suspense>
             </AccessibleErrorBoundary>
           </div>
-          {path === 'driver' && <AccessibleErrorBoundary fallback={() => null}><DriverBillingEntry /></AccessibleErrorBoundary>}
+          {path === 'driver' && <AccessibleErrorBoundary fallback={() => null}><Suspense fallback={null}><DriverBillingEntry /></Suspense></AccessibleErrorBoundary>}
         </div>
       </div>
     </ToastProvider>

@@ -170,9 +170,9 @@ export function MarketingChrome({ current = '', home = false, children }) {
       <div className="mkt-stage-shade" aria-hidden="true" />
       <header className={overPage ? 'mkt-nav mkt-nav--scrolled' : 'mkt-nav'}>
         <div className="site-nav-inner site-container">
-          <button type="button" className="mkt-brand pressable" onClick={() => navigate('landing')}>
+          <button type="button" className="mkt-brand pressable" aria-label="Clemson Rides home" onClick={() => navigate('landing')}>
             <img className="mkt-brand-icon" src="/brand/rider-icon.svg" alt="" width="28" height="28" />
-            <span>Clemson Rides</span>
+            <span className="site-brand-word">Clemson Rides</span>
           </button>
           <nav className="mkt-nav-links" aria-label="Marketing">
             <button type="button" className="pressable" onClick={() => navigate('home')}>Book</button>
@@ -186,7 +186,7 @@ export function MarketingChrome({ current = '', home = false, children }) {
       </header>
       {home ? (
         <>
-          {children}
+          <main className="site-home-main" style={{ display: 'contents' }}>{children}</main>
           <SiteFooter current={current} />
         </>
       ) : (
