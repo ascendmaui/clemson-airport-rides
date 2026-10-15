@@ -283,7 +283,7 @@ export function AccountScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.rowTitle}>{link.label}</Text>
                     {link.badge ? (
-                      <Text style={{ alignSelf: 'flex-start', backgroundColor: PLAN_BADGE_COLOR, color: '#FFFFFF', fontSize: 12, fontWeight: '800', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, overflow: 'hidden' }}>{link.badge}</Text>
+                      <Text style={{ alignSelf: 'flex-start', backgroundColor: PLAN_BADGE_COLOR, color: colors.onAccent, fontSize: 12, fontWeight: '800', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, overflow: 'hidden' }}>{link.badge}</Text>
                     ) : null}
                     <Text style={styles.copy}>{link.mailSubject ? supportEmail() : link.hint}</Text>
                   </View>

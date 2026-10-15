@@ -3,12 +3,13 @@ import { Glyph } from 'rides-native/icons'
 import { normalizeFlight } from 'rides-native/airportContext'
 import { useFocusEffect, useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, Image, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
+import { AccessibilityInfo, FlatList, Image, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { HoldExpiryNotice } from '@/components/HoldExpiryNotice'
 import { TabSwipeRegion, useTabSwipeRemeasure } from '@/components/MainTabPager'
 import { normalizeTabPath } from '@/lib/tabSwipe'
+import { RIDER_LIST_WINDOW, upcomingScheduleRows } from '@/lib/virtualRows'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { Skeleton } from '@/components/Skeleton'
 import { setAuthNext } from '@/lib/authNext'
@@ -70,6 +71,7 @@ import { NearTermSlots } from '@/components/NearTermSlots'
 import { BoostPicker } from '@/components/BoostPicker'
 
 function DriverFace({ card, role }: { card?: { name?: string; avatarUrl?: string | null; vehicleLabel?: string; ratingAvg?: number | null; ratingCount?: number } | null; role: string }) {
+  const { colors } = useTheme()
   if (!card) return null
   const rating = card.ratingAvg != null ? `${Number(card.ratingAvg).toFixed(1)} · ${card.ratingCount || 0}` : 'New'
   return (
@@ -77,13 +79,13 @@ function DriverFace({ card, role }: { card?: { name?: string; avatarUrl?: string
       {card.avatarUrl ? (
         <Image source={{ uri: card.avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} accessible={false} accessibilityIgnoresInvertColors />
       ) : (
-        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#522D80', alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ color: '#fff', fontWeight: '800' }}>{(card.name || 'D').slice(0, 1)}</Text>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.purple, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: colors.onAccent, fontWeight: '800' }}>{(card.name || 'D').slice(0, 1)}</Text>
         </View>
       )}
       <View>
-        <Text style={{ color: '#522D80', fontWeight: '800' }}>{role} · {card.name || 'Driver'}</Text>
-        <Text style={{ color: '#522D80' }}>{card.vehicleLabel || 'Vehicle'} · {rating}</Text>
+        <Text style={{ color: colors.link, fontWeight: '800' }}>{role} · {card.name || 'Driver'}</Text>
+        <Text style={{ color: colors.link }}>{card.vehicleLabel || 'Vehicle'} · {rating}</Text>
       </View>
     </View>
   )
@@ -123,26 +125,26 @@ function BackupActions({
       <DriverFace card={backup.backup} role="Backup" />
       {backup.canSwitch ? (
         <Pressable accessibilityRole="button" accessibilityLabel={`Switch to ${backupName}`} onPress={() => setSheet('switch')} style={{ marginTop: 8 }}>
-          <Text style={{ color: '#fff', backgroundColor: '#F56600', fontWeight: '800', overflow: 'hidden', borderRadius: 12, padding: 10 }}>{`Switch to ${backupName}`}</Text>
+          <Text style={{ color: colors.onAccent, backgroundColor: colors.orange, fontWeight: '800', overflow: 'hidden', borderRadius: 12, padding: 10 }}>{`Switch to ${backupName}`}</Text>
         </Pressable>
       ) : null}
       {backup.canSafetySwitch ? (
         <Pressable accessibilityRole="button" accessibilityLabel="Report a safety concern and switch" onPress={() => setSheet('safety')} style={{ marginTop: 8 }}>
-          <Text style={{ color: '#522D80', fontWeight: '700' }}>Report a safety concern and switch</Text>
+          <Text style={{ color: colors.link, fontWeight: '700' }}>Report a safety concern and switch</Text>
         </Pressable>
       ) : null}
       <Pressable accessibilityRole="button" accessibilityLabel="Cancel ride" onPress={() => setSheet('cancel')} style={{ marginTop: 8 }}>
-        <Text style={{ color: '#522D80', fontWeight: '700' }}>Cancel ride</Text>
+        <Text style={{ color: colors.link, fontWeight: '700' }}>Cancel ride</Text>
       </Pressable>
       {sheet ? (
         <View style={{ marginTop: 8, padding: 10, borderRadius: 12, backgroundColor: 'rgba(82,45,128,0.06)' }}>
           <ScheduledRidesHint topic={sheet === 'cancel' ? 'cancel' : 'switch'} colors={colors} />
           <Text>{sheet === 'cancel' ? backup.cancelCopy : backup.switchCopy}</Text>
           <Pressable accessibilityRole="button" accessibilityLabel={sheet === 'cancel' ? 'Confirm cancel' : 'Confirm switch'} onPress={confirm} disabled={busy} style={{ marginTop: 8 }}>
-            <Text style={{ color: '#F56600', fontWeight: '800' }}>{busy ? 'Saving…' : sheet === 'cancel' ? 'Confirm cancel' : 'Confirm switch'}</Text>
+            <Text style={{ color: colors.orangeInk, fontWeight: '800' }}>{busy ? 'Saving…' : sheet === 'cancel' ? 'Confirm cancel' : 'Confirm switch'}</Text>
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Keep ride" onPress={() => setSheet(null)} style={{ marginTop: 6 }}>
-            <Text style={{ color: '#522D80', fontWeight: '700' }}>Keep ride</Text>
+            <Text style={{ color: colors.link, fontWeight: '700' }}>Keep ride</Text>
           </Pressable>
         </View>
       ) : null}
@@ -274,12 +276,12 @@ function BackupPicker({
                 paddingHorizontal: 12,
                 paddingVertical: 8,
                 borderRadius: 999,
-                backgroundColor: on ? '#F56600' : colors.card,
+                backgroundColor: on ? colors.orange : colors.card,
                 borderWidth: 1,
-                borderColor: 'rgba(82,45,128,0.2)',
+                borderColor: colors.border,
               }}
             >
-              <Text style={{ color: on ? '#fff' : '#522D80', fontWeight: '800' }}>{choice.label}</Text>
+              <Text style={{ color: on ? colors.onAccent : colors.link, fontWeight: '800' }}>{choice.label}</Text>
             </Pressable>
           )
         })}
@@ -348,13 +350,14 @@ export function ScheduleScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [clock, setClock] = useState(() => new Date())
   const [checkoutTrip, setCheckoutTrip] = useState<RiderHoldTrip | null>(null)
-  const scrollRef = useRef<ScrollView>(null)
+  const scrollRef = useRef<FlatList<ScheduledRow>>(null)
   const depositSectionY = useRef(0)
   const reminders = useMemo(() => dueScheduleReminders(mine, clock), [mine, clock])
   const reminderByTrip = useMemo(() => {
     const byTrip = new Map(reminders.map((item) => [item.tripId, item]))
     return byTrip
   }, [reminders])
+  const upcoming = useMemo(() => upcomingScheduleRows(mine), [mine])
   const generation = useRef(0)
   const [passActive, setPassActive] = useState(false)
   const [passBps, setPassBps] = useState(0)
@@ -461,7 +464,7 @@ export function ScheduleScreen() {
     const code = holdAirportCode(trip)
     if (code) setAirport(code)
     void tapHaptic()
-    scrollRef.current?.scrollTo({ y: Math.max(depositSectionY.current - 12, 0), animated: true })
+    scrollRef.current?.scrollToOffset({ offset: Math.max(depositSectionY.current - 12, 0), animated: true })
   }
 
   useEffect(() => {
@@ -798,10 +801,85 @@ export function ScheduleScreen() {
     }
   }
 
+  function renderUpcoming({ item: row }: { item: ScheduledRow }) {
+    const reminder = reminderByTrip.get(row.id)
+    const backup = riderBackupPresentation(row)
+    const boostCents = readBoostCents(row)
+    const nudge = boostNudge(row, clock)
+    const canBump = boostIsEditable(row) && boostCents < BOOST_MAX_CENTS
+    return (
+      <View style={styles.panel}>
+        {reminder ? <Text style={styles.remindKicker}>{reminder.label}</Text> : null}
+        <Text style={styles.cardLine}>{row.pickup_label} → {row.dropoff_label}</Text>
+        <Text style={styles.fine}>
+          {rowPurpose(row)} · {riderStatusPhrase(row.status)} · {formatPickupAt(row.pickup_at || row.scheduled_for)}
+          {row.metadata?.recurrence?.weekdays?.length ? ` · weekly ${row.metadata.recurrence.weekdays.join(', ')}` : ''}
+        </Text>
+        {rideTypeName(String(row.tier || '')) ? <Text style={styles.student}>{rideTypeName(String(row.tier || ''))}</Text> : null}
+        {backup?.status ? <Text style={styles.student}>{backup.status}</Text> : null}
+        {backup?.status === LOOKING_FOR_BACKUP_LABEL ? <ScheduledRidesHint topic="looking" colors={colors} /> : null}
+        {backup?.notice ? <Text style={styles.fine}>{backup.notice}</Text> : null}
+        {backup ? (
+          <BackupActions
+            tripId={row.id}
+            backup={backup}
+            onDone={() => reload()}
+            onError={(message) => setError(message)}
+          />
+        ) : null}
+        {boostCents > 0 ? <Text style={styles.student}>{formatBoostBadge(boostCents)} · 100% to your driver</Text> : null}
+        {nudge ? <Text style={styles.fine}>{nudge.body}</Text> : null}
+        {canBump ? (
+          <TabSwipeRegion>
+            <BoostPicker
+              cents={0}
+              minimumCents={boostCents + 1}
+              heading={boostCents > 0 ? 'Raise the boost' : 'Add a boost'}
+              onChange={(cents) => {
+                bumpScheduledBoost(row.id, cents).then(() => reload()).catch((err: unknown) => {
+                  setError(err instanceof Error ? err.message : 'Could not update boost')
+                })
+              }}
+            />
+          </TabSwipeRegion>
+        ) : null}
+        {row.deposit_cents ? (
+          <Text style={styles.balance}>
+            {depositSurfaceCopy(
+              { fareCents: row.fare_cents || 0, depositCents: row.deposit_cents },
+              'upcoming',
+            )}
+          </Text>
+        ) : null}
+        {row.id !== checkoutTrip?.id && isOpenUnpaidAirportHold(row) ? (
+          <HoldExpiryNotice trip={row} onRequestAgain={() => requestAgain(row)} />
+        ) : null}
+        {!backup && (row.status === 'scheduled' || row.status === 'accepted') ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            onPress={() => {
+              cancelScheduledTrip(row.id).then(() => reload()).catch((err: unknown) => {
+                setError(err instanceof Error ? err.message : 'Could not cancel')
+              })
+            }}
+          >
+            <Text style={styles.cancel}>Cancel</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    )
+  }
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 12 }]}>
-      <ScrollView
+      <FlatList
+        style={{ flex: 1 }}
         ref={scrollRef}
+        data={upcoming}
+        keyExtractor={(row: ScheduledRow) => row.id}
+        renderItem={renderUpcoming}
+        {...RIDER_LIST_WINDOW}
         contentContainerStyle={styles.body}
         keyboardShouldPersistTaps="handled"
         onScroll={remeasureTabs}
@@ -817,7 +895,8 @@ export function ScheduleScreen() {
             }}
           />
         )}
-      >
+        ListHeaderComponent={(
+        <>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={styles.kicker}>RIDES · SCHEDULE</Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Ride history" hitSlop={10} onPress={() => router.replace('/history')} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -1169,82 +1248,15 @@ export function ScheduleScreen() {
         <Text style={styles.section}>Upcoming</Text>
         {loadingList ? <Skeleton height={64} /> : null}
         {!user ? <Text style={styles.copy}>Sign in to see rides saved on this account.</Text> : null}
-        {user && !loadingList && mine.filter((row: ScheduledRow) => row.status !== 'canceled').length === 0 ? (
+        {user && !loadingList && upcoming.length === 0 ? (
           <View style={styles.panel}>
             <Text style={styles.cardLine}>No upcoming rides</Text>
             <Text style={styles.copy}>Confirm a weekend airport or campus trip and it will show up here.</Text>
           </View>
         ) : null}
-        {mine.filter((row: ScheduledRow) => row.status !== 'canceled').map((row: ScheduledRow) => {
-          const reminder = reminderByTrip.get(row.id)
-          const backup = riderBackupPresentation(row)
-          const boostCents = readBoostCents(row)
-          const nudge = boostNudge(row, clock)
-          const canBump = boostIsEditable(row) && boostCents < BOOST_MAX_CENTS
-          return (
-            <View key={row.id} style={styles.panel}>
-            {reminder ? <Text style={styles.remindKicker}>{reminder.label}</Text> : null}
-            <Text style={styles.cardLine}>{row.pickup_label} → {row.dropoff_label}</Text>
-            <Text style={styles.fine}>
-              {rowPurpose(row)} · {riderStatusPhrase(row.status)} · {formatPickupAt(row.pickup_at || row.scheduled_for)}
-              {row.metadata?.recurrence?.weekdays?.length ? ` · weekly ${row.metadata.recurrence.weekdays.join(', ')}` : ''}
-            </Text>
-            {rideTypeName(String(row.tier || '')) ? <Text style={styles.student}>{rideTypeName(String(row.tier || ''))}</Text> : null}
-            {backup?.status ? <Text style={styles.student}>{backup.status}</Text> : null}
-            {backup?.status === LOOKING_FOR_BACKUP_LABEL ? <ScheduledRidesHint topic="looking" colors={colors} /> : null}
-            {backup?.notice ? <Text style={styles.fine}>{backup.notice}</Text> : null}
-            {backup ? (
-              <BackupActions
-                tripId={row.id}
-                backup={backup}
-                onDone={() => reload()}
-                onError={(message) => setError(message)}
-              />
-            ) : null}
-            {boostCents > 0 ? <Text style={styles.student}>{formatBoostBadge(boostCents)} · 100% to your driver</Text> : null}
-            {nudge ? <Text style={styles.fine}>{nudge.body}</Text> : null}
-            {canBump ? (
-              <TabSwipeRegion>
-<BoostPicker
-                cents={0}
-                minimumCents={boostCents + 1}
-                heading={boostCents > 0 ? 'Raise the boost' : 'Add a boost'}
-                onChange={(cents) => {
-                  bumpScheduledBoost(row.id, cents).then(() => reload()).catch((err: unknown) => {
-                    setError(err instanceof Error ? err.message : 'Could not update boost')
-                  })
-                }}
-              />
-</TabSwipeRegion>
-            ) : null}
-            {row.deposit_cents ? (
-              <Text style={styles.balance}>
-                {depositSurfaceCopy(
-                  { fareCents: row.fare_cents || 0, depositCents: row.deposit_cents },
-                  'upcoming',
-                )}
-              </Text>
-            ) : null}
-            {row.id !== checkoutTrip?.id && isOpenUnpaidAirportHold(row) ? (
-              <HoldExpiryNotice trip={row} onRequestAgain={() => requestAgain(row)} />
-            ) : null}
-            {!backup && (row.status === 'scheduled' || row.status === 'accepted') ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Cancel"
-                onPress={() => {
-                  cancelScheduledTrip(row.id).then(() => reload()).catch((err: unknown) => {
-                    setError(err instanceof Error ? err.message : 'Could not cancel')
-                  })
-                }}
-              >
-                <Text style={styles.cancel}>Cancel</Text>
-              </Pressable>
-            ) : null}
-          </View>
-          )
-        })}
-      </ScrollView>
+        </>
+        )}
+      />
       <SignInToBookSheet
         open={promptOpen}
         onClose={() => setPromptOpen(false)}

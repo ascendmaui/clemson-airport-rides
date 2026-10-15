@@ -2,7 +2,7 @@
   "expo": {
     "name": "Clemson Rides Driver",
     "slug": "clemson-rides-driver",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "clemsonrides-driver",
@@ -92,7 +92,7 @@
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true,
-          "motionUsagePermission": false
+          "motionUsagePermission": "Clemson Rides does not track your motion or activity. iOS requires this notice because a location library we use can read motion data."
         }
       ],
       [

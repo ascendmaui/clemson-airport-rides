@@ -5,6 +5,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Animated, Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { logCaught } from '@/lib/caught'
+import { emergencyColors } from '@/lib/palette'
+import { color } from 'rides-native/shared/theme.js'
 import { warningHaptic } from '@/lib/feedback'
 import { readLivePosition } from '@/lib/readLivePosition'
 import { setSosEngaged } from '@/lib/sosEngaged'
@@ -36,7 +38,7 @@ export function SosButton({ onPress }: { onPress: () => void }) {
       onPress={onPress}
       style={[styles.fab, { backgroundColor: colors.danger, shadowColor: colors.danger }]}
     >
-      <Glyph name="sos" size={16} color="#FFFFFF" />
+      <Glyph name="sos" size={16} color={color.white} />
       <Text style={styles.fabText}>SOS</Text>
     </Pressable>
   )
@@ -258,7 +260,7 @@ export function SosSheet({
     >
       <View style={styles.emergency} accessibilityViewIsModal>
         <StatusBar style="light" />
-        <LinearGradient colors={['#4A0C0C', '#B42318', '#6E1212']} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={[...emergencyColors.gradient]} style={StyleSheet.absoluteFill} />
         <Animated.View pointerEvents="none" style={[styles.breathe, { opacity: breathe }]} />
         <ScrollView
           contentContainerStyle={[
@@ -362,37 +364,37 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#B42318',
+    backgroundColor: emergencyColors.fab,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#B42318',
+    shadowColor: emergencyColors.fab,
     shadowOpacity: 0.35,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
   },
-  fabText: { color: '#fff', fontWeight: '800', letterSpacing: 0.6 },
+  fabText: { color: color.white, fontWeight: '800', letterSpacing: 0.6 },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#3B1020',
+    backgroundColor: emergencyColors.banner,
     borderRadius: 16,
     padding: 12,
     marginBottom: 12,
   },
   bannerCopy: { flex: 1 },
-  bannerKicker: { color: '#F56600', fontWeight: '800', fontSize: 12, letterSpacing: 1 },
-  bannerTitle: { color: '#fff', fontWeight: '700', marginTop: 2 },
+  bannerKicker: { color: color.orangeBright, fontWeight: '800', fontSize: 12, letterSpacing: 1 },
+  bannerTitle: { color: color.white, fontWeight: '700', marginTop: 2 },
   bannerMeta: { color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 2 },
-  bannerDismiss: { color: '#fff', fontSize: 22, fontWeight: '700', paddingHorizontal: 6 },
-  emergency: { flex: 1, backgroundColor: '#6E1212' },
-  breathe: { ...StyleSheet.absoluteFill, backgroundColor: '#FF8A75' },
+  bannerDismiss: { color: color.white, fontSize: 22, fontWeight: '700', paddingHorizontal: 6 },
+  emergency: { flex: 1, backgroundColor: emergencyColors.field },
+  breathe: { ...StyleSheet.absoluteFill, backgroundColor: emergencyColors.breathe },
   emergencyBody: { paddingHorizontal: 22, gap: 12, flexGrow: 1 },
   emergencyTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  emergencyKicker: { color: '#FFE4DC', fontWeight: '800', letterSpacing: 1.6, fontSize: 13 },
-  close: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  emergencyKicker: { color: emergencyColors.ink, fontWeight: '800', letterSpacing: 1.6, fontSize: 13 },
+  close: { color: color.white, fontWeight: '700', fontSize: 16 },
   emergencyTitle: {
-    color: '#fff',
+    color: color.white,
     fontSize: 36,
     lineHeight: 42,
     fontWeight: '800',
@@ -402,7 +404,7 @@ const styles = StyleSheet.create({
   emergencyCopy: { color: 'rgba(255,255,255,0.92)', fontSize: 17, lineHeight: 24 },
   emergencyMeta: { color: 'rgba(255,255,255,0.78)', fontSize: 14, lineHeight: 20 },
   call911: {
-    backgroundColor: '#fff',
+    backgroundColor: color.white,
     borderRadius: 28,
     width: '100%',
     alignSelf: 'stretch',
@@ -412,14 +414,14 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     paddingHorizontal: 20,
     marginTop: 8,
-    shadowColor: '#3B0707',
+    shadowColor: emergencyColors.shadow,
     shadowOpacity: 0.35,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
     elevation: 8,
   },
-  call911Label: { color: '#9B1B1B', fontSize: 28, fontWeight: '800', letterSpacing: -0.4, textAlign: 'center' },
-  call911Detail: { color: '#9B1B1B', fontSize: 14, fontWeight: '600', marginTop: 4, textAlign: 'center' },
+  call911Label: { color: emergencyColors.call, fontSize: 28, fontWeight: '800', letterSpacing: -0.4, textAlign: 'center' },
+  call911Detail: { color: emergencyColors.call, fontSize: 14, fontWeight: '600', marginTop: 4, textAlign: 'center' },
   callPolice: {
     borderRadius: 24,
     width: '100%',
@@ -433,7 +435,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.85)',
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  callPoliceLabel: { color: '#fff', fontSize: 20, fontWeight: '800', textAlign: 'center' },
+  callPoliceLabel: { color: color.white, fontSize: 20, fontWeight: '800', textAlign: 'center' },
   callPoliceDetail: { color: 'rgba(255,255,255,0.84)', fontSize: 13, fontWeight: '600', marginTop: 2, textAlign: 'center' },
   more: {
     borderRadius: 18,
@@ -442,8 +444,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.28)',
   },
-  moreTitle: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  moreTitle: { color: color.white, fontWeight: '800', fontSize: 16 },
   moreDetail: { color: 'rgba(255,255,255,0.78)', fontSize: 13, marginTop: 2 },
   disabled: { opacity: 0.6 },
-  emergencyError: { color: '#FFE4DC', fontSize: 14, lineHeight: 20, fontWeight: '700' },
+  emergencyError: { color: emergencyColors.ink, fontSize: 14, lineHeight: 20, fontWeight: '700' },
 })

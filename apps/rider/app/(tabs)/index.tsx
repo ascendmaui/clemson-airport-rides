@@ -17,6 +17,7 @@ import Reanimated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, SheetHandle } from '@/components/Button'
 import { DenseText } from '@/components/DenseText'
+import { RetryAction } from '@/components/RetryAction'
 import { pressStyle, useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
 import type { CampusMapHandle, LatLng, MapKind } from '@/components/mapTypes'
@@ -43,19 +44,17 @@ import { supabase } from '@/lib/supabase'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { liveRideDistanceLine, riderLiveView } from 'rides-native/liveTrip'
 import { useHomeLiveTrip } from '@/lib/useHomeLiveTrip'
-import { HEAT_WINDOWS, SHORTCUTS } from 'rides-native/places.js'
+import { SHORTCUTS } from 'rides-native/places.js'
 import { hotCatalogPlaces, lookupCatalogPlace, searchCatalogPlaces } from 'rides-native/shared/carpool.js'
 import { lift } from '@/lib/elevation'
 import { HOME_SHEET_BOTTOM_PADDING, homeTabClearance } from '@/lib/homeSheetSnap'
 import { useHomeSheetSnap } from '@/lib/useHomeSheetSnap'
+import { useReconnectRetry } from '@/lib/useReconnectRetry'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
 const MAP_KINDS: MapKind[] = ['standard', 'satellite', 'hybrid']
-
-/** Heat still follows showBusy. This control stays in the file and off the home screen. */
-const SHOW_BUSY_AREAS_TOGGLE = false
 
 const PLACES = [
   ...SHORTCUTS.map((shortcut) => ({ ...shortcut, glyph: 'campus' })),
@@ -102,12 +101,11 @@ export function RiderHome() {
     if (query.trim().length >= 2) return found.slice(0, 6)
     return hotCatalogPlaces()
   }, [query])
-  const [showBusy, setShowBusy] = useState(true)
-  const [heatWindow, setHeatWindow] = useState('now')
   const [spots, setSpots] = useState<BusySpot[]>([])
   const [caption, setCaption] = useState('Popular campus spots from ride requests — dorms, downtown, stadium.')
   const [blended, setBlended] = useState(false)
   const [spotsLoading, setSpotsLoading] = useState(true)
+  const [homeRetry, setHomeRetry] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [mapType, setMapType] = useState<MapKind>('standard')
   const [userCoord, setUserCoord] = useState<LatLng | null>(null)
@@ -145,8 +143,8 @@ export function RiderHome() {
     : 'Tiger'
   const initial = name.slice(0, 1).toUpperCase()
 
-  async function reloadSpots(windowId: string) {
-    const result = await loadBusySpots(windowId)
+  async function reloadSpots() {
+    const result = await loadBusySpots('now')
     setSpots(result.spots)
     setCaption(result.caption)
     setBlended(result.blended)
@@ -156,29 +154,44 @@ export function RiderHome() {
   async function loadGameNotice() {
     if (!supabase) {
       setGameNotice(gameDayNotice(null))
-      return
+      return true
     }
     try {
       const row = await loadGameDay(supabase)
       setGameNotice(gameDayNotice(row))
+      return true
     } catch (err) {
       logCaught('home-game-day', err)
       setGameNotice(gameDayNotice(null))
+      return false
     }
   }
 
   async function loadScheduledReminders() {
     if (!user?.id) {
       setScheduledRows([])
-      return
+      return true
     }
     try {
       setScheduledRows(await listScheduledTrips(user.id))
       setClock(new Date())
+      return true
     } catch (err) {
       toastCaught('home-scheduled', err, 'Could not load scheduled rides')
       setScheduledRows([])
+      return false
     }
+  }
+
+  async function refreshBooking() {
+    const spotsOk = await reloadSpots().then(() => true).catch((err: unknown) => {
+      logCaught('home-busy-spots', err)
+      setSpotsLoading(false)
+      return false
+    })
+    const gameOk = await loadGameNotice()
+    const ridesOk = await loadScheduledReminders()
+    setHomeRetry(spotsOk && gameOk && ridesOk ? null : 'Could not refresh rides. Retry when you reconnect.')
   }
 
   useEffect(() => {
@@ -193,7 +206,10 @@ export function RiderHome() {
         if (alive) setGameNotice(gameDayNotice(row))
       } catch (err) {
         logCaught('home-game-day', err)
-        if (alive) setGameNotice(gameDayNotice(null))
+        if (alive) {
+          setGameNotice(gameDayNotice(null))
+          setHomeRetry('Could not refresh rides. Retry when you reconnect.')
+        }
       }
     })()
     return () => {
@@ -218,7 +234,10 @@ export function RiderHome() {
       setClock(new Date())
     }).catch((err: unknown) => {
       toastCaught('home-scheduled', err, 'Could not load scheduled rides')
-      if (alive) setScheduledRows([])
+      if (alive) {
+        setScheduledRows([])
+        setHomeRetry('Could not refresh rides. Retry when you reconnect.')
+      }
     })
     return () => {
       alive = false
@@ -228,7 +247,7 @@ export function RiderHome() {
   useEffect(() => {
     let alive = true
     setSpotsLoading(true)
-    loadBusySpots(heatWindow).then((result) => {
+    loadBusySpots('now').then((result) => {
       if (!alive) return
       setSpots(result.spots)
       setCaption(result.caption)
@@ -236,12 +255,17 @@ export function RiderHome() {
       setSpotsLoading(false)
     }).catch((err: unknown) => {
       logCaught('home-busy-spots', err)
-      if (alive) setSpotsLoading(false)
+      if (alive) {
+        setSpotsLoading(false)
+        setHomeRetry('Could not refresh rides. Retry when you reconnect.')
+      }
     })
     return () => {
       alive = false
     }
-  }, [heatWindow])
+  }, [])
+
+  useReconnectRetry('booking-home', () => refreshBooking(), homeRetry != null)
 
   const goSearch = (dest?: string) => {
     if (dest) {
@@ -294,8 +318,8 @@ export function RiderHome() {
         <CampusMap
           ref={mapRef}
           spots={spots}
-          showHeat={showBusy}
-          heatWindow={heatWindow}
+          showHeat
+          heatWindow="now"
           mapType={mapType}
           gameDay={gameDay}
           gameDayLabel={gameNotice?.live ? gameNotice.headline : null}
@@ -473,11 +497,7 @@ export function RiderHome() {
               tintColor={colors.orange}
               onRefresh={() => {
                 setRefreshing(true)
-                Promise.all([
-                  reloadSpots(heatWindow),
-                  loadGameNotice(),
-                  loadScheduledReminders(),
-                ]).finally(() => setRefreshing(false))
+                refreshBooking().finally(() => setRefreshing(false))
               }}
             />
           )}
@@ -491,6 +511,15 @@ export function RiderHome() {
           ) : (
             <Text style={styles.welcome}>Welcome, {name}</Text>
           )}
+          {homeRetry ? (
+            <View accessibilityLiveRegion="polite">
+              <Text style={styles.locateNote}>{homeRetry}</Text>
+              <RetryAction
+                hint="Loads campus spots, game day, and scheduled rides again"
+                onPress={() => { void refreshBooking() }}
+              />
+            </View>
+          ) : null}
           {gameDayExperience.ready && gameDayExperience.model.phase !== 'off' ? (
             <GameDayBanner model={gameDayExperience.model} onPress={() => router.push('/game-day')} />
           ) : !gameDayExperience.ready && gameNotice?.live ? (
@@ -614,24 +643,6 @@ export function RiderHome() {
                 <Text style={styles.mapTitle}>Campus map</Text>
                 <Text style={styles.busyDays}>Busy days</Text>
               </View>
-              {SHOW_BUSY_AREAS_TOGGLE ? (
-                <Pressable
-                  onPress={() => {
-                    void tapHaptic()
-                    setShowBusy((value: boolean) => !value)
-                  }}
-                  style={[styles.busy, showBusy && styles.busyOn]}
-                  accessibilityRole="button"
-                  accessibilityLabel={showBusy ? 'Busy areas on' : 'Busy areas off'}
-                  accessibilityHint="Shows or hides busy areas on the campus map"
-                  accessibilityState={{ selected: showBusy }}
-                  hitSlop={8}
-                >
-                  <Text style={[styles.busyText, showBusy && styles.busyTextOn]}>
-                    {showBusy ? 'Busy Areas · On' : 'Busy Areas · Off'}
-                  </Text>
-                </Pressable>
-              ) : null}
             </View>
             {spotsLoading ? (
               <Skeleton height={32} width="70%" />
@@ -639,23 +650,13 @@ export function RiderHome() {
               <>
                 <TabSwipeRegion>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroller} contentContainerStyle={[styles.row, styles.chipRow]}>
-                  {showBusy
-                    ? HEAT_WINDOWS.map((window) => (
-                        <Pill
-                          key={window.id}
-                          label={window.label}
-                          active={heatWindow === window.id}
-                          onPress={() => setHeatWindow(window.id)}
-                        />
-                      ))
-                    : null}
                   <Pill label={gameNotice == null ? 'Game day…' : gameNotice.headline} active={gameDay} />
                   <Pill label={surge ? 'Surge · On' : 'Surge'} active={surge} onPress={() => setSurge((value: boolean) => !value)} />
                 </ScrollView>
                 </TabSwipeRegion>
                 <Text style={styles.caption}>
-                  {showBusy ? caption : 'Busy areas are hidden.'}
-                  {showBusy && blended ? <Text style={styles.live}>  Live + typical</Text> : null}
+                  {caption}
+                  {blended ? <Text style={styles.live}>  Live + typical</Text> : null}
                   {gameNotice ? `  ${gameNotice.live ? gameNotice.detail : gameNotice.body}` : '  Checking game day…'}
                   {surge ? `  ${overlays.surgeLabel || 'Surge overlay'}` : ''}
                 </Text>
@@ -817,10 +818,6 @@ function makeStyles(colors: Palette) {
     campusCopy: { flex: 1 },
     mapTitle: { fontWeight: '700' as const, fontSize: 15, letterSpacing: -0.2, color: colors.ink },
     busyDays: { color: colors.inkSecondary, fontSize: 12, fontWeight: '600' as const, marginTop: 2 },
-    busy: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: colors.purpleSoft },
-    busyOn: { backgroundColor: colors.orange },
-    busyText: { color: colors.link, fontSize: 12, fontWeight: '700' as const },
-    busyTextOn: { color: colors.onAccent },
     row: { gap: 8, paddingVertical: 2 },
     chipScroller: { flexGrow: 0, alignSelf: 'stretch' as const },
     chipRow: { alignItems: 'flex-start' as const, flexGrow: 0 },

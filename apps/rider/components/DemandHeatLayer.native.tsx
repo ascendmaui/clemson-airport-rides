@@ -11,7 +11,7 @@ import {
   placeHeatLabels,
   renderDemandHeatFrames,
 } from '@/lib/demandHeatMap'
-import type { Scheme } from '@/lib/palette'
+import { heatLabelFor, type Scheme } from '@/lib/palette'
 
 function useHeatBreathFrame(active: boolean): number {
   const [frame, setFrame] = useState(0)
@@ -62,8 +62,8 @@ export function DemandHeatLayer({
             tracksViewChanges={false}
             tappable={false}
           >
-            <View style={styles.chip}>
-              <Text style={[styles.label, area.label === 'Quiet' ? styles.quiet : null, { color: busynessInk(area.label) }]}>
+            <View style={[styles.chip, { backgroundColor: heatLabelFor(scheme).chip }]}>
+              <Text style={[styles.label, area.label === 'Quiet' ? styles.quiet : null, { color: busynessInk(area.label), textShadowColor: heatLabelFor(scheme).shadow }]}>
                 {area.label}
               </Text>
             </View>
@@ -76,7 +76,6 @@ export function DemandHeatLayer({
 
 const styles = StyleSheet.create({
   chip: {
-    backgroundColor: 'rgba(255,252,248,0.94)',
     borderRadius: 8,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -84,7 +83,6 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: '700',
-    textShadowColor: 'rgba(255,255,255,0.9)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 3,
   },

@@ -8,6 +8,7 @@ import { Animated, Pressable, Text, View } from 'react-native'
 import { DenseText } from '@/components/DenseText'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { RetryAction } from '@/components/RetryAction'
 import { FlowErrorBoundary } from '@/components/FlowErrorBoundary'
 import { TipBoostPicker } from '@/components/TipBoostPicker'
 import { pressStyle, useEnterMotion } from '@/components/enter'
@@ -44,8 +45,10 @@ import {
 } from 'rides-native/drivers'
 import { destPoint, pickupPoint } from 'rides-native/places.js'
 import { logCaught } from '@/lib/caught'
+import { useReconnectRetry } from '@/lib/useReconnectRetry'
 import { pickerDriverCard, readablePickerDrivers, rosterCard, sanitizeOnlineDrivers, textField } from '@/lib/driverFields'
 import { lift } from '@/lib/elevation'
+import { RIDER_LIST_WINDOW, pickerListRows } from '@/lib/virtualRows'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
@@ -177,49 +180,63 @@ function DriverRoster({
     )
   }
 
-  function renderGroups() {
-    const passFirst = (groups.passPreferred || []).length > 0
-    const blocks = [
-      passFirst ? { title: 'Preferred', rows: groups.passPreferred || [] } : null,
-      groups.preferred.length ? { title: passFirst ? 'Favorites' : 'Preferred', rows: groups.preferred } : null,
-      groups.online.length ? { title: 'Online now', rows: groups.online } : null,
-    ].filter((block): block is { title: string; rows: OnlineDriver[] } => Boolean(block))
-    return blocks.map((block) => (
-      <View key={block.title} style={styles.section}>
-        {blocks.length > 1 ? <Text style={styles.sectionTitle}>{block.title}</Text> : null}
-        {block.rows.map((driver: OnlineDriver) => renderDriver(driver))}
-      </View>
-    ))
-  }
+  const passFirst = (groups.passPreferred || []).length > 0
+  const rosterBlocks = [
+    passFirst ? { title: 'Preferred', rows: groups.passPreferred || [] } : null,
+    groups.preferred.length ? { title: passFirst ? 'Favorites' : 'Preferred', rows: groups.preferred } : null,
+    groups.online.length ? { title: 'Online now', rows: groups.online } : null,
+  ].filter((block): block is { title: string; rows: OnlineDriver[] } => Boolean(block))
+  const rosterRows = phase === 'results' ? pickerListRows(rosterBlocks) : []
 
   return (
-    <Animated.ScrollView style={[styles.listScroll, listMotion]} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-      {phase === 'results' && !drivers.some((driver: OnlineDriver) => driver.online) ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>{drivers.length ? 'Preferred drivers are offline' : 'Still searching'}</Text>
-          <Text style={styles.sub}>
-            {error || (drivers.length
-              ? PREFERRED_OFFLINE_COPY
-              : 'No approved driver is online. The orange and purple cars are a preview, not people you can request.')}
-          </Text>
-          <PrimaryButton
-            label={notified ? 'Notify me · saved' : 'Notify me'}
-            disabled={notified}
-            onPress={onNotify}
-          />
-          <PrimaryButton label="Retry" tone="ghost" onPress={onRetry} />
-        </View>
-      ) : null}
-      {(groups.passPreferred || []).length > 0 ? (
-        <Text style={styles.meta}>{TIGER_PASS_NAME} offers preferred drivers first, then your other saved drivers.</Text>
-      ) : null}
-      {favNote ? <Text style={styles.meta}>{favNote}</Text> : null}
-      {phase === 'results' && favoriteIds.length === 0 ? (
-        <Text style={styles.sub}>{EMPTY_FAVORITES_COPY}</Text>
-      ) : null}
-      {phase === 'results' ? renderGroups() : null}
-      {extra}
-    </Animated.ScrollView>
+    <Animated.FlatList
+      style={[styles.listScroll, listMotion]}
+      contentContainerStyle={styles.list}
+      showsVerticalScrollIndicator={false}
+      data={rosterRows}
+      keyExtractor={(row) => row.key}
+      {...RIDER_LIST_WINDOW}
+      ListHeaderComponent={(
+        <>
+          {phase === 'results' && !drivers.some((driver: OnlineDriver) => driver.online) ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>{drivers.length ? 'Preferred drivers are offline' : 'Still searching'}</Text>
+              <Text style={styles.sub}>
+                {error || (drivers.length
+                  ? PREFERRED_OFFLINE_COPY
+                  : 'No approved driver is online. The orange and purple cars are a preview, not people you can request.')}
+              </Text>
+              <PrimaryButton
+                label={notified ? 'Notify me · saved' : 'Notify me'}
+                disabled={notified}
+                onPress={onNotify}
+              />
+              <PrimaryButton label="Retry" tone="ghost" onPress={onRetry} />
+            </View>
+          ) : null}
+          {(groups.passPreferred || []).length > 0 ? (
+            <Text style={styles.meta}>{TIGER_PASS_NAME} offers preferred drivers first, then your other saved drivers.</Text>
+          ) : null}
+          {favNote ? <Text style={styles.meta}>{favNote}</Text> : null}
+          {phase === 'results' && favoriteIds.length === 0 ? (
+            <Text style={styles.sub}>{EMPTY_FAVORITES_COPY}</Text>
+          ) : null}
+        </>
+      )}
+      renderItem={({ item }) => {
+        switch (item.kind) {
+          case 'section':
+            return <Text style={styles.sectionTitle}>{item.title}</Text>
+          case 'driver':
+            return renderDriver(item.driver)
+          default: {
+            const _exhaustive: never = item
+            return _exhaustive
+          }
+        }
+      }}
+      ListFooterComponent={extra ? <View>{extra}</View> : null}
+    />
   )
 }
 
@@ -364,6 +381,8 @@ function PickDriver() {
     if (!tipParam || !Number.isFinite(cents) || cents < 0) return
     setPrepaidTipCents(Math.round(cents))
   }, [tipParam])
+
+  useReconnectRetry('pick-driver', () => setAttempt((value: number) => value + 1), Boolean(error))
 
   const selectedDriver = drivers.find((row: OnlineDriver) => row.id === selected) || null
   const comfortNotice = comfortFleetNotice(tier === 'comfort' || tier === 'comfort' || Boolean(selectedDriver?.comfortClass))
@@ -640,7 +659,10 @@ function PickDriver() {
         ) : null}
         <TipBoostPicker cents={prepaidTipCents} onChange={setPrepaidTipCents} />
         {error && drivers.some((driver: OnlineDriver) => driver.online) ? (
-          <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="assertive">{error}</Text>
+          <View accessibilityLiveRegion="assertive">
+            <Text style={styles.error} accessibilityRole="alert">{error}</Text>
+            <RetryAction label="Retry request" hint="Sends the ride request again" onPress={() => { void onRequest() }} />
+          </View>
         ) : null}
         <PrimaryButton
           label={requesting ? 'Requesting…' : selectedDriver ? `Request ${selectedDriver.name}` : (anyOnline ? 'Request next driver' : 'Select a driver')}
