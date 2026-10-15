@@ -17,6 +17,7 @@ import Reanimated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, SheetHandle } from '@/components/Button'
 import { DenseText } from '@/components/DenseText'
+import { DENSE_FONT_SCALE } from '@/lib/denseType'
 import { RetryAction } from '@/components/RetryAction'
 import { pressStyle, useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
@@ -315,6 +316,8 @@ export function RiderHome() {
         collapsable={false}
         style={styles.mapSlot}
       >
+        <View style={{ height: insets.top }} />
+        <View style={styles.mapFill}>
         <CampusMap
           ref={mapRef}
           spots={spots}
@@ -327,7 +330,8 @@ export function RiderHome() {
           userCoordinate={userCoord}
           showSimulatedFleet
         />
-        <Animated.View pointerEvents="box-none" style={[styles.mapChrome, { paddingTop: insets.top + 10 }, chromeMotion]}>
+        </View>
+        <Animated.View pointerEvents="box-none" style={[styles.mapChrome, { paddingTop: insets.top + 8 }, chromeMotion]}>
           <View style={styles.topBar}>
             <View style={[styles.brand, lift(colors, 'float')]}>
               <View style={styles.brandMark}>
@@ -335,7 +339,7 @@ export function RiderHome() {
               </View>
               <View style={styles.brandCopy}>
                 <DenseText style={styles.brandKicker}>RIDE • GAME • REPEAT</DenseText>
-                <Text style={styles.brandTitle}>Clemson <Text style={styles.brandSoft}>Rides</Text></Text>
+                <Text style={styles.brandTitle} numberOfLines={2} maxFontSizeMultiplier={DENSE_FONT_SCALE}>Clemson <Text style={styles.brandSoft}>Rides</Text></Text>
                 <DenseText style={styles.brandPillText}>TIGERS GET YOU THERE</DenseText>
               </View>
             </View>
@@ -428,8 +432,29 @@ export function RiderHome() {
         >
           <Text style={styles.dragHint}>Drag down to expand the map</Text>
         </Reanimated.View>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.sheetScroll}
+          contentContainerStyle={styles.sheetContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          onScroll={remeasureTabs}
+          scrollEventThrottle={32}
+          scrollEnabled={sheet.scrollEnabled}
+          pointerEvents={sheet.scrollEnabled ? 'auto' : 'box-none'}
+          refreshControl={(
+            <RefreshControl
+              refreshing={refreshing}
+              tintColor={colors.orange}
+              onRefresh={() => {
+                setRefreshing(true)
+                refreshBooking().finally(() => setRefreshing(false))
+              }}
+            />
+          )}
+        >
         <View onLayout={sheet.onSearchLayout} style={styles.searchBlock}>
-          <Text style={styles.prompt} accessibilityElementsHidden={sheet.detent === 'collapsed'}>Where are you headed, Tiger?</Text>
+          <Text style={styles.prompt} numberOfLines={3} maxFontSizeMultiplier={DENSE_FONT_SCALE} accessibilityElementsHidden={sheet.detent === 'collapsed'}>Where are you headed, Tiger?</Text>
           <View
             style={[styles.search, lift(colors, 'rest')]}
             accessibilityElementsHidden={sheet.detent === 'collapsed'}
@@ -442,6 +467,7 @@ export function RiderHome() {
               onChangeText={setQuery}
               placeholder="Campus, GSP, CLT…"
               placeholderTextColor={colors.placeholder}
+              maxFontSizeMultiplier={DENSE_FONT_SCALE}
               style={styles.searchInput}
               autoCorrect={false}
               editable={sheet.detent !== 'collapsed'}
@@ -481,27 +507,6 @@ export function RiderHome() {
             <Text style={styles.liveBody}>{liveDistance || `Open tracking for ${liveTrip.dropoff_label || 'this trip'}.`}</Text>
           </Pressable>
         ) : null}
-        <ScrollView
-          ref={scrollRef}
-          style={styles.sheetScroll}
-          contentContainerStyle={styles.sheetContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          onScroll={remeasureTabs}
-          scrollEventThrottle={32}
-          scrollEnabled={sheet.scrollEnabled}
-          pointerEvents={sheet.scrollEnabled ? 'auto' : 'none'}
-          refreshControl={(
-            <RefreshControl
-              refreshing={refreshing}
-              tintColor={colors.orange}
-              onRefresh={() => {
-                setRefreshing(true)
-                refreshBooking().finally(() => setRefreshing(false))
-              }}
-            />
-          )}
-        >
           {spotsLoading ? (
             <View style={styles.skeletonBlock}>
               <Skeleton height={18} width="36%" />
@@ -727,6 +732,7 @@ function makeStyles(colors: Palette) {
   return {
     screen: { flex: 1, backgroundColor: colors.background },
     mapSlot: { flex: 1, minHeight: 0, backgroundColor: colors.mapFallback, overflow: 'hidden' as const },
+    mapFill: { flex: 1, minHeight: 0 },
     mapChrome: {
       position: 'absolute' as const,
       top: 0,
@@ -745,9 +751,10 @@ function makeStyles(colors: Palette) {
     },
     brand: {
       flex: 1,
+      minWidth: 0,
       maxWidth: 280,
       flexDirection: 'row' as const,
-      alignItems: 'center' as const,
+      alignItems: 'flex-start' as const,
       gap: 10,
       borderRadius: 18,
       backgroundColor: colors.card,
@@ -757,13 +764,14 @@ function makeStyles(colors: Palette) {
     brandMark: {
       width: 36,
       height: 36,
+      flexShrink: 0,
       borderRadius: 12,
       backgroundColor: colors.orange,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
     },
     brandMarkText: { color: colors.onAccent, fontSize: 12, fontWeight: '800' as const, letterSpacing: 0.4 },
-    brandCopy: { flex: 1 },
+    brandCopy: { flex: 1, minWidth: 0 },
     brandKicker: { color: colors.orange, fontSize: 12, fontWeight: '700' as const, letterSpacing: 1.1 },
     brandTitle: { color: colors.title, fontSize: 16, fontWeight: '800' as const, letterSpacing: -0.3, marginTop: 1 },
     brandSoft: { fontWeight: '600' as const, color: colors.ink },
@@ -771,6 +779,7 @@ function makeStyles(colors: Palette) {
     avatar: {
       width: 44,
       height: 44,
+      flexShrink: 0,
       borderRadius: 22,
       backgroundColor: colors.purple,
       alignItems: 'center' as const,
@@ -903,8 +912,8 @@ function makeStyles(colors: Palette) {
       minHeight: 56,
       backgroundColor: colors.input,
     },
-    searchMark: { width: 10, height: 10, borderRadius: 3, backgroundColor: colors.orange },
-    searchInput: { flex: 1, minWidth: 0, fontSize: 17, fontWeight: '600' as const, color: colors.ink, paddingVertical: 14 },
+    searchMark: { width: 10, height: 10, borderRadius: 3, backgroundColor: colors.orange, flexShrink: 0 },
+    searchInput: { flex: 1, minWidth: 0, fontSize: 17, fontWeight: '600' as const, color: colors.ink, paddingVertical: 8 },
     searchLink: { alignSelf: 'flex-start' as const, paddingVertical: 10, marginTop: 2 },
     searchLinkText: { color: colors.orange, fontWeight: '700' as const, fontSize: 14, letterSpacing: -0.1 },
     sectionLabel: {
