@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FarePanel } from '@/components/FarePanel'
 import { BackButton, Card, ErrorText, Primary, Tag } from '@/components/chrome'
@@ -11,6 +11,7 @@ import { useFeedback } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { DRIVER_LIST_WINDOW } from '@/lib/virtualRows'
 import { riderDriverFirstName } from '../../../shared/riderDriverPrivacy.js'
 import type { Palette } from '@/lib/palette'
 import { acceptTrip, confirmBackupQueueTrip, declineDriverOffer, loadDriverDesk, markSearchingOffers, releaseBackupQueueSeat, subscribeTrips } from 'rides-native/driverDesk'
@@ -447,7 +448,10 @@ function QueueScreenBody() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
-      <ScrollView
+      <FlatList
+        data={canSeeOffers ? shown : []}
+        keyExtractor={(card: DriverCard) => card.id}
+        {...DRIVER_LIST_WINDOW}
         contentContainerStyle={styles.list}
         refreshControl={
           <RefreshControl
@@ -459,88 +463,91 @@ function QueueScreenBody() {
             accessibilityLabel="Pull to refresh application status"
           />
         }
-      >
-        <BackButton onPress={() => router.back()} />
-        <Text style={styles.kicker}>QUEUE</Text>
-        <Text style={styles.title}>{canSeeOffers ? 'Accept rides' : 'Ride queue'}</Text>
-        <Text style={styles.copy}>
-          {canSeeOffers
-            ? 'Chosen-driver requests, open matches, student discounts, game-day rides, and scheduled weekend or party pickups.'
-            : 'Ride requests and scheduled pickups will appear here once your driver application is approved.'}
-        </Text>
+        ListHeaderComponent={
+          <View style={styles.listHeader}>
+            <BackButton onPress={() => router.back()} />
+            <Text style={styles.kicker}>QUEUE</Text>
+            <Text style={styles.title}>{canSeeOffers ? 'Accept rides' : 'Ride queue'}</Text>
+            <Text style={styles.copy}>
+              {canSeeOffers
+                ? 'Chosen-driver requests, open matches, student discounts, game-day rides, and scheduled weekend or party pickups.'
+                : 'Ride requests and scheduled pickups will appear here once your driver application is approved.'}
+            </Text>
 
-        <View style={[styles.filters, styles.board]}>
-          {([
-            ['open', 'Open pool'],
-            ['scheduled', 'Scheduled'],
-          ] as const).map(([id, label]) => (
-            <Pressable
-              key={id}
-              onPress={() => setBoard(id)}
-              style={[styles.filter, board === id && styles.filterOn]}
-              accessibilityRole="tab"
-              accessibilityLabel={id === 'scheduled' ? 'Scheduled rides at 75 percent' : 'Open pool'}
-              accessibilityState={{ selected: board === id }}
-            >
-              <Text style={[styles.filterText, board === id && styles.filterTextOn]}>{label}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <Text style={styles.copy}>
-          {board === 'scheduled'
-            ? 'Scheduled rides stay on this tab. You net 75%.'
-            : 'The first offer nets 80% for 15 seconds, then the pool nets 70% for two minutes.'}
-        </Text>
-        {board === 'scheduled' ? <ScheduledRidesExplainer role="driver" colors={colors} /> : null}
+            <View style={[styles.filters, styles.board]}>
+              {([
+                ['open', 'Open pool'],
+                ['scheduled', 'Scheduled'],
+              ] as const).map(([id, label]) => (
+                <Pressable
+                  key={id}
+                  onPress={() => setBoard(id)}
+                  style={[styles.filter, board === id && styles.filterOn]}
+                  accessibilityRole="tab"
+                  accessibilityLabel={id === 'scheduled' ? 'Scheduled rides at 75 percent' : 'Open pool'}
+                  accessibilityState={{ selected: board === id }}
+                >
+                  <Text style={[styles.filterText, board === id && styles.filterTextOn]}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.copy}>
+              {board === 'scheduled'
+                ? 'Scheduled rides stay on this tab. You net 75%.'
+                : 'The first offer nets 80% for 15 seconds, then the pool nets 70% for two minutes.'}
+            </Text>
+            {board === 'scheduled' ? <ScheduledRidesExplainer role="driver" colors={colors} /> : null}
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-          {queueFilters().map((item) => (
-            <Pressable
-              key={item}
-              onPress={() => setFilter(item)}
-              style={[styles.filter, filter === item && styles.filterOn]}
-              accessibilityRole="tab"
-              accessibilityLabel={`${filterLabel(item)} filter`}
-              accessibilityState={{ selected: filter === item }}
-              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-            >
-              <Text style={[styles.filterText, filter === item && styles.filterTextOn]}>{filterLabel(item)}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-        {error ? <ErrorText>{error}</ErrorText> : null}
-        {warning ? <ErrorText>{warning}</ErrorText> : null}
-        {offerNote ? (
-          <Text accessibilityLiveRegion="polite" style={{ color: colors.ink, fontWeight: '700' }}>{offerNote}</Text>
-        ) : null}
-        {!user ? <Primary label="Sign in" onPress={() => router.push('/sign-in')} /> : null}
-
-        {!canSeeOffers ? (
-          <DriverStatusCard
-            status={status}
-            gate={gate}
-            reason={reason}
-            onRefresh={onPullRefresh}
-            refreshing={refreshing}
-          />
-        ) : (
-          <>
-            {shown.length === 0 ? (
-              <Card>
-                <Text style={styles.cardTitle}>{board === 'scheduled' ? 'No scheduled rides' : empty.title}</Text>
-                <Text style={styles.copy}>
-                  {board === 'scheduled'
-                    ? 'Rides booked ahead show up on this tab at 75%.'
-                    : empty.body}
-                </Text>
-              </Card>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+              {queueFilters().map((item) => (
+                <Pressable
+                  key={item}
+                  onPress={() => setFilter(item)}
+                  style={[styles.filter, filter === item && styles.filterOn]}
+                  accessibilityRole="tab"
+                  accessibilityLabel={`${filterLabel(item)} filter`}
+                  accessibilityState={{ selected: filter === item }}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <Text style={[styles.filterText, filter === item && styles.filterTextOn]}>{filterLabel(item)}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            {error ? <ErrorText>{error}</ErrorText> : null}
+            {warning ? <ErrorText>{warning}</ErrorText> : null}
+            {offerNote ? (
+              <Text accessibilityLiveRegion="polite" style={{ color: colors.ink, fontWeight: '700' }}>{offerNote}</Text>
             ) : null}
-            {shown.map((card: DriverCard) => (
-              <QueueCard key={card.id} card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onConfirm={() => onConfirm(card)} onDepart={() => onDepart(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
-            ))}
-          </>
+            {!user ? <Primary label="Sign in" onPress={() => router.push('/sign-in')} /> : null}
+
+            {!canSeeOffers ? (
+              <DriverStatusCard
+                status={status}
+                gate={gate}
+                reason={reason}
+                onRefresh={onPullRefresh}
+                refreshing={refreshing}
+              />
+            ) : (
+              <>
+                {shown.length === 0 ? (
+                  <Card>
+                    <Text style={styles.cardTitle}>{board === 'scheduled' ? 'No scheduled rides' : empty.title}</Text>
+                    <Text style={styles.copy}>
+                      {board === 'scheduled'
+                        ? 'Rides booked ahead show up on this tab at 75%.'
+                        : empty.body}
+                    </Text>
+                  </Card>
+                ) : null}
+              </>
+            )}
+          </View>
+        }
+        renderItem={({ item: card }) => (
+          <QueueCard card={card} busy={busyId === card.id} onAccept={() => onAccept(card)} onDecline={() => onDecline(card)} onConfirm={() => onConfirm(card)} onDepart={() => onDepart(card)} onOpen={() => { if (!isSyntheticOffer(card)) router.push({ pathname: '/trip', params: { id: card.id } }) }} />
         )}
-      </ScrollView>
+      />
     </View>
   )
 }
@@ -549,6 +556,7 @@ function queueStyles(colors: Palette) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
     list: { padding: 16, gap: 12, paddingBottom: 40 },
+    listHeader: { gap: 12 },
     kicker: { color: colors.orange, fontWeight: '800', letterSpacing: 1.1, fontSize: 12, marginTop: 8 },
     title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.4, color: colors.title },
     copy: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
