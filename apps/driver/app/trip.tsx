@@ -69,6 +69,8 @@ import { driverColdStartView } from 'rides-native/activeTripReconcile'
 import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
 import { canDriverEnd } from '../../../shared/driverEndTrip.js'
 import { MISSING_TRIP_VIEW, driverCanceledView, nextDriverTripCard } from 'rides-native/tripCanceled'
+import { CrashBoundary } from '@/components/CrashBoundary'
+import { forgetActiveTrip, rememberActiveTrip } from '@/lib/crashReport'
 
 type RiderFix = { latitude: number; longitude: number }
 
@@ -96,7 +98,16 @@ function LeaveNowLabel({ leaveNowAt }: { leaveNowAt?: string | null }) {
   return <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 28, marginTop: 6 }}>{label}</Text>
 }
 
+/** A render error on the trip screen shows recovery; Try again reloads the same trip id from the server. */
 export default function TripScreen() {
+  return (
+    <CrashBoundary scope="trip" title="Your trip" fill>
+      <TripScreenBody />
+    </CrashBoundary>
+  )
+}
+
+function TripScreenBody() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const params = useLocalSearchParams<{ id?: string }>()
@@ -171,6 +182,14 @@ export default function TripScreen() {
   const partyColors = partyColorsFromPalette(colors)
 
   useEffect(() => setSosOpen(false), [trip?.id, sosActive])
+
+  // Lets the root crash screen reopen this trip ("Back to my trip").
+  useEffect(() => {
+    if (!trip?.id) return undefined
+    if (terminalTrip) { forgetActiveTrip(trip.id); return undefined }
+    rememberActiveTrip(trip.id)
+    return undefined
+  }, [trip?.id, terminalTrip])
 
   useEffect(() => {
     const status = trip ? `${trip.id}:${trip.status}:${trip.released ? 'released' : ''}` : null
