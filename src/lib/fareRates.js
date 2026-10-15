@@ -1,5 +1,5 @@
 /**
- * Clemson RIDES fare card — version 2026-09-23.
+ * Clemson Rides fare card — version 2026-09-23.
  *
  * Research (Greenville–Spartanburg / Clemson, SC mid-size market)
  * UpHail published UberX and Lyft Standard cards for Greenville, SC and

@@ -109,7 +109,7 @@ export function AdminDesk() {
   return (
     <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 20px 48px' }}>
       <button type="button" className="pressable" onClick={() => navigate('account')} style={{ fontSize: 20 }}>←</button>
-      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.1, color: '#F56600', marginTop: 12 }}>CLEMSON RIDES</div>
+      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.1, color: '#F56600', marginTop: 12 }}>Clemson Rides</div>
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#522D80', margin: '4px 0 0', letterSpacing: -0.4 }}>Admin</h1>
       <p style={{ color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45 }}>
         Riders, drivers, applications, trips, and support. Approving a driver unlocks ride accept.

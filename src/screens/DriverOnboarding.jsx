@@ -620,7 +620,7 @@ export function DriverOnboarding() {
           </figure>
           <figure className="drive-intro-block">
             <MarketingPhoto id="safety-verified-driver" />
-            <figcaption>New drivers are not auto-approved. Clemson RIDES reviews the application before they take trips.</figcaption>
+            <figcaption>New drivers are not auto-approved. Clemson Rides reviews the application before they take trips.</figcaption>
           </figure>
         </div>
       ) : null}
@@ -669,7 +669,7 @@ export function DriverOnboarding() {
                 <>
                   <p className="field-error-text" role="alert">{driverQuizError({ hasCar: false, hasInsurance: true, attestation: true })}</p>
                   <p style={{ fontSize: 14, margin: '6px 0 0' }}>
-                    <a href="/drivers/rentals" data-testid="no-car-rent-one">No car? Rent one</a> from a Clemson RIDES rental partner. Rentals open once your license is approved and your background check passes (this also applies to the needs_vehicle path).
+                    <a href="/drivers/rentals" data-testid="no-car-rent-one">No car? Rent one</a> from a Clemson Rides rental partner. Rentals open once your license is approved and your background check passes (this also applies to the needs_vehicle path).
                   </p>
                 </>
               ) : null}
@@ -838,7 +838,7 @@ export function DriverOnboarding() {
             <>
               <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 14, fontSize: 13, lineHeight: 1.45 }}>
                 <input type="checkbox" checked={backgroundAuthorized} onChange={(e) => setBackgroundAuthorized(e.target.checked)} style={{ marginTop: 3 }} />
-                <span>I authorize Clemson RIDES to request a background check, including motor-vehicle records, if a screening vendor is connected later. Signing this does not mean a check was completed.</span>
+                <span>I authorize Clemson Rides to request a background check, including motor-vehicle records, if a screening vendor is connected later. Signing this does not mean a check was completed.</span>
               </label>
               <Field id="bgSignature" label="Type your legal name to sign" value={bgSignature} onChange={setBgSignature} autoComplete="name" />
               <label style={{ display: 'block', marginBottom: 12, fontSize: 13, fontWeight: 650 }}>

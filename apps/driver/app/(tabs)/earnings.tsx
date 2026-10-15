@@ -39,6 +39,7 @@ import { driverBoostShareCents, readBoostCents } from '../../../../shared/schedu
 import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { CASHOUT_COPY } from '../../../../shared/cashout.js'
 import { readPrepaidTipCents } from '../../../../shared/prepaidTip.js'
+import { quiet, quietly } from '@/lib/softFail'
 
 type EarningsState = Awaited<ReturnType<typeof loadEarnings>> | null
 
@@ -72,7 +73,7 @@ export default function EarningsHub() {
     const next = await loadEarnings(supabase, user.id)
     setData(next)
     const [quoteNext, perkPayload, forecastPayload] = await Promise.all([
-      loadCashoutQuote(supabase).catch(() => null),
+      loadCashoutQuote(supabase).catch(quietly('cash-out quote', null)),
       loadOptional<DriverPerks>('/api/driver?action=perks'),
       loadOptional<ForecastPayload>('/api/driver?action=forecast'),
     ])
@@ -117,7 +118,7 @@ export default function EarningsHub() {
             Alert.alert('Cash-out not sent', err instanceof Error ? err.message : 'Try again in a few minutes.')
           } finally {
             setCashing(false)
-            refresh().catch(() => {})
+            refresh().catch(quiet('earnings refresh after cash-out'))
           }
         },
       },

@@ -41,6 +41,7 @@ import {
 } from 'rides-native/vehicleInspection'
 import { extractReadableText, licensePendingCopy, matchRegistration, reviewLicenseImage } from 'rides-native/documentReview'
 import { Glyph } from 'rides-native/icons'
+import { quietly } from '@/lib/softFail'
 
 type PickedFile = { uri: string; name?: string; mimeType?: string; size?: number; width?: number; height?: number }
 type DocumentsTabId = DocumentCategoryId | 'inspection'
@@ -197,8 +198,8 @@ export default function DocumentsScreen() {
     try {
       const [docs, car, deadline] = await Promise.all([
         fetchMyDriverDocuments(supabase, user.id),
-        loadVehicle(supabase, user.id).catch(() => null),
-        fetchInspectionDeadline(supabase, user.id).catch(() => null),
+        loadVehicle(supabase, user.id).catch(quietly('documents vehicle', null)),
+        fetchInspectionDeadline(supabase, user.id).catch(quietly('documents inspection deadline', null)),
       ])
       setDocuments(docs)
       setInspectionDueAt(deadline?.inspection_due_at ?? null)

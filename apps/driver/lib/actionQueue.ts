@@ -30,7 +30,9 @@ export function driverActionQueue(): ActionQueue | null {
         for (const listener of eventListeners) listener(event)
       },
     })
-    void queue.load().then(() => queue?.flush())
+    void queue.load().then(() => queue?.flush()).catch((err: unknown) => {
+      console.warn('[driver] action queue load', err instanceof Error ? err.message : err)
+    })
     AppState.addEventListener('change', (next) => {
       if (next === 'active') void queue?.flush()
     })

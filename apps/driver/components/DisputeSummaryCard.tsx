@@ -4,6 +4,7 @@ import { Card, Tag } from '@/components/chrome'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { authedJson } from 'rides-native/apiClient'
+import { quiet } from '@/lib/softFail'
 
 type Dispute = { status: string; reason: string | null; summary_text: string; generated_at: string }
 
@@ -15,7 +16,7 @@ export function DisputeSummaryCard({ tripId }: { tripId: string }) {
     let alive = true
     authedJson(supabase, '/api/trip-messages?action=dispute-summary', { method: 'POST', body: { tripId } })
       .then((result: any) => { if (alive) setDispute(result?.dispute || null) })
-      .catch(() => {})
+      .catch(quiet('dispute summary'))
     return () => { alive = false }
   }, [tripId])
   if (!dispute) return null

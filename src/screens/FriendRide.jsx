@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CampusMap, CLEMSON } from '../components/CampusMap'
+import { SiteIcon } from '../components/SiteIcon.jsx'
 import { PlacePicker } from '../components/PlacePicker'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { CarpoolCompare } from '../components/CarpoolCompare'
@@ -573,7 +574,7 @@ export function FriendRideScreen({ token: tokenProp, kind: kindProp = 'friends' 
                 )}
                 {p.rating_avg != null && (
                   <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-secondary)' }}>
-                    ★ {Number(p.rating_avg).toFixed(1)}
+                    <SiteIcon name="star" size={12} /> {Number(p.rating_avg).toFixed(1)}
                     {p.rating_count ? ` (${p.rating_count})` : ''}
                   </span>
                 )}

@@ -25,7 +25,7 @@ export function HelpChatPanel({ accountRole = null, active = true }) {
     <ChatShell
       kicker="HELP"
       title={chat.roleVariant === 'driver' ? 'Driver Help' : 'Rider Help'}
-      subtitle="How Clemson RIDES works. This chat does not file tickets."
+      subtitle="How Clemson Rides works. This chat does not file tickets."
     >
       {chat.showRoleToggle && (
         <Segment
