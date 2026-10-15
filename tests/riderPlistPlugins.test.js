@@ -18,13 +18,16 @@ test('rider secure store does not add a Face ID purpose string', () => {
   assert.equal(pluginOptions('expo-secure-store').faceIDPermission, false)
 })
 
-test('rider location stays when-in-use and omits motion and always keys', () => {
+test('rider location stays when-in-use, explains motion, and omits always keys', () => {
   const location = pluginOptions('expo-location')
   assert.equal(
     location.locationWhenInUsePermission,
     'Clemson Rides uses your location to set your pickup point and show your driver approaching.',
   )
-  assert.equal(location.motionUsagePermission, false)
+  assert.equal(
+    location.motionUsagePermission,
+    'Clemson Rides does not track your motion or activity. iOS requires this notice because a location library we use can read motion data.',
+  )
   assert.equal(location.locationAlwaysAndWhenInUsePermission, false)
   assert.equal(location.locationAlwaysPermission, false)
   assert.notEqual(location.isIosBackgroundLocationEnabled, true)
