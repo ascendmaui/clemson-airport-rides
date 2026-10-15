@@ -321,7 +321,7 @@ export function CarpoolHubScreen() {
           end={{ x: 0.85, y: 1 }}
           style={[styles.hero, { paddingTop: insets.top + 28 }]}
         >
-          <Text style={styles.brand}>CLEMSON RIDES</Text>
+          <Text style={styles.brand}>Clemson Rides</Text>
           <Text style={styles.heroTitle}>Split the surge.</Text>
           <Text style={styles.heroBody}>
             One person to Grand Marc or College Ave on a game night is about {formatUsd(pitch.soloCents)}.

@@ -669,7 +669,7 @@ export function RiderHome() {
             accessibilityHint={user ? 'Opens student pricing' : 'Sign in to check student pricing'}
           >
             <View style={styles.offerIcon}>
-              <Text style={styles.gamedayIcon}>🎓</Text>
+              <Glyph name="learning" size={24} color={colors.purple} />
             </View>
             <View style={styles.gamedayCopy}>
               <Text style={styles.gamedayTitle}>{studentOffer.title}</Text>
@@ -688,7 +688,7 @@ export function RiderHome() {
             accessibilityHint="Opens carpools"
           >
             <View style={styles.offerIcon}>
-              <Text style={styles.gamedayIcon}>🏈</Text>
+              <Glyph name="dropoff" size={24} color={colors.orange} />
             </View>
             <View style={styles.gamedayCopy}>
               <Text style={styles.gamedayTitle}>Game day carpool</Text>
@@ -962,7 +962,6 @@ function makeStyles(colors: Palette) {
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
     },
-    gamedayIcon: { fontSize: 20 },
     gamedayCopy: { flex: 1 },
     gamedayTitle: { fontWeight: '700' as const, fontSize: 15, letterSpacing: -0.2, color: colors.ink },
     gamedayBody: { fontSize: 13, lineHeight: 18, color: colors.inkSecondary, marginTop: 2 },

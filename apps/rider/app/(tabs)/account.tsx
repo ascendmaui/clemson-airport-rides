@@ -66,8 +66,8 @@ const GROUPS: { title: string; links: AccountLink[] }[] = [
     links: [
       { href: '/help', label: 'Help', hint: 'How booking, Schedule, friends, and billing work', icon: 'help' },
       { href: '/support', label: 'Support', hint: 'Charge, ride, bug, or safety tickets', icon: 'chat' },
-      { label: 'Email help', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson RIDES help' },
-      { label: 'Email support', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson RIDES support' },
+      { label: 'Email help', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson Rides help' },
+      { label: 'Email support', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson Rides support' },
       { href: '/lost-found', label: 'Lost & found', hint: 'An item left in the car after a ride', icon: 'lostFound' },
     ],
   },

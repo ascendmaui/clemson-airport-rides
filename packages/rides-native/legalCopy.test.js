@@ -396,7 +396,7 @@ test('simulated app rendering matches rider and web consumer logic', () => {
     const title = doc === 'terms' ? 'Terms of Service' : 'Privacy Policy'
     const rendered = {
       title,
-      meta: `Clemson RIDES · Last updated ${LEGAL_UPDATED}`,
+      meta: `Clemson Rides · Last updated ${LEGAL_UPDATED}`,
       renderedSections: sections.map((section) => ({
         heading: section.heading,
         paragraphCount: section.paragraphs?.length ?? 0,
