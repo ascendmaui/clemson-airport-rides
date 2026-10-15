@@ -7,7 +7,7 @@ export function BootScreen({ mark = 'CR' }: { mark?: string }) {
       <View style={styles.mark}>
         <Text style={styles.markLabel}>{mark}</Text>
       </View>
-      <Text style={styles.title}>Clemson RIDES</Text>
+      <Text style={styles.title}>Clemson Rides</Text>
     </View>
   )
 }

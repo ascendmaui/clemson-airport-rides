@@ -25,7 +25,7 @@ function SupportScreen() {
         <Pressable
           accessibilityRole="link"
           accessibilityLabel={`Email support at ${supportEmail()}`}
-          onPress={() => { void Linking.openURL(supportMailto('Clemson RIDES support')) }}
+          onPress={() => { void Linking.openURL(supportMailto('Clemson Rides support')) }}
         >
           <Text style={styles.link}>Email {supportEmail()}</Text>
         </Pressable>
