@@ -17,7 +17,9 @@ test('native driver config declares active-trip background location on both plat
   for (const key of ['isIosBackgroundLocationEnabled', 'isAndroidBackgroundLocationEnabled', 'isAndroidForegroundServiceEnabled']) {
     assert.equal(location[key], true, key)
   }
-  assert.ok(expo.ios.infoPlist.UIBackgroundModes.includes('location'))
+  assert.deepEqual(expo.ios.infoPlist.UIBackgroundModes, ['location'])
+  const [, audio] = expo.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-audio')
+  assert.equal(audio.enableBackgroundPlayback, false)
 })
 
 test('task registers at startup and orphan tracking reconciles on launch and resume', () => {
