@@ -141,7 +141,7 @@ test('buildAccountDeletionTicket creates valid ticket with default parameters', 
   assert.equal(ticket.confirmed, true)
   assert.equal(ticket.category, 'account')
   assert.equal(ticket.roleVariant, 'rider')
-  assert.equal(ticket.subject, 'Delete my Clemson RIDES account')
+  assert.equal(ticket.subject, 'Delete my Clemson Rides account')
   assert.equal(
     ticket.body,
     `${ACCOUNT_DELETION_TICKET.body} Account email: on file.`,
@@ -180,10 +180,10 @@ test('buildAccountDeletionTicket sets roleVariant to driver or rider safely', ()
   const driverTicket = buildAccountDeletionTicket({
     email: 'driver@clemson.edu',
     roleVariant: 'driver',
-    subject: 'Delete my Clemson RIDES driver account',
+    subject: 'Delete my Clemson Rides driver account',
   })
   assert.equal(driverTicket.roleVariant, 'driver')
-  assert.equal(driverTicket.subject, 'Delete my Clemson RIDES driver account')
+  assert.equal(driverTicket.subject, 'Delete my Clemson Rides driver account')
   const driverValidated = validateTicket(driverTicket)
   assert.equal(driverValidated.ok, true)
   assert.equal(driverValidated.ticket.roleVariant, 'driver')
@@ -211,10 +211,10 @@ test('ACCOUNT_DELETION_TICKET contains expected fields and values', () => {
   assert.equal(ACCOUNT_DELETION_TICKET.confirmed, true)
   assert.equal(ACCOUNT_DELETION_TICKET.category, 'account')
   assert.equal(ACCOUNT_DELETION_TICKET.roleVariant, 'rider')
-  assert.equal(ACCOUNT_DELETION_TICKET.subject, 'Delete my Clemson RIDES account')
+  assert.equal(ACCOUNT_DELETION_TICKET.subject, 'Delete my Clemson Rides account')
   assert.equal(
     ACCOUNT_DELETION_TICKET.body,
-    'Please delete my Clemson RIDES account and the trip history tied to it. I confirm this request from the product.',
+    'Please delete my Clemson Rides account and the trip history tied to it. I confirm this request from the product.',
   )
 
   // BUG?: roleVariant is hardcoded to 'rider' on the template, so driver deletion requests
@@ -256,7 +256,7 @@ test('validateTicket passes on the raw ACCOUNT_DELETION_TICKET template', () => 
   assert.equal(result.ok, true)
   assert.equal(result.ticket.category, 'account')
   assert.equal(result.ticket.roleVariant, 'rider')
-  assert.equal(result.ticket.subject, 'Delete my Clemson RIDES account')
+  assert.equal(result.ticket.subject, 'Delete my Clemson Rides account')
   assert.equal(result.ticket.body, ACCOUNT_DELETION_TICKET.body)
 })
 
@@ -291,7 +291,7 @@ test('validateTicket supports overriding roleVariant to driver', () => {
   const driverPayload = {
     ...ACCOUNT_DELETION_TICKET,
     roleVariant: 'driver',
-    subject: 'Delete my Clemson RIDES driver account',
+    subject: 'Delete my Clemson Rides driver account',
     body: `${ACCOUNT_DELETION_TICKET.body} Account email: driver@clemson.edu.`,
   }
   const result = validateTicket(driverPayload)

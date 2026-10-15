@@ -88,7 +88,7 @@ export function FriendsScreen() {
         onError: (e) => setError(e.message || 'GPS error'),
       })
       const url = s.url || shareUrl(s.token)
-      try { await navigator.share?.({ title: 'My Clemson RIDES location', url, text: 'Follow my live ride' }) } catch {}
+      try { await navigator.share?.({ title: 'My Clemson Rides location', url, text: 'Follow my live ride' }) } catch {}
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(url)
         setCopied(true)

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BottomTabs } from '../components/BottomTabs'
+import { SiteIcon } from '../components/SiteIcon.jsx'
 import { PlacePicker } from '../components/PlacePicker'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { CarpoolCompare } from '../components/CarpoolCompare'
@@ -139,7 +140,7 @@ export function CarpoolHub() {
           background: 'linear-gradient(145deg, #F56600 0%, #522D80 72%)',
           color: '#fff',
         }}>
-          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.4 }}>CLEMSON RIDES</div>
+          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.4 }}>Clemson Rides</div>
           <h1 style={{ fontSize: 32, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1.05, margin: '8px 0 0' }}>
             Split the surge.
           </h1>
@@ -268,7 +269,7 @@ export function CarpoolHub() {
 
           {result?.pool?.waiting && (
             <div style={{ ...card, textAlign: 'center' }} role="status" aria-live="polite">
-              <div style={{ fontSize: 24, marginBottom: 6 }} aria-hidden="true">⏳</div>
+              <div style={{ marginBottom: 6, color: 'var(--orange)' }} aria-hidden="true"><SiteIcon name="hourglass" size={24} /></div>
               <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--purple)' }}>You are in the queue</div>
               <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45, marginTop: 4 }}>
                 No one else is heading to {result.pool.neighborhoodLabel || 'that neighborhood'} inside the time window yet.
@@ -278,7 +279,7 @@ export function CarpoolHub() {
           )}
           {result?.code === 'queue_unavailable' && (
             <div style={{ ...card, textAlign: 'center' }} role="status" aria-live="polite">
-              <div style={{ fontSize: 24, marginBottom: 6 }} aria-hidden="true">ℹ️</div>
+              <div style={{ marginBottom: 6, color: 'var(--purple)' }} aria-hidden="true"><SiteIcon name="info" size={24} /></div>
               <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--purple)' }}>Prices are ready. The live queue is not.</div>
               <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45, marginTop: 4 }}>{result.message}</p>
             </div>

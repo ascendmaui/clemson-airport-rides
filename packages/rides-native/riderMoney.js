@@ -209,7 +209,7 @@ const STUDENT_SURFACES = {
     detail: 'Standard quotes on Confirm include this 10% off.',
   },
   tiers: {
-    title: `🐯 ${STUDENT_DISCOUNT_LABEL}`,
+    title: STUDENT_DISCOUNT_LABEL,
     detail: 'Your confirmed Clemson email applies this price.',
   },
   confirm: {
@@ -236,7 +236,7 @@ export function studentSurfaceCopy(status, surface) {
     return { title: reason, detail: null, granted: false }
   }
   return {
-    title: surface === 'tiers' ? '🐯 Student pricing is off' : 'Student pricing is off',
+    title: 'Student pricing is off',
     detail: reason,
     granted: false,
   }
@@ -536,7 +536,7 @@ export function riderPromoShareUrl(code) {
 }
 
 export function riderPromoShareText(code) {
-  return `Join me on Clemson RIDES. Use code ${normalizePromoCode(code)} when you sign up.`
+  return `Join me on Clemson Rides. Use code ${normalizePromoCode(code)} when you sign up.`
 }
 
 export async function claimPromoCode(supabase, code) {

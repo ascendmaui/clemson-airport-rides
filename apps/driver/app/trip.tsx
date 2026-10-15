@@ -3,7 +3,7 @@ import { Glyph } from 'rides-native/icons'
 import { createTrackingRefresh } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { AccessibilityInfo, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CampusMap, type MapPin } from '@/components/CampusMap'
@@ -69,6 +69,12 @@ import { driverColdStartView } from 'rides-native/activeTripReconcile'
 import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
 import { canDriverEnd } from '../../../shared/driverEndTrip.js'
 import { MISSING_TRIP_VIEW, driverCanceledView, nextDriverTripCard } from 'rides-native/tripCanceled'
+import { CrashBoundary } from '@/components/CrashBoundary'
+import { forgetActiveTrip, rememberActiveTrip } from '@/lib/crashReport'
+import { failureToast, quiet, quietly, tripStepFailureTitle } from '@/lib/softFail'
+import { LocationDisclosure } from '@/components/LocationDisclosure'
+import { DISCLOSURE_DECLINED_NOTE, shouldShowLocationDisclosure } from '@/lib/locationDisclosure'
+import * as Location from 'expo-location'
 
 type RiderFix = { latitude: number; longitude: number }
 
@@ -96,7 +102,16 @@ function LeaveNowLabel({ leaveNowAt }: { leaveNowAt?: string | null }) {
   return <Text style={{ color: ORANGE, fontWeight: '800', fontSize: 28, marginTop: 6 }}>{label}</Text>
 }
 
+/** A render error on the trip screen shows recovery; Try again reloads the same trip id from the server. */
 export default function TripScreen() {
+  return (
+    <CrashBoundary scope="trip" title="Your trip" fill>
+      <TripScreenBody />
+    </CrashBoundary>
+  )
+}
+
+function TripScreenBody() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const params = useLocalSearchParams<{ id?: string }>()
@@ -150,6 +165,15 @@ export default function TripScreen() {
   const seenStatus = useRef<string | null>(null)
   const activeTrip = isActiveTripLocationStatus(trip?.status)
   const [backgroundNote, setBackgroundNote] = useState<string | null>(null)
+  // Prominent disclosure before the OS background-location prompt (Play policy).
+  const [disclosureFor, setDisclosureFor] = useState<string | null>(null)
+  const [disclosureAnswered, setDisclosureAnswered] = useState<{ tripId: string; accepted: boolean } | null>(null)
+  const answerDisclosure = useCallback((accepted: boolean) => {
+    setDisclosureFor((tripId) => {
+      if (tripId) setDisclosureAnswered({ tripId, accepted })
+      return null
+    })
+  }, [])
   const [self, setSelf] = useState<{ latitude: number; longitude: number } | null>(null)
   const [rider, setRider] = useState<RiderFix | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -171,6 +195,14 @@ export default function TripScreen() {
   const partyColors = partyColorsFromPalette(colors)
 
   useEffect(() => setSosOpen(false), [trip?.id, sosActive])
+
+  // Lets the root crash screen reopen this trip ("Back to my trip").
+  useEffect(() => {
+    if (!trip?.id) return undefined
+    if (terminalTrip) { forgetActiveTrip(trip.id); return undefined }
+    rememberActiveTrip(trip.id)
+    return undefined
+  }, [trip?.id, terminalTrip])
 
   useEffect(() => {
     const status = trip ? `${trip.id}:${trip.status}:${trip.released ? 'released' : ''}` : null
@@ -214,7 +246,7 @@ export default function TripScreen() {
     const reader = createTrackingRefresh({
       load: () => loadTrip(supabase, id, user?.id),
       onData: (row) => {
-        if (!row) void stopTripBackgroundLocation(id).catch(() => {})
+        if (!row) void stopTripBackgroundLocation(id).catch(quiet('stop trip location'))
         // A poll begun before Start or cancel must not restore the wait screen.
         setTrip((current) => current && current.id === row?.id && row?.status === 'arrived'
           && ['in_progress', 'completed', 'canceled', 'canceled_midride', 'cancelled_wait'].includes(current.status)
@@ -254,6 +286,19 @@ export default function TripScreen() {
         return
       }
       try {
+        // Disclosure first: the OS prompt is only requested after the driver taps Continue.
+        const current = Platform.OS === 'web' ? { granted: true } : await Location.getBackgroundPermissionsAsync().catch(quietly('background permission read', null))
+        const granted = Boolean(current?.granted)
+        const answered = disclosureAnswered?.tripId === trip.id ? disclosureAnswered : null
+        if (!alive) return
+        if (shouldShowLocationDisclosure({ granted, answeredTripId: answered?.tripId ?? null, tripId: trip.id })) {
+          setDisclosureFor(trip.id)
+          return
+        }
+        if (!granted && answered && !answered.accepted) {
+          setBackgroundNote(DISCLOSURE_DECLINED_NOTE)
+          return
+        }
         const status = await startTripBackgroundLocation(trip.id)
         if (alive) setBackgroundNote(status === 'background-denied'
           ? 'Set location to Always so your rider can still see you while you use Maps.'
@@ -262,13 +307,13 @@ export default function TripScreen() {
         if (alive) setBackgroundNote('Background location could not start. Check location in Settings, then return to retry.')
       }
     }
-    void updateBackgroundLocation().catch(() => {})
+    void updateBackgroundLocation().catch(quiet('trip background location'))
     const listener = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void updateBackgroundLocation().catch(() => {})
+      if (state === 'active') void updateBackgroundLocation().catch(quiet('trip background location'))
     })
     // Navigation away from this screen must keep an active trip's service alive.
     return () => { alive = false; listener.remove() }
-  }, [trip?.id, activeTrip, terminalTrip, user?.id])
+  }, [trip?.id, activeTrip, terminalTrip, user?.id, disclosureAnswered])
 
   useEffect(() => {
     if (!supabase || !id || !trip || terminalTrip) return undefined
@@ -357,9 +402,17 @@ export default function TripScreen() {
       } else {
         pulse('accept')
       }
-      await refresh()
+      // The step is saved; a slow re-read must not report the step as failed.
+      await refresh().catch(quiet('refresh after trip step'))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update this trip')
+      failureToast({
+        key: 'trip-step',
+        title: tripStepFailureTitle(trip.status),
+        err,
+        fallback: 'The trip did not change.',
+        retry: () => { void onAdvance() },
+      })
     } finally {
       setBusy(false)
     }
@@ -419,10 +472,11 @@ export default function TripScreen() {
       }
       if (result?.trip) setTrip(toDriverCard(result.trip, { driverId: user.id }))
       pulse(op === 'drop' ? 'complete' : 'accept')
-      await refresh()
+      await refresh().catch(quiet('refresh after stop'))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update this stop')
-      await refresh()
+      failureToast({ key: 'trip-stop', title: 'Could not update this stop', err, fallback: 'The stop did not change.', retry: () => { void onStopAction(stop, op) } })
+      await refresh().catch(quiet('refresh after stop failure'))
     } finally {
       setBusy(false)
     }
@@ -435,9 +489,10 @@ export default function TripScreen() {
     try {
       const result = await driverTripAction(supabase, trip.id, 'cancel')
       setTrip(toDriverCard(result.trip, { driverId: user?.id }))
-      await refresh()
+      await refresh().catch(quiet('refresh after no-show'))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not cancel this ride')
+      failureToast({ key: 'trip-no-show', title: 'Could not mark a no-show', err, fallback: 'The ride is unchanged.', retry: () => { void onNoShow() } })
     } finally {
       setBusy(false)
     }
@@ -460,7 +515,7 @@ export default function TripScreen() {
           departedTrip.current = null
           const message = err instanceof Error ? err.message : 'Could not start navigation'
           if (!/changed|Refresh/i.test(message)) setError(message)
-          refresh()
+          refresh().catch(quiet('refresh after leave-now'))
         })
     }
     const wait = dueAt - Date.now()
@@ -791,8 +846,9 @@ export default function TripScreen() {
               onPress={() => {
                 if (!supabase || !trip.id) return
                 setBusy(true)
-                confirmBackupQueueTrip(supabase, trip.id).then(() => refresh()).catch((err: unknown) => {
+                confirmBackupQueueTrip(supabase, trip.id).then(() => refresh().catch(quiet('refresh after confirm'))).catch((err: unknown) => {
                   setError(err instanceof Error ? err.message : 'Could not confirm')
+                  failureToast({ key: 'trip-confirm', title: 'Could not confirm this trip', err, fallback: 'Your seat is unchanged.' })
                 }).finally(() => setBusy(false))
               }}
               disabled={busy}
@@ -805,7 +861,7 @@ export default function TripScreen() {
                 setBusy(true)
                 confirmBackupQueueTrip(supabase, trip.id, { navigate: true })
                   .then(() => openNavigation(navApp, target))
-                  .then(() => refresh())
+                  .then(() => refresh().catch(quiet('refresh after confirm and navigate')))
                   .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not start navigation'))
                   .finally(() => setBusy(false))
               }}
@@ -819,7 +875,7 @@ export default function TripScreen() {
                   if (!supabase || !trip.id || !trip.backupRole) return
                   setBusy(true)
                   releaseBackupQueueSeat(supabase, trip.id, { role: trip.backupRole })
-                    .then(() => refresh())
+                    .then(() => refresh().catch(quiet('refresh after seat release')))
                     .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not release this seat'))
                     .finally(() => setBusy(false))
                 }}
@@ -843,6 +899,7 @@ export default function TripScreen() {
         </ScrollView>
         </GestureDetector>
       </View>
+      <LocationDisclosure visible={Boolean(disclosureFor && disclosureFor === trip?.id && activeTrip && !terminalTrip)} onAccept={() => answerDisclosure(true)} onDecline={() => answerDisclosure(false)} />
       <SosSheet
         open={sosOpen && sosActive}
         onClose={() => setSosOpen(false)}

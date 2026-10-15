@@ -18,6 +18,7 @@ import { normalizePromoCode } from 'rides-native/authErrors'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
+import { caughtMessage, logCaught } from '@/lib/caught'
 
 type Desk = {
   code: string | null
@@ -44,6 +45,10 @@ export default function PromoScreen() {
     loadPromoDesk(supabase, user.id).then((row) => {
       if (!alive) return
       setDesk(row as Desk)
+    }).catch((err: unknown) => {
+      if (!alive) return
+      logCaught('promo', err)
+      setNote(caughtMessage(err, 'Could not load promo codes.'))
     })
     return () => {
       alive = false

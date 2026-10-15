@@ -18,7 +18,7 @@ Two current binaries. The frozen TestFlight app is a third package and must not 
 
 Package names are `expo.android.package` in each `app.json`. They match the iOS bundle ids. Expo owner is `johnmatveyev`. Production `eas.json` sets `appVersionSource` to `remote` and `autoIncrement` on the production profile, so the Play `versionCode` is not in git.
 
-Declared Android permissions (manifest list in `app.json`; background location is not requested):
+Declared Android permissions (manifest list in `app.json`). The driver app also requests background location during an active trip only, after an in-app disclosure (see `docs/driver-background-location.md`):
 
 | App | Permissions |
 | --- | --- |
@@ -147,7 +147,7 @@ Use the binary and the privacy policy. Do not guess past what is listed here.
 - [ ] News app: no. Government app: no. John confirms.
 - [ ] Data safety, aligned with `PRIVACY_SECTIONS`: name, email, and auth ids; student-verification marker; trip pickup and dropoff labels and coordinates; fare, card-hold, and charge amounts; Stripe payment metadata (full card numbers are not stored on Clemson RIDES servers); optional phone and home/work labels; device or session signals for realtime updates. Precise location is while-in-use (`ACCESS_FINE_LOCATION`). Driver app adds the notification permission and camera or photo-library access for documents. Data is shared with Stripe, Supabase, and the driver assigned to the trip, as the policy states. John completes the form.
 - [ ] Account deletion URL or in-app path. Account can file a confirmed support ticket (`shared/accountDeletion.js`, subject “Delete my Clemson RIDES account”). That path does not call `auth.admin.deleteUser`. John chooses the URL Play will show. The privacy page tells people to request deletion from Account.
-- [ ] Location declaration: foreground only. No background-location permission.
+- [ ] Location declaration. Rider: foreground only. Driver: background location during an active trip, with the in-app prominent disclosure. Declaration text and video script: `docs/driver-background-location.md`.
 - [ ] Photo and video permissions for the driver document picker, if Play asks.
 - [ ] Financial-features declaration for ride payments (card hold at booking, full fare captured at trip end, hold released on cancellation within policy), if Play asks. Payments stay on the existing Stripe paths. No live charge is part of this checklist.
 - [ ] Countries and regions.

@@ -27,6 +27,7 @@ import {
   startPaymentMethodSetup,
   updateSavedPaymentMethod,
 } from 'rides-native/riderMoney.js'
+import { caughtMessage, logCaught, toastCaught } from '@/lib/caught'
 import { nativePaymentSheetAvailable, presentNativeSetupSheet } from '@/lib/nativePaymentSheet'
 import type { NativeSetupResult } from '@/lib/nativePaymentSheetTypes'
 import { formatCents } from 'rides-native/tripTags.js'
@@ -127,6 +128,12 @@ function BillingScreen() {
       const problems = [result.profileError, result.paymentsError, result.ridesError].filter(Boolean)
       setNote(problems.length ? problems.join(' ') : null)
       setLoading(false)
+    }).catch((err: unknown) => {
+      if (!alive) return
+      setLoading(false)
+      const message = caughtMessage(err, 'Could not load billing. Try again.')
+      setNote(message)
+      toastCaught('billing-load', err, 'Could not load billing', message)
     })
     loadPrepaidCredits(supabase).then((result) => {
       if (!alive) return
@@ -135,13 +142,21 @@ function BillingScreen() {
       setCreditsLoaded(true)
       setCreditsError(result.error)
       setTiers((result.tiers || []) as PrepaidTier[])
+    }).catch((err: unknown) => {
+      if (!alive) return
+      const message = caughtMessage(err, 'Could not load your credit balance.')
+      setCreditsLoaded(true)
+      setCreditsUnavailable(true)
+      setCreditsError(message)
+      toastCaught('billing-credits', err, 'Could not load credits', message)
     })
     listSavedPaymentMethods(supabase).then((result) => {
       if (!alive || result?.error) return
       setMethods(result.methods || [])
       setDefaultPmId(result.defaultPmId || null)
-    }).catch(() => {
-      /* The profile card still shows when the saved-method list is down. */
+    }).catch((err: unknown) => {
+      logCaught('billing-methods', err)
+      if (alive) setNote('Saved cards could not be loaded. Your profile card still shows.')
     })
     return () => {
       alive = false

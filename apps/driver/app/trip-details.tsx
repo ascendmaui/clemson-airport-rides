@@ -16,6 +16,7 @@ import { loadEarnings, loadTrip } from 'rides-native/driverDesk'
 import { formatCents, formatPickupAt, comfortFleetNotice, incentiveLabel, type DriverCard } from 'rides-native/tripTags'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { TripThread } from 'rides-native/TripThread.jsx'
+import { quietly } from '@/lib/softFail'
 
 export default function TripDetailsScreen() {
   const router = useRouter()
@@ -33,7 +34,7 @@ export default function TripDetailsScreen() {
     const row = await loadTrip(supabase, id, user?.id)
     setTrip(row)
     if (!user) return
-    const earnings = await loadEarnings(supabase, user.id).catch(() => null)
+    const earnings = await loadEarnings(supabase, user.id).catch(quietly('trip details earnings', null))
     const payments = (earnings?.paymentsByTrip?.[id] || []) as TipPayment[]
     const cents = tipCentsFromPayments(payments)
     setTip(payments.some((payment: TipPayment) => payment.kind === 'tip') ? cents : null)

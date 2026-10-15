@@ -19,6 +19,12 @@ const supabaseUrl = dataUrl(`
   export function __setSupabase(next) { supabase = next }
 `)
 
+const caughtUrl = dataUrl(`
+  export function logCaught() {}
+  export function caughtMessage(_err, fallback) { return fallback }
+  export function toastCaught() {}
+`)
+
 const apiClientUrl = dataUrl(`
   const key = ${JSON.stringify(KEY)}
   export function apiBase() { return 'https://api.test' }
@@ -37,6 +43,7 @@ registerHooks({
     const parent = context.parentURL || ''
     if (!parent.includes(PARENT)) return nextResolve(specifier, context)
     if (specifier === '@/lib/supabase') return { url: supabaseUrl, shortCircuit: true }
+    if (specifier === '@/lib/caught') return { url: caughtUrl, shortCircuit: true }
     if (specifier === 'rides-native/apiClient' || specifier === 'rides-native/apiClient.js') {
       return { url: apiClientUrl, shortCircuit: true }
     }

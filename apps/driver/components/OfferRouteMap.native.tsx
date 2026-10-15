@@ -53,9 +53,9 @@ export function OfferRouteMap({
         {legs.map((leg) => (
           <Polyline key={leg.id} coordinates={leg.coordinates} strokeColor={leg.color} strokeWidth={4} />
         ))}
-        {points.driver ? <Marker coordinate={points.driver} pinColor="#F56600" anchor={{ x: 0.5, y: 1 }} /> : null}
-        {points.pickup ? <Marker coordinate={points.pickup} pinColor="#F56600" anchor={{ x: 0.5, y: 1 }} /> : null}
-        {points.dropoff ? <Marker coordinate={points.dropoff} pinColor="#522D80" anchor={{ x: 0.5, y: 1 }} /> : null}
+        {points.driver ? <Marker coordinate={points.driver} pinColor="#F56600" anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false} /> : null}
+        {points.pickup ? <Marker coordinate={points.pickup} pinColor="#F56600" anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false} /> : null}
+        {points.dropoff ? <Marker coordinate={points.dropoff} pinColor="#522D80" anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false} /> : null}
       </MapView>
     </View>
   )

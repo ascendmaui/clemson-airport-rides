@@ -15,6 +15,7 @@ import {
 import { useTheme } from '@/lib/theme'
 import { GlassSheet } from 'rides-native/glass'
 import { ErrorText, Primary } from '@/components/chrome'
+import { logSoft } from '@/lib/softFail'
 
 export function DriverEndTripSheet({ supabase, tripId, disabled, onEnded }: {
   supabase: unknown
@@ -43,6 +44,7 @@ export function DriverEndTripSheet({ supabase, tripId, disabled, onEnded }: {
     try {
       await driverEndTrip(supabase, tripId, reason, reason === 'other' ? note.trim() : undefined)
     } catch (err) {
+      logSoft('driver end trip', err)
       setError(err instanceof Error ? err.message : 'Could not end this trip. Try again.')
       sending.current = false
       setBusy(false)
