@@ -319,10 +319,7 @@ export function GetTheAppPage() {
           <p>{app.blurb}</p>
           <p>{app.iosNote}</p>
           <p>{app.androidNote}</p>
-          <a className="mkt-text pressable" href={app.testflightHref} target="_blank" rel="noopener">
-            Join the iPhone beta (TestFlight)
-          </a>
-          <QrMark value={app.testflightHref} label={`QR code for ${app.product} TestFlight beta`} />
+          <QrMark value={installOffer(app.id).pageUrl} label={`QR code for the ${app.product} install page`} />
           <a className="mkt-text pressable" href={installOffer(app.id).pagePath}>
             Phone install page
           </a>

@@ -46,19 +46,21 @@ test('store listings stay unpublished until real URLs exist', () => {
   assert.equal(APP_DOWNLOADS[0].id, 'rider')
   assert.equal(APP_DOWNLOADS[0].href, WEB_BOOK_URL)
   assert.equal(APP_DOWNLOADS[0].androidHref, WEB_BOOK_URL)
-  assert.equal(APP_DOWNLOADS[0].iosHref, RIDER_TESTFLIGHT_URL)
-  assert.equal(APP_DOWNLOADS[0].testflightHref, RIDER_TESTFLIGHT_URL)
+  assert.equal(APP_DOWNLOADS[0].iosHref, WEB_BOOK_URL)
+  assert.equal(APP_DOWNLOADS[0].testflightHref, undefined)
   assert.equal(APP_DOWNLOADS[1].id, 'driver')
   assert.equal(APP_DOWNLOADS[1].href, WEB_DRIVER_URL)
   assert.equal(APP_DOWNLOADS[1].androidHref, WEB_DRIVER_URL)
-  assert.equal(APP_DOWNLOADS[1].iosHref, DRIVER_TESTFLIGHT_URL)
-  assert.equal(APP_DOWNLOADS[1].testflightHref, DRIVER_TESTFLIGHT_URL)
+  assert.equal(APP_DOWNLOADS[1].iosHref, WEB_DRIVER_URL)
+  assert.equal(APP_DOWNLOADS[1].testflightHref, undefined)
   for (const app of APP_DOWNLOADS) {
-    assert.equal(app.iosNote, 'iPhone: install the public beta through TestFlight.')
+    assert.equal(app.iosNote, 'iPhone: coming soon to the App Store.')
     assert.match(app.androidNote, /not live yet/)
-    assert.match(app.blurb, /iPhone: install the public beta through TestFlight\./)
+    assert.match(app.blurb, /iPhone: coming soon to the App Store\./)
+    assert.doesNotMatch(`${app.blurb} ${app.iosNote} ${app.androidNote}`, /testflight|beta/i)
     assert.match(app.blurb, /Play Store listing is not live yet/)
-    const targets = `${app.href} ${app.iosHref} ${app.androidHref} ${app.testflightHref}`
+    const targets = `${app.href} ${app.iosHref} ${app.androidHref}`
+    assert.doesNotMatch(targets, /testflight/i)
     assert.doesNotMatch(targets, EXPO_LINK)
     assert.doesNotMatch(targets, /apps\.apple\.com|play\.google\.com/)
     assert.match(app.href, /^https:\/\/clemsonrides\.com\//)
@@ -120,10 +122,9 @@ test('the marketing page is a ride or carpool entry and does not invent store id
   assert.equal(retiredFleet.test(source), false)
 })
 
-test('download QR codes are square modules for the public install links', () => {
-  for (const [app, expectedUrl] of [[APP_DOWNLOADS[0], RIDER_TESTFLIGHT_URL], [APP_DOWNLOADS[1], DRIVER_TESTFLIGHT_URL]]) {
-    assert.equal(app.testflightHref, expectedUrl)
-    const matrix = qrMatrix(app.testflightHref)
+test('download QR codes are square modules for the public install pages', () => {
+  for (const [app, expectedUrl] of [[APP_DOWNLOADS[0], `${WEB_ORIGIN}/download`], [APP_DOWNLOADS[1], `${WEB_ORIGIN}/driver/download`]]) {
+    const matrix = qrMatrix(expectedUrl)
     assert.ok(matrix.size >= 21)
     assert.equal(matrix.size % 1, 0)
     assert.equal(matrix.cells.some(([x, y]) => x === 0 && y === 0), true)
@@ -132,15 +133,15 @@ test('download QR codes are square modules for the public install links', () => 
     assert.notDeepEqual(matrix, qrMatrix(app.href))
   }
   const source = readFileSync(new URL('../src/screens/MarketingInfo.jsx', import.meta.url), 'utf8')
-  assert.match(source, /href=\{app\.testflightHref\} target="_blank" rel="noopener"/)
-  assert.match(source, /Join the iPhone beta \(TestFlight\)/)
-  assert.match(source, /<QrMark value=\{app\.testflightHref\} label=\{`QR code for \$\{app\.product\} TestFlight beta`\} \/>/)
+  assert.match(source, /<QrMark value=\{installOffer\(app\.id\)\.pageUrl\}/)
+  assert.doesNotMatch(source, /testflight|TestFlight|iPhone beta|join the beta|test the app/i)
   assert.match(source, /Open the driver desk/)
   assert.match(source, /Book a ride/)
 })
 
-test('beta availability note reads correctly on the app and driver pages', () => {
-  assert.equal(APP_STORE_NOTE, 'iPhone apps are in public beta on TestFlight. The App Store and Play Store listings are not live yet.')
+test('app availability note has no beta or TestFlight prompt', () => {
+  assert.equal(APP_STORE_NOTE, 'The iPhone app is coming soon to the App Store. Until then, you can book and drive on clemsonrides.com.')
+  assert.doesNotMatch(APP_STORE_NOTE, /testflight|beta/i)
   const appPage = readFileSync(new URL('../src/screens/MarketingInfo.jsx', import.meta.url), 'utf8')
   const drivePage = readFileSync(new URL('../src/screens/DriveWithUs.jsx', import.meta.url), 'utf8')
   assert.match(appPage, /lede=\{APP_STORE_NOTE\}/)

@@ -58,7 +58,7 @@ export function supportMailto(subject, body) {
 /**
  * Public App Store and Google Play URLs.
  * Stay null until a real listing for that specific app is published.
- * Do not invent store ids. Rider and driver have separate public TestFlight betas.
+ * Do not invent store ids.
  * Rider and driver are separate binaries, so one shared store URL is not used.
  */
 export const IOS_STORE_URL = null
@@ -87,6 +87,10 @@ export function publishedStoreUrl(url) {
   return trimmed
 }
 
+/**
+ * Release tooling only. The website never links to or mentions TestFlight;
+ * web pages show 'Coming soon to the App Store' until a store URL is published.
+ */
 /** Accept only a public TestFlight join link on Apple's HTTPS host. */
 export function publicTestFlightUrl(url) {
   if (typeof url !== 'string') return null
@@ -100,7 +104,7 @@ function installHref(storeUrl, webUrl) {
 
 /**
  * Web booking and driver desk remain available on every platform.
- * iPhone install links use each app's public beta until its App Store listing is live.
+ * iPhone buttons open the App Store once a listing is published; until then they read 'Coming soon to the App Store'.
  */
 export const APP_DOWNLOADS = [
   {
@@ -108,32 +112,30 @@ export const APP_DOWNLOADS = [
     label: 'Rider',
     product: 'Clemson RIDES Rider',
     href: WEB_BOOK_URL,
-    testflightHref: publicTestFlightUrl(RIDER_TESTFLIGHT_URL),
-    iosHref: publishedStoreUrl(RIDER_IOS_STORE_URL) || publicTestFlightUrl(RIDER_TESTFLIGHT_URL) || WEB_BOOK_URL,
+    iosHref: publishedStoreUrl(RIDER_IOS_STORE_URL) || WEB_BOOK_URL,
     androidHref: installHref(RIDER_ANDROID_STORE_URL, WEB_BOOK_URL),
     iosNote: publishedStoreUrl(RIDER_IOS_STORE_URL)
       ? 'App Store'
-      : 'iPhone: install the public beta through TestFlight.',
+      : 'iPhone: coming soon to the App Store.',
     androidNote: publishedStoreUrl(RIDER_ANDROID_STORE_URL)
       ? 'Google Play'
       : 'The Play Store listing is not live yet. This opens booking on clemsonrides.com.',
-    blurb: 'iPhone: install the public beta through TestFlight. Android: book on clemsonrides.com while the Play Store listing is not live yet.',
+    blurb: 'iPhone: coming soon to the App Store. Android: book on clemsonrides.com while the Play Store listing is not live yet.',
   },
   {
     id: 'driver',
     label: 'Driver',
     product: 'Clemson RIDES Driver',
     href: WEB_DRIVER_URL,
-    testflightHref: publicTestFlightUrl(DRIVER_TESTFLIGHT_URL),
-    iosHref: publishedStoreUrl(DRIVER_IOS_STORE_URL) || publicTestFlightUrl(DRIVER_TESTFLIGHT_URL) || WEB_DRIVER_URL,
+    iosHref: publishedStoreUrl(DRIVER_IOS_STORE_URL) || WEB_DRIVER_URL,
     androidHref: installHref(DRIVER_ANDROID_STORE_URL, WEB_DRIVER_URL),
     iosNote: publishedStoreUrl(DRIVER_IOS_STORE_URL)
       ? 'App Store'
-      : 'iPhone: install the public beta through TestFlight.',
+      : 'iPhone: coming soon to the App Store.',
     androidNote: publishedStoreUrl(DRIVER_ANDROID_STORE_URL)
       ? 'Google Play'
       : 'The Play Store listing is not live yet. This opens the driver web app on clemsonrides.com.',
-    blurb: 'iPhone: install the public beta through TestFlight. Android: open the driver desk on clemsonrides.com while the Play Store listing is not live yet.',
+    blurb: 'iPhone: coming soon to the App Store. Android: open the driver desk on clemsonrides.com while the Play Store listing is not live yet.',
   },
 ]
 
