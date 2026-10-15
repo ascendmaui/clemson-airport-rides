@@ -26,16 +26,18 @@ test('Android map tiles stay off until a real key is configured', () => {
   assert.match(ANDROID_MAP_UNAVAILABLE, /Pickup and drop-off still work/)
 })
 
-test('Android app config injects the maps key and does not request background location', () => {
+test('Android app config injects the maps key and limits background location to the driver', () => {
   for (const app of ['rider', 'driver']) {
     const config = readFileSync(new URL(`../../apps/${app}/app.config.js`, import.meta.url), 'utf8')
     assert.match(config, /EXPO_PUBLIC_GOOGLE_MAPS_API_KEY/)
     assert.doesNotMatch(config, /AIza[0-9A-Za-z_-]{10}/)
   }
   const driver = JSON.parse(readFileSync(new URL('../../apps/driver/app.json', import.meta.url), 'utf8'))
+  const rider = JSON.parse(readFileSync(new URL('../../apps/rider/app.json', import.meta.url), 'utf8'))
   const permissions = driver.expo.android.permissions
   assert.ok(permissions.includes('ACCESS_FINE_LOCATION'))
   assert.ok(permissions.includes('ACCESS_COARSE_LOCATION'))
   assert.ok(permissions.includes('POST_NOTIFICATIONS'))
-  assert.equal(permissions.includes('ACCESS_BACKGROUND_LOCATION'), false)
+  assert.equal(permissions.includes('ACCESS_BACKGROUND_LOCATION'), true)
+  assert.equal(rider.expo.android.permissions.includes('ACCESS_BACKGROUND_LOCATION'), false)
 })

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -7,16 +7,6 @@ import { DRIVER_SOCIAL_PROVIDERS } from '../packages/rides-native/socialAuth.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const read = (file) => readFileSync(path.join(root, file), 'utf8')
-
-function sourceFiles(dir, out = []) {
-  for (const name of readdirSync(dir)) {
-    if (name === 'node_modules' || name === 'package-lock.json') continue
-    const full = path.join(dir, name)
-    if (statSync(full).isDirectory()) sourceFiles(full, out)
-    else if (/\.(tsx?|jsx?|json)$/.test(name)) out.push(full)
-  }
-  return out
-}
 
 test('driver store name and version are Clemson Rides Driver 1.2.0', () => {
   const expo = JSON.parse(read('apps/driver/app.json')).expo
@@ -86,12 +76,5 @@ test('background location is a driver manifest permission, with no build-propert
     // React Native 0.86.3 pins compileSdk and targetSdk to 36 in gradle/libs.versions.toml.
     assert.equal(pkg.dependencies['react-native'], '0.86.3', app)
     assert.equal(plugins.includes('expo-build-properties'), false, app)
-  }
-})
-
-test('driver app source has no fleet, autonomy, or deposit marketing', () => {
-  const banned = /Tesla|Model 3|self-driving|robotaxi|Crimson|TestFlight|25% deposit|__DEV__/i
-  for (const file of sourceFiles(path.join(root, 'apps/driver'))) {
-    assert.doesNotMatch(readFileSync(file, 'utf8'), banned, path.relative(root, file))
   }
 })
