@@ -1,7 +1,7 @@
 import { useFocusEffect, usePathname, useRouter } from 'expo-router'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Platform, ScrollView, Share, Switch, Text, TextInput, View } from 'react-native'
+import { FlatList, Platform, Share, Switch, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
@@ -10,6 +10,7 @@ import { NeighborhoodPicker } from '@/components/carpool/NeighborhoodPicker'
 import { Card, EmptyState, ErrorText, Field, SkeletonBlock } from '@/components/carpool/ui'
 import { TabSwipeRegion, useTabSwipeRemeasure } from '@/components/MainTabPager'
 import { normalizeTabPath } from '@/lib/tabSwipe'
+import { RIDER_LIST_WINDOW, friendScreenRows, type FriendScreenRow } from '@/lib/virtualRows'
 import { loadAmbassadorCode } from '@/lib/ambassadorCode'
 import { caughtMessage, logCaught } from '@/lib/caught'
 import { setAuthNext } from '@/lib/authNext'
@@ -320,10 +321,87 @@ export function CarpoolHubScreen() {
 
   const waiting = Boolean(result?.pool?.waiting)
   const neighborhood = result?.pool?.neighborhoodLabel || cluster?.label || 'that neighborhood'
+  const screenRows = useMemo(() => friendScreenRows(friends, activity), [friends, activity])
+
+  function renderScreenRow({ item }: { item: FriendScreenRow }) {
+    switch (item.kind) {
+      case 'friend': {
+        const friend = friends.find((row: SavedFriend) => row.id === item.id)
+        if (!friend) return null
+        return (
+          <View style={styles.rowPad}>
+            <Text style={styles.note}>{friend.name} · {friend.email}</Text>
+          </View>
+        )
+      }
+      case 'ride-together':
+        return (
+          <View style={styles.body}>
+            <Card>
+              <Text style={styles.cardTitle}>Ride together</Text>
+              <Text style={styles.note}>
+                Split evenly or by distance. Party weekend follows the tailgate switch above.
+                Stops save from the campus and airport list. Friend-ride route miles still need the server Maps key.
+              </Text>
+              <NeighborhoodPicker label="Pickup" value={friendPickup} onChange={setFriendPickup} />
+              <NeighborhoodPicker label="Drop-off" value={friendDropoff} onChange={setFriendDropoff} />
+              <TabSwipeRegion style={styles.friendPills}>
+                <Pill label="Split evenly" active={splitMode === 'even'} onPress={() => { void tapHaptic(); setSplitMode('even') }} />
+                <Pill label="Split by distance" active={splitMode === 'by_distance'} onPress={() => { void tapHaptic(); setSplitMode('by_distance') }} />
+              </TabSwipeRegion>
+              <Text style={styles.note}>
+                {splitMode === 'even'
+                  ? 'Even split divides the server route fare. The lobby shows each person’s share, with this route alone struck, before anyone is charged.'
+                  : 'By distance uses each stop’s weight from the server route. The lobby shows each person’s share before anyone is charged.'}
+              </Text>
+              <PrimaryButton label={friendBusy ? 'Starting…' : 'Start group ride'} onPress={onRideTogether} disabled={friendBusy} tone="purple" />
+            </Card>
+          </View>
+        )
+      case 'activity-head':
+        return (
+          <View style={styles.body}>
+            <Card>
+              <Text style={styles.cardTitle}>Activity</Text>
+              {!user ? <Text style={styles.note}>Sign in to see group rides you organized.</Text> : null}
+              {user && activity.length === 0 ? <Text style={styles.note}>No group rides yet.</Text> : null}
+            </Card>
+          </View>
+        )
+      case 'activity': {
+        const row = activity.find((entry: FriendActivity) => entry.id === item.id)
+        if (!row) return null
+        return (
+          <View style={styles.rowPad}>
+            <Text style={styles.note}>
+              {row.kind || 'friends'} · {row.status || 'open'}
+              {row.split_mode === 'by_distance' ? ' · by distance' : ' · even split'}
+              {row.total_fare_cents != null ? ` · ${formatUsd(row.total_fare_cents)}` : ''}
+            </Text>
+          </View>
+        )
+      }
+      default: {
+        const _exhaustive: never = item
+        return _exhaustive
+      }
+    }
+  }
 
   return (
     <View style={styles.screen}>
-      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled" onScroll={remeasureTabs} scrollEventThrottle={32}>
+      <FlatList
+        style={styles.scroll}
+        data={screenRows}
+        keyExtractor={(row) => row.key}
+        keyboardShouldPersistTaps="handled"
+        onScroll={remeasureTabs}
+        scrollEventThrottle={32}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        {...RIDER_LIST_WINDOW}
+        renderItem={renderScreenRow}
+        ListHeaderComponent={(
+        <>
         <LinearGradient
           colors={[colors.orange, colors.purple]}
           start={{ x: 0, y: 0 }}
@@ -461,47 +539,17 @@ export function CarpoolHubScreen() {
             />
             <PrimaryButton label={friendBusy ? 'Working…' : 'Add friend'} onPress={onAddFriend} disabled={friendBusy || !friendEmail.trim()} />
             {friends.length === 0 ? <Text style={styles.note}>No saved friends on this phone yet.</Text> : null}
-            {friends.map((friend: SavedFriend) => (
-              <Text key={friend.id} style={styles.note}>{friend.name} · {friend.email}</Text>
-            ))}
-          </Card>
-
-          <Card>
-            <Text style={styles.cardTitle}>Ride together</Text>
-            <Text style={styles.note}>
-              Split evenly or by distance. Party weekend follows the tailgate switch above.
-              Stops save from the campus and airport list. Friend-ride route miles still need the server Maps key.
-            </Text>
-            <NeighborhoodPicker label="Pickup" value={friendPickup} onChange={setFriendPickup} />
-            <NeighborhoodPicker label="Drop-off" value={friendDropoff} onChange={setFriendDropoff} />
-            <TabSwipeRegion style={styles.friendPills}>
-              <Pill label="Split evenly" active={splitMode === 'even'} onPress={() => { void tapHaptic(); setSplitMode('even') }} />
-              <Pill label="Split by distance" active={splitMode === 'by_distance'} onPress={() => { void tapHaptic(); setSplitMode('by_distance') }} />
-            </TabSwipeRegion>
-            <Text style={styles.note}>
-              {splitMode === 'even'
-                ? 'Even split divides the server route fare. The lobby shows each person’s share, with this route alone struck, before anyone is charged.'
-                : 'By distance uses each stop’s weight from the server route. The lobby shows each person’s share before anyone is charged.'}
-            </Text>
-            <PrimaryButton label={friendBusy ? 'Starting…' : 'Start group ride'} onPress={onRideTogether} disabled={friendBusy} tone="purple" />
-          </Card>
-
-          <Card>
-            <Text style={styles.cardTitle}>Activity</Text>
-            {!user ? <Text style={styles.note}>Sign in to see group rides you organized.</Text> : null}
-            {user && activity.length === 0 ? <Text style={styles.note}>No group rides yet.</Text> : null}
-            {activity.map((row: FriendActivity) => (
-              <Text key={row.id} style={styles.note}>
-                {row.kind || 'friends'} · {row.status || 'open'}
-                {row.split_mode === 'by_distance' ? ' · by distance' : ' · even split'}
-                {row.total_fare_cents != null ? ` · ${formatUsd(row.total_fare_cents)}` : ''}
-              </Text>
-            ))}
-            {friendError ? <ErrorText>{friendError}</ErrorText> : null}
-            {friendNote ? <Text style={styles.note}>{friendNote}</Text> : null}
           </Card>
         </View>
-      </ScrollView>
+        </>
+        )}
+        ListFooterComponent={(
+          <View style={styles.body}>
+            {friendError ? <ErrorText>{friendError}</ErrorText> : null}
+            {friendNote ? <Text style={styles.note}>{friendNote}</Text> : null}
+          </View>
+        )}
+      />
       <SignInToBookSheet
         open={promptOpen}
         onClose={() => setPromptOpen(false)}
@@ -547,6 +595,7 @@ function makeStyles(colors: Palette) {
       fontWeight: '700' as const,
     },
     body: { paddingHorizontal: 20, paddingBottom: 12 },
+    rowPad: { paddingHorizontal: 20 },
     note: { marginTop: 8, color: colors.inkSecondary, fontSize: 13, lineHeight: 18 },
     cardTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16 },
     tailgate: {
