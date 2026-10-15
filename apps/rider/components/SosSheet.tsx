@@ -212,7 +212,7 @@ export function SosSheet({
     }
     try {
       if (channel === 'web_share') {
-        await Share.share({ title: 'SOS Clemson RIDES', message: text })
+        await Share.share({ title: 'SOS Clemson Rides', message: text })
         setShareNote('Location shared.')
       } else {
         const href = sosChannelHref(channel, text)

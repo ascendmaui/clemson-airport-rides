@@ -21,7 +21,7 @@ function LegalScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <StackHeader title={title} onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.meta}>Clemson RIDES · Last updated {LEGAL_UPDATED}</Text>
+        <Text style={styles.meta}>Clemson Rides · Last updated {LEGAL_UPDATED}</Text>
         <Text style={styles.meta}>The same policy as the website.</Text>
         {sections.map((section) => (
           <View key={section.heading} style={styles.section}>
