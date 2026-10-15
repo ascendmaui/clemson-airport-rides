@@ -98,7 +98,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Clemson Rides uses the camera for driver documents and for a video clip you start during a ride. Ride clips stay on this phone.",
+          "cameraPermission": "Clemson Rides uses the camera to photograph driver documents and to record a video clip you start during a ride. Ride clips stay on this phone.",
           "microphonePermission": "Clemson Rides uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone.",
           "recordAudioAndroid": true,
           "barcodeScannerEnabled": false
