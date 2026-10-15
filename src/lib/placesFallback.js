@@ -29,9 +29,16 @@ export function keepInputUsable(input, placeholder) {
   const observer = new MutationObserver(restore)
   observer.observe(input, { attributes: true, attributeFilter: ['class', 'disabled', 'placeholder'] })
   let timer = null
+  // Google paints its error dropdown only after its own request fails, so look a few times.
   const checkDropdown = () => {
     clearTimeout(timer)
-    timer = setTimeout(() => { if (pacShowsError()) placesOff() }, 250)
+    let tries = 0
+    const look = () => {
+      if (pacShowsError()) { placesOff(); return }
+      tries += 1
+      if (tries < 6) timer = setTimeout(look, 400)
+    }
+    timer = setTimeout(look, 150)
   }
   input.addEventListener('input', checkDropdown)
   input.addEventListener('focus', checkDropdown)
