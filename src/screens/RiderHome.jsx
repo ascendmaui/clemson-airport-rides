@@ -21,7 +21,6 @@ import { HEAT_WINDOWS } from '../lib/rideDemand'
 import { RiderWaitBanner } from '../components/WaitFeeCard'
 import { SHORTCUTS } from '../../packages/rides-native/places.js'
 import { ownerSavedPlaces, welcomeHeading } from '../lib/homePrivacy'
-import { SiteIcon } from '../components/SiteIcon'
 import { useWideLayout } from '../lib/useWideLayout'
 
 function placeIconName(place) {
