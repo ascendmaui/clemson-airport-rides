@@ -1,5 +1,5 @@
-// Driver sign-up page perks. Framed as what drivers get with Clemson RIDES.
-// The comparison section states only what Clemson RIDES includes; it does not
+// Driver sign-up page perks. Framed as what drivers get with Clemson Rides.
+// The comparison section states only what Clemson Rides includes; it does not
 // assert what any other app offers.
 
 export const PAY_TIERS = [
@@ -18,7 +18,7 @@ export const TITLE_HIGHLIGHT = {
   id: 'rebuilt-titles',
   icon: 'car',
   title: 'Rebuilt titles welcome',
-  body: 'Have a car with a rebuilt title? If it passes inspection, you can drive with Clemson RIDES. Salvage titles are not accepted.',
+  body: 'Have a car with a rebuilt title? If it passes inspection, you can drive with Clemson Rides. Salvage titles are not accepted.',
 }
 
 export const PERK_GROUPS = [
@@ -72,7 +72,7 @@ export const PERK_GROUPS = [
   },
 ]
 
-// Each row is a statement about Clemson RIDES only.
+// Each row is a statement about Clemson Rides only.
 export const COMPARISON_ROWS = [
   'Per-hour pay shown on every offer',
   'Rider photo and star rating on offers',
@@ -95,15 +95,15 @@ export const COMPARISON_ROWS = [
 // Verified 2026-10-12 against official help pages; re-check before changing:
 // https://www.uber.com/us/en/drive/requirements/vehicle-requirements/?city=greenville-sc
 // https://help.lyft.com/hc/en-us/all/articles/115012924087-South-Carolina-Driver-Information
-export const COMPARISON_SOURCE_NOTE = 'Rebuilt titles: as of October 2026, Uber’s and Lyft’s published South Carolina vehicle requirements do not accept rebuilt titles. Requirements change, so check their current rules directly. Clemson RIDES accepts rebuilt titles that pass inspection; salvage titles are not accepted.'
+export const COMPARISON_SOURCE_NOTE = 'Rebuilt titles: as of October 2026, Uber’s and Lyft’s published South Carolina vehicle requirements do not accept rebuilt titles. Requirements change, so check their current rules directly. Clemson Rides accepts rebuilt titles that pass inspection; salvage titles are not accepted.'
 
-export const COMPARISON_NOTE = 'This table lists what you get with Clemson RIDES. Apart from the sourced rebuilt-title note above, it does not describe other apps; their features vary by market and change often, so check them directly. Uber and Lyft are trademarks of their respective owners. Clemson RIDES is not affiliated with or endorsed by either.'
+export const COMPARISON_NOTE = 'This table lists what you get with Clemson Rides. Apart from the sourced rebuilt-title note above, it does not describe other apps; their features vary by market and change often, so check them directly. Uber and Lyft are trademarks of their respective owners. Clemson Rides is not affiliated with or endorsed by either.'
 
 // No rental partner yet: keep wording "typical" and never name a partner or a guaranteed price.
 export const RENTAL = {
   title: 'No car? Rent one and start driving.',
   body: [
-    'You can start with just a driver’s license and a passed background check. Rent a vehicle, drive for Clemson RIDES, and pay the weekly rental from your earnings.',
+    'You can start with just a driver’s license and a passed background check. Rent a vehicle, drive for Clemson Rides, and pay the weekly rental from your earnings.',
     'Typical weekly rentals run about $300–$400 and usually include liability insurance, maintenance and the basics.',
   ],
   points: [
@@ -116,9 +116,9 @@ export const RENTAL = {
     {
       id: 'fleet',
       kicker: 'Path 1',
-      title: 'Clemson RIDES rental partner',
+      title: 'Clemson Rides rental partner',
       status: 'Coming soon',
-      body: 'We’re lining up a rental partner for Clemson RIDES drivers. Join the list and we’ll let you know when it opens.',
+      body: 'We’re lining up a rental partner for Clemson Rides drivers. Join the list and we’ll let you know when it opens.',
       cta: 'Get notified',
     },
     {
@@ -128,8 +128,8 @@ export const RENTAL = {
       body: 'Turo is a car-sharing marketplace, not a rideshare rental program. Its prohibited-uses policy bars paid passenger driving in California, Minnesota, New York and Oregon; South Carolina is not on that list. Some Turo hosts may allow rideshare use. Confirm with the host first, and check the host’s rideshare policy and Turo’s current terms before you book.',
       cta: 'Browse Turo near Clemson',
       href: 'https://turo.com/us/en/car-rental/united-states/clemson-sc',
-      fine: 'Turo is a separate company. Clemson RIDES is not affiliated with or endorsed by Turo.',
+      fine: 'Turo is a separate company. Clemson Rides is not affiliated with or endorsed by Turo.',
     },
   ],
-  note: 'Availability may vary. Rental terms, prices and included coverage are set by the rental provider and are not guaranteed by Clemson RIDES.',
+  note: 'Availability may vary. Rental terms, prices and included coverage are set by the rental provider and are not guaranteed by Clemson Rides.',
 }

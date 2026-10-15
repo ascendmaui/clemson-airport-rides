@@ -234,7 +234,7 @@ export const FEATURES = [
       'Game day shows the pickup zone and the fare from the server.',
       `Scheduled airport rides go to Greenville-Spartanburg (GSP) and Charlotte Douglas (CLT).`,
     ],
-    why: 'The trips are the ones around this campus. Clemson RIDES is not an official Clemson University service.',
+    why: 'The trips are the ones around this campus. Clemson Rides is not an official Clemson University service.',
   },
   {
     id: 'airports',

@@ -119,7 +119,7 @@ Create two apps. Package names must match the table above on the first upload. T
 ### Account and signing
 
 - [ ] Play Console developer account John will publish under (package prefix is `com.ascendmaui`).
-- [ ] App 1 name confirmation: display name in repo is `Clemson RIDES`, package `com.ascendmaui.clemsonrides.rider`.
+- [ ] App 1 name confirmation: display name in repo is `Clemson Rides`, package `com.ascendmaui.clemsonrides.rider`.
 - [ ] App 2 name confirmation: display name in repo is `Clemson RIDES Driver`, package `com.ascendmaui.clemsonrides.driver`.
 - [ ] Play App Signing enrollment for each app, and the upload key. The signing-cert SHA-1 is also what `docs/google-signin-setup.md` section 1.4 needs for the Android OAuth clients. It is not in git.
 - [ ] `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` set on the rider EAS project and the driver EAS project for preview and production. Without it, #306 keeps the map on the unavailable state.

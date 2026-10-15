@@ -20,10 +20,6 @@ import {
   redirectTarget,
 } from '../shared/installLinks.js'
 import {
-  DRIVER_TESTFLIGHT_URL,
-  RIDER_TESTFLIGHT_URL,
-} from '../shared/productLinks.js'
-import {
   artifactName,
   buildMeta,
   parseEasOutput,
@@ -137,20 +133,20 @@ test('VPS copy script only uploads APKs and the compose volume is read-only', as
   }
 })
 
-test('install links use TestFlight when set, the APK until Play exists, and phones redirect', () => {
+test('install links show App Store coming soon, the APK until Play exists, and phones redirect', () => {
   assert.equal(CLEMSON_ORANGE, '#F56600')
   assert.equal(CLEMSON_PURPLE, '#522D80')
   const rider = installOffer('rider', {
-    riderTestflight: '',
-    driverTestflight: '',
+    riderAppStore: '',
+    driverAppStore: '',
     riderPlay: '',
     driverPlay: '',
     riderApk: '',
     driverApk: '',
   })
   const driver = installOffer('driver', {
-    riderTestflight: '',
-    driverTestflight: '',
+    riderAppStore: '',
+    driverAppStore: '',
     riderPlay: '',
     driverPlay: '',
     riderApk: '',
@@ -158,19 +154,20 @@ test('install links use TestFlight when set, the APK until Play exists, and phon
   })
   assert.equal(rider.pagePath, '/download')
   assert.equal(rider.pageUrl, 'https://clemsonrides.com/download')
-  assert.equal(rider.iosHref, RIDER_TESTFLIGHT_URL)
-  assert.equal(rider.iosState, 'testflight')
+  assert.equal(rider.iosHref, null)
+  assert.equal(rider.iosState, 'coming-soon')
   assert.equal(rider.androidKind, 'apk')
   assert.equal(rider.androidHref, `https://clemsonrides.com/downloads/${RIDER_APK_NAME}`)
   assert.equal(driver.pagePath, '/driver/download')
-  assert.equal(driver.iosHref, DRIVER_TESTFLIGHT_URL)
+  assert.equal(driver.iosHref, null)
+  assert.equal(driver.iosState, 'coming-soon')
   assert.equal(driver.androidHref, `https://clemsonrides.com/downloads/${DRIVER_APK_NAME}`)
 
   const hidden = installOffer('rider', {
-    riderTestflight: 'https://example.com/not-testflight',
+    riderAppStore: 'https://example.com/not-the-app-store',
     riderPlay: 'https://expo.dev/nope',
     riderApk: 'https://evil.example/rider.apk',
-    driverTestflight: '',
+    driverAppStore: '',
     driverPlay: '',
     driverApk: '',
   })
@@ -180,8 +177,8 @@ test('install links use TestFlight when set, the APK until Play exists, and phon
   assert.equal(hidden.androidHref, `https://clemsonrides.com/downloads/${RIDER_APK_NAME}`)
 
   const play = installOffer('driver', {
-    riderTestflight: '',
-    driverTestflight: '',
+    riderAppStore: '',
+    driverAppStore: '',
     riderPlay: '',
     driverPlay: 'https://play.google.com/store/apps/details?id=com.ascendmaui.clemsonrides.driver',
     riderApk: '',
@@ -196,7 +193,13 @@ test('install links use TestFlight when set, the APK until Play exists, and phon
   assert.equal(clientPlatform(iphone), 'ios')
   assert.equal(clientPlatform(android), 'android')
   assert.equal(clientPlatform('Mozilla/5.0 (Macintosh)'), 'other')
-  assert.equal(redirectTarget(rider, iphone), RIDER_TESTFLIGHT_URL)
+  assert.equal(redirectTarget(rider, iphone), null)
+  assert.equal(redirectTarget(rider, iphone, { stay: false }), null)
+  const listed = installOffer('rider', { riderAppStore: 'https://apps.apple.com/app/id123', driverAppStore: '', riderPlay: '', driverPlay: '', riderApk: '', driverApk: '' })
+  assert.equal(listed.iosState, 'app-store')
+  assert.equal(redirectTarget(listed, iphone), 'https://apps.apple.com/app/id123')
+  const testflightOverride = installOffer('rider', { riderAppStore: 'https://testflight.apple.com/join/DXcYmBQg', driverAppStore: '', riderPlay: '', driverPlay: '', riderApk: '', driverApk: '' })
+  assert.equal(testflightOverride.iosHref, null)
   assert.equal(redirectTarget(rider, android), rider.androidHref)
   assert.equal(redirectTarget(rider, 'desktop'), null)
   assert.equal(redirectTarget(rider, iphone, { stay: true }), null)

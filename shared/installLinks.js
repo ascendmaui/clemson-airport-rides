@@ -1,15 +1,14 @@
 /**
  * Public install targets for /download and /driver/download.
- * Store and TestFlight URLs stay in productLinks.js. Optional VITE_* values
+ * Store URLs stay in productLinks.js. Optional VITE_* values
  * override them at build time when they are set. Empty values keep the default.
  */
 import {
   DRIVER_ANDROID_STORE_URL,
-  DRIVER_TESTFLIGHT_URL,
+  DRIVER_IOS_STORE_URL,
   RIDER_ANDROID_STORE_URL,
-  RIDER_TESTFLIGHT_URL,
+  RIDER_IOS_STORE_URL,
   WEB_ORIGIN,
-  publicTestFlightUrl,
   publishedStoreUrl,
 } from './productLinks.js'
 
@@ -25,20 +24,20 @@ const APK_URL = /^https:\/\/clemsonrides\.com\/downloads\/[A-Za-z0-9][A-Za-z0-9.
 const APPS = {
   rider: {
     id: 'rider',
-    product: 'Clemson RIDES',
+    product: 'Clemson Rides',
     audience: 'Riders',
     pagePath: '/download',
     apkName: RIDER_APK_NAME,
-    testflightUrl: RIDER_TESTFLIGHT_URL,
+    iosStoreUrl: RIDER_IOS_STORE_URL,
     playUrl: RIDER_ANDROID_STORE_URL,
   },
   driver: {
     id: 'driver',
-    product: 'Clemson RIDES Driver',
+    product: 'Clemson Rides Driver',
     audience: 'Drivers',
     pagePath: '/driver/download',
     apkName: DRIVER_APK_NAME,
-    testflightUrl: DRIVER_TESTFLIGHT_URL,
+    iosStoreUrl: DRIVER_IOS_STORE_URL,
     playUrl: DRIVER_ANDROID_STORE_URL,
   },
 }
@@ -51,8 +50,8 @@ function defined(value) {
 export function publicInstallOverrides() {
   if (typeof import.meta.env === 'undefined') {
     return {
-      riderTestflight: '',
-      driverTestflight: '',
+      riderAppStore: '',
+      driverAppStore: '',
       riderPlay: '',
       driverPlay: '',
       riderApk: '',
@@ -60,8 +59,8 @@ export function publicInstallOverrides() {
     }
   }
   return {
-    riderTestflight: defined(import.meta.env.VITE_RIDER_TESTFLIGHT_URL),
-    driverTestflight: defined(import.meta.env.VITE_DRIVER_TESTFLIGHT_URL),
+    riderAppStore: defined(import.meta.env.VITE_RIDER_APP_STORE_URL),
+    driverAppStore: defined(import.meta.env.VITE_DRIVER_APP_STORE_URL),
     riderPlay: defined(import.meta.env.VITE_RIDER_PLAY_URL),
     driverPlay: defined(import.meta.env.VITE_DRIVER_PLAY_URL),
     riderApk: defined(import.meta.env.VITE_RIDER_APK_URL),
@@ -78,10 +77,11 @@ export function installOffer(appId, overrides = null) {
   const app = APPS[appId]
   if (!app) return null
   const extra = overrides || publicInstallOverrides()
-  const testflightOverride = appId === 'driver' ? extra.driverTestflight : extra.riderTestflight
+  const appStoreOverride = appId === 'driver' ? extra.driverAppStore : extra.riderAppStore
   const playOverride = appId === 'driver' ? extra.driverPlay : extra.riderPlay
   const apkOverride = appId === 'driver' ? extra.driverApk : extra.riderApk
-  const iosHref = publicTestFlightUrl(testflightOverride || app.testflightUrl)
+  // iPhone opens only a published App Store listing. Otherwise the page says coming soon.
+  const iosHref = publishedStoreUrl(appStoreOverride || app.iosStoreUrl)
   const playHref = publishedStoreUrl(playOverride || app.playUrl)
   const apkHref = apkDownloadUrl(app.apkName, apkOverride)
   return {
@@ -91,7 +91,7 @@ export function installOffer(appId, overrides = null) {
     pagePath: app.pagePath,
     pageUrl: `${WEB_ORIGIN}${app.pagePath}`,
     iosHref,
-    iosState: iosHref ? 'testflight' : 'coming-soon',
+    iosState: iosHref ? 'app-store' : 'coming-soon',
     androidHref: playHref || apkHref,
     androidKind: playHref ? 'play' : 'apk',
     apkHref,

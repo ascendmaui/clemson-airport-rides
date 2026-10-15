@@ -54,64 +54,68 @@ test('supabaseCreditStore safely reports unavailable when client or user is null
   assert.equal(apply.code, 'credits_unavailable')
 })
 
-test('supabaseCreditStore reads from credit_accounts table', async () => {
-  const mockSb = {
+function lotsSb(result, seen = []) {
+  const api = {
+    select(cols) { seen.push(['select', cols]); return api },
+    eq(col, val) { seen.push(['eq', col, val]); return api },
+    gt(col, val) { seen.push(['gt', col, val]); return api },
+    then(resolve) { resolve(result) },
+  }
+  return {
     from: (table) => {
-      assert.equal(table, 'credit_accounts')
-      return {
-        select: () => ({
-          eq: () => ({
-            maybeSingle: async () => ({
-              data: { balance_cents: 4500 },
-              error: null,
-            }),
-          }),
-        }),
-      }
+      seen.push(['from', table])
+      assert.equal(table, 'rider_credit_lots')
+      return api
     },
   }
+}
 
-  const store = supabaseCreditStore(mockSb)
+test('supabaseCreditStore reads the balance from available rider_credit_lots only', async () => {
+  const seen = []
+  const store = supabaseCreditStore(lotsSb({ data: [{ remaining_cents: 100000000 }, { remaining_cents: 4500 }], error: null }, seen))
   const res = await store.getCredits('usr_sb_1')
-  assert.equal(res.balanceCents, 4500)
+  assert.equal(res.balanceCents, 100004500)
   assert.equal(res.unavailable, false)
+  assert.ok(seen.some((s) => s[0] === 'eq' && s[1] === 'status' && s[2] === 'available'))
+  assert.ok(seen.some((s) => s[0] === 'eq' && s[1] === 'profile_id' && s[2] === 'usr_sb_1'))
 })
 
-test('supabaseCreditStore falls back to profiles table when credit_accounts table is missing', async () => {
-  const mockSb = {
-    from: (table) => {
-      if (table === 'credit_accounts') {
-        return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: async () => ({
-                data: null,
-                error: { message: 'relation credit_accounts does not exist' },
-              }),
-            }),
-          }),
-        }
-      }
-      if (table === 'profiles') {
-        return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: async () => ({
-                data: { credit_balance_cents: 1200 },
-                error: null,
-              }),
-            }),
-          }),
-        }
-      }
-      throw new Error(`Unexpected table ${table}`)
-    },
-  }
-
-  const store = supabaseCreditStore(mockSb)
+test('supabaseCreditStore never reads credit_accounts or profiles, and a failed read is unavailable', async () => {
+  const store = supabaseCreditStore(lotsSb({ data: null, error: { message: 'timeout' } }))
   const res = await store.getCredits('usr_sb_2')
-  assert.equal(res.balanceCents, 1200)
-  assert.equal(res.unavailable, false)
+  assert.equal(res.balanceCents, 0)
+  assert.equal(res.unavailable, true)
+})
+
+test('supabaseCreditStore refuses the change when the RPC fails (no fallback write)', async () => {
+  let fromCalled = false
+  const store = supabaseCreditStore({
+    rpc: async () => ({ data: null, error: { message: 'function apply_credit_delta does not exist' } }),
+    from: () => { fromCalled = true; throw new Error('no direct table writes') },
+  })
+  const res = await store.applyCredits('usr_rpc', -500, { idempotencyKey: 'k1' })
+  assert.equal(res.ok, false)
+  assert.equal(res.code, 'credits_unavailable')
+  assert.equal(fromCalled, false)
+})
+
+test('supabaseCreditStore passes through insufficient and idempotency_conflict codes', async () => {
+  for (const code of ['credits_insufficient', 'idempotency_conflict']) {
+    const store = supabaseCreditStore({ rpc: async () => ({ data: { ok: false, code, balance_cents: 52 }, error: null }) })
+    const res = await store.applyCredits('usr_rpc', -500, { idempotencyKey: 'k2' })
+    assert.equal(res.ok, false)
+    assert.equal(res.code, code)
+    assert.equal(res.balanceCents, 52)
+  }
+})
+
+test('memoryCreditStore rejects a reused idempotency key with a different amount or rider', async () => {
+  const store = memoryCreditStore({ a: 1000, b: 1000 })
+  assert.equal((await store.applyCredits('a', -100, { idempotencyKey: 'x' })).ok, true)
+  assert.equal((await store.applyCredits('a', -100, { idempotencyKey: 'x' })).duplicate, true)
+  assert.equal((await store.applyCredits('a', -200, { idempotencyKey: 'x' })).code, 'idempotency_conflict')
+  assert.equal((await store.applyCredits('b', -100, { idempotencyKey: 'x' })).code, 'idempotency_conflict')
+  assert.equal((await store.getCredits('a')).balanceCents, 900)
 })
 
 test('supabaseCreditStore applies credit deltas via apply_credit_delta RPC', async () => {

@@ -47,20 +47,20 @@ export function AppDownloadPage({ appId }) {
 
   if (!offer) return null
   const other = installOffer(appId === 'driver' ? 'rider' : 'driver')
-  const iosNote = offer.iosState === 'testflight'
-    ? 'Opens the public TestFlight beta.'
-    : 'The public TestFlight link is not configured yet.'
+  const iosNote = offer.iosState === 'app-store'
+    ? 'Opens the App Store listing.'
+    : 'Coming soon to the App Store. Until then, use clemsonrides.com in Safari.'
   const androidNote = offer.androidKind === 'play'
     ? 'Opens the Play Store listing.'
     : 'Downloads the latest Android APK.'
 
   return (
     <MarketingChrome current="get-the-app">
-      <div className="mkt-section-head">
+      <div className="mkt-section-head mkt-page-hero">
         <p className="mkt-kicker" style={{ background: CLEMSON_PURPLE }}>{offer.audience}</p>
         <h1>{offer.product}</h1>
         <p>
-          Scan a code, or open this page on your phone. iPhone goes to TestFlight when that link is set.
+          Scan a code, or open this page on your phone. The iPhone app is coming soon to the App Store.
           Android downloads the latest APK, or opens Play once that listing is set.
         </p>
       </div>
@@ -76,7 +76,7 @@ export function AppDownloadPage({ appId }) {
           href={offer.iosHref}
           label="iPhone"
           color={CLEMSON_PURPLE}
-          action={offer.iosHref ? 'Install with TestFlight' : 'Coming soon'}
+          action={offer.iosHref ? 'Download on the App Store' : 'Coming soon'}
           note={iosNote}
         />
         <PlatformCode
