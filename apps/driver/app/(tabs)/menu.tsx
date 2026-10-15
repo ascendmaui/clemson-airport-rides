@@ -16,6 +16,7 @@ import { loadDriverPerks, loadVehicle, setLeaderboardOptOut, type Leaderboard, t
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
 import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
+import { quietly } from '@/lib/softFail'
 
 function vehicleSubtitle(vehicle: VehicleRow | null): string {
   if (!vehicle) return 'Add the car riders will see'
@@ -49,8 +50,8 @@ export default function MenuScreen() {
     if (!user || !supabase) return
     const [nextVehicle, summary, quiz] = await Promise.all([
       loadVehicle(supabase, user.id),
-      loadRatingSummary(supabase, user.id).catch(() => null),
-      loadKnowledgeQuiz(supabase, user.id).catch(() => null),
+      loadRatingSummary(supabase, user.id).catch(quietly('menu rating', null)),
+      loadKnowledgeQuiz(supabase, user.id).catch(quietly('menu quiz', null)),
     ])
     setVehicle(nextVehicle)
     loadDriverPerks(supabase).then((p) => {

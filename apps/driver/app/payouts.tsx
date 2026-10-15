@@ -13,6 +13,7 @@ import { type as typeScale } from 'rides-native/shared/theme.js'
 import { cashOutPayout, loadPayoutDesk, startPayoutSetup } from 'rides-native/driverPayoutsClient'
 import { payoutChipLabel } from '../../../shared/driverPayoutMethods.js'
 import { CASHOUT_COPY } from '../../../shared/cashout.js'
+import { quiet } from '@/lib/softFail'
 
 type Pending = {
   tripId?: string
@@ -165,7 +166,7 @@ export default function PayoutsScreen() {
       setError(err instanceof Error ? err.message : 'Cash out was not sent.')
     } finally {
       setBusy(null)
-      refresh().catch(() => {})
+      refresh().catch(quiet('payouts refresh'))
     }
   }
 

@@ -42,6 +42,7 @@ import { ScheduledRidesExplainer, ScheduledRidesHint } from 'rides-native/Schedu
 import { driverBoostOfferLine } from '../../../shared/copy/boost.js'
 import { compareBoostedFirst, formatBoostBadge } from '../../../shared/scheduledBoost.js'
 import { CrashBoundary } from '@/components/CrashBoundary'
+import { failureToast, quiet } from '@/lib/softFail'
 
 function useQueueStyles() {
   const { colors } = useTheme()
@@ -76,6 +77,9 @@ function LeaveNowCountdown({ leaveNowAt, onDue }: { leaveNowAt?: string | null; 
         fired.current = true
         void Promise.resolve(onDueRef.current()).then((ok) => {
           if (ok === false) fired.current = false
+        }, (err: unknown) => {
+          fired.current = false
+          quiet('leave-now handoff')(err)
         })
       }
     }
@@ -283,7 +287,7 @@ function QueueScreenBody() {
     const currentGate = driverGateView(nextStatus, { rejectionReason: nextReason })
     if (currentGate.canSeeOffers) {
       const desk = await loadDriverDesk(supabase, user.id)
-      if (desk.online) markSearchingOffers(supabase, desk.offers).catch(() => {})
+      if (desk.online) markSearchingOffers(supabase, desk.offers).catch(quiet('mark searching offers'))
       const merged = [...desk.offers, ...desk.scheduledOpen, ...desk.upcoming]
       const seen = new Set<string>()
       setWarning(desk.warning || null)
@@ -321,7 +325,7 @@ function QueueScreenBody() {
   useEffect(() => {
     if (!supabase || !user || !canSeeOffers) return undefined
     return subscribeTrips(supabase, () => {
-      refresh().catch(() => {})
+      refresh().catch(quiet('queue realtime refresh'))
     })
   }, [canSeeOffers, refresh, user])
 
@@ -331,12 +335,18 @@ function QueueScreenBody() {
     setError(null)
     try {
       await acceptTrip(supabase, card, user.id)
-      notifyAcceptedRide(card).catch(() => {})
-      pulse('accept')
-      await refresh()
-      if (card.status !== 'scheduled') router.push({ pathname: '/trip', params: { id: card.id } })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not accept')
+      failureToast({ key: 'accept', title: 'Could not accept this ride', err, fallback: 'The ride was not accepted.', retry: () => { void onAccept(card) } })
+      setBusyId(null)
+      return
+    }
+    try {
+      // Accepted: a failed re-read or local notification must not hide the trip.
+      notifyAcceptedRide(card).catch(quiet('accepted ride notification'))
+      pulse('accept')
+      await refresh().catch(quiet('refresh after accept'))
+      if (card.status !== 'scheduled') router.push({ pathname: '/trip', params: { id: card.id } })
     } finally {
       setBusyId(null)
     }
@@ -349,7 +359,7 @@ function QueueScreenBody() {
     try {
       await confirmBackupQueueTrip(supabase, card.id, { navigate: true })
       pulse('accept')
-      await refresh()
+      await refresh().catch(quiet('refresh after depart'))
       router.push({ pathname: '/trip', params: { id: card.id } })
       return true
     } catch (err) {
@@ -359,6 +369,7 @@ function QueueScreenBody() {
         return true
       }
       setError(message)
+      failureToast({ key: 'depart', title: 'Could not start this trip', err, fallback: 'The trip did not start.', retry: () => { void onDepart(card) } })
       return false
     } finally {
       setBusyId(null)
@@ -372,9 +383,10 @@ function QueueScreenBody() {
     try {
       await confirmBackupQueueTrip(supabase, card.id)
       pulse('accept')
-      await refresh()
+      await refresh().catch(quiet('refresh after confirm'))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not confirm')
+      failureToast({ key: 'confirm', title: 'Could not confirm this trip', err, fallback: 'Your seat is unchanged.', retry: () => { void onConfirm(card) } })
     } finally {
       setBusyId(null)
     }
@@ -392,7 +404,7 @@ function QueueScreenBody() {
         try {
           await releaseBackupQueueSeat(supabase, card.id, { role: card.backupRole })
           pulse('decline')
-          await refresh()
+          await refresh().catch(quiet('refresh after seat release'))
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Could not release this seat')
         } finally {
@@ -414,9 +426,10 @@ function QueueScreenBody() {
         ? declinePassMessage({ keptSearching: true })
         : null
       if (message) setOfferNote(message)
-      await refresh()
+      await refresh().catch(quiet('refresh after decline'))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not decline')
+      failureToast({ key: 'decline', title: 'Could not pass on this ride', err, fallback: 'The offer is still yours.', retry: () => { void onDecline(card) } })
     } finally {
       setBusyId(null)
     }

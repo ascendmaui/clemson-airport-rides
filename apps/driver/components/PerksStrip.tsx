@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { setMyMarker } from '@/lib/myMarker'
 import { firstRideChipCopy, loadDriverPerks, type DriverPerks, type Leaderboard, type StreakView, type SurgeView, type PartyQueueView, type SafetyScoreView, type ScorecardView, setPartyQueueOptIn } from 'rides-native/driverDesk'
+import { quiet } from '@/lib/softFail'
 
 const dollars = (cents: number) => `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`
 
@@ -23,7 +24,7 @@ export function PerksStrip() {
       if (!alive) return
       setPerks(p)
       setMyMarker((p.scorecard as ScorecardView | undefined)?.marker)
-    }).catch(() => {})
+    }).catch(quiet('perks load'))
     return () => { alive = false }
   }, [user]))
   if (!perks) return null

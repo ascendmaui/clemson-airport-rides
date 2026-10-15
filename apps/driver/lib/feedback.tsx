@@ -139,7 +139,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
       void setAudioModeAsync({
         playsInSilentMode: false,
         interruptionMode: 'mixWithOthers',
-      }).catch(() => {})
+      }).catch((err: unknown) => console.warn('[driver] audio mode', err instanceof Error ? err.message : err))
     } catch {
       /* audio session setup can fail closed */
     }
