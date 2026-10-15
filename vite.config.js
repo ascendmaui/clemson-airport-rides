@@ -26,6 +26,36 @@ function homeShell() {
   }
 }
 
+/**
+ * Build only: on the home shell, request the app bundle right after the hero
+ * photo paints instead of during first paint. Other routes load it immediately.
+ */
+function deferEntryOnHomeShell() {
+  return {
+    name: 'clemson-home-shell-defer-entry',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html) {
+        const tag = html.match(/<script type="module" crossorigin src="(\/assets\/index-[\w-]+\.js)"><\/script>/)
+        if (!tag) throw new Error('home shell: entry script tag not found in index.html')
+        // Wait for the stadium photo (the LCP element) to decode, capped at 2.5 s, then paint, then load.
+        const loader = `<script type="module">
+let started = false
+const go = () => { if (!started) { started = true; import('${tag[1]}') } }
+if (document.documentElement.getAttribute('data-home-shell') === '1') {
+  const photo = document.querySelector('[data-home-shell] .mkt-stage-photo')
+  const ready = photo && photo.decode ? photo.decode().catch(() => {}) : Promise.resolve()
+  ready.then(() => requestAnimationFrame(() => setTimeout(go, 0)))
+  setTimeout(go, 2500)
+} else go()
+</script>`
+        return html.replace(tag[0], loader)
+      },
+    },
+  }
+}
+
 const legacy = {
   '/api/help-chat': ['/api/admin-drivers?action=help-chat', adminHandler],
   '/api/support-chat': ['/api/admin-drivers?action=support-chat', adminHandler],
@@ -110,7 +140,7 @@ function devApiPlugin() {
 }
 
 export default defineConfig({
-  plugins: [react(), devApiPlugin(), homeShell()],
+  plugins: [react(), devApiPlugin(), homeShell(), deferEntryOnHomeShell()],
   define: {
     'process.env.SUPPORT_EMAIL': JSON.stringify(process.env.SUPPORT_EMAIL || ''),
     'process.env.VITE_SUPPORT_EMAIL': JSON.stringify(process.env.VITE_SUPPORT_EMAIL || ''),

@@ -12,6 +12,7 @@
   if (document.documentElement.getAttribute('data-home-shell') !== '1') { frame.remove(); return; }
   var root = frame.querySelector('.mkt-home');
   var hero = frame.querySelector('.mkt-stage');
+  // Same measurement as useHeroHeight in MarketingChrome.jsx, before first paint.
   if (root && hero) root.style.setProperty('--mkt-hero-h', Math.ceil(hero.getBoundingClientRect().bottom - root.getBoundingClientRect().top) + 'px');
 })();
 </script>

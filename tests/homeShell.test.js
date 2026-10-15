@@ -12,7 +12,7 @@ test('home shell is inlined into #root only for the marketing home', () => {
   assert.match(html, /location\.pathname === '\/' && \(!h \|\| h === '#' \|\| h === '#\/'\)/)
   assert.match(html, /setAttribute\('data-home-shell', '1'\)/)
   assert.match(vite, /src\/shell\/homeShell\.html/)
-  assert.match(vite, /plugins: \[react\(\), devApiPlugin\(\), homeShell\(\)\]/)
+  assert.match(vite, /plugins: \[react\(\), devApiPlugin\(\), homeShell\(\), deferEntryOnHomeShell\(\)\]/)
   const shell = read('src/shell/homeShell.html')
   assert.match(shell, /data-home-shell="" inert=""/)
   assert.match(shell, /frame\.remove\(\)/)
