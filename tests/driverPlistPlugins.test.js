@@ -38,11 +38,15 @@ test('driver location omits motion and keeps active-trip always strings', () => 
   assert.equal(location.isIosBackgroundLocationEnabled, true)
 })
 
-test('driver audio plugin is unchanged', () => {
+test('driver audio stays in the foreground and the plist matches the plugins', () => {
   const audio = pluginOptions('expo-audio')
-  assert.equal(Object.hasOwn(audio, 'enableBackgroundPlayback'), false)
+  const camera = pluginOptions('expo-image-picker')
+  assert.equal(audio.enableBackgroundPlayback, false)
   assert.equal(
     audio.microphonePermission,
     'Clemson Rides uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone.',
   )
+  assert.deepEqual(expo.ios.infoPlist.UIBackgroundModes, ['location'])
+  assert.equal(expo.ios.infoPlist.NSMicrophoneUsageDescription, audio.microphonePermission)
+  assert.equal(expo.ios.infoPlist.NSCameraUsageDescription, camera.cameraPermission)
 })
