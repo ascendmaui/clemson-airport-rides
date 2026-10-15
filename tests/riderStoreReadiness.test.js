@@ -46,7 +46,7 @@ test('rider purpose strings cover location, camera, and photos', () => {
   const camera = expo.ios.infoPlist.NSCameraUsageDescription
   const picker = expo.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-image-picker')
   assert.match(location, /Clemson Rides uses your location/)
-  assert.match(location, /campus map/)
+  assert.match(location, /set your pickup point and show your driver approaching/)
   assert.match(camera, /Clemson Rides uses the camera/)
   assert.match(camera, /active ride/)
   assert.equal(picker[1].photosPermission.includes('photo library'), true)
