@@ -34,6 +34,10 @@ test('the driver admin screen mounts the promo admin panel', () => {
   const panel = read('packages/rides-native/PromoAdminPanel.jsx')
   assert.match(panel, /err\?\.status === 403 \|\| err\?\.status === 401\) setHidden\(true\)/)
   assert.match(panel, /if \(hidden \|\| !data\?\.admin\) return null/)
+  // One-time use: no max-uses or per-account field in the admin form.
+  assert.doesNotMatch(panel, /maxRedemptions|perAccount|Max redemptions/)
+  assert.match(panel, /How many single-use codes/)
+  assert.match(panel, /Cap \$ per ride \(empty = none\)/)
 })
 
 test('driver sign-up has a promo box that claims driver codes only', () => {

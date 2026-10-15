@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Pressable, ScrollView, Share, Text, TextInput, View } from 'react-native'
-import { createPromoCodes, exportPromoCodes, loadPromoAdmin, updatePromoCode } from './promoAdminClient.js'
+import { createPromoCodes, exportPromoCodes, loadPromoAdmin, savePromoAutoSettings, updatePromoCode } from './promoAdminClient.js'
 import { describePromo } from '../../shared/promoCodes.js'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -23,8 +23,6 @@ const EMPTY = {
   cap: '15',
   minTrip: '',
   days: '30',
-  maxRedemptions: '100',
-  perAccount: '1',
   code: '',
   prefix: '',
   count: '',
@@ -32,15 +30,17 @@ const EMPTY = {
   publicListing: false,
 }
 
-/** Turns the form into the promo-create body. The server re-validates everything. */
+/**
+ * Turns the form into the promo-create body. The server re-validates everything.
+ * Every code is single-use, so there is no max-uses field: "How many" makes
+ * that many unique single-use codes.
+ */
 export function promoFormToRequest(form, now = new Date()) {
   const days = Math.max(1, Math.min(366, Math.round(Number(form.days) || 30)))
   const body = {
     side: form.side,
     discountType: form.side === 'driver' ? 'flat' : form.discountType,
     expiresAt: new Date(now.getTime() + days * DAY_MS).toISOString(),
-    maxRedemptions: Math.round(Number(form.maxRedemptions) || 0),
-    perAccountLimit: Math.round(Number(form.perAccount) || 1),
     minTripCents: dollarsToCents(form.minTrip),
     publicListing: Boolean(form.publicListing),
     ...(form.campaign ? { campaign: String(form.campaign).trim() } : {}),
@@ -192,21 +192,22 @@ export function PromoAdminPanel({ supabase, colors }) {
             {form.discountType === 'percent' ? field('Cap $ per ride', 'cap', { keyboardType: 'decimal-pad' }) : null}
             {form.side === 'rider' ? field('Minimum trip $', 'minTrip', { keyboardType: 'decimal-pad' }) : null}
             {field('Expires in days (max 366)', 'days', { keyboardType: 'number-pad' })}
-            {field('Max redemptions', 'maxRedemptions', { keyboardType: 'number-pad' })}
-            {field('Per account', 'perAccount', { keyboardType: 'number-pad' })}
             {field('Exact code (optional)', 'code')}
             {field('Or prefix', 'prefix')}
-            {field('How many (max 500)', 'count', { keyboardType: 'number-pad' })}
+            {field('How many single-use codes (max 500)', 'count', { keyboardType: 'number-pad' })}
             {field('Campaign', 'campaign', { autoCapitalize: 'none' })}
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             {form.side === 'rider' ? chip(form.publicListing ? 'Listed on site' : 'Not listed on site', form.publicListing, () => set('publicListing')(!form.publicListing)) : null}
           </View>
           <Text style={{ color: muted, fontSize: 12 }}>
-            One use per device and per card is on for every code. Terms cannot change after issue; deactivate and issue a new code instead.
+            Every code works once, ever. A batch gives each person one code: one per account, device and card. Terms cannot change after issue; turn a code off and issue a new one instead.
           </Text>
           {button('Create', () => { void create() }, 'create')}
         </View>
+      ) : null}
+      {data.auto ? (
+        <AutoSettings auto={data.auto} busy={busy} setBusy={setBusy} setError={setError} reload={reload} supabase={supabase} ink={ink} muted={muted} accent={accent} />
       ) : null}
       {error ? <Text style={{ color: '#B00020' }} accessibilityRole="alert">{error}</Text> : null}
       {codes.length === 0 ? <Text style={{ color: muted }}>No codes yet.</Text> : null}
@@ -215,7 +216,7 @@ export function PromoAdminPanel({ supabase, colors }) {
           <View style={{ flex: 1 }}>
             <Text style={{ color: ink, fontWeight: '800' }}>{row.code}{row.active ? '' : ' (off)'}</Text>
             <Text style={{ color: muted, fontSize: 12 }}>
-              {describePromo(row)} · {row.side} · used {row.counts?.redeemed || 0}/{row.max_redemptions}
+              {describePromo(row)} · {row.side} · {row.counts?.redeemed ? 'used' : 'single-use'}
               {row.counts?.reserved ? ` · ${row.counts.reserved} on rides` : ''}
               {row.counts?.claimed ? ` · ${row.counts.claimed} saved` : ''} · ends {shortDate(row.expires_at)}
             </Text>
@@ -224,5 +225,68 @@ export function PromoAdminPanel({ supabase, colors }) {
         </View>
       ))}
     </ScrollView>
+  )
+}
+
+/** Auto-issued codes (sign-up, first card, $50 credits). Changes apply to codes issued after saving. */
+function AutoSettings({ auto, busy, setBusy, setError, reload, supabase, ink, muted, accent }) {
+  const [percent, setPercent] = useState(String(auto.percentOff ?? 50))
+  const [cap, setCap] = useState(auto.maxDiscountCents ? String(auto.maxDiscountCents / 100) : '')
+  const [days, setDays] = useState(String(auto.expiresDays ?? 90))
+
+  async function save(extra = {}) {
+    setBusy('auto')
+    setError('')
+    try {
+      await savePromoAutoSettings(supabase, {
+        percentOff: Number(percent),
+        maxDiscountCents: cap ? dollarsToCents(cap) : null,
+        expiresDays: Number(days),
+        ...extra,
+      })
+      await reload()
+    } catch (err) {
+      setError(err?.payload?.error || err?.message || 'Could not save auto codes')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const input = (label, value, onChange) => (
+    <View style={{ gap: 2, flexBasis: '30%', flexGrow: 1 }}>
+      <Text style={{ color: muted, fontSize: 12 }}>{label}</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChange}
+        accessibilityLabel={label}
+        keyboardType="decimal-pad"
+        style={{ minHeight: 40, borderWidth: 1, borderColor: accent, borderRadius: 8, paddingHorizontal: 8, color: ink }}
+      />
+    </View>
+  )
+  return (
+    <View style={{ gap: 6, paddingTop: 8 }}>
+      <Text style={{ color: ink, fontSize: 16, fontWeight: '800' }}>Auto codes</Text>
+      <Text style={{ color: muted, fontSize: 12 }}>
+        One single-use code per account for each of: new account, first card, credits reaching $50.
+        {' '}Issuing is {auto.issueEnabled ? 'on' : 'off'}. Emails are {auto.emailsEnabled ? 'on' : 'off (PROMO_CODE_EMAILS_ENABLED)'}.
+        {' '}{auto.maxDiscountCents ? `Capped at $${(auto.maxDiscountCents / 100).toFixed(2)} per ride.` : 'No dollar cap: 50% of a long airport fare is a large discount.'}
+      </Text>
+      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+        {input('Percent off (max 50)', percent, setPercent)}
+        {input('Cap $ per ride (empty = none)', cap, setCap)}
+        {input('Expires in days', days, setDays)}
+      </View>
+      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+        <Pressable onPress={() => { void save() }} disabled={Boolean(busy)} accessibilityRole="button"
+          style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 20, justifyContent: 'center', backgroundColor: accent }}>
+          <Text style={{ color: '#fff', fontWeight: '800' }}>{busy === 'auto' ? '…' : 'Save auto codes'}</Text>
+        </Pressable>
+        <Pressable onPress={() => { void save({ issueEnabled: !auto.issueEnabled }) }} disabled={Boolean(busy)} accessibilityRole="button"
+          style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 20, justifyContent: 'center', borderWidth: 1, borderColor: accent }}>
+          <Text style={{ color: accent, fontWeight: '800' }}>{auto.issueEnabled ? 'Stop issuing' : 'Start issuing'}</Text>
+        </Pressable>
+      </View>
+    </View>
   )
 }

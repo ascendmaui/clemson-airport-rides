@@ -7,6 +7,8 @@ import {
   looksLikeWeeklyCoupon,
   normalizePromoCode,
   planPromoCodes,
+  PROMO_AUTO_DEFAULTS,
+  PROMO_AUTO_HEADLINE,
   PROMO_LIMITS,
   promoCodesCsv,
   promoDiscountCents,
@@ -37,26 +39,27 @@ test('Friday coupon look-alikes are rejected', () => {
 
 test('percent rider code gets the default $15 cap; fields map to columns', () => {
   const out = validatePromoDefinition({
-    side: 'rider', discountType: 'percent', percentOff: 20, expiresAt: inDays(30), maxRedemptions: 200,
+    side: 'rider', discountType: 'percent', percentOff: 20, expiresAt: inDays(30),
   }, { now: NOW })
   assert.equal(out.ok, true)
   assert.equal(out.row.percent_off_bps, 2000)
   assert.equal(out.row.max_discount_cents, PROMO_LIMITS.defaultPercentCapCents)
   assert.equal(out.row.per_account_limit, 1)
+  assert.equal(out.row.max_redemptions, 1, 'single-use')
   assert.equal(out.row.limit_per_device, true)
   assert.equal(out.row.limit_per_card, true)
   assert.equal(out.row.public_listing, false)
 })
 
 test('guardrails reject unsafe definitions', () => {
-  const base = { side: 'rider', discountType: 'flat', amountOffCents: 500, expiresAt: inDays(30), maxRedemptions: 10 }
+  const base = { side: 'rider', discountType: 'flat', amountOffCents: 500, expiresAt: inDays(30) }
   const bad = (patch) => validatePromoDefinition({ ...base, ...patch }, { now: NOW })
   assert.equal(bad({}).ok, true)
   assert.equal(bad({ amountOffCents: 5001 }).ok, false)
   assert.equal(bad({ discountType: 'percent', amountOffCents: null, percentOff: 51 }).ok, false)
-  assert.equal(bad({ maxRedemptions: null }).ok, false)
-  assert.equal(bad({ maxRedemptions: 10001 }).ok, false)
-  assert.equal(bad({ perAccountLimit: 11 }).ok, false)
+  assert.equal(bad({ maxRedemptions: 1 }).ok, true)
+  assert.match(bad({ maxRedemptions: 100 }).errors.join(), /single-use/)
+  assert.match(bad({ perAccountLimit: 2 }).errors.join(), /single-use/)
   assert.equal(bad({ expiresAt: null }).ok, false)
   assert.equal(bad({ expiresAt: inDays(-1) }).ok, false)
   assert.equal(bad({ expiresAt: inDays(400) }).ok, false)
@@ -64,7 +67,7 @@ test('guardrails reject unsafe definitions', () => {
 })
 
 test('driver codes are flat only, with no trip minimum', () => {
-  const base = { side: 'driver', expiresAt: inDays(60), maxRedemptions: 50 }
+  const base = { side: 'driver', expiresAt: inDays(60) }
   assert.equal(validatePromoDefinition({ ...base, discountType: 'flat', amountOffCents: 2500 }, { now: NOW }).ok, true)
   assert.equal(validatePromoDefinition({ ...base, discountType: 'percent', percentOff: 10 }, { now: NOW }).ok, false)
   assert.equal(validatePromoDefinition({ ...base, discountType: 'flat', amountOffCents: 2500, minTripCents: 1000 }, { now: NOW }).ok, false)
@@ -140,10 +143,28 @@ test('public campaign row exposes no counts or internals', () => {
 test('CSV export escapes and guards against formula injection', () => {
   const csv = promoCodesCsv([{
     code: 'FALL20', side: 'rider', campaign: '=HYPERLINK("x")', discount_type: 'flat', amount_off_cents: 500,
-    min_trip_cents: 0, max_redemptions: 10, per_account_limit: 1, active: true, counts: { redeemed: 2 },
+    min_trip_cents: 0, max_redemptions: 1, per_account_limit: 1, active: true, counts: { redeemed: 1 },
   }])
   const [head, line] = csv.trim().split('\n')
-  assert.match(head, /^code,side,campaign,/)
-  assert.match(line, /^FALL20,rider,"'=HYPERLINK\(""x""\)",\$5 off,flat,,5\.00,/)
+  assert.match(head, /^code,source,status,side,campaign,/)
+  assert.match(line, /^FALL20,admin,used,rider,"'=HYPERLINK\(""x""\)",\$5 off,flat,,5\.00,/)
   assert.equal(describePromo({ side: 'driver', amount_off_cents: 2500 }), '$25 driver signup bonus')
+})
+
+test('auto codes read "50% off your next ride"; a capped one says so', () => {
+  const auto = { source: 'auto_card', side: 'rider', discount_type: 'percent', percent_off_bps: 5000, max_discount_cents: null }
+  assert.equal(describePromo(auto), '50% off your next ride')
+  assert.equal(describePromo({ ...auto, max_discount_cents: 2500 }), '50% off (up to $25)')
+  assert.equal(PROMO_AUTO_DEFAULTS.percentOffBps, 5000)
+  assert.equal(PROMO_AUTO_DEFAULTS.maxDiscountCents, null, 'no dollar cap by default')
+  assert.equal(PROMO_AUTO_DEFAULTS.expiresDays, 90)
+  assert.equal(PROMO_AUTO_DEFAULTS.creditThresholdCents, 5000)
+  assert.equal(PROMO_AUTO_HEADLINE, '50% off your next ride.')
+  assert.equal(PROMO_LIMITS.maxRedemptions, 1)
+})
+
+test('uncapped 50% on a long airport fare is the full half (the margin risk to watch)', () => {
+  const auto = { discount_type: 'percent', percent_off_bps: 5000, max_discount_cents: null, min_trip_cents: 0 }
+  assert.equal(promoDiscountCents(auto, 15200), 7600)
+  assert.equal(promoDiscountCents({ ...auto, max_discount_cents: 2500 }, 15200), 2500)
 })

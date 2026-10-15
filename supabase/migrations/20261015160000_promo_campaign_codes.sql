@@ -17,9 +17,26 @@
 --   * Driver codes are recorded at driver signup as claimed. Nothing is paid
 --     from here; any payout must go through payout_approval_requests (#554).
 --
--- Limits: max_redemptions overall, per_account_limit per account, and the same
--- limit per device id and per Stripe card fingerprint (limit_per_device /
--- limit_per_card, on by default). One promo per trip (unique trip_id).
+-- ONE-TIME USE: every code redeems exactly once, ever. max_redemptions and
+-- per_account_limit are pinned to 1 by check constraints, and a partial unique
+-- index allows one live (claimed / reserved / redeemed) redemption per code.
+-- A redeemed row can never leave 'redeemed'. Batches are N single-use codes.
+-- A cancelled trip returns the unused code to the account that used it.
+-- Device and card fingerprint limits stay on by default. One promo per trip
+-- (unique trip_id).
+--
+-- AUTO-ISSUED CODES (owner_profile_id + source):
+--   auto_signup    new profile (account created)
+--   auto_card      first saved card (profiles.stripe_default_pm_id null -> set)
+--   auto_credit50  credit balance first reaches the threshold ($50). The
+--                  balance is profiles.credit_balance_cents, which #553 derives
+--                  from rider_credit_lots only (guard_profile_credit_balance).
+--   One code per (account, source), ever: unique index, never re-issued after
+--   removing a card or dropping below and re-crossing $50.
+--   Default 50% off one ride, no dollar cap, 90-day expiry, bound to the owner
+--   (other accounts get not_found). Settings: promo_auto_settings.
+--   Each issue queues one row in promo_email_outbox (unique per code). The
+--   server sends it when PROMO_CODE_EMAILS_ENABLED=1 (default off).
 --
 -- Redemption is atomic: every write path locks the code row FOR UPDATE and
 -- re-counts before inserting. It is idempotent: one redemption per trip
@@ -30,6 +47,16 @@
 -- the sole promo admin (johnmatveyev@gmail.com) server-side.
 --
 -- Down (reversible):
+--   drop trigger if exists profiles_promo_auto_issue_insert on public.profiles;
+--   drop trigger if exists profiles_promo_auto_issue_update on public.profiles;
+--   drop trigger if exists promo_code_redemptions_terminal_guard on public.promo_code_redemptions;
+--   drop function if exists public.promo_profile_auto_issue();
+--   drop function if exists public.promo_redemption_terminal_guard();
+--   drop function if exists public.promo_issue_auto_code(uuid, text);
+--   drop function if exists public.promo__random_code(text);
+--   drop function if exists public.promo__group_reason(public.promo_campaign_codes, uuid, text, text);
+--   drop function if exists public.promo_claim_email_batch(integer);
+--   drop table if exists public.promo_email_outbox, public.promo_auto_settings;
 --   drop trigger if exists trips_promo_status_sync on public.trips;
 --   drop trigger if exists promo_campaign_codes_unique_guard on public.promo_campaign_codes;
 --   drop function if exists public.promo_campaign_code_unique_guard();
@@ -53,12 +80,14 @@ create table if not exists public.promo_campaign_codes (
   discount_type text not null check (discount_type in ('percent', 'flat')),
   percent_off_bps integer not null default 0 check (percent_off_bps between 0 and 5000),
   amount_off_cents integer not null default 0 check (amount_off_cents between 0 and 5000),
-  max_discount_cents integer check (max_discount_cents is null or max_discount_cents between 1 and 5000),
+  -- null = no dollar cap (the auto 50% default). Admin percent codes default to $15 in the API.
+  max_discount_cents integer check (max_discount_cents is null or max_discount_cents between 1 and 50000),
   min_trip_cents integer not null default 0 check (min_trip_cents between 0 and 100000),
   starts_at timestamptz not null default now(),
   expires_at timestamptz not null,
-  max_redemptions integer not null check (max_redemptions between 1 and 10000),
-  per_account_limit integer not null default 1 check (per_account_limit between 1 and 10),
+  -- One-time use, hard-enforced. Kept as columns so the shape is explicit.
+  max_redemptions integer not null default 1 check (max_redemptions = 1),
+  per_account_limit integer not null default 1 check (per_account_limit = 1),
   -- The per-account limit also applies per device and per card fingerprint.
   limit_per_device boolean not null default true,
   limit_per_card boolean not null default true,
@@ -68,6 +97,10 @@ create table if not exists public.promo_campaign_codes (
   campaign text check (campaign is null or char_length(campaign) <= 80),
   notes text check (notes is null or char_length(notes) <= 500),
   batch_id uuid,
+  -- Auto-issued codes are bound to one account and not transferable.
+  owner_profile_id uuid,
+  source text not null default 'admin'
+    check (source in ('admin', 'auto_signup', 'auto_card', 'auto_credit50')),
   created_by uuid,
   created_by_email text,
   created_at timestamptz not null default now(),
@@ -78,13 +111,21 @@ create table if not exists public.promo_campaign_codes (
   ),
   constraint promo_campaign_codes_driver_flat_only check (side = 'rider' or discount_type = 'flat'),
   constraint promo_campaign_codes_window check (expires_at > starts_at),
-  constraint promo_campaign_codes_max_lifetime check (expires_at <= starts_at + interval '366 days')
+  constraint promo_campaign_codes_max_lifetime check (expires_at <= starts_at + interval '366 days'),
+  constraint promo_campaign_codes_auto_owner check (
+    (source = 'admin') or (owner_profile_id is not null and side = 'rider')
+  )
 );
 
 create index if not exists promo_campaign_codes_active_idx
   on public.promo_campaign_codes (side, active, expires_at);
 create index if not exists promo_campaign_codes_batch_idx
   on public.promo_campaign_codes (batch_id) where batch_id is not null;
+-- One auto code per trigger per account, ever.
+create unique index if not exists promo_campaign_codes_auto_once
+  on public.promo_campaign_codes (owner_profile_id, source) where source <> 'admin';
+create index if not exists promo_campaign_codes_owner_idx
+  on public.promo_campaign_codes (owner_profile_id) where owner_profile_id is not null;
 
 comment on table public.promo_campaign_codes is
   'Admin-generated promo codes. Rider: percent or flat off the rider fare (hold and capture). Driver: flat signup incentive, recorded only. Service role only.';
@@ -120,6 +161,9 @@ create index if not exists promo_code_redemptions_card_idx
   on public.promo_code_redemptions (code_id, card_fingerprint) where card_fingerprint is not null;
 create index if not exists promo_code_redemptions_profile_idx
   on public.promo_code_redemptions (profile_id, status, created_at);
+-- One-time use: at most one live redemption per code. released / void rows do not count.
+create unique index if not exists promo_code_redemptions_single_use
+  on public.promo_code_redemptions (code_id) where status in ('claimed', 'reserved', 'redeemed');
 
 comment on table public.promo_code_redemptions is
   'One row per claim or use. claimed (signup) -> reserved (trip booked, hold placed) -> redeemed (fare captured). released/void do not count toward limits.';
@@ -147,6 +191,39 @@ create table if not exists public.promo_code_attempts (
 
 create index if not exists promo_code_attempts_profile_idx
   on public.promo_code_attempts (profile_id, created_at desc);
+
+-- Auto-issue settings (one row). Admin-editable through the server only.
+create table if not exists public.promo_auto_settings (
+  id boolean primary key default true check (id),
+  issue_enabled boolean not null default true,
+  percent_off_bps integer not null default 5000 check (percent_off_bps between 1 and 5000),
+  -- null = no per-ride dollar cap (John's spec). Set e.g. 2500 to cap at $25.
+  max_discount_cents integer check (max_discount_cents is null or max_discount_cents between 1 and 50000),
+  expires_days integer not null default 90 check (expires_days between 1 and 366),
+  credit_threshold_cents bigint not null default 5000 check (credit_threshold_cents between 100 and 10000000),
+  updated_by_email text,
+  updated_at timestamptz not null default now()
+);
+insert into public.promo_auto_settings (id) values (true) on conflict (id) do nothing;
+
+-- Email outbox: one row per auto code, so a retry never sends twice.
+create table if not exists public.promo_email_outbox (
+  id uuid primary key default gen_random_uuid(),
+  code_id uuid not null unique references public.promo_campaign_codes(id) on delete cascade,
+  profile_id uuid not null,
+  kind text not null check (kind in ('auto_signup', 'auto_card', 'auto_credit50')),
+  status text not null default 'pending' check (status in ('pending', 'sending', 'sent', 'failed', 'skipped')),
+  attempts integer not null default 0,
+  next_attempt_at timestamptz not null default now(),
+  locked_until timestamptz,
+  last_error text check (last_error is null or char_length(last_error) <= 300),
+  provider_message_id text,
+  sent_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists promo_email_outbox_due_idx
+  on public.promo_email_outbox (status, next_attempt_at) where status in ('pending', 'sending');
 
 -- A campaign code may not shadow a rider_social code (one entry box serves both).
 create or replace function public.promo_campaign_code_unique_guard()
@@ -184,11 +261,17 @@ alter table public.promo_campaign_codes enable row level security;
 alter table public.promo_code_redemptions enable row level security;
 alter table public.promo_code_admin_events enable row level security;
 alter table public.promo_code_attempts enable row level security;
+alter table public.promo_auto_settings enable row level security;
+alter table public.promo_email_outbox enable row level security;
 
 revoke all on public.promo_campaign_codes from public, anon, authenticated;
 revoke all on public.promo_code_redemptions from public, anon, authenticated;
 revoke all on public.promo_code_admin_events from public, anon, authenticated;
 revoke all on public.promo_code_attempts from public, anon, authenticated;
+revoke all on public.promo_auto_settings from public, anon, authenticated;
+revoke all on public.promo_email_outbox from public, anon, authenticated;
+grant all on public.promo_auto_settings to service_role;
+grant all on public.promo_email_outbox to service_role;
 grant all on public.promo_campaign_codes to service_role;
 grant all on public.promo_code_redemptions to service_role;
 grant all on public.promo_code_admin_events to service_role;
@@ -205,6 +288,12 @@ create policy promo_code_admin_events_service_role on public.promo_code_admin_ev
   for all to service_role using (true) with check (true);
 drop policy if exists promo_code_attempts_service_role on public.promo_code_attempts;
 create policy promo_code_attempts_service_role on public.promo_code_attempts
+  for all to service_role using (true) with check (true);
+drop policy if exists promo_auto_settings_service_role on public.promo_auto_settings;
+create policy promo_auto_settings_service_role on public.promo_auto_settings
+  for all to service_role using (true) with check (true);
+drop policy if exists promo_email_outbox_service_role on public.promo_email_outbox;
+create policy promo_email_outbox_service_role on public.promo_email_outbox
   for all to service_role using (true) with check (true);
 
 -- ---------------------------------------------------------------------------
@@ -262,8 +351,45 @@ begin
 end;
 $$;
 
--- Validate one code for one account. Locks the code row when p_lock is true.
--- Returns null when the code is usable, else the reason.
+-- Cross-account guard for a group of single-use codes: the same batch, or the
+-- same auto trigger. One per account, per device and per card in the group, so
+-- many single-use codes cannot be farmed by one person.
+create or replace function public.promo__group_reason(
+  c public.promo_campaign_codes, p_profile uuid, p_device text, p_card text
+) returns text
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if c.batch_id is null and c.source = 'admin' then return null; end if;
+  if c.source = 'admin' and exists (
+    select 1 from public.promo_code_redemptions r join public.promo_campaign_codes g on g.id = r.code_id
+    where g.batch_id = c.batch_id and g.id <> c.id and r.profile_id = p_profile
+      and r.status in ('claimed', 'reserved', 'redeemed')) then
+    return 'per_account_limit';
+  end if;
+  if c.limit_per_device and p_device is not null and exists (
+    select 1 from public.promo_code_redemptions r join public.promo_campaign_codes g on g.id = r.code_id
+    where g.id <> c.id and r.device_id = p_device and r.profile_id <> p_profile
+      and r.status in ('reserved', 'redeemed')
+      and (case when c.source = 'admin' then g.batch_id = c.batch_id else g.source = c.source end)) then
+    return 'device_limit';
+  end if;
+  if c.limit_per_card and p_card is not null and exists (
+    select 1 from public.promo_code_redemptions r join public.promo_campaign_codes g on g.id = r.code_id
+    where g.id <> c.id and r.card_fingerprint = p_card and r.profile_id <> p_profile
+      and r.status in ('reserved', 'redeemed')
+      and (case when c.source = 'admin' then g.batch_id = c.batch_id else g.source = c.source end)) then
+    return 'card_limit';
+  end if;
+  return null;
+end;
+$$;
+
+-- Validate one single-use code for one account. Null when usable, else the reason.
+-- The caller's own 'claimed' row (signup claim or auto issue) does not block it.
 create or replace function public.promo__unusable_reason(
   c public.promo_campaign_codes, p_profile uuid, p_side text, p_fare integer, p_discount integer,
   p_device text default null, p_card text default null
@@ -274,32 +400,25 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
-  v_used integer;
-  v_mine integer;
   v_spent integer;
+  v_reason text;
 begin
+  -- Bound codes look like unknown codes to everyone else (no enumeration).
+  if c.owner_profile_id is not null and c.owner_profile_id <> p_profile then return 'not_found'; end if;
   if c.side <> p_side then return 'wrong_side'; end if;
   if not c.active then return 'inactive'; end if;
   if c.starts_at > now() then return 'not_started'; end if;
   if c.expires_at <= now() then return 'expired'; end if;
-  select count(*) into v_used from public.promo_code_redemptions
-    where code_id = c.id and status in ('claimed', 'reserved', 'redeemed');
-  if v_used >= c.max_redemptions then return 'max_redemptions'; end if;
-  select count(*) into v_mine from public.promo_code_redemptions
-    where code_id = c.id and profile_id = p_profile and status in ('claimed', 'reserved', 'redeemed');
-  if v_mine >= c.per_account_limit then return 'per_account_limit'; end if;
-  if c.limit_per_device and p_device is not null then
-    select count(*) into v_mine from public.promo_code_redemptions
-      where code_id = c.id and device_id = p_device and profile_id <> p_profile
-        and status in ('claimed', 'reserved', 'redeemed');
-    if v_mine >= c.per_account_limit then return 'device_limit'; end if;
+  if exists (select 1 from public.promo_code_redemptions
+    where code_id = c.id and profile_id = p_profile and status in ('reserved', 'redeemed')) then
+    return 'per_account_limit';
   end if;
-  if c.limit_per_card and p_card is not null then
-    select count(*) into v_mine from public.promo_code_redemptions
-      where code_id = c.id and card_fingerprint = p_card and profile_id <> p_profile
-        and status in ('claimed', 'reserved', 'redeemed');
-    if v_mine >= c.per_account_limit then return 'card_limit'; end if;
+  if exists (select 1 from public.promo_code_redemptions
+    where code_id = c.id and profile_id <> p_profile and status in ('claimed', 'reserved', 'redeemed')) then
+    return 'max_redemptions';
   end if;
+  v_reason := public.promo__group_reason(c, p_profile, p_device, p_card);
+  if v_reason is not null then return v_reason; end if;
   if p_fare is not null and p_fare < c.min_trip_cents then return 'below_minimum'; end if;
   if c.budget_cents is not null and p_discount is not null then
     select coalesce(sum(discount_cents), 0) into v_spent from public.promo_code_redemptions
@@ -422,7 +541,7 @@ begin
       where r2.profile_id = p_profile and r2.status = 'claimed' and r2.side = 'rider'
         and c2.active and c2.starts_at <= now() and c2.expires_at > now()
         and p_fare_cents >= c2.min_trip_cents
-      order by r2.created_at limit 1;
+      order by c2.expires_at, r2.created_at limit 1;
     if not found then return jsonb_build_object('ok', false, 'reason', 'no_code'); end if;
     v_code := r.code;
   elsif public.promo_attempts_blocked(p_profile) then
@@ -439,21 +558,9 @@ begin
     where code_id = c.id and profile_id = p_profile and status = 'claimed'
     order by created_at limit 1 for update;
   if found then
-    if c.side <> 'rider' then return public.promo__fail(p_profile, v_code, 'wrong_side'); end if;
-    if not c.active then return jsonb_build_object('ok', false, 'reason', 'inactive'); end if;
-    if c.expires_at <= now() then return jsonb_build_object('ok', false, 'reason', 'expired'); end if;
-    if p_fare_cents < c.min_trip_cents then return jsonb_build_object('ok', false, 'reason', 'below_minimum'); end if;
-    if c.limit_per_card and v_card is not null and (
-      select count(*) from public.promo_code_redemptions
-      where code_id = c.id and card_fingerprint = v_card and profile_id <> p_profile
-        and status in ('claimed', 'reserved', 'redeemed')) >= c.per_account_limit then
-      return jsonb_build_object('ok', false, 'reason', 'card_limit');
-    end if;
-    if c.budget_cents is not null and (
-      select coalesce(sum(discount_cents), 0) from public.promo_code_redemptions
-      where code_id = c.id and status in ('reserved', 'redeemed')) + v_discount > c.budget_cents then
-      return jsonb_build_object('ok', false, 'reason', 'budget_exhausted');
-    end if;
+    v_reason := public.promo__unusable_reason(c, p_profile, 'rider', p_fare_cents, v_discount, v_device, v_card);
+    if v_reason is not null then return public.promo__fail(p_profile, v_code, v_reason); end if;
+    if v_discount <= 0 then return jsonb_build_object('ok', false, 'reason', 'below_minimum'); end if;
     update public.promo_code_redemptions set
       status = 'reserved', trip_id = p_trip_id, discount_cents = v_discount, fare_cents = p_fare_cents,
       platform_funded_cents = v_discount, reserved_at = now(), updated_at = now(),
@@ -507,7 +614,10 @@ begin
 end;
 $$;
 
--- Trip canceled: a signup claim goes back to claimed; a booking-time code is released.
+-- Trip canceled (reason 'cancel:<status>'): the unused code goes back to the
+-- account that used it as 'claimed' (one-time use: nobody else can take it).
+-- A booking that never created its trip (server failure) frees a code that was
+-- typed at booking, and returns a claimed one to claimed.
 create or replace function public.promo_release_for_trip(p_trip_id uuid, p_reason text default 'trip_canceled')
 returns jsonb
 language plpgsql
@@ -520,9 +630,9 @@ begin
   select * into r from public.promo_code_redemptions where trip_id = p_trip_id for update;
   if not found then return jsonb_build_object('ok', true, 'skipped', true, 'reason', 'no_promo'); end if;
   if r.status <> 'reserved' then return jsonb_build_object('ok', true, 'skipped', true, 'status', r.status); end if;
-  if r.claimed_at is not null then
+  if r.claimed_at is not null or p_reason like 'cancel:%' then
     update public.promo_code_redemptions set
-      status = 'claimed', trip_id = null, discount_cents = 0, platform_funded_cents = 0, fare_cents = null,
+      status = 'claimed', trip_id = null, claimed_at = coalesce(r.claimed_at, now()), discount_cents = 0, platform_funded_cents = 0, fare_cents = null,
       reserved_at = null, release_reason = left(p_reason, 80), updated_at = now()
     where id = r.id returning * into r;
   else
@@ -546,7 +656,7 @@ as $$
 begin
   if NEW.status::text is distinct from OLD.status::text then
     if NEW.status::text in ('canceled', 'cancelled', 'canceled_midride', 'cancelled_wait', 'expired', 'no_drivers') then
-      perform public.promo_release_for_trip(NEW.id, 'trip_' || NEW.status::text);
+      perform public.promo_release_for_trip(NEW.id, 'cancel:' || NEW.status::text);
     elsif NEW.status::text = 'completed' then
       update public.promo_code_redemptions
         set status = 'redeemed', redeemed_at = coalesce(redeemed_at, now()), updated_at = now()
@@ -562,6 +672,183 @@ create trigger trips_promo_status_sync
   after update of status on public.trips
   for each row
   execute function public.promo_trip_status_sync();
+
+-- ---------------------------------------------------------------------------
+-- One-time use: a redeemed redemption is final.
+-- ---------------------------------------------------------------------------
+create or replace function public.promo_redemption_terminal_guard()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if OLD.status = 'redeemed' and NEW.status <> 'redeemed' then
+    raise exception 'promo_redemption_final' using errcode = '23514';
+  end if;
+  if OLD.code_id <> NEW.code_id then
+    raise exception 'promo_redemption_code_fixed' using errcode = '23514';
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists promo_code_redemptions_terminal_guard on public.promo_code_redemptions;
+create trigger promo_code_redemptions_terminal_guard
+  before update on public.promo_code_redemptions
+  for each row execute function public.promo_redemption_terminal_guard();
+
+-- ---------------------------------------------------------------------------
+-- Auto-issued codes
+-- ---------------------------------------------------------------------------
+
+-- Random code: prefix + 8 chars, no 0/O/1/I. Auto codes are bound to their
+-- owner, so a guessed code is useless to anyone else.
+create or replace function public.promo__random_code(p_prefix text)
+returns text
+language plpgsql
+volatile
+set search_path = public, pg_temp
+as $$
+declare
+  v_alphabet constant text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  v_out text := upper(coalesce(p_prefix, ''));
+begin
+  for i in 1..8 loop
+    v_out := v_out || substr(v_alphabet, 1 + floor(random() * 32)::int, 1);
+  end loop;
+  return v_out;
+end;
+$$;
+
+-- Issue the auto code for one (account, trigger). Idempotent forever: the
+-- unique index promo_campaign_codes_auto_once decides. Also creates the
+-- owner's 'claimed' row (so the next ride uses it) and one outbox row.
+create or replace function public.promo_issue_auto_code(p_profile uuid, p_trigger text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  cfg public.promo_auto_settings;
+  c public.promo_campaign_codes;
+  v_prefix text;
+  v_campaign text;
+begin
+  if p_profile is null or p_trigger not in ('auto_signup', 'auto_card', 'auto_credit50') then
+    return jsonb_build_object('ok', false, 'reason', 'invalid_request');
+  end if;
+  select * into c from public.promo_campaign_codes where owner_profile_id = p_profile and source = p_trigger;
+  if found then
+    return jsonb_build_object('ok', true, 'duplicate', true, 'code_id', c.id, 'code', c.code);
+  end if;
+  select * into cfg from public.promo_auto_settings where id;
+  if not found then
+    insert into public.promo_auto_settings (id) values (true) on conflict (id) do nothing;
+    select * into cfg from public.promo_auto_settings where id;
+  end if;
+  if not cfg.issue_enabled then return jsonb_build_object('ok', false, 'reason', 'issue_disabled'); end if;
+  v_prefix := case p_trigger when 'auto_signup' then 'HI' when 'auto_card' then 'CARD' else 'FIFTY' end;
+  v_campaign := case p_trigger when 'auto_signup' then 'Auto: new account'
+    when 'auto_card' then 'Auto: first card' else 'Auto: $50 credits' end;
+  for attempt in 1..6 loop
+    begin
+      insert into public.promo_campaign_codes (
+        code, side, discount_type, percent_off_bps, amount_off_cents, max_discount_cents, min_trip_cents,
+        starts_at, expires_at, max_redemptions, per_account_limit, active, public_listing,
+        campaign, owner_profile_id, source
+      ) values (
+        public.promo__random_code(v_prefix), 'rider', 'percent', cfg.percent_off_bps, 0, cfg.max_discount_cents, 0,
+        now(), now() + make_interval(days => cfg.expires_days), 1, 1, true, false,
+        v_campaign, p_profile, p_trigger
+      )
+      on conflict (owner_profile_id, source) where source <> 'admin' do nothing
+      returning * into c;
+      exit;
+    exception when unique_violation then
+      -- Random code collided (code or rider_social guard). Try another.
+      if attempt = 6 then raise; end if;
+    end;
+  end loop;
+  if c.id is null then
+    select * into c from public.promo_campaign_codes where owner_profile_id = p_profile and source = p_trigger;
+    return jsonb_build_object('ok', true, 'duplicate', true, 'code_id', c.id, 'code', c.code);
+  end if;
+  insert into public.promo_code_redemptions (code_id, code, side, profile_id, status, idempotency_key, claimed_at)
+  values (c.id, c.code, 'rider', p_profile, 'claimed', 'auto:' || p_trigger || ':' || p_profile, now());
+  insert into public.promo_email_outbox (code_id, profile_id, kind) values (c.id, p_profile, p_trigger)
+  on conflict (code_id) do nothing;
+  return jsonb_build_object('ok', true, 'duplicate', false, 'code_id', c.id, 'code', c.code, 'expires_at', c.expires_at);
+end;
+$$;
+
+-- Triggers on profiles. A failure here must never block sign-up, a card save
+-- or a credit purchase, so errors are downgraded to a warning.
+create or replace function public.promo_profile_auto_issue()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_threshold bigint;
+begin
+  begin
+    if TG_OP = 'INSERT' then
+      perform public.promo_issue_auto_code(NEW.id, 'auto_signup');
+      if NEW.stripe_default_pm_id is not null then
+        perform public.promo_issue_auto_code(NEW.id, 'auto_card');
+      end if;
+    else
+      if OLD.stripe_default_pm_id is null and NEW.stripe_default_pm_id is not null then
+        perform public.promo_issue_auto_code(NEW.id, 'auto_card');
+      end if;
+    end if;
+    select credit_threshold_cents into v_threshold from public.promo_auto_settings where id;
+    v_threshold := coalesce(v_threshold, 5000);
+    if coalesce(NEW.credit_balance_cents, 0) >= v_threshold
+       and (TG_OP = 'INSERT' or coalesce(OLD.credit_balance_cents, 0) < v_threshold) then
+      perform public.promo_issue_auto_code(NEW.id, 'auto_credit50');
+    end if;
+  exception when others then
+    raise warning 'promo auto issue skipped for %: %', NEW.id, sqlerrm;
+  end;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists profiles_promo_auto_issue_insert on public.profiles;
+create trigger profiles_promo_auto_issue_insert
+  after insert on public.profiles
+  for each row execute function public.promo_profile_auto_issue();
+drop trigger if exists profiles_promo_auto_issue_update on public.profiles;
+create trigger profiles_promo_auto_issue_update
+  after update of stripe_default_pm_id, credit_balance_cents on public.profiles
+  for each row execute function public.promo_profile_auto_issue();
+
+-- Outbox worker lease: up to p_limit due rows, locked for 5 minutes, skipping
+-- rows another worker holds. The worker marks each sent / pending / failed.
+create or replace function public.promo_claim_email_batch(p_limit integer default 25)
+returns setof public.promo_email_outbox
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  return query
+  update public.promo_email_outbox o set
+    status = 'sending', attempts = o.attempts + 1, locked_until = now() + interval '5 minutes', updated_at = now()
+  where o.id in (
+    select id from public.promo_email_outbox
+    where (status = 'pending' and next_attempt_at <= now())
+       or (status = 'sending' and locked_until < now())
+    order by next_attempt_at
+    limit greatest(1, least(coalesce(p_limit, 25), 100))
+    for update skip locked
+  )
+  returning o.*;
+end;
+$$;
 
 -- Function grants: service_role only (the server). Nothing is client callable.
 revoke all on function public.promo_compute_discount(text, integer, integer, integer, integer, integer) from public, anon, authenticated;
@@ -581,3 +868,11 @@ grant execute on function public.promo_claim_code(uuid, text, text, text) to ser
 grant execute on function public.promo_reserve_for_trip(uuid, text, uuid, integer, text, text) to service_role;
 grant execute on function public.promo_finalize_for_trip(uuid, integer, integer) to service_role;
 grant execute on function public.promo_release_for_trip(uuid, text) to service_role;
+revoke all on function public.promo__group_reason(public.promo_campaign_codes, uuid, text, text) from public, anon, authenticated;
+revoke all on function public.promo_redemption_terminal_guard() from public, anon, authenticated;
+revoke all on function public.promo__random_code(text) from public, anon, authenticated;
+revoke all on function public.promo_issue_auto_code(uuid, text) from public, anon, authenticated;
+revoke all on function public.promo_profile_auto_issue() from public, anon, authenticated;
+revoke all on function public.promo_claim_email_batch(integer) from public, anon, authenticated;
+grant execute on function public.promo_issue_auto_code(uuid, text) to service_role;
+grant execute on function public.promo_claim_email_batch(integer) to service_role;

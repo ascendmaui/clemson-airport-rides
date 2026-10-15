@@ -2,6 +2,19 @@
  * Admin-generated promo codes for Clemson Rides. Pure helpers, no network.
  * Server: server/promoCodes.js. SQL: supabase/migrations/20261015160000_promo_campaign_codes.sql.
  *
+ * One-time use
+ * - Every code redeems exactly once, ever (SQL: max_redemptions = 1 and a
+ *   unique live redemption per code). A batch is N unique single-use codes.
+ *   A cancelled ride returns the unused code to the account that used it.
+ *
+ * Auto-issued codes (SQL triggers on profiles, see the migration)
+ * - New account, first saved card, credit balance first reaching $50: one code
+ *   per trigger per account, ever. 50% off one ride by default, no dollar cap,
+ *   90-day expiry, bound to the owner. "First ride" in John's ask is read as
+ *   the next ride after the code arrives, because the card and $50 triggers
+ *   usually come after a first ride. The code applies to the next ride on its
+ *   own (soonest-expiring first) unless student / Tiger Pass is cheaper.
+ *
  * Money rules
  * - A rider code lowers what the rider pays: the card hold (pre-auth) and the
  *   captured fare. trips.fare_cents keeps the pre-promo fare, so driver pay
@@ -35,13 +48,25 @@ export const PROMO_LIMITS = Object.freeze({
   maxFlatCents: 5000,
   maxDiscountCapCents: 5000,
   maxMinTripCents: 100000,
-  maxRedemptions: 10000,
-  maxPerAccount: 10,
+  // One-time use: fixed, not configurable.
+  maxRedemptions: 1,
+  maxPerAccount: 1,
   maxBudgetCents: 5000000,
   maxLifetimeDays: 366,
   maxBatch: 500,
   defaultPercentCapCents: 1500,
 })
+
+/** Auto-issued code defaults. promo_auto_settings in the database is the live copy. */
+export const PROMO_AUTO_DEFAULTS = Object.freeze({
+  percentOffBps: 5000,
+  maxDiscountCents: null, // John's spec: no dollar cap. Set a cap in settings to limit margin risk.
+  expiresDays: 90,
+  creditThresholdCents: 5000,
+})
+
+export const PROMO_AUTO_SOURCES = Object.freeze(['auto_signup', 'auto_card', 'auto_credit50'])
+export const PROMO_AUTO_HEADLINE = '50% off your next ride.'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -119,14 +144,11 @@ export function validatePromoDefinition(input = {}, { now = new Date() } = {}) {
   }
   if (side === 'driver' && minTripCents > 0) errors.push('minimum trip value applies to rider codes only')
 
-  const maxRedemptions = intOrNull(input.maxRedemptions ?? input.max_redemptions)
-  if (!Number.isFinite(maxRedemptions) || maxRedemptions == null || maxRedemptions < 1 || maxRedemptions > PROMO_LIMITS.maxRedemptions) {
-    errors.push(`max redemptions is required (1 to ${PROMO_LIMITS.maxRedemptions})`)
-  }
+  // One-time use. A value other than 1 is refused rather than silently changed.
+  const maxRedemptions = intOrNull(input.maxRedemptions ?? input.max_redemptions) ?? 1
+  if (maxRedemptions !== 1) errors.push('codes are single-use; to make more uses, generate a batch of codes')
   const perAccountLimit = intOrNull(input.perAccountLimit ?? input.per_account_limit) ?? 1
-  if (!Number.isFinite(perAccountLimit) || perAccountLimit < 1 || perAccountLimit > PROMO_LIMITS.maxPerAccount) {
-    errors.push(`per-account limit must be 1 to ${PROMO_LIMITS.maxPerAccount}`)
-  }
+  if (perAccountLimit !== 1) errors.push('codes are single-use; the per-account limit is always 1')
   const budgetCents = intOrNull(input.budgetCents ?? input.budget_cents)
   if (budgetCents != null && (!Number.isFinite(budgetCents) || budgetCents < 1 || budgetCents > PROMO_LIMITS.maxBudgetCents)) {
     errors.push('budget is out of range')
@@ -162,8 +184,8 @@ export function validatePromoDefinition(input = {}, { now = new Date() } = {}) {
       min_trip_cents: minTripCents,
       starts_at: startsAt.toISOString(),
       expires_at: expiresAt.toISOString(),
-      max_redemptions: maxRedemptions,
-      per_account_limit: perAccountLimit,
+      max_redemptions: 1,
+      per_account_limit: 1,
       limit_per_device: input.limitPerDevice !== false,
       limit_per_card: input.limitPerCard !== false,
       budget_cents: budgetCents,
@@ -302,6 +324,10 @@ const usd = (c) => `$${(cents(c) / 100).toFixed(2).replace(/\.00$/, '')}`
 
 export function describePromo(row) {
   if (!row) return ''
+  const source = row.source ?? 'admin'
+  if (PROMO_AUTO_SOURCES.includes(source) && cents(row.percent_off_bps) === 5000 && row.max_discount_cents == null) {
+    return '50% off your next ride'
+  }
   const type = row.discount_type ?? row.discountType
   if ((row.side ?? 'rider') === 'driver') return `${usd(row.amount_off_cents ?? row.amountOffCents)} driver signup bonus`
   let text = type === 'percent'
@@ -328,15 +354,24 @@ export function publicCampaignRow(row) {
     minTripCents: cents(row.min_trip_cents),
     startsAt: row.starts_at,
     expiresAt: row.expires_at,
-    terms: 'One per account, device and card. One promo per ride; does not combine with student or Tiger Pass pricing (you get the better price). Cannot exceed the fare.',
+    terms: 'Single use. One per account, device and card. One promo per ride; does not combine with student or Tiger Pass pricing (you get the better price). Cannot exceed the fare.',
   }
 }
 
 const CSV_COLUMNS = [
-  'code', 'side', 'campaign', 'description', 'discount_type', 'percent_off', 'amount_off_usd',
+  'code', 'source', 'status', 'side', 'campaign', 'description', 'discount_type', 'percent_off', 'amount_off_usd',
   'max_discount_usd', 'min_trip_usd', 'starts_at', 'expires_at', 'max_redemptions',
-  'per_account_limit', 'redeemed', 'reserved', 'claimed', 'active', 'public_listing',
+  'redeemed', 'reserved', 'claimed', 'active', 'public_listing',
 ]
+
+/** unused | saved (claimed by an account) | on_ride | used */
+export function promoCodeStatus(row) {
+  const counts = row?.counts || {}
+  if (cents(counts.redeemed)) return 'used'
+  if (cents(counts.reserved)) return 'on_ride'
+  if (cents(counts.claimed)) return 'saved'
+  return 'unused'
+}
 
 function csvCell(value) {
   if (value == null) return ''
@@ -351,12 +386,12 @@ export function promoCodesCsv(rows = []) {
   for (const row of rows) {
     const counts = row.counts || {}
     lines.push([
-      row.code, row.side, row.campaign, describePromo(row), row.discount_type,
+      row.code, row.source || 'admin', promoCodeStatus(row), row.side, row.campaign, describePromo(row), row.discount_type,
       row.discount_type === 'percent' ? cents(row.percent_off_bps) / 100 : '',
       row.discount_type === 'flat' ? (cents(row.amount_off_cents) / 100).toFixed(2) : '',
       row.max_discount_cents == null ? '' : (cents(row.max_discount_cents) / 100).toFixed(2),
       (cents(row.min_trip_cents) / 100).toFixed(2),
-      row.starts_at, row.expires_at, row.max_redemptions, row.per_account_limit,
+      row.starts_at, row.expires_at, 1,
       cents(counts.redeemed), cents(counts.reserved), cents(counts.claimed),
       row.active ? 'yes' : 'no', row.public_listing ? 'yes' : 'no',
     ].map(csvCell).join(','))

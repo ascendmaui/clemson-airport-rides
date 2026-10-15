@@ -20,3 +20,7 @@ export function exportPromoCodes(supabase, { campaign } = {}, fetchImpl) {
   const q = campaign ? `&campaign=${encodeURIComponent(campaign)}` : ''
   return authedJson(supabase, `/api/admin?action=promo-export&format=json${q}`, { fetch: fetchImpl })
 }
+
+export function savePromoAutoSettings(supabase, input, fetchImpl) {
+  return authedJson(supabase, '/api/admin?action=promo-auto-settings-update', { method: 'POST', body: input, fetch: fetchImpl })
+}

@@ -103,7 +103,7 @@ test('admin desk routes promo actions to the owner-only handler', async () => {
 const CODE_ROW = {
   id: 'c1', code: 'FALL20', side: 'rider', discount_type: 'percent', percent_off_bps: 2000, amount_off_cents: 0,
   max_discount_cents: 1500, min_trip_cents: 0, starts_at: '2026-10-01T00:00:00Z', expires_at: '2026-11-01T00:00:00Z',
-  max_redemptions: 100, per_account_limit: 1, active: true, public_listing: true, campaign: 'fall',
+  max_redemptions: 1, per_account_limit: 1, active: true, public_listing: true, campaign: 'fall', source: 'admin',
 }
 
 test('John can list and export CSV; export is audited', async () => {
@@ -123,8 +123,8 @@ test('John can list and export CSV; export is audited', async () => {
   await handlePromoAdmin({ method: 'GET', query: { action: 'promo-export' } }, csv, 'promo-export', { sb, user: JOHN })
   assert.equal(csv.statusCode, 200)
   assert.match(csv.headers['content-type'], /text\/csv/)
-  assert.match(csv.body, /^code,side,campaign/)
-  assert.match(csv.body, /FALL20,rider,fall,20% off \(up to \$15\)/)
+  assert.match(csv.body, /^code,source,status,side,campaign/)
+  assert.match(csv.body, /FALL20,admin,used,rider,fall,20% off \(up to \$15\)/)
   const audit = sb.calls.from.find((op) => op.table === 'promo_code_admin_events' && op.action === 'insert')
   assert.equal(audit.payload.action, 'exported')
 })
@@ -144,7 +144,7 @@ test('create validates, inserts one batch, and records who made it', async () =>
   assert.equal(inserted, null)
   const out = await createPromoCodes(sb, {
     actor: JOHN,
-    input: { side: 'rider', discountType: 'flat', amountOffCents: 500, prefix: 'FALL', count: 3, maxRedemptions: 1, expiresAt: '2026-11-15T00:00:00Z' },
+    input: { side: 'rider', discountType: 'flat', amountOffCents: 500, prefix: 'FALL', count: 3, expiresAt: '2026-11-15T00:00:00Z' },
     now: NOW,
   })
   assert.equal(out.ok, true)
@@ -155,7 +155,7 @@ test('create validates, inserts one batch, and records who made it', async () =>
 test('a duplicate code is a 409, not a crash', async () => {
   const sb = fakeSb({ tables: { promo_campaign_codes: { data: null, error: { code: '23505', message: 'duplicate key' } } } })
   const out = await createPromoCodes(sb, {
-    actor: JOHN, input: { code: 'FALL20', side: 'rider', discountType: 'flat', amountOffCents: 500, maxRedemptions: 5, expiresAt: '2026-11-15T00:00:00Z' }, now: NOW,
+    actor: JOHN, input: { code: 'FALL20', side: 'rider', discountType: 'flat', amountOffCents: 500, expiresAt: '2026-11-15T00:00:00Z' }, now: NOW,
   })
   assert.equal(out.status, 409)
 })
@@ -178,7 +178,7 @@ test('public campaign feed is opt-in, live rider codes only, and leaks no intern
   assert.equal(rows[0].code, 'FALL20')
   assert.equal('notes' in rows[0], false)
   const filters = sb.calls.from[0].filters.map((f) => f.slice(0, 2).join(':'))
-  for (const want of ['eq:public_listing', 'eq:active', 'eq:side', 'lte:starts_at', 'gt:expires_at']) assert.ok(filters.includes(want), want)
+  for (const want of ['eq:public_listing', 'eq:active', 'eq:side', 'eq:source', 'lte:starts_at', 'gt:expires_at']) assert.ok(filters.includes(want), want)
 
   const res = fakeRes()
   await weeklyCoupon({ method: 'GET', query: { action: 'promo-campaigns' }, headers: {} }, res, { sb })

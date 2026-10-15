@@ -10,6 +10,7 @@ import {
   choosePromoOrRecurring,
   normalizePromoCode,
   planPromoCodes,
+  PROMO_AUTO_DEFAULTS,
   PROMO_LIMITS,
   promoCodesCsv,
   promoDiscountCents,
@@ -122,19 +123,22 @@ async function claimedSignupPromo(sb, userId, now = new Date()) {
   const res = await sb.from('promo_code_redemptions')
     .select('id, code, code_id, created_at')
     .eq('profile_id', userId).eq('status', 'claimed').eq('side', 'rider')
-    .order('created_at', { ascending: true }).limit(5)
+    .order('created_at', { ascending: true }).limit(10)
   if (res?.error) {
     if (MISSING.test(res.error.message || '')) return null
     throw new Error(res.error.message)
   }
+  // Same order as promo_reserve_for_trip: the soonest-expiring code goes first.
+  const live = []
   for (const claim of res?.data || []) {
     const code = await sb.from('promo_campaign_codes').select('*').eq('id', claim.code_id).maybeSingle()
     const row = code?.data
     if (!row || !row.active) continue
     if (new Date(row.expires_at) <= now || new Date(row.starts_at) > now) continue
-    return row
+    live.push(row)
   }
-  return null
+  live.sort((a, b) => new Date(a.expires_at) - new Date(b.expires_at))
+  return live[0] || null
 }
 
 /**
@@ -218,8 +222,11 @@ async function audit(sb, { action, actor, codeId = null, batchId = null, detail 
   }
 }
 
-export async function listPromoCodes(sb, { limit = 500 } = {}) {
-  const codes = await sb.from('promo_campaign_codes').select('*').order('created_at', { ascending: false }).limit(limit)
+/** Admin-made codes by default. Auto-issued codes (one per account per trigger) only on request. */
+export async function listPromoCodes(sb, { limit = 500, includeAuto = false } = {}) {
+  let query = sb.from('promo_campaign_codes').select('*')
+  if (!includeAuto) query = query.eq('source', 'admin')
+  const codes = await query.order('created_at', { ascending: false }).limit(limit)
   if (codes?.error) throw new Error(codes.error.message)
   const rows = codes.data || []
   const counts = new Map()
@@ -257,10 +264,10 @@ export async function createPromoCodes(sb, { actor, input = {}, now = new Date()
 }
 
 /** Only safe fields change after creation. Discount terms are frozen once issued. */
+// max_redemptions is not here: every code is single-use.
 const UPDATABLE = {
   active: 'active',
   expiresAt: 'expires_at',
-  maxRedemptions: 'max_redemptions',
   publicListing: 'public_listing',
   notes: 'notes',
   campaign: 'campaign',
@@ -279,11 +286,6 @@ function updateErrors(changes, current, now) {
       if (at.getTime() - start.getTime() > PROMO_LIMITS.maxLifetimeDays * 86400000) errors.push(`a code can live at most ${PROMO_LIMITS.maxLifetimeDays} days`)
       changes.expires_at = at.toISOString()
     }
-  }
-  if ('max_redemptions' in changes) {
-    const n = Math.round(Number(changes.max_redemptions))
-    if (!Number.isFinite(n) || n < 1 || n > PROMO_LIMITS.maxRedemptions) errors.push('max redemptions is out of range')
-    changes.max_redemptions = n
   }
   if ('budget_cents' in changes && changes.budget_cents != null) {
     const n = Math.round(Number(changes.budget_cents))
@@ -319,17 +321,17 @@ export async function updatePromoCode(sb, { actor, id, patch = {}, now = new Dat
   return { ok: true, code: updated.data }
 }
 
-export async function exportPromoCodes(sb, { actor, campaign = null } = {}) {
-  let rows = await listPromoCodes(sb, { limit: 5000 })
+export async function exportPromoCodes(sb, { actor, campaign = null, includeAuto = false } = {}) {
+  let rows = await listPromoCodes(sb, { limit: 5000, includeAuto })
   if (campaign) rows = rows.filter((row) => row.campaign === campaign)
-  await audit(sb, { action: 'exported', actor, detail: { count: rows.length, campaign } })
+  await audit(sb, { action: 'exported', actor, detail: { count: rows.length, campaign, includeAuto } })
   return { csv: promoCodesCsv(rows), count: rows.length }
 }
 
 /** Marketing feed: opt-in (public_listing) rider codes that are live now. */
 export async function publicCampaigns(sb, { now = new Date() } = {}) {
   const res = await sb.from('promo_campaign_codes').select('*')
-    .eq('public_listing', true).eq('active', true).eq('side', 'rider')
+    .eq('public_listing', true).eq('active', true).eq('side', 'rider').eq('source', 'admin')
     .lte('starts_at', now.toISOString()).gt('expires_at', now.toISOString())
     .order('expires_at', { ascending: true }).limit(50)
   if (res?.error) {
@@ -337,4 +339,74 @@ export async function publicCampaigns(sb, { now = new Date() } = {}) {
     throw new Error(res.error.message)
   }
   return (res.data || []).map(publicCampaignRow)
+}
+
+// ---------------------------------------------------------------------------
+// Auto-issued codes: settings (promo_auto_settings, one row)
+// ---------------------------------------------------------------------------
+
+function autoSettingsView(row) {
+  const r = row || {}
+  return {
+    issueEnabled: r.issue_enabled !== false,
+    percentOff: (r.percent_off_bps ?? PROMO_AUTO_DEFAULTS.percentOffBps) / 100,
+    maxDiscountCents: r.max_discount_cents ?? PROMO_AUTO_DEFAULTS.maxDiscountCents,
+    expiresDays: r.expires_days ?? PROMO_AUTO_DEFAULTS.expiresDays,
+    creditThresholdCents: Number(r.credit_threshold_cents ?? PROMO_AUTO_DEFAULTS.creditThresholdCents),
+    updatedAt: r.updated_at || null,
+    updatedByEmail: r.updated_by_email || null,
+  }
+}
+
+export async function getAutoSettings(sb) {
+  const res = await sb.from('promo_auto_settings').select('*').eq('id', true).maybeSingle()
+  if (res?.error) {
+    if (MISSING.test(res.error.message || '')) return { ...autoSettingsView(null), unavailable: true }
+    throw new Error(res.error.message)
+  }
+  return autoSettingsView(res?.data)
+}
+
+/** Validated patch. Changes apply to codes issued after the save; issued codes keep their terms. */
+export function autoSettingsPatch(input = {}) {
+  const errors = []
+  const patch = {}
+  if ('issueEnabled' in input) patch.issue_enabled = input.issueEnabled === true
+  if ('percentOff' in input) {
+    const bps = Math.round(Number(input.percentOff) * 100)
+    if (!Number.isFinite(bps) || bps < 1 || bps > PROMO_LIMITS.maxPercentBps) errors.push('percent off must be 1 to 50')
+    else patch.percent_off_bps = bps
+  }
+  if ('maxDiscountCents' in input) {
+    const raw = input.maxDiscountCents
+    if (raw == null || raw === '' || raw === 0) patch.max_discount_cents = null
+    else {
+      const n = Math.round(Number(raw))
+      if (!Number.isFinite(n) || n < 1 || n > 50000) errors.push('max discount must be $0.01 to $500, or empty for no cap')
+      else patch.max_discount_cents = n
+    }
+  }
+  if ('expiresDays' in input) {
+    const n = Math.round(Number(input.expiresDays))
+    if (!Number.isFinite(n) || n < 1 || n > PROMO_LIMITS.maxLifetimeDays) errors.push(`expiry must be 1 to ${PROMO_LIMITS.maxLifetimeDays} days`)
+    else patch.expires_days = n
+  }
+  if ('creditThresholdCents' in input) {
+    const n = Math.round(Number(input.creditThresholdCents))
+    if (!Number.isFinite(n) || n < 100 || n > 10000000) errors.push('credit threshold is out of range')
+    else patch.credit_threshold_cents = n
+  }
+  if (!errors.length && !Object.keys(patch).length) errors.push('nothing_to_update')
+  return errors.length ? { ok: false, errors } : { ok: true, patch }
+}
+
+export async function updateAutoSettings(sb, { actor, input = {}, now = new Date() } = {}) {
+  const checked = autoSettingsPatch(input)
+  if (!checked.ok) return { ok: false, status: 400, error: checked.errors.join('; '), errors: checked.errors }
+  const res = await sb.from('promo_auto_settings')
+    .update({ ...checked.patch, updated_by_email: actor?.email || null, updated_at: now.toISOString() })
+    .eq('id', true).select('*').maybeSingle()
+  if (res?.error) throw new Error(res.error.message)
+  await audit(sb, { action: 'updated', actor, detail: { auto_settings: Object.keys(checked.patch) } })
+  return { ok: true, settings: autoSettingsView(res?.data) }
 }
