@@ -66,3 +66,22 @@ There was no `docs/legal/` or `legal/` folder before this draft.
 2. **Added terms (8:17 AM):** driver works on own terms (if/when/where/how long/accept); own insurance including rideshare/TNC from app-on through drop-off with proof; sole responsibility for legal compliance; sole responsibility for the vehicle at own expense; prominent dispatch-only/not-a-carrier clause near the top. New lawyer flags L-6 (dispatch-only vs TNC statute) and L-7 (SC insurance minimums).
 3. **Maximum-protection pass (8:17 AM):** "to the fullest extent permitted by applicable law" on each clause; no employment/partnership/JV/franchise/agency; no authority to bind; no control of manner or means; benefit-claim waiver; primary coverage, lapse notice, and stop-driving rule; vehicle assumption of risk incl. fines/tickets/tolls; AS-IS/AS-AVAILABLE disclaimers; covenant not to sue; consequential-damages exclusion and bracketed cap; survival; reform-not-strike severability; capitals and initials boxes. No new fees, commissions, or deactivation policies.
 4. **Universal-scope pass (8:18 AM):** release, waiver, assumption of risk, indemnity, cap, and covenant cover any and all claims, known or unknown, at any time (online, offline, en route, before/during/after rides), relating to the Company and its people, any rider, any third party, and any dispatched ride; explicit unknown-claims waiver. New lawyer flag **L-12**: overly broad or one-sided waivers risk being found unconscionable or against public policy in SC, which could void the whole clause — counsel to confirm scope.
+
+## Revision 2026-10-15, ~8:40 AM ET: Uber/Lyft research pass and final decisions
+
+Research: [`uber-lyft-terms-research-2026-10-15.md`](./uber-lyft-terms-research-2026-10-15.md). Decisions were made for the most protection likely to survive a court challenge, using mainstream rideshare defaults.
+
+| Section | Change |
+| --- | --- |
+| §4.1, §4.3 | Business-to-business framing (driver engages the Platform), relationship re-confirmed at each login, no shared profit or loss; safety features and standards are not evidence of control or agency; no branding or uniform requirement except as law requires |
+| §6.1 | Insurance minimums filled from the current rider Terms ($50k/$100k/$50k online; $1M on trip; UM), "or higher amounts law requires" |
+| §6.3, §6.6 | Proof of premium and renewal copies; Company coverage, if any, may change |
+| §11.6 | New: separate driver–rider transaction; Company collects fares as limited payment collection agent |
+| §12.3 | Payout states (pending / approved and sent / rejected) per PR #554 |
+| §21.3 | Entire risk remains with driver; algorithm and location-data disclaimers; no rider screening warranty |
+| §22.1–22.2 | Express-negligence wording; cap = greater of US$100 or 12 months of platform fees |
+| §23.1 | Indemnity expressly covers the Company Parties' ordinary negligence (SC express-negligence rule) |
+| §27 | Rewritten: 30-day informal notice that tolls limitations; AAA Commercial rules (Employment rules for misclassification claims); FAA with SC UAA fallback; delegation except class waiver; non-severable class waiver decided by courts; mass-arbitration batching; Company pays fees above a court filing fee; workers' comp/unemployment and small-claims carve-outs; jury waiver; heirs and service providers bound; no shortened deadline; 30-day opt-out with no retaliation |
+| §29.1 | Reformation replaces an invalid term with a valid one of similar effect |
+| §30.2 | Material changes require affirmative re-acceptance; each version restarts the opt-out window |
+| Lawyer list | L-4, L-7, L-8, L-13 updated; L-20 (no shortened deadline), L-21 (market techniques; Uber takes no driver indemnity), L-22 (re-acceptance flow) added |
