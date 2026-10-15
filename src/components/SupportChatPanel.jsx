@@ -15,7 +15,7 @@ function welcome(role) {
 }
 
 function mailtoFor(draft) {
-  return supportMailto(draft?.subject || 'Clemson RIDES support', draft?.body || '')
+  return supportMailto(draft?.subject || 'Clemson Rides support', draft?.body || '')
 }
 
 export function SupportChatPanel({ accountRole = null, active = true }) {

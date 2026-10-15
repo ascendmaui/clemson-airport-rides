@@ -6,6 +6,7 @@ import { fetchRecentLostFoundTrips } from '../lib/lostFound'
 import { ReportLostItemButton } from '../components/ReportLostItem'
 import { SkeletonRideCard } from '../components/LoadingSkeleton'
 import { navigate } from '../lib/navigation'
+import { SiteIcon } from '../components/SiteIcon.jsx'
 
 function formatWhen(iso) {
   if (!iso) return 'Completed ride'
@@ -67,7 +68,7 @@ function HistoryInner() {
               textAlign: 'center',
             }}
           >
-            <div style={{ fontSize: 28, marginBottom: 8 }} aria-hidden="true">🚗</div>
+            <div style={{ marginBottom: 8, color: 'var(--orange)' }} aria-hidden="true"><SiteIcon name="car" size={28} /></div>
             <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--ink)' }}>No completed rides yet</div>
             <p style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 6, lineHeight: 1.45 }}>
               After a trip finishes, your route summary, receipt, and lost & found reporting will appear here.

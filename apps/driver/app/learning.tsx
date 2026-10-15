@@ -20,6 +20,7 @@ import {
   type KnowledgeQuizRow,
   type KnowledgeQuizStatus,
 } from 'rides-native/driverKnowledgeQuiz'
+import { quiet } from '@/lib/softFail'
 
 type Phase = 'study' | 'question' | 'result'
 
@@ -110,7 +111,7 @@ export default function LearningScreen() {
     setPicks(nextPicks)
     if (index >= KNOWLEDGE_QUIZ.length - 1) {
       fadeTo(() => {
-        finish(nextPicks).catch(() => {})
+        finish(nextPicks).catch(quiet('learning finish'))
       })
       return
     }
