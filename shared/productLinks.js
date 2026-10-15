@@ -110,7 +110,7 @@ export const APP_DOWNLOADS = [
   {
     id: 'rider',
     label: 'Rider',
-    product: 'Clemson RIDES Rider',
+    product: 'Clemson Rides Rider',
     href: WEB_BOOK_URL,
     iosHref: publishedStoreUrl(RIDER_IOS_STORE_URL) || WEB_BOOK_URL,
     androidHref: installHref(RIDER_ANDROID_STORE_URL, WEB_BOOK_URL),
@@ -125,7 +125,7 @@ export const APP_DOWNLOADS = [
   {
     id: 'driver',
     label: 'Driver',
-    product: 'Clemson RIDES Driver',
+    product: 'Clemson Rides Driver',
     href: WEB_DRIVER_URL,
     iosHref: publishedStoreUrl(DRIVER_IOS_STORE_URL) || WEB_DRIVER_URL,
     androidHref: installHref(DRIVER_ANDROID_STORE_URL, WEB_DRIVER_URL),

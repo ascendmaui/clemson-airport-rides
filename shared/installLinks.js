@@ -24,7 +24,7 @@ const APK_URL = /^https:\/\/clemsonrides\.com\/downloads\/[A-Za-z0-9][A-Za-z0-9.
 const APPS = {
   rider: {
     id: 'rider',
-    product: 'Clemson RIDES',
+    product: 'Clemson Rides',
     audience: 'Riders',
     pagePath: '/download',
     apkName: RIDER_APK_NAME,
@@ -33,7 +33,7 @@ const APPS = {
   },
   driver: {
     id: 'driver',
-    product: 'Clemson RIDES Driver',
+    product: 'Clemson Rides Driver',
     audience: 'Drivers',
     pagePath: '/driver/download',
     apkName: DRIVER_APK_NAME,
