@@ -33,7 +33,7 @@
 
 ## Product — carpool flagship
 
-See `docs/CARPOOL_MATCHING.md` for the matching algorithm, the $30–$40 vs $10–$15 split, driver bonus id `driver_carpool_bonus`, and how this extends friend rides instead of forking them.
+See `docs/CARPOOL_MATCHING.md` for the matching algorithm, the 50% of Standard per seat fare, driver bonus id `driver_carpool_bonus`, and how this extends friend rides instead of forking them.
 
 ## Product — carpool (kind=carpool)
 1. Organizer (student-with-car) creates → shareable `/carpool/:token`

@@ -70,9 +70,9 @@ export function CarpoolCompare({
     >
       <Text style={styles.kicker}>{kicker(mode)}</Text>
       <View style={styles.row}>
-        <PriceBox label="Alone in surge" amount={formatUsd(delta.soloSurgeCents)} muted />
+        <PriceBox label="Standard" amount={formatUsd(delta.soloSurgeCents)} muted />
         <Text style={styles.arrow}>→</Text>
-        <PriceBox label="Your seat · 4 riders" amount={formatUsd(delta.fullCarShareCents)} />
+        <PriceBox label="Carpool seat" amount={formatUsd(delta.fullCarShareCents)} />
       </View>
       <View style={styles.save}>
         <Text style={styles.saveText}>You save {formatUsd(delta.savingsCents)}</Text>

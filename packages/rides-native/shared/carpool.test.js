@@ -17,6 +17,7 @@ import {
   searchNeighborhoods,
 } from './carpool.js'
 import { liveCarpoolQuote, splitRows } from './split.js'
+import { CARPOOL_SEAT_FRACTION_BPS, scaleCents } from '../../../src/lib/fareRates.js'
 import { capacityMessage, offerCapacity, vehicleMaxSeats } from './vehicle.js'
 
 const PEAK = new Date('2026-09-26T22:00:00-04:00')
@@ -38,14 +39,14 @@ test('clusters Grand Marc, College Ave, stadium, bars, and housing', () => {
   assert.equal(hotNeighborhoods().some((row) => row.id === 'memorial-stadium'), true)
 })
 
-test('peak hop stays in the $30–$40 solo and $10–$15 full-car band', () => {
+test('peak hop Carpool seat is half of Standard', () => {
   const { pickup, dropoff } = defaultCarpoolEnds()
   const pitch = pitchQuote({ pickup, dropoff, at: PEAK, displayName: 'You' })
-  assert.ok(pitch.soloCents >= 3000 && pitch.soloCents <= 4000, formatUsd(pitch.soloCents))
-  assert.ok(pitch.fullShareCents >= 1000 && pitch.fullShareCents <= 1500, formatUsd(pitch.fullShareCents))
+  assert.equal(pitch.fullShareCents, scaleCents(pitch.soloCents, CARPOOL_SEAT_FRACTION_BPS))
   assert.equal(pitch.savingsCents, pitch.soloCents - pitch.fullShareCents)
   assert.ok(pitch.savingsCents > 0)
   assert.equal(pitch.window, 'peak_night')
+  assert.match(formatUsd(pitch.fullShareCents), /^\$/)
 })
 
 test('parses a carpool link or bare token', () => {

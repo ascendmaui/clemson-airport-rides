@@ -9,7 +9,6 @@ import {
   WAIT_SAVE_MULTIPLIER_BPS,
   quoteFare,
 } from '../src/lib/fareRates.js'
-import { fareAuthorizationCents } from '../shared/fareAuthorization.js'
 import {
   CARPOOL_MATCH_RADIUS_MILES,
   groupCarpoolRequests,
@@ -108,11 +107,11 @@ test('a filled group merges into one trip and notifies the driver with the real 
   assert.deepEqual(filled.trip.metadata.carpool_rider_ids, ['r1', 'r2', 'r3'])
   assert.equal(filled.driverId, 'driver-real')
   assert.equal(filled.holds.length, 3)
-  const expectedHold = fareAuthorizationCents(900)
   for (const hold of filled.holds) {
     assert.equal(hold.depositCents, 0)
     assert.equal(hold.holdKind, 'preauth')
-    assert.equal(hold.authorizationCents, expectedHold.authorizationCents)
+    assert.equal(hold.authorizationCents, 900)
+    assert.equal(hold.bufferCents, 0)
     assert.equal(hold.estimatedFareCents, 900)
   }
   assert.deepEqual(filled.notice, {

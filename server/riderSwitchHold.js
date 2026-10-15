@@ -65,7 +65,9 @@ export async function settleSwitchHold({
     }
   }
 
-  const target = fareAuthorizationCents(fareCents ?? trip?.fare_cents)
+  const target = fareAuthorizationCents(fareCents ?? trip?.fare_cents, {
+    bufferBps: quote?.carpool ? 0 : undefined,
+  })
   const needed = target.authorizationCents
   if (needed <= 0) return { ok: true, patch: null }
 

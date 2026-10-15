@@ -684,7 +684,7 @@ export function RiderHome() {
             }}
             style={({ pressed }) => [styles.gameday, lift(colors, 'rest'), pressStyle(pressed)]}
             accessibilityRole="button"
-            accessibilityLabel="Game day carpool. About 10 to 15 dollars each instead of 30 to 40."
+            accessibilityLabel="Game day carpool. 50 percent of the Standard fare per seat when 3 or 4 riders share the trip."
             accessibilityHint="Opens carpools"
           >
             <View style={styles.offerIcon}>
@@ -692,7 +692,7 @@ export function RiderHome() {
             </View>
             <View style={styles.gamedayCopy}>
               <Text style={styles.gamedayTitle}>Game day carpool</Text>
-              <Text style={styles.gamedayBody}>About $10–$15 each instead of $30–$40.</Text>
+              <Text style={styles.gamedayBody}>50% of the Standard fare per seat when 3 or 4 riders share the trip.</Text>
             </View>
             <View style={styles.gamedayBtn}>
               <Text style={styles.gamedayBtnText}>Find a carpool</Text>

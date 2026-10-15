@@ -78,9 +78,11 @@ export const PLATFORM_FEE_BPS = 2000
 export const STUDENT_DISCOUNT_BPS = 1000
 
 /**
- * Shared-ride discount. Applies when kind is carpool or the party has 2+ riders.
- * 15% is the solo-vs-shared gap we take (between historical Uber Pool cuts and
- * a token $1 off). Edit here only.
+ * Friend-ride group discount. Applies only when quoteFare is called with
+ * isCarpool and the tier is not the Carpool ride option. Two or more friends
+ * sharing one fare take 15% off that group total, then split it.
+ * The Carpool ride option is not this discount. It is half of Standard per seat
+ * (CARPOOL_SEAT_FRACTION_BPS).
  */
 export const CARPOOL_DISCOUNT_BPS = 1500
 
@@ -457,8 +459,8 @@ export function quoteFare({
   const surgeMul = clampSurge(surgeMultiplier)
   const surgedCents = Math.round(classedCents * surgeMul)
 
-  // Friend-ride carpool keeps CARPOOL_DISCOUNT_BPS. The ride-tier carpool
-  // price is the seat fraction above, so it is not discounted a second time.
+  // Friend rides with 2+ people keep CARPOOL_DISCOUNT_BPS on the group fare.
+  // The Carpool ride option is the seat fraction above, not a second discount.
   const sharedSeat = Boolean(isCarpool) && tierId !== 'carpool'
   const carpool = sharedSeat
     ? percentOffCents(surgedCents, CARPOOL_DISCOUNT_BPS)

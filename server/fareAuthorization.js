@@ -8,6 +8,7 @@ import { classifyStripeError, failureResult } from '../shared/paymentFailure.js'
 import {
   capturePlan,
   fareAuthorizationCents,
+  isCarpoolFareHold,
   shouldRetryAuthorization,
 } from '../shared/fareAuthorization.js'
 import { holdQuoteCents, readBoostCents } from '../shared/scheduledBoost.js'
@@ -215,8 +216,11 @@ export async function placeFareAuthorization({
   boostCents = 0,
   prepaidTipCents = 0,
   idempotencySuffix = '',
+  carpool = false,
 }) {
-  const quote = holdQuoteCents(estimatedFareCents, boostCents, prepaidTipCents)
+  const quote = holdQuoteCents(estimatedFareCents, boostCents, prepaidTipCents, {
+    bufferBps: carpool ? 0 : undefined,
+  })
   if (quote.authorizationCents <= 0) {
     return { ok: true, skipped: true, reason: 'zero_fare', ...quote }
   }
@@ -348,10 +352,12 @@ export async function authorizeRideRequest({
   // Ride credits settle the fare. A boost and a booked backup fee are still
   // card money. With neither, scheduling stays on the credits path.
   const creditsFare = choice === 'credits'
+  const carpool = isCarpoolFareHold(trip)
+  const holdOptions = { bufferBps: carpool ? 0 : undefined }
   const backupBonusCents = readBackupQueue(trip)?.bonusCents || 0
-  const quote = holdQuoteCents(creditsFare ? backupBonusCents : fareCents, boostCents, prepaidTipCents)
+  const quote = holdQuoteCents(creditsFare ? backupBonusCents : fareCents, boostCents, prepaidTipCents, holdOptions)
   if (creditsFare && boostCents <= 0 && backupBonusCents <= 0 && prepaidTipCents <= 0) {
-    return { ok: true, skipped: true, reason: 'credits', ...fareAuthorizationCents(fareCents), boostCents: 0 }
+    return { ok: true, skipped: true, reason: 'credits', ...fareAuthorizationCents(fareCents, holdOptions), boostCents: 0 }
   }
   const client = stripe || (stripeOk() ? stripeClient() : null)
   if (!client?.paymentIntents?.create) {
@@ -369,6 +375,7 @@ export async function authorizeRideRequest({
     boostCents: quote.boostCents,
     prepaidTipCents: quote.prepaidTipCents,
     idempotencySuffix: creditsFare ? 'boost' : '',
+    carpool,
   })
   if (sb && trip?.id && !placed.skipped) {
     await mergeTripMetadata(sb, trip.id, {
@@ -476,7 +483,13 @@ export async function syncBoostAuthorization({ sb, stripe, trip, boostCents } = 
     return { ok: true, skipped: true, reason: 'stripe_not_configured' }
   }
   const creditsFare = trip?.metadata?.billing_choice === 'credits'
-  const quote = holdQuoteCents(creditsFare ? 0 : (auth.estimatedFareCents ?? trip?.fare_cents), boostCents, readPrepaidTipCents(trip))
+  const carpool = isCarpoolFareHold(trip)
+  const quote = holdQuoteCents(
+    creditsFare ? 0 : (auth.estimatedFareCents ?? trip?.fare_cents),
+    boostCents,
+    readPrepaidTipCents(trip),
+    { bufferBps: carpool ? 0 : undefined },
+  )
   if (quote.authorizationCents <= Math.max(0, Math.round(Number(auth.authorizationCents) || 0))) {
     return { ok: true, skipped: true, reason: 'hold_already_covers', ...quote }
   }
@@ -512,6 +525,7 @@ export async function syncBoostAuthorization({ sb, stripe, trip, boostCents } = 
     boostCents: quote.boostCents,
     prepaidTipCents: quote.prepaidTipCents,
     idempotencySuffix: `boost:${quote.boostCents}`,
+    carpool,
   })
   if (sb && trip.id) {
     await mergeTripMetadata(sb, trip.id, {

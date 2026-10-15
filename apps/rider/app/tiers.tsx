@@ -114,6 +114,18 @@ export default function RideTiers() {
     setPromptOpen(true)
   }
 
+  const carpoolCatalog = tiers.find((tier) => tier.id === 'carpool') || null
+  const carpoolServer = (quote?.tiers || []).find((row) => row.id === 'carpool') || null
+  const carpoolQuoted = carpoolCatalog
+    ? tierQuote(carpoolCatalog, {
+      isStudent: student.verified,
+      serverTier: carpoolServer,
+      pass,
+      passName: quote?.tigerPassName || pass?.name || TIGER_PASS_NAME,
+    })
+    : null
+  const carpoolCharge = carpoolQuoted ? carpoolQuoted.price * seats : null
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
       <View style={styles.header}>
@@ -188,7 +200,7 @@ export default function RideTiers() {
                 pressStyle(pressed),
               ]}
               accessibilityRole="button"
-              accessibilityLabel={timing ? `${tier.name}, ${formatUsd(quoted.price)}, ${timing}` : `${tier.name}, ${formatUsd(quoted.price)}, ${tier.eta}, ${tier.meta}`}
+              accessibilityLabel={timing ? `${tier.name}, ${formatUsd(tier.id === 'carpool' && on && carpoolCharge != null ? carpoolCharge : quoted.price)}, ${timing}` : `${tier.name}, ${formatUsd(tier.id === 'carpool' && on && carpoolCharge != null ? carpoolCharge : quoted.price)}, ${tier.eta}, ${tier.meta}`}
               accessibilityHint="Selects this fare"
               accessibilityState={{ selected: on }}
             >
@@ -203,7 +215,7 @@ export default function RideTiers() {
                   {quoted.label ? <Text style={styles.discount}>{quoted.label}</Text> : null}
                 </View>
                 <View style={styles.priceCol}>
-                  <Text style={styles.price}>{formatUsd(quoted.price)}</Text>
+                  <Text style={styles.price}>{formatUsd(tier.id === 'carpool' && on ? (carpoolCharge ?? quoted.price) : quoted.price)}</Text>
                   {quoted.discount > 0 ? <Text style={styles.was}>{formatUsd(quoted.was)}</Text> : null}
                 </View>
               </View>
@@ -236,6 +248,11 @@ export default function RideTiers() {
               </Pressable>
             ))}
           </View>
+        ) : null}
+        {selected === 'carpool' && carpoolCharge != null ? (
+          <Text style={{ fontSize: 13, fontWeight: '700', marginBottom: 8, color: colors.ink }}>
+            {seats === 1 ? '1 seat' : '2 seats'} · {formatUsd(carpoolCharge)}
+          </Text>
         ) : null}
         <PrimaryButton label={selected === 'comfort' ? 'Request Extra Comfort' : selected === 'carpool' ? 'Request Carpool' : 'Choose a driver'} onPress={onConfirm} tone={selected === 'comfort' ? 'purple' : 'orange'} />
       </GlassSheet>
