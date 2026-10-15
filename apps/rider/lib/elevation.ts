@@ -1,7 +1,7 @@
 import type { ViewStyle } from 'react-native'
 // Relative path so `npm test` can load these tokens without the Metro alias.
 import { elevationFor } from '../../../packages/rides-native/shared/theme.js'
-import { darkPalette, type Palette } from '@/lib/palette'
+import { darkPalette, type Palette } from './palette.ts'
 
 function schemeFor(colors: Palette): 'light' | 'dark' {
   return colors.background === darkPalette.background ? 'dark' : 'light'
