@@ -10,7 +10,9 @@ import { SIMULATED_FLEET_BADGE, refuseSimulatedDriverTap } from 'rides-native/si
 import { demoCarPaint, SEARCH_MAP_ZOOM_MS, searchMapRegion } from 'rides-native/searchPreview.js'
 import { useSimulatedFleet } from 'rides-native/useSimulatedFleet.js'
 import type { CampusMapHandle, CampusMapProps, LatLng, MapPin } from '@/components/mapTypes'
+import { mapUnavailableColors } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
+import { color } from 'rides-native/shared/theme.js'
 
 function SearchFleetGlyph({
   heading,
@@ -300,7 +302,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
                   anchor={{ x: 0.5, y: 0.5 }}
                 >
                   <View style={[styles.car, { backgroundColor: car.color }]}>
-                    <Glyph name="vehicle" size={18} color="#FFFFFF" active knockout="#F2701C" />
+                    <Glyph name="vehicle" size={18} color={color.white} active knockout={color.orangeBright} />
                   </View>
                 </Marker>
               )
@@ -405,10 +407,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
-    backgroundColor: '#F4F5F8',
+    backgroundColor: mapUnavailableColors.surface,
   },
-  unavailableTitle: { fontSize: 16, fontWeight: '800', color: '#522D80', marginBottom: 8 },
-  unavailableBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', color: '#5B6472' },
+  unavailableTitle: { fontSize: 16, fontWeight: '800', color: color.purple, marginBottom: 8 },
+  unavailableBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', color: mapUnavailableColors.body },
   car: {
     width: 28,
     height: 28,
@@ -416,7 +418,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: color.white,
   },
   carGlyph: { fontSize: 14 },
   stop: {
@@ -427,19 +429,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: color.white,
   },
-  stopText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  stopText: { color: color.white, fontSize: 12, fontWeight: '800' },
   tigerChip: {
-    backgroundColor: '#F56600',
-    borderColor: '#522D80',
+    backgroundColor: color.orange,
+    borderColor: color.purple,
     borderWidth: 2,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  tigerChipPreview: { backgroundColor: '#522D80' },
-  tigerChipText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  tigerChipPreview: { backgroundColor: color.purple },
+  tigerChipText: { color: color.white, fontSize: 12, fontWeight: '800' },
   zone: { position: 'absolute', left: 12, bottom: 12, right: 12, alignItems: 'flex-start' },
   zoneText: { overflow: 'hidden', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, fontWeight: '800' },
   busyCar: { alignItems: 'center', width: 52 },
@@ -447,9 +449,9 @@ const styles = StyleSheet.create({
     width: 14,
     height: 22,
     borderRadius: 5,
-    backgroundColor: '#522D80',
+    backgroundColor: color.purple,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: color.white,
   },
   busyBadge: { position: 'absolute', right: 12, bottom: 12 },
   busyBadgeText: {
@@ -459,16 +461,16 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     fontSize: 12,
     fontWeight: '800',
-    backgroundColor: '#522D80',
-    color: '#FFFFFF',
+    backgroundColor: color.purple,
+    color: color.white,
   },
   driverCar: {
     width: 18,
     height: 28,
     borderRadius: 7,
-    backgroundColor: '#F56600',
+    backgroundColor: color.orange,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: color.white,
     alignItems: 'center',
   },
   driverNose: {
@@ -480,6 +482,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 6,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderBottomColor: '#522D80',
+    borderBottomColor: color.purple,
   },
 })
