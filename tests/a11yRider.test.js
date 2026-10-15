@@ -18,8 +18,8 @@ const SCAN_DIRS = ['apps/rider/app', 'apps/rider/components']
 const INTERACTIVE = new Set(['Pressable', 'TouchableOpacity', 'Button'])
 
 const ALLOWLIST = [
-  'apps/rider/components/EmergencyContactsCard.tsx:192:15 <Pressable>',
-  'apps/rider/components/EmergencyContactsCard.tsx:196:13 <Pressable>',
+  'apps/rider/components/EmergencyContactsCard.tsx:198:15 <Pressable>',
+  'apps/rider/components/EmergencyContactsCard.tsx:202:13 <Pressable>',
 ]
 
 function isIdentStart(ch) {

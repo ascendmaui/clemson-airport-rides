@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Animated, Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { logCaught } from '@/lib/caught'
 import { warningHaptic } from '@/lib/feedback'
 import { readLivePosition } from '@/lib/readLivePosition'
 import { setSosEngaged } from '@/lib/sosEngaged'
@@ -140,7 +141,13 @@ export function SosSheet({
     readLivePosition().then((pos) => {
       if (!alive) return
       if (pos) setCoords(pos)
+      else setShareNote('Location is unavailable. You can still call for help.')
       setLocating(false)
+    }).catch((err: unknown) => {
+      logCaught('sos-location', err)
+      if (!alive) return
+      setLocating(false)
+      setShareNote('Location is unavailable. You can still call for help.')
     })
     const loop = Animated.loop(
       Animated.sequence([
@@ -205,7 +212,7 @@ export function SosSheet({
     }
     try {
       if (channel === 'web_share') {
-        await Share.share({ title: 'SOS Clemson RIDES', message: text })
+        await Share.share({ title: 'SOS Clemson Rides', message: text })
         setShareNote('Location shared.')
       } else {
         const href = sosChannelHref(channel, text)
