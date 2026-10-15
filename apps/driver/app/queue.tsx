@@ -43,6 +43,7 @@ import { driverBoostOfferLine } from '../../../shared/copy/boost.js'
 import { compareBoostedFirst, formatBoostBadge } from '../../../shared/scheduledBoost.js'
 import { CrashBoundary } from '@/components/CrashBoundary'
 import { failureToast, quiet } from '@/lib/softFail'
+import { color as brand } from 'rides-native/shared/theme.js'
 
 function useQueueStyles() {
   const { colors } = useTheme()
@@ -58,7 +59,7 @@ function ConfirmCountdown({ closesAt }: { closesAt?: string | null }) {
     return () => clearInterval(id)
   }, [closesAt])
   if (!label) return null
-  return <Text style={{ color: '#F56600', fontWeight: '800', fontSize: 22, marginTop: 4 }}>{label}</Text>
+  return <Text style={{ color: brand.orange, fontWeight: '800', fontSize: 22, marginTop: 4 }}>{label}</Text>
 }
 
 function LeaveNowCountdown({ leaveNowAt, onDue }: { leaveNowAt?: string | null; onDue: () => boolean | Promise<boolean | void> }) {
@@ -88,7 +89,7 @@ function LeaveNowCountdown({ leaveNowAt, onDue }: { leaveNowAt?: string | null; 
     return () => clearInterval(id)
   }, [leaveNowAt])
   if (!label) return null
-  return <Text style={{ color: '#F56600', fontWeight: '800', fontSize: 22, marginTop: 4 }}>{label}</Text>
+  return <Text style={{ color: brand.orange, fontWeight: '800', fontSize: 22, marginTop: 4 }}>{label}</Text>
 }
 
 function seatReleaseLabel(role?: string | null) {
@@ -145,7 +146,7 @@ function QueueCard({
           <Text style={styles.copy}>{statusHeadline(card.status)}</Text>
         </View>
       </View>
-      <Text style={[styles.fare, (card.boostDriverCents || 0) > 0 && { color: '#F56600' }]}>{formatCents(card.driverNetCents)} est. earnings</Text>
+      <Text style={[styles.fare, (card.boostDriverCents || 0) > 0 && { color: colors.orange }]}>{formatCents(card.driverNetCents)} est. earnings</Text>
       {(card.boostDriverCents || 0) > 0 ? (
         <View style={styles.boostBadge}>
           <Text style={styles.boostText}>{formatBoostBadge(card.boostDriverCents || 0)}</Text>
@@ -161,15 +162,15 @@ function QueueCard({
       <Text style={styles.copy}>Drop-off · {card.dropoffLabel}</Text>
       {card.airportContext ? <Text style={styles.note} accessibilityLabel={`Airport: ${card.airportContext.line}`}>{card.airportContext.line}</Text> : null}
       {card.pickupAt ? <Text style={styles.copy}>{formatPickupAt(card.pickupAt)}</Text> : null}
-      {card.backupLabel ? <Text style={[styles.note, { color: '#F56600', fontWeight: '800' }]}>{card.backupLabel}</Text> : null}
-      {card.lookingForBackup && card.backupRole === 'primary' ? <Text style={[styles.note, { color: '#522D80' }]}>Looking for backup driver</Text> : null}
+      {card.backupLabel ? <Text style={[styles.note, { color: colors.orange, fontWeight: '800' }]}>{card.backupLabel}</Text> : null}
+      {card.lookingForBackup && card.backupRole === 'primary' ? <Text style={[styles.note, { color: colors.link }]}>Looking for backup driver</Text> : null}
       {card.lookingForBackup && card.backupRole === 'primary' ? <ScheduledRidesHint topic="looking" colors={colors} /> : null}
       {card.backupRole === 'open_backup' ? <ScheduledRidesHint topic="offer" colors={colors} /> : null}
       {card.backupRole === 'backup' && card.pickupAt ? (
-        <Text style={[styles.note, { color: '#522D80' }]}>{`You're #2 for this trip, pickup at ${formatPickupAt(card.pickupAt)}`}</Text>
+        <Text style={[styles.note, { color: colors.link }]}>{`You're #2 for this trip, pickup at ${formatPickupAt(card.pickupAt)}`}</Text>
       ) : null}
       {card.backupStatusLine && card.backupRole === 'primary' ? <Text style={styles.note}>{card.backupStatusLine}</Text> : null}
-      {card.backupNotice ? <Text style={[styles.note, { color: '#522D80', fontWeight: '700' }]}>{card.backupNotice}</Text> : null}
+      {card.backupNotice ? <Text style={[styles.note, { color: colors.link, fontWeight: '700' }]}>{card.backupNotice}</Text> : null}
       {card.passengers > 1 ? <Text style={styles.copy}>{card.passengers} riders · capacity check is your seat count</Text> : null}
       <View style={styles.tags}>
         {card.tagLabels.map((label: string) => (
@@ -181,17 +182,17 @@ function QueueCard({
       {card.comfortStub ? <Text style={styles.copy}>{COMFORT_FLEET_NOTICE}</Text> : null}
       {card.backupConfirmOpen ? (
         <View style={{ marginTop: 8, padding: 10, borderRadius: 12, backgroundColor: 'rgba(245,102,0,0.12)' }}>
-          <Text style={{ color: '#F56600', fontWeight: '800' }}>Confirm trip</Text>
+          <Text style={{ color: colors.orange, fontWeight: '800' }}>Confirm trip</Text>
           <Text style={styles.copy}>{card.backupConfirmCopy}</Text>
           <ScheduledRidesHint topic="confirm" colors={colors} />
-          {card.backupUrgent ? <Text style={[styles.note, { color: '#F56600', fontWeight: '800' }]}>You are up. Confirm and start toward pickup.</Text> : null}
+          {card.backupUrgent ? <Text style={[styles.note, { color: colors.orange, fontWeight: '800' }]}>You are up. Confirm and start toward pickup.</Text> : null}
           <ConfirmCountdown closesAt={card.backupConfirmClosesAt} />
           <Primary label={busy ? 'Saving…' : 'Confirm trip'} onPress={onConfirm} disabled={busy} />
         </View>
       ) : null}
       {card.backupLeaveNowOpen ? (
         <View style={{ marginTop: 8, padding: 10, borderRadius: 12, backgroundColor: 'rgba(245,102,0,0.12)' }}>
-          <Text style={{ color: '#F56600', fontWeight: '800' }}>Leave now</Text>
+          <Text style={{ color: colors.orange, fontWeight: '800' }}>Leave now</Text>
           <ScheduledRidesHint topic="leave" colors={colors} />
           <LeaveNowCountdown leaveNowAt={card.backupLeaveNowAt} onDue={onDepart} />
           <Primary label={busy ? 'Saving…' : 'Leave now'} onPress={onDepart} disabled={busy} />
@@ -557,7 +558,7 @@ function queueStyles(colors: Palette) {
     riderRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     avatar: { width: 44, height: 44, borderRadius: 22 },
     avatarFallback: { backgroundColor: colors.purple, alignItems: 'center', justifyContent: 'center' },
-    avatarLetter: { color: '#fff', fontWeight: '800', fontSize: 18 },
+    avatarLetter: { color: colors.onAccent, fontWeight: '800', fontSize: 18 },
     filter: { backgroundColor: colors.card, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
     filterOn: { backgroundColor: colors.fill },
     filterText: { color: colors.title, fontWeight: '800' },
@@ -570,12 +571,12 @@ function queueStyles(colors: Palette) {
     fare: { color: colors.ink, fontWeight: '800', fontSize: 22, letterSpacing: -0.3 },
     boostBadge: {
       alignSelf: 'flex-start',
-      backgroundColor: '#F56600',
+      backgroundColor: colors.orange,
       borderRadius: 999,
       paddingHorizontal: 10,
       paddingVertical: 4,
     },
-    boostText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+    boostText: { color: colors.onAccent, fontWeight: '800', fontSize: 12 },
     tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   })
 }
