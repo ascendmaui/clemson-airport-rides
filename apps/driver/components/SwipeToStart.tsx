@@ -12,6 +12,7 @@ import {
   type SwipeCue,
 } from 'rides-native/swipeConfirm'
 import { useTheme } from '@/lib/theme'
+import { color as brand } from 'rides-native/shared/theme.js'
 
 const KNOB = 56
 const KNOB_SPRING = { damping: 18, stiffness: 240, mass: 0.7 }
@@ -195,11 +196,11 @@ export function SwipeToStart({
           if (event.nativeEvent.actionName === 'activate' && !disabled) onConfirm()
         }}
       >
-        <GlassSheen scheme={scheme} radius={(KNOB + 8) / 2} tint="#522D80" />
+        <GlassSheen scheme={scheme} radius={(KNOB + 8) / 2} tint={brand.purple} />
         <Animated.View style={[styles.fill, { backgroundColor: glassFill(knobRecipe) }, fillStyle]} />
         <Text style={[styles.label, { color: labelColor }]} numberOfLines={1}>{label}</Text>
         <Animated.View style={[styles.knob, { backgroundColor: glassFill(knobRecipe) }, knobStyle]}>
-          <GlassSheen scheme={scheme} radius={KNOB / 2} tint="#F56600" />
+          <GlassSheen scheme={scheme} radius={KNOB / 2} tint={brand.orange} />
           <Text style={[styles.arrow, { color: knobRecipe.text }]}>→</Text>
         </Animated.View>
       </View>

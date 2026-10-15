@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { sameRouteProps } from '@/lib/markerRedraw'
 import { offerRouteLegs, offerRoutePoints } from 'rides-native/offerRoute.js'
+import { color as brand } from 'rides-native/shared/theme.js'
 
 type Coord = { latitude: number; longitude: number } | null
 
@@ -32,8 +33,8 @@ function OfferRouteMapView({
         </View>
       ))}
       <View style={styles.track}>
-        {points.driver && points.pickup ? <View style={[styles.stroke, { backgroundColor: '#F56600' }]} /> : null}
-        {points.pickup && points.dropoff ? <View style={[styles.stroke, { backgroundColor: '#522D80' }]} /> : null}
+        {points.driver && points.pickup ? <View style={[styles.stroke, { backgroundColor: brand.orange }]} /> : null}
+        {points.pickup && points.dropoff ? <View style={[styles.stroke, { backgroundColor: brand.purple }]} /> : null}
       </View>
     </View>
   )

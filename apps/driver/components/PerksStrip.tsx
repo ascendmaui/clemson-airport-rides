@@ -72,7 +72,7 @@ export function PerksStrip() {
   const card = perks.scorecard as ScorecardView | undefined
   if (card?.enabled) {
     const pct = (r: number | null | undefined) => (r == null ? '—' : `${Math.round(r * 100)}%`)
-    const line = `Accept ${pct(card.acceptance?.rate)} · Complete ${pct(card.completion?.rate)} · ★ ${card.rating != null ? card.rating.toFixed(2) : '—'}`
+    const line = `Accept ${pct(card.acceptance?.rate)} · Complete ${pct(card.completion?.rate)} · Rating ${card.rating != null ? card.rating.toFixed(2) : '—'}`
     chips.unshift(
       <Pressable key="scorecard" onPress={() => router.push('/scorecard')} accessibilityRole="button" accessibilityLabel={`Scorecard. ${line}`}>
         <PerkChip title="Scorecard" line={line} />
@@ -115,8 +115,9 @@ export function PerkChip({ title, line, progress, tone, accessibilityLabel }: { 
     <View
       style={[styles.chip, shadow, {
         backgroundColor: tone === 'orange' ? colors.orangeSoft : tone === 'purple' ? colors.purpleSoft : colors.card,
-        borderLeftWidth: tone ? 3 : 0,
-        borderLeftColor: accent,
+        // Brand rail on every chip: orange for money/urgent, purple otherwise.
+        borderLeftWidth: 3,
+        borderLeftColor: tone === 'orange' ? colors.orange : colors.purple,
       }]}
       accessible
       accessibilityLabel={accessibilityLabel || `${title}. ${line}`}
@@ -137,7 +138,8 @@ function toneColor(colors: Palette, tone?: 'orange' | 'purple') {
     case 'orange':
       return colors.orange
     case 'purple':
-      return colors.purple
+      // Text on dark cards: the lighter brand purple keeps contrast at night.
+      return colors.link
     case undefined:
       return colors.title
     default: {
@@ -160,7 +162,7 @@ function StreakChip({ label, unit, view }: { label: string; unit: string; view: 
 
 const styles = StyleSheet.create({
   row: { gap: 8, paddingHorizontal: 16, paddingVertical: 6 },
-  chip: { borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, minWidth: 150, gap: 2 },
+  chip: { borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, minWidth: 150, gap: 2 },
   track: { height: 4, borderRadius: 2, marginTop: 4, overflow: 'hidden' },
   fill: { height: 4, borderRadius: 2 },
 })

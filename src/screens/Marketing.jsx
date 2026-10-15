@@ -124,7 +124,7 @@ export function Marketing() {
       </section>
 
       <div className="site-container">
-        <FeatureSections />
+        <FeatureSections compact />
       </div>
 
       <section className="site-section site-container" aria-label="Book">

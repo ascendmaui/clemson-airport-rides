@@ -135,7 +135,7 @@ export default function EarningsActivity() {
                     <Text style={{ color: colors.inkSecondary }}>Wait time {shownCents(trip.driver_wait_earnings_cents || 0, earningsPrivate)}</Text>
                   ) : null}
                   {trip.status !== 'canceled' && boost > 0 ? (
-                    <Text style={{ color: '#F56600', fontWeight: '800' }}>Boost {formatBoostBadge(boost)}</Text>
+                    <Text style={{ color: colors.orange, fontWeight: '800' }}>Boost {formatBoostBadge(boost)}</Text>
                   ) : null}
                   {trip.status !== 'canceled' && pay?.showBonus ? (
                     <Text style={{ color: colors.inkSecondary }}>
