@@ -47,7 +47,7 @@ test('debitLots skips the RPC when there is nothing to debit', async () => {
 })
 
 test('debit_credit_lots migration is atomic, idempotent, locked and service_role only', () => {
-  const sql = readFileSync(new URL('../supabase/migrations/20261015130000_debit_credit_lots_idempotent.sql', import.meta.url), 'utf8')
+  const sql = readFileSync(new URL('../supabase/migrations/20261015131500_debit_credit_lots_idempotent.sql', import.meta.url), 'utf8')
   assert.match(sql, /pg_advisory_xact_lock\(hashtextextended\('rider_credit:'/)
   assert.match(sql, /idempotency_conflict/)
   assert.match(sql, /for update/)
