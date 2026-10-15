@@ -39,14 +39,28 @@ function deferEntryOnHomeShell() {
       handler(html) {
         const tag = html.match(/<script type="module" crossorigin src="(\/assets\/index-[\w-]+\.js)"><\/script>/)
         if (!tag) throw new Error('home shell: entry script tag not found in index.html')
-        // Wait for the stadium photo (the LCP element) to decode, capped at 2.5 s, then paint, then load.
+        // Request the bundle only after a hero photo is on screen: the first image
+        // largest-contentful-paint entry arrives after that frame is presented, so the
+        // bundle never competes with first paint. (Chrome may pick the stadium photo or a
+        // collage photo as LCP depending on the viewport, so any image entry counts.) Browsers without LCP entries (Safari)
+        // wait for decode + a frame. Capped at 2.5 s either way.
         const loader = `<script type="module">
 let started = false
 const go = () => { if (!started) { started = true; import('${tag[1]}') } }
 if (document.documentElement.getAttribute('data-home-shell') === '1') {
   const photo = document.querySelector('[data-home-shell] .mkt-stage-photo')
-  const ready = photo && photo.decode ? photo.decode().catch(() => {}) : Promise.resolve()
-  ready.then(() => requestAnimationFrame(() => setTimeout(go, 0)))
+  const later = () => setTimeout(go, 0)
+  const lcp = typeof PerformanceObserver !== 'undefined' && (PerformanceObserver.supportedEntryTypes || []).includes('largest-contentful-paint')
+  if (photo && lcp) {
+    const seen = new PerformanceObserver((list) => {
+      if (list.getEntries().some((e) => e.url)) { seen.disconnect(); later() }
+    })
+    seen.observe({ type: 'largest-contentful-paint', buffered: true })
+    photo.addEventListener('error', later)
+  } else {
+    const ready = photo && photo.decode ? photo.decode().catch(() => {}) : Promise.resolve()
+    ready.then(() => requestAnimationFrame(later))
+  }
   setTimeout(go, 2500)
 } else go()
 </script>`
