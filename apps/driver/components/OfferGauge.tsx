@@ -22,6 +22,7 @@ import Animated, {
 import { GAUGE_PALETTE, type GaugeEffects, type GaugeTier } from 'rides-native/offerGauge'
 import { useTheme } from '@/lib/theme'
 import { Glyph } from 'rides-native/icons'
+import { gaugeCrownColors } from '@/lib/palette'
 
 type Gauge = {
   text: string
@@ -155,7 +156,7 @@ export function OfferGauge({ gauge, offerId }: { gauge: Gauge; offerId: string }
             <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
           </Animated.View>
         ) : null}
-        <Arc fill={gauge.fill} color={tier === 'crown' ? '#FFFFFF' : swatch.accent} track={scheme === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.10)'} still={reduce} />
+        <Arc fill={gauge.fill} color={tier === 'crown' ? gaugeCrownColors.arc : swatch.accent} track={scheme === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.10)'} still={reduce} />
         <View>
           <View style={styles.valueRow}>
             {tier === 'crown' ? <Glyph name="sparkle" size={14} color={swatch.fg} active /> : null}
@@ -164,7 +165,7 @@ export function OfferGauge({ gauge, offerId }: { gauge: Gauge; offerId: string }
           {gauge.tierLabel ? <Text style={[styles.label, { color: swatch.fg }]}>{gauge.tierLabel}</Text> : null}
         </View>
         {sparkles.map((i) => (
-          <Sparkle key={i} index={i} count={sparkles.length} color={tier === 'crown' ? '#FFE9A8' : '#FFFFFF'} still={reduce} />
+          <Sparkle key={i} index={i} count={sparkles.length} color={tier === 'crown' ? gaugeCrownColors.sparkle : gaugeCrownColors.sparkleDefault} still={reduce} />
         ))}
       </View>
       </View>
