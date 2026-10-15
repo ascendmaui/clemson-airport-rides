@@ -25,7 +25,7 @@ export function DriverEndTripSheet({ supabase, tripId, disabled, onEnded }: {
 }) {
   const { colors, scheme } = useTheme()
   const light = colors.statusBar === 'dark'
-  const selectedColor = light ? '#522D80' : '#E6D4FF'
+  const selectedColor = light ? colors.purple : colors.link
   const insets = useSafeAreaInsets()
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')

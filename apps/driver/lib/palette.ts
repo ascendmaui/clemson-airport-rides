@@ -130,3 +130,31 @@ export function paletteFor(scheme: Scheme): Palette {
     }
   }
 }
+
+/**
+ * Named fixed colours for surfaces that do not follow the app scheme.
+ * Screens import these instead of writing raw hex.
+ */
+/** Heat-map card and legend: follow the *map* style (dark map at night), not the app scheme. */
+export const mapHeatColors = {
+  light: { surface: '#FFFFFF', title: '#1B1B1F', estimate: '#9A3F00', body: '#3E4654', legend: 'rgba(255,255,255,0.92)', border: 'rgba(82,45,128,0.12)' },
+  dark: { surface: '#16121F', title: '#FFFFFF', estimate: '#FFC9A3', body: '#D5D0DC', legend: 'rgba(22,18,31,0.9)', border: 'rgba(255,255,255,0.14)' },
+} as const
+
+/** Android "map unavailable" placeholder (shown before tiles load). */
+export const mapUnavailableColors = { surface: '#F4F5F8', body: '#5B6472' } as const
+
+/** Offer gauge "crown" tier: white arc on the gold gradient, warm sparkles. */
+export const gaugeCrownColors = { arc: '#FFFFFF', sparkle: '#FFE9A8', sparkleDefault: '#FFFFFF' } as const
+
+/** Earnings hero sits on a fixed purple gradient in light mode. */
+export const earningsHeroColors = { gradientEnd: '#3C1E66', kickerOnPurple: '#FFD8B8', cashInk: '#1A1033' } as const
+
+/** Tips slice in the earnings split chart. */
+export const tipsColor = '#22A04B'
+
+/** Signature canvas stays white paper with dark ink in both schemes, like a printed form. */
+export const signatureColors = { ink: '#111111', surface: '#FFFFFF', border: '#D7D3DE', hint: '#8B939E' } as const
+
+/** Web fallback for the offer route preview (light lilac card). */
+export const routePreviewColors = { surface: '#E7E1F2', label: '#16121F' } as const

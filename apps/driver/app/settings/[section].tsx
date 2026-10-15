@@ -268,7 +268,7 @@ function SoundChoices() {
       </Card>
       {ALERT_TIERS.map((tier) => (
         <View key={tier.id} style={{ gap: 8 }}>
-          <Text style={{ color: colors.purple, fontWeight: '800' }}>{tier.label}</Text>
+          <Text style={{ color: colors.link, fontWeight: '800' }}>{tier.label}</Text>
           <ChoiceCards
             options={ALERT_MODES}
             value={theme.rideAlerts[tier.id]}
@@ -309,7 +309,7 @@ function AutoAcceptChoices() {
                 accessibilityState={{ selected: on }}
                 style={[styles.chip, { backgroundColor: on ? colors.orange : colors.segment }]}
               >
-                <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800' }}>{miles} mi</Text>
+                <Text style={{ color: on ? colors.onAccent : colors.title, fontWeight: '800' }}>{miles} mi</Text>
               </Pressable>
             )
           })}
@@ -332,7 +332,7 @@ function AutoAcceptChoices() {
                 accessibilityState={{ selected: on }}
                 style={[styles.chip, { backgroundColor: on ? colors.purple : colors.segment }]}
               >
-                <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800' }}>${dollars}/hr</Text>
+                <Text style={{ color: on ? colors.onAccent : colors.title, fontWeight: '800' }}>${dollars}/hr</Text>
               </Pressable>
             )
           })}

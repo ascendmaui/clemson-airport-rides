@@ -107,6 +107,8 @@ import { tipBoostOfferLine } from '../../../../shared/prepaidTip.js'
 import { ACTIVE_TRIP_RECONCILE_MS, reconcileActiveTrip } from 'rides-native/activeTripReconcile'
 import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
 import { canDriverEnd } from '../../../../shared/driverEndTrip.js'
+import { color as brand } from 'rides-native/shared/theme.js'
+import { Glyph } from 'rides-native/icons'
 
 /** Home map overlay grid: screen-edge gutter, spacing between floating pieces, clearance under the status bar. */
 const EDGE = 16
@@ -655,7 +657,7 @@ function DriverHomeBody() {
                     accessibilityState={{ checked: showHeat }}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    <Text style={{ color: showHeat ? '#fff' : colors.title, fontWeight: '800', fontSize: 12 }}>
+                    <Text style={{ color: showHeat ? colors.onAccent : colors.title, fontWeight: '800', fontSize: 12 }}>
                       {showHeat ? 'On' : 'Off'}
                     </Text>
                   </Pressable>
@@ -670,7 +672,7 @@ function DriverHomeBody() {
                       hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                       style={[styles.heatChip, peakMode ? styles.heatChipOn : { backgroundColor: colors.card, borderColor: colors.border }]}
                     >
-                      <Text style={{ color: peakMode ? '#FFFFFF' : colors.title, fontWeight: '700', fontSize: 13, letterSpacing: 0.2 }}>Peak</Text>
+                      <Text style={{ color: peakMode ? colors.onAccent : colors.title, fontWeight: '700', fontSize: 13, letterSpacing: 0.2 }}>Peak</Text>
                     </Pressable>
                     {HEAT_WINDOWS.map((item: { id: string; label: string }) => {
                       const on = item.id === heatWindow
@@ -684,7 +686,7 @@ function DriverHomeBody() {
                           hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                           style={[styles.heatChip, { backgroundColor: on ? colors.orange : colors.card }]}
                         >
-                          <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800', fontSize: 12 }}>{item.label}</Text>
+                          <Text style={{ color: on ? colors.onAccent : colors.title, fontWeight: '800', fontSize: 12 }}>{item.label}</Text>
                         </Pressable>
                       )
                     })}
@@ -989,12 +991,16 @@ export function RideCard({
             )}
             <View style={{ flex: 1 }}>
               <Text style={[styles.riderName, { color: colors.ink }]}>{riderFirst}</Text>
-              <Text
-                style={[styles.riderMeta, { color: colors.inkSecondary }]}
+              <View
+                style={styles.riderMetaRow}
+                accessible
                 accessibilityLabel={ratingAvg != null ? `Rider rating ${Number(ratingAvg).toFixed(1)} stars` : 'New rider, no rating yet'}
               >
-                {ratingAvg != null ? `★ ${Number(ratingAvg).toFixed(1)}` : '★ New'} · {card.tier === 'wait' ? 'Wait & Save' : card.tier === 'comfort' ? 'Extra Comfort' : card.tier === 'carpool' ? 'Carpool' : 'Standard'}
-              </Text>
+                <Glyph name="star" size={13} color={colors.orange} active />
+                <Text style={[styles.riderMeta, { color: colors.inkSecondary, marginTop: 0 }]}>
+                  {ratingAvg != null ? Number(ratingAvg).toFixed(1) : 'New'} · {card.tier === 'wait' ? 'Wait & Save' : card.tier === 'comfort' ? 'Extra Comfort' : card.tier === 'carpool' ? 'Carpool' : 'Standard'}
+                </Text>
+              </View>
             </View>
             <OfferGauge gauge={gauge} offerId={card.id} />
             {onFavorite ? (
@@ -1046,7 +1052,7 @@ export function RideCard({
           <Text style={{ color: colors.ink, fontWeight: '700' }}>Pickup · {card.pickupLabel}</Text>
           <Text style={{ color: colors.ink, fontWeight: '700' }}>Drop-off · {card.dropoffLabel}</Text>
           {card.airportContext ? (
-            <Text style={{ color: colors.purple, fontWeight: '800' }} accessibilityLabel={`Airport: ${card.airportContext.line}`}>
+            <Text style={{ color: colors.link, fontWeight: '800' }} accessibilityLabel={`Airport: ${card.airportContext.line}`}>
               {card.airportContext.line}
             </Text>
           ) : null}
@@ -1064,11 +1070,11 @@ export function RideCard({
               {exclusiveLeft}s to accept
             </Animated.Text>
           ) : poolLeft != null ? (
-            <Text style={{ color: colors.purple, fontWeight: '800' }}>
+            <Text style={{ color: colors.link, fontWeight: '800' }}>
               {poolLeft > 0 ? `Pool · ${poolLeft}s left` : 'Pool offer ended'}
             </Text>
           ) : exclusiveLeft === 0 ? (
-            <Text style={{ color: colors.purple, fontWeight: '800' }}>Opening the pool</Text>
+            <Text style={{ color: colors.link, fontWeight: '800' }}>Opening the pool</Text>
           ) : vm.timeLeft?.label ? (
             <Text style={{ color: vm.timeLeft.isUrgent ? colors.orange : colors.inkSecondary, fontWeight: '700' }}>
               {vm.timeLeft.label}
@@ -1145,7 +1151,7 @@ const styles = StyleSheet.create({
   hotspotRow: { flexGrow: 0, marginTop: 10 },
   hotspots: { paddingHorizontal: 16, gap: 8 },
   hotspot: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  hotspotOn: { color: '#fff', fontWeight: '800' as const },
+  hotspotOn: { color: brand.white, fontWeight: '800' as const },
   hotspotOff: { fontWeight: '800' as const },
   dock: { position: 'absolute', left: EDGE, right: EDGE, gap: GAP, justifyContent: 'flex-end' },
   offerDock: { zIndex: OFFER_CARD_Z, elevation: OFFER_CARD_ELEVATION },
@@ -1160,12 +1166,13 @@ const styles = StyleSheet.create({
   riderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   riderName: { fontWeight: '700', fontSize: 16, letterSpacing: -0.3 },
   riderMeta: { fontWeight: '600', fontSize: 13, marginTop: 2, letterSpacing: -0.1 },
+  riderMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   avatar: {
     width: 44, height: 44, borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(82,45,128,0.28)',
   },
   avatarFallback: { alignItems: 'center', justifyContent: 'center' },
-  avatarLetter: { color: '#fff', fontWeight: '700', fontSize: 16, letterSpacing: -0.3 },
+  avatarLetter: { color: brand.white, fontWeight: '700', fontSize: 16, letterSpacing: -0.3 },
   offerFareRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   offerFare: { fontSize: 34, fontWeight: '800', letterSpacing: -0.6 },
   offerFareTag: { fontSize: 16, fontWeight: '700' },

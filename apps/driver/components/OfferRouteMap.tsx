@@ -2,6 +2,8 @@ import { memo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { sameRouteProps } from '@/lib/markerRedraw'
 import { offerRouteLegs, offerRoutePoints } from 'rides-native/offerRoute.js'
+import { color as brand } from 'rides-native/shared/theme.js'
+import { routePreviewColors } from '@/lib/palette'
 
 type Coord = { latitude: number; longitude: number } | null
 
@@ -32,18 +34,18 @@ function OfferRouteMapView({
         </View>
       ))}
       <View style={styles.track}>
-        {points.driver && points.pickup ? <View style={[styles.stroke, { backgroundColor: '#F56600' }]} /> : null}
-        {points.pickup && points.dropoff ? <View style={[styles.stroke, { backgroundColor: '#522D80' }]} /> : null}
+        {points.driver && points.pickup ? <View style={[styles.stroke, { backgroundColor: brand.orange }]} /> : null}
+        {points.pickup && points.dropoff ? <View style={[styles.stroke, { backgroundColor: brand.purple }]} /> : null}
       </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  map: { height: 132, borderRadius: 16, overflow: 'hidden', backgroundColor: '#E7E1F2', padding: 12, gap: 8, justifyContent: 'flex-end' },
+  map: { height: 132, borderRadius: 16, overflow: 'hidden', backgroundColor: routePreviewColors.surface, padding: 12, gap: 8, justifyContent: 'flex-end' },
   leg: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   swatch: { width: 18, height: 4, borderRadius: 2 },
-  label: { fontWeight: '700', fontSize: 12, color: '#16121F' },
+  label: { fontWeight: '700', fontSize: 12, color: routePreviewColors.label },
   track: { flexDirection: 'row', gap: 6, alignItems: 'center' },
   stroke: { height: 6, flex: 1, borderRadius: 3 },
 })
