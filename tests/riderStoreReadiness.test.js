@@ -17,9 +17,9 @@ test('rider store name and version are Clemson Rides 1.2.0', () => {
   const home = read('apps/rider/app/(tabs)/index.tsx')
   assert.match(home, /Clemson <Text style=\{styles\.brandSoft\}>Rides<\/Text>/)
   assert.doesNotMatch(home, /brandSoft\}>RIDES</)
-  assert.match(home, /const SHOW_BUSY_AREAS_TOGGLE = false/)
-  assert.match(home, /SHOW_BUSY_AREAS_TOGGLE \? \(/)
-  assert.match(home, /Busy Areas · On/)
+  assert.doesNotMatch(home, /Busy Areas/)
+  assert.match(home, /Game day…/)
+  assert.match(home, /Surge · On/)
 })
 
 test('rider android manifest has a versionCode and no background location', () => {
