@@ -28,6 +28,10 @@ test('rider location stays when-in-use and omits motion and always keys', () => 
   assert.equal(location.locationAlwaysAndWhenInUsePermission, false)
   assert.equal(location.locationAlwaysPermission, false)
   assert.notEqual(location.isIosBackgroundLocationEnabled, true)
+  assert.equal(expo.ios.infoPlist.NSLocationWhenInUseUsageDescription, location.locationWhenInUsePermission)
+  assert.equal(expo.ios.infoPlist.NSMicrophoneUsageDescription, pluginOptions('expo-audio').microphonePermission)
+  assert.equal(expo.ios.infoPlist.NSCameraUsageDescription, pluginOptions('expo-image-picker').cameraPermission)
+  assert.equal(expo.ios.infoPlist.UIBackgroundModes, undefined)
 })
 
 test('rider audio does not enable background playback', () => {

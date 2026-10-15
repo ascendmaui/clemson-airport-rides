@@ -20,7 +20,7 @@
       "bundleIdentifier": "com.ascendmaui.clemsonrides.rider",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "Clemson Rides uses your location to center the campus map, shares it on a trip link you send, and attaches GPS when you confirm an SOS.",
+        "NSLocationWhenInUseUsageDescription": "Clemson Rides uses your location to set your pickup point and show your driver approaching.",
         "NSMicrophoneUsageDescription": "Clemson Rides uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone.",
         "NSCameraUsageDescription": "Clemson Rides uses the camera only when you start a video recording during an active ride. The clip stays on this phone."
       },
