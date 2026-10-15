@@ -127,7 +127,7 @@ test('PRIVACY_SECTIONS conforms to required structure and unique headings', () =
 test('PRIVACY_SECTIONS contains critical compliance and campus policy statements', () => {
   const whoWeAre = PRIVACY_SECTIONS.find((s) => s.heading === 'Article 1. Who We Are')
   assert.ok(whoWeAre)
-  assert.match(whoWeAre.paragraphs[0], /Clemson RIDES/)
+  assert.match(whoWeAre.paragraphs[0], /Clemson Rides/)
   assert.match(whoWeAre.paragraphs[0], /GSP\/CLT/)
 
   const infoCollect = PRIVACY_SECTIONS.find((s) => s.heading === 'Article 3. Information We Collect')

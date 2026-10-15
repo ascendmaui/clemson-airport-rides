@@ -155,7 +155,7 @@ export function buildSetupIntentParams({ customerId, userId, paymentMethod, type
   }
 }
 
-export const NATIVE_SHEET_MERCHANT_NAME = 'Clemson RIDES'
+export const NATIVE_SHEET_MERCHANT_NAME = 'Clemson Rides'
 export const NATIVE_SHEET_RETURN_URL = 'clemsonrides://billing'
 
 const SAVED_METHOD_TYPES = ['card', 'cashapp', 'link']

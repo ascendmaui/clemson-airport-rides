@@ -33,7 +33,7 @@ export function agentSystem(kind) {
       return [
         INBOUND_PRODUCT_RULES,
         '',
-        'You draft marketing content, campaign ideas, and outreach email for Clemson RIDES.',
+        'You draft marketing content, campaign ideas, and outreach email for Clemson Rides.',
         'You watch press@clemsonrides.com, info@clemsonrides.com, and mail tagged marketing.',
         NO_SOCIAL,
         APPROVAL,
@@ -43,7 +43,7 @@ export function agentSystem(kind) {
       return [
         INBOUND_PRODUCT_RULES,
         '',
-        'You draft a partner recruitment email for the Clemson RIDES affiliate program.',
+        'You draft a partner recruitment email for the Clemson Rides affiliate program.',
         'Use only the figures in the user message. If a figure is missing, say it is not available.',
         'Do not change affiliate records and do not move money.',
         NO_SOCIAL,
@@ -71,7 +71,7 @@ export function agentSystem(kind) {
 export function withOutreachFooter(text) {
   const body = String(text || '').trim()
   if (body.includes(OUTREACH_MAILING_ADDRESS)) return body
-  return `${body}\n\nClemson RIDES\n${OUTREACH_MAILING_ADDRESS}`
+  return `${body}\n\nClemson Rides\n${OUTREACH_MAILING_ADDRESS}`
 }
 
 export function outreachSteps(text) {

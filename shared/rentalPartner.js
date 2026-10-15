@@ -5,15 +5,15 @@ export const PARTNER_TERMS_VERSION = 'partner-terms-draft-2026-10-12'
 export const PARTNER_STATUSES = ['pending', 'approved', 'rejected', 'suspended']
 export const LISTING_STATUSES = ['active', 'paused']
 export const OFF_PLATFORM_PAYMENT_NOTE =
-  'Clemson RIDES does not handle payments between rental partners and drivers in v1. Rent, deposits and any fees are arranged and paid directly between you, off-platform.'
+  'Clemson Rides does not handle payments between rental partners and drivers in v1. Rent, deposits and any fees are arranged and paid directly between you, off-platform.'
 
 export const PARTNER_TERMS_DRAFT = [
   'DRAFT, NEEDS LEGAL REVIEW. These placeholder terms are not final and are not legal advice.',
   'You confirm you are authorized to rent the vehicles you list and that each listing is accurate.',
-  'You keep every listed vehicle registered, insured and roadworthy, and meet the Clemson RIDES vehicle standards.',
-  'Clemson RIDES only introduces you to drivers. Rental agreements, payments and deposits are between you and the driver, off-platform.',
+  'You keep every listed vehicle registered, insured and roadworthy, and meet the Clemson Rides vehicle standards.',
+  'Clemson Rides only introduces you to drivers. Rental agreements, payments and deposits are between you and the driver, off-platform.',
   'You will only use driver contact details to arrange the rental you accepted.',
-  'Clemson RIDES may pause or remove listings or partner accounts at any time.',
+  'Clemson Rides may pause or remove listings or partner accounts at any time.',
 ]
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/

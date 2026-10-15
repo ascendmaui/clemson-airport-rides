@@ -99,7 +99,7 @@ export function PartyNightScreen({ token = '' }) {
           background: 'linear-gradient(145deg, #F56600 0%, #522D80 72%)',
           color: '#fff',
         }}>
-          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.4 }}>CLEMSON RIDES</div>
+          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.4 }}>Clemson Rides</div>
           <h1 style={{ fontSize: 32, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1.05, margin: '8px 0 0' }}>
             Party night
           </h1>

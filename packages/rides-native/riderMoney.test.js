@@ -665,7 +665,7 @@ test('riderPromoShareUrl and riderPromoShareText construct normalized share link
   )
   assert.equal(
     riderPromoShareText('tiger-ride-10'),
-    'Join me on Clemson RIDES. Use code TIGERRIDE10 when you sign up.',
+    'Join me on Clemson Rides. Use code TIGERRIDE10 when you sign up.',
   )
   assert.equal(
     riderPromoShareUrl(null),
@@ -673,7 +673,7 @@ test('riderPromoShareUrl and riderPromoShareText construct normalized share link
   )
   assert.equal(
     riderPromoShareText(null),
-    'Join me on Clemson RIDES. Use code  when you sign up.',
+    'Join me on Clemson Rides. Use code  when you sign up.',
   )
   assert.equal(
     riderPromoShareUrl('abc-def-ghij-klmnop-extra'),
