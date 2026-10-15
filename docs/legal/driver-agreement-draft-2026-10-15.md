@@ -7,8 +7,8 @@
 > hash in `public.driver_agreement_versions`). That text, its version, and its
 > hash are unchanged by this draft.
 >
-> Bracketed items such as `[$______]` are placeholders that counsel must fill or
-> approve. Notes in **[LAWYER REVIEW]** callouts are internal and must be
+> Insurance minimums and the liability cap are filled with market or current-Terms
+> defaults for counsel to confirm. Notes in **[LAWYER REVIEW]** callouts are internal and must be
 > removed before any version is shown to drivers. Draft version label for
 > tracking only: `ic-agreement-DRAFT-2026-10-15` (not registered anywhere).
 >
@@ -86,11 +86,11 @@
 
 ## 4. Independent Contractor Relationship
 
-4.1 **Status.** To the fullest extent permitted by applicable law, you are and will remain an **independent contractor** and not an employee of the Company. Nothing in this Agreement, the app, or the way requests are offered creates an employment, partnership, joint venture, franchise, or agency relationship between you and the Company.
+4.1 **Status.** To the fullest extent permitted by applicable law, you are and will remain an **independent contractor** and not an employee of the Company. You and the Company are separate, independent businesses. The Company is not hiring you to provide any service; you are engaging the Company to give your independent business access to the Platform. Nothing in this Agreement, the app, or the way requests are offered creates an employment, partnership, joint venture, franchise, or agency relationship between you and the Company, and the parties do not share profits or losses. You confirm this relationship each time you log in to the driver app.
 
 4.2 **Your own terms.** You operate on your own terms. **You alone choose whether, when, where, and for how long you drive, and whether to accept, decline, or ignore any ride request.** There are no shifts, schedules, minimum hours, minimum acceptance rates, quotas, or exclusive territories. You may log on and off at any time.
 
-4.3 **No control over manner or means.** The Company has no right to control, and does not control, the manner or means by which you provide transportation. You choose your route consistent with the law and the Rider's destination, when to take breaks, and how to operate your business. App features such as navigation links, safety prompts, trip codes, ratings, and eligibility standards are conditions for use of the Platform and for rider safety. They are not supervision, training, or direction of an employee.
+4.3 **No control over manner or means.** The Company has no right to control, and does not control, the manner or means by which you provide transportation. You choose your route consistent with the law and the Rider's destination, when to take breaks, and how to operate your business. App features such as navigation links, safety prompts, trip codes, ratings, and eligibility standards are conditions for use of the Platform and for rider safety. They are not supervision, training, or direction of an employee. Any safety feature, screening step, standard, rating, policy, or deactivation, whether or not a law requires it, is not evidence of an employment, agency, or control relationship. Except for any signage a law or permit requires, the Company does not require you to display its name or colors on your Vehicle or to wear a uniform.
 
 4.4 **Freedom to work elsewhere.** You may provide transportation or any other services to anyone else at any time, including through other rideshare, delivery, or dispatch platforms, and you may do so while Online with Clemson Rides, subject only to Section 15 (Non-Solicitation) and the safety rule that you will not accept a Clemson Rides trip you cannot safely complete.
 
@@ -130,25 +130,26 @@
 
   (b) a rideshare / TNC endorsement or commercial policy that covers **every period of app use, from app-on through drop-off**, including:
 
-   - **While Online and available but not yet engaged in a Trip:** liability limits of at least **[$______] per person / [$______] per incident for death and bodily injury, and [$______] for property damage**, plus uninsured-motorist coverage required by S.C. Code Ann. § 38-77-150; and
-   - **While en route to a pickup and while a Rider is in the Vehicle:** liability limits of at least **[$______]** for death, bodily injury, and property damage combined, plus that uninsured-motorist coverage.
+   - **While Online and available but not yet engaged in a Trip:** liability limits of at least **$50,000 per person and $100,000 per incident for death and bodily injury, and $50,000 for property damage**, plus uninsured-motorist coverage required by S.C. Code Ann. § 38-77-150; and
+   - **While en route to a pickup and while a Rider is in the Vehicle:** liability limits of at least **$1,000,000** for death, bodily injury, and property damage, plus that uninsured-motorist coverage,
 
-> **[LAWYER REVIEW – L-7]** Insert the minimum amounts SC law requires. The
-> current rider Terms of Service (Sections 10.9 and 11.2) state $50,000 /
-> $100,000 / $50,000 while logged on and $1,000,000 while engaged in a ride.
-> The live signed agreement (Section 11) states $100,000 / $300,000 / $100,000
-> or a $300,000 CSL as "placeholders." Counsel must reconcile these and confirm
-> the TNC Act amounts and periods.
+   or any higher amounts applicable law requires.
+
+> **[LAWYER REVIEW – L-7]** Amounts filled from the current rider Terms of
+> Service (Sections 10.9 and 11.2), which already cite the SC TNC periods. The
+> live signed agreement (Section 11) used $100,000 / $300,000 / $100,000 or a
+> $300,000 CSL as "placeholders." Counsel must confirm the TNC Act amounts,
+> periods, and whether the TNC or the driver must carry them.
 
 6.2 **Primary coverage.** To the fullest extent permitted by applicable law, your coverage is primary with respect to your operations, your Vehicle, and every Trip you accept.
 
-6.3 **Proof and notice.** You will keep proof of current coverage in the Vehicle and in the app, provide a declarations page or other proof to the Company on request, and notify the Company immediately of any cancellation, non-renewal, reduction, or lapse.
+6.3 **Proof and notice.** You will keep proof of current coverage in the Vehicle and in the app, provide the policy declarations page, insurance identification card, and proof of premium payment to the Company on request and again at each renewal, and notify the Company immediately of any cancellation, non-renewal, reduction, or lapse.
 
 6.4 **Lapse means stop driving.** If any required coverage lapses or no longer meets the amounts in Section 6.1, you will **immediately stop going Online** and will not accept any Trip until coverage is restored and proof is provided. Driving during a lapse is a material breach and grounds for immediate deactivation.
 
 6.5 **Personal policy exclusions.** You acknowledge that a personal automobile policy may exclude coverage while you are Online or on a Trip, as S.C. Code Ann. § 58-23-1625 permits insurers to do. You will disclose rideshare use to your insurer as your policy and the law require and will not conceal it.
 
-6.6 **Company insurance.** The Company maintains only a standard commercial general liability policy for its own business operations. That policy does not extend to or cover any Trip, Driver, or Rider incident, accident, injury, or interaction, except as otherwise required by applicable law. Any coverage the Company may later obtain is as its policy states and does not make you an employee or an insured beyond that policy's terms.
+6.6 **Company insurance.** The Company maintains only a standard commercial general liability policy for its own business operations. That policy does not extend to or cover any Trip, Driver, or Rider incident, accident, injury, or interaction, except as otherwise required by applicable law. Any coverage the Company may later obtain is as its policy states, may be changed, reduced, or cancelled by the Company at any time except as law requires, and does not make you an employee or an insured beyond that policy's terms.
 
 6.7 **Accidents.** To the fullest extent permitted by applicable law, you and your automobile insurance carrier(s) are solely responsible for any accident and all resulting liability, including injury, death, and property damage, before, during, or after any Trip.
 
@@ -225,6 +226,8 @@
 
 11.5 **No cash.** You will not accept a street hail or cash for a ride booked on the Platform.
 
+11.6 **Separate transaction; payment collection agent.** Each Trip is a separate transaction between you and the Rider. The Company collects the fare from the Rider on your behalf as your limited payment collection agent, and the Rider's payment through the Platform satisfies the Rider's obligation to you for that Trip.
+
 ---
 
 ## 12. Driver Earnings, Payouts, Cash-Out, and Tips
@@ -233,7 +236,7 @@
 
 12.2 **Stripe onboarding required.** To receive any payout you must complete Stripe Connect onboarding (or the onboarding of any successor payment provider the Company designates) and keep your connected account in good standing. You agree to Stripe's own terms for that account.
 
-12.3 **Admin review and approval.** **Payouts are reviewed and approved by a Company administrator before they are sent to your connected Stripe account.** Approval may be delayed or withheld while a Trip, a payment, a safety report, a chargeback, or suspected fraud is under review.
+12.3 **Admin review and approval.** **Payouts are reviewed and approved by a Company administrator before they are sent to your connected Stripe account.** The app shows each payout as pending approval, approved and sent, or rejected; a rejected payout returns to your balance and the app may show a reason. Approval may be delayed or withheld while a Trip, a payment, a safety report, a chargeback, or suspected fraud is under review.
 
 12.4 **Cash-out.** Any cash-out you request follows the same review and approval process. Any instant cash-out fee is shown in the app before you confirm.
 
@@ -243,11 +246,12 @@
 
 12.7 **No guarantee.** Payout timing also depends on Stripe, banks, and holidays. The Company does not guarantee any number of requests or any minimum earnings.
 
-> **[LAWYER REVIEW – L-13]** Confirm the payout description matches the
-> product. On current `main`, the code shows an automatic payout sweep and an
-> instant cash-out flow; an explicit admin-approval step for every payout was
-> not located in code. Describe only what the product actually does before
-> drivers sign.
+> **[LAWYER REVIEW – L-13]** Matches the product as of PR #554 (merged
+> 2026-10-15): every live payout (trip and wait payouts, cash-out, tips,
+> fees, perks bonuses) waits in an admin approval queue before Stripe is
+> called; a rejected payout returns to the driver's balance. Confirm the
+> hold-during-review and setoff wording, and wage-payment risk if drivers are
+> reclassified.
 
 ---
 
@@ -380,20 +384,24 @@ AT ANY TIME, INCLUDING BEFORE, DURING, AND AFTER ANY TRIP AND WHILE ONLINE, OFFL
 
 21.2 THE COMPANY DOES NOT WARRANT THAT THE PLATFORM WILL BE UNINTERRUPTED, TIMELY, SECURE, OR ERROR-FREE; THAT MAPS, ROUTES, PINS, ETAS, OR FARE QUOTES WILL BE ACCURATE; THAT ANY NUMBER OF REQUESTS OR ANY LEVEL OF EARNINGS WILL BE AVAILABLE; OR THAT ANY RIDER WILL BE SAFE, LAWFUL, OR WILL PAY. OUTAGES AND FAILURES OF THIRD-PARTY SERVICES (INCLUDING STRIPE, SUPABASE, APPLE, GOOGLE, MAPPING PROVIDERS, AND PHONE CARRIERS) ARE NOT A BREACH.
 
-21.3 WHERE A LAW DOES NOT ALLOW A PARTICULAR DISCLAIMER, THE DISCLAIMER APPLIES TO THE MAXIMUM EXTENT THAT LAW ALLOWS.
+21.3 TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, THE ENTIRE RISK ARISING OUT OF YOUR USE OF THE PLATFORM AND YOUR DRIVING REMAINS WITH YOU. MATCHING, OFFER, PRICING, ROUTING, AND LOCATION FEATURES, INCLUDING ANY USE OF ALGORITHMS, ARE NOT A GUARANTEE OR WARRANTY OF ANY KIND, AND LOCATION DATA IS NOT INTENDED FOR USE WHERE AN ERROR COULD CAUSE INJURY OR LOSS. THE COMPANY DOES NOT SCREEN RIDERS AND MAKES NO WARRANTY ABOUT ANY RIDER'S CONDUCT.
+
+21.4 WHERE A LAW DOES NOT ALLOW A PARTICULAR DISCLAIMER, THE DISCLAIMER APPLIES TO THE MAXIMUM EXTENT THAT LAW ALLOWS.
 
 **Driver initials: [ ______ ]**
 
 ## 22. Limitation of Liability
 
-22.1 **EXCLUSION OF CONSEQUENTIAL DAMAGES.** TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, NO RELEASED PARTY WILL BE LIABLE TO YOU FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR LOST PROFITS, LOST EARNINGS, LOST TRIPS, LOST DATA, OR LOSS OF GOODWILL, HOWEVER CAUSED AND UNDER ANY THEORY, EVEN IF ADVISED OF THE POSSIBILITY.
+22.1 **EXCLUSION OF CONSEQUENTIAL DAMAGES.** TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, NO RELEASED PARTY WILL BE LIABLE TO YOU FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR LOST PROFITS, LOST EARNINGS, LOST TRIPS, LOST DATA, OR LOSS OF GOODWILL, HOWEVER CAUSED AND UNDER ANY THEORY, REGARDLESS OF THE NEGLIGENCE (ACTIVE, PASSIVE, SOLE, OR CONCURRENT) OF ANY RELEASED PARTY, EVEN IF ADVISED OF THE POSSIBILITY.
 
-22.2 **CAP.** TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, THE RELEASED PARTIES' TOTAL AGGREGATE LIABILITY TO YOU FOR ALL CLAIMS OF ANY KIND THAT ARE NOT VALIDLY RELEASED, ARISING OUT OF OR RELATING IN ANY WAY TO THIS AGREEMENT, THE PLATFORM, ANY RIDER, ANY THIRD PARTY, OR ANY TRIP, AT ANY TIME, WILL NOT EXCEED THE GREATER OF **[$______]** OR **[the platform fees the Company retained from your Trips in the [___] months before the Claim]**. THE CAP IS A SINGLE CEILING FOR ALL RELATED CLAIMS AND DOES NOT RESET PER CLAIM, PERSON, OR THEORY.
+22.2 **CAP.** TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, THE RELEASED PARTIES' TOTAL AGGREGATE LIABILITY TO YOU FOR ALL CLAIMS OF ANY KIND THAT ARE NOT VALIDLY RELEASED, ARISING OUT OF OR RELATING IN ANY WAY TO THIS AGREEMENT, THE PLATFORM, ANY RIDER, ANY THIRD PARTY, OR ANY TRIP, AT ANY TIME, WILL NOT EXCEED THE GREATER OF **ONE HUNDRED U.S. DOLLARS (US$100)** OR **THE PLATFORM FEES YOU PAID TO, OR THE COMPANY RETAINED FROM, YOUR TRIPS IN THE TWELVE (12) MONTHS BEFORE THE EVENT GIVING RISE TO THE FIRST CLAIM**. THE CAP IS A SINGLE CEILING FOR ALL RELATED CLAIMS AND DOES NOT RESET PER CLAIM, PERSON, OR THEORY.
 
 22.3 THESE LIMITS APPLY EVEN IF A LIMITED REMEDY FAILS OF ITS ESSENTIAL PURPOSE. THEY DO NOT APPLY TO LIABILITY FOR GROSS NEGLIGENCE, RECKLESSNESS, OR INTENTIONAL MISCONDUCT, TO STATUTORY INSURANCE DUTIES, OR TO ANY LIABILITY THAT APPLICABLE LAW DOES NOT ALLOW TO BE LIMITED, AND THEY DO NOT LIMIT YOUR RIGHT TO BE PAID EARNINGS FOR COMPLETED TRIPS.
 
-> **[LAWYER REVIEW – L-8]** Fill the cap amount and look-back period. The live
-> agreement uses US$100 or three months of retained platform fees.
+> **[LAWYER REVIEW – L-8]** Cap set to the market default (greater of US$100
+> or 12 months of platform fees). The live agreement used US$100 or three
+> months of retained fees. Confirm a cap is enforceable for personal-injury
+> claims in SC and is not unconscionable.
 
 **Driver initials: [ ______ ]**
 
@@ -409,7 +417,9 @@ AT ANY TIME, INCLUDING BEFORE, DURING, AND AFTER ANY TRIP AND WHILE ONLINE, OFFL
   (f) tickets, tolls, fines, and penalties;
   (g) your insurance, including any denial of coverage, lapse, or insufficient limits;
   (h) your taxes, and any claim that payouts were wages, to the extent arising from your conduct, representations, or filings; and
-  (i) content you upload, and any breach of confidentiality.
+  (i) content you upload, and any breach of confidentiality,
+
+including Claims alleged to arise in part from the ordinary negligence (active, passive, or concurrent) of a Company Party, to the fullest extent permitted by applicable law.
 
 23.2 The Company may choose its own counsel at your expense or require you to provide a defense by counsel reasonably acceptable to the Company. You will not settle any Claim that imposes an obligation on, or admits fault by, any Company Party without the Company's prior written consent.
 
@@ -439,26 +449,37 @@ The following survive termination, deactivation, account closure, and the end of
 
 ## 27. Dispute Resolution; Arbitration; Class Waiver
 
-27.1 **Informal resolution.** Before starting a formal claim, the party with the dispute will send written notice to the other (to the Company at 101 North Main Street, Greenville, SC 29601, or to you at your account email) and both will try in good faith to resolve it for thirty (30) days.
+27.1 **Informal notice first.** Before starting arbitration or a court case, the party with the dispute will send written notice describing it and the relief sought (to the Company at 101 North Main Street, Greenville, SC 29601, or to you at your account email), and both will try in good faith to resolve it for thirty (30) days. Any statute of limitations is tolled during that period. Small-claims cases may skip this step.
 
-27.2 **Binding individual arbitration.** Except for individual small-claims cases and the requests for interim relief in Section 27.6, any dispute arising out of or relating to this Agreement, the Platform, or any Trip will be resolved by binding individual arbitration administered by the American Arbitration Association under its applicable rules, before one arbitrator, seated in Greenville, South Carolina. The Federal Arbitration Act, 9 U.S.C. § 1 et seq., governs this Section.
+27.2 **Binding individual arbitration.** Except as Section 27.8 provides, any dispute, claim, or controversy arising out of or relating to this Agreement (including prior versions), the Platform, any Trip, your relationship with the Company, your classification, payments, deactivation, or background checks will be resolved by binding individual arbitration before one arbitrator administered by the American Arbitration Association under its Commercial Arbitration Rules, except that claims alleging you are an employee of the Company proceed under the AAA Employment/Workplace Arbitration Rules. The seat is Greenville, South Carolina, and hearings may be by video.
 
-27.3 **Class, collective, and representative waiver.** TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, YOU AND THE COMPANY EACH WAIVE ANY RIGHT TO BRING OR PARTICIPATE IN A CLASS, COLLECTIVE, OR REPRESENTATIVE ACTION OR ARBITRATION. Claims may be brought only individually.
+27.3 **Governing arbitration law.** The Federal Arbitration Act, 9 U.S.C. § 1 et seq., governs this Section. If the FAA is held not to apply (including under the FAA § 1 exemption for transportation workers), this Section is governed by the South Carolina Uniform Arbitration Act, S.C. Code Ann. § 15-48-10 et seq., to the fullest extent permitted by applicable law.
 
-27.4 **Jury waiver.** TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, YOU AND THE COMPANY EACH WAIVE A TRIAL BY JURY OF ANY CLAIM HEARD IN COURT.
+27.4 **Delegation.** The arbitrator decides all questions about the interpretation, applicability, enforceability, unconscionability, or formation of this arbitration agreement, except that a court decides the validity of the class, collective, and representative-action waiver in Section 27.5 and whether a claim belongs in small-claims court.
 
-27.5 **Mass arbitration and delegation.** The mass-arbitration batching rule and delegation clause in the Clemson Rides Terms of Service (Sections 18.4 and 18.5) apply to this Agreement.
+27.5 **Class, collective, and representative waiver.** TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, YOU AND THE COMPANY EACH WAIVE ANY RIGHT TO BRING OR PARTICIPATE IN A CLASS, COLLECTIVE, OR REPRESENTATIVE ACTION OR ARBITRATION. The arbitrator may award relief only to the individual party and only as needed for that party's claim. **This waiver is not severable from the agreement to arbitrate**: if a court finally holds it unenforceable for a claim, that claim proceeds in court on an individual basis if the law allows and is stayed until any arbitrable claims are resolved.
 
-27.6 **Small claims and interim relief.** Either party may bring an individual claim in a South Carolina small-claims or magistrate's court, or seek temporary injunctive relief in court to protect confidential information, intellectual property, or safety while arbitration proceeds.
+27.6 **Mass arbitration.** If twenty-five (25) or more similar demands are filed by the same or coordinated counsel within ninety (90) days, they proceed in batches of twenty-five (25); up to five (5) bellwether matters from the first batch are arbitrated first while the rest are stayed, followed by a good-faith mediation of the remaining demands, with later batches proceeding in order. Limitations periods are tolled while a demand is stayed. The AAA Mass Arbitration Supplementary Rules apply where not inconsistent. Batching does not create a class or collective proceeding.
 
-27.7 **Opt-out.** You may opt out of arbitration by mailing a signed notice with your name and account email to the address in Section 27.1 within thirty (30) days after you first sign this Agreement.
+27.7 **Fees.** For any claim you bring, the Company will pay all arbitration filing, administrative, and arbitrator fees above the amount of the filing fee you would pay to bring the same claim in a South Carolina court. The Company pays all such fees for any claim it brings. Each party pays its own attorneys' fees unless the arbitrator awards fees under applicable law or Section 20.1.
 
-27.8 If the class waiver is held unenforceable for a claim, that claim proceeds in court on an individual basis and arbitration continues to govern all other claims.
+27.8 **Exceptions.** This Section does not require arbitration of (a) individual claims in a South Carolina small-claims or magistrate's court that stay there; (b) claims for workers' compensation or unemployment insurance benefits; (c) requests for temporary injunctive relief in court to protect confidential information, intellectual property, or safety while arbitration proceeds; or (d) claims that applicable law not preempted by the FAA says cannot be arbitrated. Nothing here prevents you from filing a charge with, or participating in an investigation by, a government agency.
 
-> **[LAWYER REVIEW – L-4]** Arbitration and class waiver enforceability,
+27.9 **Jury waiver.** TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, YOU AND THE COMPANY EACH WAIVE A TRIAL BY JURY OF ANY CLAIM HEARD IN COURT, INCLUDING IF YOU OPT OUT OF ARBITRATION.
+
+27.10 **Third parties.** This Section binds your heirs, estate, and assigns, and covers claims against the Company Parties and the Company's payment and background-check service providers, to the extent the claims arise from this Agreement or your use of the Platform.
+
+27.11 **No shortened deadline.** Nothing in this Agreement shortens any statute of limitations.
+
+27.12 **Opt-out.** You may opt out of this arbitration agreement by mailing or emailing a signed notice with your name and account email to the address in Section 27.1 within thirty (30) days after you first sign this version. Opting out does not affect any other part of this Agreement. The Company will not retaliate against you for opting out.
+
+> **[LAWYER REVIEW – L-4, L-20]** Arbitration and class waiver enforceability,
 > including the FAA § 1 transportation-worker exemption (*New Prime*,
-> *Saxon*, *Bissonnette*), which may remove rideshare drivers on airport trips
-> from FAA coverage and leave the SC Uniform Arbitration Act to govern.
+> *Saxon*, *Bissonnette*) for drivers on interstate CLT trips, the SC UAA
+> fallback, delegation, batching, fee terms, and binding third parties.
+> A 1-year claims deadline was deliberately **not** included: S.C. Code Ann.
+> § 15-3-140 voids shortened limitations periods, and *Huskins v. Mungo
+> Homes, LLC* (S.C. 2024) voided an entire arbitration agreement over one.
 
 ## 28. Governing Law and Venue
 
@@ -470,7 +491,7 @@ This Agreement is governed by the laws of the State of South Carolina, without r
 
 ## 29. Severability and Reformation
 
-29.1 If any provision of this Agreement, or any part of a provision, is held invalid, unenforceable, or against public policy, **a court or arbitrator will reform it to the minimum extent necessary to make it valid and enforceable, narrowing its scope, duration, amount, or the Claims it covers, rather than striking it**. Only if reformation is impossible will that part be severed. The remainder of the provision and of this Agreement stays in full force.
+29.1 Except as Section 27.5 provides for the class waiver, if any provision of this Agreement, or any part of a provision, is held invalid, unenforceable, or against public policy, **a court or arbitrator will reform it to the minimum extent necessary to make it valid and enforceable, replacing it with a valid term that has, as closely as possible, the same effect, and narrowing its scope, duration, amount, or the Claims it covers, rather than striking it**. Only if reformation is impossible will that part be severed. The remainder of the provision and of this Agreement stays in full force.
 
 29.2 In particular, if a release, waiver, assumption of risk, covenant not to sue, indemnity, or limitation of liability is held unenforceable as to any category of Claim (for example, Claims for ordinary negligence), it will be enforced as to every other category.
 
@@ -478,7 +499,7 @@ This Agreement is governed by the laws of the State of South Carolina, without r
 
 30.1 **Entire agreement.** This Agreement, the Clemson Rides Terms of Service, and the Privacy Policy are the entire agreement on this subject. Where they conflict on the Company's liability, the provision that limits that liability more tightly controls, to the fullest extent permitted by applicable law.
 
-30.2 **Changes.** The Company may publish a new version. You must accept a new version in the app before you continue to go Online. A prior signature does not accept a later version.
+30.2 **Changes.** The Company may publish a new version. A new version binds you only when you accept it; for any material change you must affirmatively accept the new version in the app before you continue to go Online, and each new version starts a new 30-day arbitration opt-out window under Section 27.12. A prior signature does not accept a later version.
 
 30.3 **Assignment.** You may not assign this Agreement. The Company may assign it to a successor that operates the Platform.
 
@@ -514,16 +535,19 @@ Every item below must be reviewed and resolved by a licensed South Carolina atto
 | L-3 | § 4.7 Benefit waiver; § 4.8 classification indemnity | Whether a driver can waive employee-benefit claims, and whether an indemnity for misclassification assessments is enforceable or itself evidence of control. Workers' comp and unemployment rights are generally non-waivable. |
 | L-5 | § 6 Insurance; § 6.6–6.7 Company policy | **Insurance and TNC requirements under SC law.** S.C. Code Ann. § 58-23-1630 may require the TNC to maintain or backstop coverage; confirm whether the Company must carry TNC coverage itself and whether "primary as to driver's operations" is consistent with the statute. |
 | L-6 | § 1 Dispatch only / not a carrier | **'Dispatch only / not a carrier' positioning versus SC TNC statutes**, which place insurance, background-check, zero-tolerance, nondiscrimination, record-keeping, and permit duties on the TNC itself. Confirm whether the Company needs a TNC permit from the SC Office of Regulatory Staff / PSC and whether this framing is accurate. |
-| L-7 | § 6.1 Insurance minimums | **Minimum insurance amounts required by SC law** — fill the bracketed placeholders. Reconcile the rider Terms ($50k/$100k/$50k online; $1M on trip) with the live agreement's $100k/$300k/$100k placeholders. Confirm UM/UIM requirements under §§ 38-77-140 and 38-77-150. |
-| L-8 | § 22 Limitation of liability | Fill the **liability cap** amount and look-back period. Confirm a cap is enforceable for personal-injury claims and is not unconscionable. |
-| L-4 | § 27 Arbitration, class and jury waiver | **Arbitration and class waiver.** FAA § 1 transportation-worker exemption (rideshare drivers carrying passengers to and from airports), fallback to SC Uniform Arbitration Act, delegation clause, mass-arbitration batching, opt-out mechanics, and fees. |
+| L-7 | § 6.1 Insurance minimums | **Minimum insurance amounts required by SC law.** Draft uses the rider Terms' figures ($50k/$100k/$50k online; $1M on trip) plus UM under §§ 38-77-140 and 38-77-150. Confirm these are the TNC Act amounts and periods and who must carry them. |
+| L-8 | § 22 Limitation of liability | Cap set to the greater of US$100 or 12 months of platform fees (market default). Confirm a cap is enforceable for personal-injury claims and is not unconscionable. |
+| L-4 | § 27 Arbitration, class and jury waiver | **Arbitration and class waiver.** FAA § 1 transportation-worker exemption (interstate CLT trips), SC UAA fallback, AAA Commercial vs Employment rules, delegation, non-severable class waiver, mass-arbitration batching (25 / bellwethers / mediation), Company-paid fees above a court filing fee, workers' comp and unemployment carve-out, 30-day opt-out restarting with each version, binding heirs and service providers. |
 | L-11 | First-page arbitration notice | Confirm the notice satisfies S.C. Code Ann. § 15-48-10(a) (underlined capitals on the first page) in the app's rendering. |
 | L-9 | § 28 Venue | Greenville County (this draft, matches Terms) vs. Pickens/Anderson County (live agreement). |
 | L-10 | § 8 Background checks | FCRA stand-alone disclosure and authorization, SC TNC Act § 58-23-1650 duties, and whether approval on attestation without a vendor report is permissible. |
-| L-13 | § 12 Payouts | Confirm the admin-approval description of payouts, cash-out, and tips matches the product (code on `main` shows an automatic payout sweep and instant cash-out); any setoff/negative-balance repayment rules; and whether holding earnings during review raises SC Payment of Wages Act risk if drivers are reclassified. |
+| L-13 | § 12 Payouts | Admin approval of every payout, cash-out, and tip (live since PR #554): confirm the hold-during-review and rejection wording, setoff/negative-balance repayment rules, and whether holding earnings during review raises SC Payment of Wages Act risk if drivers are reclassified. |
 | L-14 | § 11 Card hold | Confirm the rider-payment description matches the Terms of Service and the cancellation policy, and that drivers are not promised payment for trips whose capture fails. |
 | L-15 | § 15 Non-solicitation | Confirm the six-month rider non-solicitation is reasonable and enforceable under SC restrictive-covenant law for a contractor. (The live agreement also has a limited non-compete; this draft drops it — confirm.) |
 | L-16 | § 16 Privacy and location | Location collection while Online/en route, retention periods, and any state privacy-law obligations. |
 | L-17 | § 30.1 "Tighter limit controls" | Whether a conflict rule that always favors the Company's liability limits is enforceable or contributes to unconscionability (L-12). |
 | L-18 | Re-signing | **Whether existing drivers must re-sign a new version.** The live `ic-agreement-2026-10-05` was signed by current drivers and approval requires that version. Decide whether a new version requires fresh signature (recommended for releases and arbitration), how to handle drivers who decline, and whether the old version continues to govern past trips. |
 | L-19 | § 31 Electronic signature and initials | Whether in-app initials boxes and a drawn/typed signature satisfy ESIGN/UETA and SC conspicuousness for each waiver section. |
+| L-20 | § 27.11 No shortened deadline | A 1-year claims deadline was considered and **rejected**: S.C. Code Ann. § 15-3-140 voids shortened limitations periods, and *Huskins v. Mungo Homes* (S.C. 2024) voided a whole arbitration agreement over one. Confirm. |
+| L-21 | §§ 4.1, 11.6, 21.3 Market techniques | Business-to-business framing ("driver engages the Platform", re-confirmation on each login, no shared profit or loss), payment-collection-agent framing, and "safety features are not indicia of control" are adapted from Uber and Lyft. Confirm they fit SC law and the TNC Act (see L-6). Note Uber's driver agreement takes **no** driver indemnity (PAA § 12.9); weigh whether the broad § 23 indemnity adds risk under L-2/L-12. |
+| L-22 | § 30.2 Changes | Affirmative re-acceptance for material changes and a fresh opt-out window per version: confirm the in-app flow records it. |

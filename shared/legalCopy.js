@@ -333,4 +333,107 @@ export const TERMS_SECTIONS = [
       `For terms or privacy questions, email ${SUPPORT} or use Account → Support. Notices required by these Terms, including a notice that starts the informal dispute step and an arbitration opt-out, must be mailed to Clemson Rides, 101 North Main Street, Greenville, SC 29601. A mailed notice is effective when we receive it. The Company may give you notice at the email on your account, and that notice is effective when sent.`,
     ],
   },
+  // ---------------------------------------------------------------------------
+  // DRAFT ADDITIONS (2026-10-15). Not live: this exists only on the PR #485
+  // branch. Articles 1-23 above are unchanged. Every lawyer note below is an
+  // internal comment and is not shown to riders. Full list:
+  // docs/legal/rider-terms-additions-2026-10-15.md
+  // ---------------------------------------------------------------------------
+  {
+    heading: 'Article 24. Supplemental Protective Terms: Scope and Precedence',
+    paragraphs: [
+      'Section 24.1. Articles 24 through 30 are added to these Terms. They supplement Articles 1 through 23 and do not delete or rewrite them. Each provision in Articles 24 through 30 applies to the fullest extent permitted by applicable law.',
+      'Section 24.2. Precedence. To the extent of any conflict between Articles 24 through 30 and any other provision of these Terms, the Driver Agreement, or the Privacy Policy, the provision that is more protective of Clemson Rides controls, to the fullest extent permitted by applicable law. A provision that a court or arbitrator will not enforce is not “more protective” for this purpose, and the next most protective enforceable provision controls instead.',
+      'Section 24.3. In Articles 24 through 30, “Company Parties” means Clemson Rides and its past, present, and future owners, members, managers, officers, directors, employees, contractors, affiliates, agents, insurers, successors, and assigns. “Covered Matter” means anything arising out of or relating in any way to Clemson Rides; the Platform, the apps, or the website; any Company Party; any Driver; any Rider; any third party; or any Ride dispatched through the Platform, at any time, including before, during, and after a Ride, and whether the Driver is online, offline, or en route.',
+    ],
+  },
+  // LAWYER REVIEW (R-3, R-6): Section 24.2 resolves conflicts in the Company's
+  // favor. Conflicts with Articles 13, 14, 15, 16, 19.1, and 22 are listed in
+  // the docs file. A one-sided precedence rule can itself support an
+  // unconscionability finding.
+  {
+    heading: 'Article 25. Dispatch Platform and Independent Drivers',
+    paragraphs: [
+      'Section 25.1. Clemson Rides is a technology and dispatch platform that connects Riders with independent-contractor Drivers. Clemson Rides is not a transportation carrier, common carrier, or motor carrier, does not provide transportation services, and is not the employer of any Driver. Drivers, not Clemson Rides, provide the transportation.',
+      'Section 25.2. When a Driver accepts your request, any transportation that follows is a separate transaction between you and that Driver. Clemson Rides collects the fare for that transaction as the Driver’s limited payment collection agent, and your payment through the Platform satisfies your payment obligation to the Driver for that Ride.',
+      'Section 25.3. Drivers are not actual, apparent, or ostensible agents or employees of Clemson Rides. Any safety feature, screening step, standard, rating, policy, deactivation, or other effort by Clemson Rides, whether or not a law requires it, is not evidence of an employment, agency, or control relationship with any Driver and is not an undertaking to supervise any Ride.',
+      'SECTION 25.4. TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, THE ENTIRE RISK ARISING OUT OF YOUR USE OF THE PLATFORM AND OF ANY RIDE REMAINS WITH YOU. MATCHING, PRICING, ROUTING, AND LOCATION FEATURES, INCLUDING ANY USE OF ALGORITHMS, ARE NOT A GUARANTEE OR WARRANTY OF ANY KIND, AND LOCATION DATA IS NOT INTENDED FOR USE WHERE AN ERROR COULD CAUSE INJURY OR LOSS.',
+    ],
+  },
+  // LAWYER REVIEW (R-4): dispatch-only framing versus the SC TNC Act
+  // (S.C. Code Ann. §§ 58-23-1610 et seq.), which places insurance, screening,
+  // zero-tolerance, nondiscrimination, and record duties on the TNC itself.
+  {
+    heading: 'Article 26. Supplemental Assumption of Risk',
+    paragraphs: [
+      'SECTION 26.1. TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, YOU KNOWINGLY, VOLUNTARILY, AND EXPRESSLY ASSUME ALL RISKS OF EVERY KIND, KNOWN AND UNKNOWN, ARISING OUT OF OR RELATING IN ANY WAY TO ANY COVERED MATTER, INCLUDING TRAFFIC COLLISIONS, THE CONDUCT OF DRIVERS, RIDERS, AND OTHER PERSONS, CRIME, WEATHER, ROAD AND VEHICLE CONDITIONS, AND PLATFORM ERRORS OR OUTAGES, AT ANY TIME, BEFORE, DURING, AND AFTER ANY RIDE.',
+      'SECTION 26.2. TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, THIS ASSUMPTION OF RISK INCLUDES RISKS ARISING FROM THE NEGLIGENCE OF ANY COMPANY PARTY, WHETHER ACTIVE, PASSIVE, SOLE, OR CONCURRENT, AND INCLUDES RISKS ARISING FROM GROSS NEGLIGENCE AND ANY OTHER CONDUCT.',
+    ],
+  },
+  // LAWYER REVIEW (R-1, R-2): John asked that Articles 26-28 include gross
+  // negligence "to the fullest extent permitted by applicable law." SC courts
+  // generally will not enforce a release, assumption of risk, or indemnity for
+  // gross negligence, recklessness, or intentional conduct. Including it risks
+  // the entire clause being struck rather than narrowed (see Huskins v. Mungo
+  // Homes, S.C. 2024, refusing to sever an unlawful term from an adhesion
+  // contract). Counsel must confirm scope.
+  {
+    heading: 'Article 27. Supplemental Release, Unknown Claims, and Covenant Not to Sue',
+    paragraphs: [
+      'SECTION 27.1. RELEASE. TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, YOU, FOR YOURSELF AND YOUR HEIRS, ESTATE, REPRESENTATIVES, GUESTS FOR WHOM YOU BOOK A RIDE, AND ASSIGNS, RELEASE, WAIVE, AND FOREVER DISCHARGE THE COMPANY PARTIES FROM ANY AND ALL CLAIMS OF ANY KIND, KNOWN OR UNKNOWN, SUSPECTED OR UNSUSPECTED, ARISING OUT OF OR RELATING IN ANY WAY TO ANY COVERED MATTER, INCLUDING CLAIMS FOR PERSONAL INJURY, DEATH, PROPERTY DAMAGE OR LOSS, EMOTIONAL DISTRESS, AND ECONOMIC LOSS.',
+      'SECTION 27.2. TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, THIS RELEASE INCLUDES CLAIMS BASED ON THE NEGLIGENCE OF ANY COMPANY PARTY, WHETHER ACTIVE, PASSIVE, SOLE, OR CONCURRENT, AND INCLUDES CLAIMS BASED ON GROSS NEGLIGENCE AND ANY OTHER CLAIM. IF A LAW DOES NOT ALLOW A PARTICULAR CLAIM TO BE RELEASED, THIS RELEASE APPLIES TO EVERY OTHER CLAIM AND IS NARROWED ONLY AS FAR AS THAT LAW REQUIRES.',
+      'SECTION 27.3. UNKNOWN CLAIMS. TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, YOU EXPRESSLY WAIVE THE BENEFIT OF ANY STATUTE, RULE, OR DOCTRINE THAT WOULD LIMIT A GENERAL RELEASE TO CLAIMS YOU KNOW OR SUSPECT WHEN YOU ACCEPT THESE TERMS. YOU UNDERSTAND THAT YOU MAY LATER DISCOVER FACTS OR CLAIMS YOU DO NOT NOW KNOW, AND YOU INTEND THIS RELEASE TO APPLY TO THEM.',
+      'SECTION 27.4. COVENANT NOT TO SUE. TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, YOU AGREE NOT TO SUE OR BRING ANY ARBITRATION OR OTHER PROCEEDING AGAINST ANY COMPANY PARTY ON ANY CLAIM RELEASED IN THIS ARTICLE. THIS COVENANT DOES NOT BAR A REPORT OR CHARGE TO A GOVERNMENT AGENCY, A CLAIM THAT IS NOT RELEASED, OR A PROCEEDING TO ENFORCE THESE TERMS.',
+      'Section 27.5. This release concerns Claims against the Company Parties. It does not release your Claims against a Driver personally or against the Driver’s insurer or any statutorily required TNC insurance coverage, which you may pursue directly.',
+    ],
+  },
+  // LAWYER REVIEW (R-1, R-3, R-5): conflicts with Article 15 (paragraphs 1-3)
+  // and Article 19.1, which exclude gross negligence and willful misconduct
+  // where a statute forbids the waiver; consumer-protection limits on waivers
+  // in adhesion consumer contracts (SC Unfair Trade Practices Act,
+  // unconscionability). Section 27.5 is a deliberate carve-out so the release
+  // is not read to cover parties who are not in the contract.
+  {
+    heading: 'Article 28. Supplemental Indemnity and Damages Limits',
+    paragraphs: [
+      'Section 28.1. Rider indemnity. To the fullest extent permitted by applicable law, you will defend, indemnify, and hold harmless the Company Parties from and against any and all Claims arising out of or relating in any way to your use of the Platform, any Ride you request or take, your guests, your conduct toward any Driver or other person, or your breach of these Terms or of any law. This indemnity applies without regard to the negligence of any party, including the negligence of the Company Party seeking indemnity, to the fullest extent permitted by applicable law. You will not settle any Claim that imposes an obligation on, or admits fault by, a Company Party without the Company’s prior written consent.',
+      'SECTION 28.2. EXCLUSION OF CONSEQUENTIAL DAMAGES. TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, NO COMPANY PARTY WILL BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR LOST PROFITS, LOST DATA, MISSED FLIGHTS, OR LOSS OF GOODWILL, ARISING OUT OF OR RELATING IN ANY WAY TO ANY COVERED MATTER, HOWEVER CAUSED AND UNDER ANY THEORY, REGARDLESS OF THE NEGLIGENCE OF ANY COMPANY PARTY, AND EVEN IF ADVISED OF THE POSSIBILITY.',
+      'SECTION 28.3. CAP. TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, THE TOTAL AGGREGATE LIABILITY OF ALL COMPANY PARTIES FOR ALL CLAIMS ARISING OUT OF OR RELATING IN ANY WAY TO ANY COVERED MATTER WILL NOT EXCEED THE GREATER OF ONE HUNDRED U.S. DOLLARS (US$100) OR THE AMOUNTS YOU PAID THROUGH THE PLATFORM IN THE TWELVE (12) MONTHS BEFORE THE EVENT GIVING RISE TO THE FIRST CLAIM. UNDER SECTION 24.2, IF ARTICLE 14 PROVIDES A LOWER ENFORCEABLE LIMIT, THAT LOWER LIMIT CONTROLS.',
+      'SECTION 28.4. THESE LIMITS APPLY EVEN IF A LIMITED REMEDY FAILS OF ITS ESSENTIAL PURPOSE. THEY DO NOT LIMIT ANY RIGHT THAT APPLICABLE LAW SAYS CANNOT BE LIMITED, AND IN THAT CASE THEY APPLY TO THE MAXIMUM EXTENT THAT LAW ALLOWS.',
+    ],
+  },
+  // LAWYER REVIEW (R-5, R-7): South Carolina enforces indemnity for an
+  // indemnitee's own negligence only when stated clearly and unequivocally;
+  // Section 28.1 is drafted to meet that test. Section 28.3 cap (greater of
+  // US$100 or 12 months of spend) is higher than Article 14 (greater of the
+  // trip amount or US$100); under Section 24.2 the lower Article 14 cap
+  // controls. Counsel to choose.
+  {
+    heading: 'Article 29. Supplemental Dispute Resolution Terms',
+    paragraphs: [
+      'Section 29.1. These Sections add to Article 18 and do not replace it. If the Federal Arbitration Act is held not to apply to a dispute, the arbitration agreement in Article 18 is governed by the South Carolina Uniform Arbitration Act, S.C. Code Ann. § 15-48-10 et seq., to the fullest extent permitted by applicable law.',
+      'Section 29.2. The class, collective, and representative-action waiver in Section 18.3 is not severable from the agreement to arbitrate. If a court finally holds that waiver unenforceable for a Claim, that Claim proceeds in court on an individual basis if the law allows, and is stayed until any arbitrable Claims are resolved. A court, not an arbitrator, decides the validity of that waiver.',
+      'Section 29.3. For a Rider’s individual Claim, the Company will pay all arbitration filing, administrative, and arbitrator fees above the amount of the filing fee you would pay to bring the same Claim in a South Carolina court. Each party pays its own attorneys’ fees unless the arbitrator awards fees under applicable law.',
+      'Section 29.4. Any applicable statute of limitations is tolled while the informal notice period in Section 18.1 runs. Nothing in these Terms shortens any statute of limitations. This arbitration agreement also binds your heirs, estate, and the guests for whom you book a Ride, to the extent their Claims arise from your use of the Platform, and you will make these Terms available to those guests.',
+      'Section 29.5. The Company will not retaliate against you for opting out of arbitration under Section 18.6.',
+    ],
+  },
+  // LAWYER REVIEW (R-8): arbitration and class waiver, including the SC UAA
+  // fallback, § 15-48-10(a) first-page notice, delegation, batching (18.4),
+  // and binding guests. Deliberately no shortened claims deadline:
+  // S.C. Code Ann. § 15-3-140 voids it, and Huskins v. Mungo Homes (S.C. 2024)
+  // struck an entire arbitration agreement over a 90-day deadline.
+  {
+    heading: 'Article 30. Supplemental Acknowledgment, Changes, Severability, and Survival',
+    paragraphs: [
+      'Section 30.1. Changes. For a material change to Articles 12 through 19 or 24 through 30, the Company will ask you to accept the updated Terms affirmatively in the app or on the website before your next booking. This is in addition to Article 22.',
+      'Section 30.2. Severability and reformation. If any part of Articles 24 through 30 is held invalid, unenforceable, or against public policy, a court or arbitrator will reform it to the minimum extent necessary to make it enforceable, replacing it with a valid term that has, as closely as possible, the same effect, and narrowing its scope, the Claims it covers, or its amount rather than striking it. Only if reformation is impossible will that part be severed, and every other part of these Terms stays in force. Article 20.1 also applies.',
+      'Section 30.3. Survival. Articles 24 through 30 survive account closure, deactivation, termination of these Terms, and the end of any Ride.',
+      'SECTION 30.4. ACKNOWLEDGMENT. BY CREATING AN ACCOUNT, REQUESTING A RIDE, OR TAPPING “I AGREE,” YOU CONFIRM THAT YOU HAVE READ AND UNDERSTOOD THESE TERMS, INCLUDING THE ASSUMPTION OF RISK, RELEASE, UNKNOWN-CLAIMS WAIVER, COVENANT NOT TO SUE, INDEMNITY, DAMAGES LIMITS, AND ARBITRATION AGREEMENT; THAT YOU HAVE HAD TIME TO CONSIDER THEM AND THE OPPORTUNITY TO CONSULT A LAWYER; AND THAT YOU KNOWINGLY AND VOLUNTARILY GIVE UP THE RIGHTS THEY DESCRIBE. YOUR ELECTRONIC ACCEPTANCE IS YOUR SIGNATURE UNDER ARTICLE 20.7.',
+    ],
+  },
+  // LAWYER REVIEW (R-9): whether existing riders must re-accept. The web
+  // "agree" button stores LEGAL_UPDATED in sessionStorage only; a stored,
+  // per-user clickwrap record would better support Section 30.4. LEGAL_UPDATED
+  // and the driver clickwrap version were left unchanged on purpose.
 ]
