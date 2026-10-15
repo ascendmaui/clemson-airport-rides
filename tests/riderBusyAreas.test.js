@@ -13,3 +13,4 @@ test('home map keeps Game day and Surge and drops the Busy Areas control', () =>
   assert.match(home, /Surge · On/)
   assert.match(home, /label=\{surge \? 'Surge · On' : 'Surge'\}/)
 })
+
