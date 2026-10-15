@@ -56,7 +56,44 @@ async function writeLedger(sb, row) {
   if (error) console.error('[rider_credit_ledger]', error.message)
 }
 
-export async function debitLots(sb, { profileId, debits, note, tripId }) {
+/**
+ * Debit specific lots for one charge. Production goes through the
+ * debit_credit_lots RPC: all lots or none, per-rider lock, and an idempotency
+ * key (explicit, or derived from the note) so a webhook/reconcile pair or a
+ * retried charge never debits twice. A replay returns the same debits.
+ * Throws on any failure; nothing is applied when it throws.
+ */
+export async function debitLots(sb, { profileId, debits, note, tripId, idempotencyKey } = {}) {
+  const rows = (debits || []).filter((d) => d?.lotId && d.debitCents)
+  if (!rows.length) return []
+  if (typeof sb?.rpc !== 'function') return debitLotsTableFallback(sb, { profileId, debits: rows, note, tripId })
+  const key = idempotencyKey || (note ? `lots:${note}` : null)
+  const { data, error } = await sb.rpc('debit_credit_lots', {
+    p_profile_id: profileId,
+    p_debits: rows.map((d) => ({
+      lot_id: d.lotId,
+      debit_cents: Math.round(Number(d.debitCents) || 0),
+      discount_cents: Math.round(Number(d.discountCents) || 0),
+    })),
+    p_trip_id: tripId || null,
+    p_note: note || null,
+    p_idempotency_key: key,
+  })
+  if (error) {
+    if (/credit_lot_missing/.test(error.message || '')) throw new Error('Credit lot missing')
+    if (/credit_balance_changed/.test(error.message || '')) throw new Error('Credit balance changed — retry the charge')
+    throw new Error(error.message || 'Credit debit failed')
+  }
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row || row.ok !== true) {
+    if (row?.code === 'idempotency_conflict') throw new Error('Credit debit already recorded with a different amount')
+    throw new Error(row?.code || 'Credit debit failed')
+  }
+  return rows
+}
+
+/** Test doubles without rpc(): the old per-lot compare-and-swap path. */
+async function debitLotsTableFallback(sb, { profileId, debits, note, tripId }) {
   const applied = []
   try {
     for (const debit of debits || []) {
