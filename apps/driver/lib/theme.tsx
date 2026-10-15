@@ -225,6 +225,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   )
 }
 
+/** Theme when a ThemeProvider is mounted, else null (crash recovery above the provider). */
+export function useOptionalTheme(): ThemeValue | null {
+  return useContext(ThemeContext)
+}
+
 export function useTheme(): ThemeValue {
   const value = useContext(ThemeContext)
   if (!value) throw new Error('useTheme must be used inside ThemeProvider')

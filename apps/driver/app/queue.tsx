@@ -41,6 +41,7 @@ import { WorthItLegend } from 'rides-native/WorthItLegend'
 import { ScheduledRidesExplainer, ScheduledRidesHint } from 'rides-native/ScheduledRidesInfo'
 import { driverBoostOfferLine } from '../../../shared/copy/boost.js'
 import { compareBoostedFirst, formatBoostBadge } from '../../../shared/scheduledBoost.js'
+import { CrashBoundary } from '@/components/CrashBoundary'
 
 function useQueueStyles() {
   const { colors } = useTheme()
@@ -234,6 +235,14 @@ function filterLabel(filter: QueueFilter): string {
 }
 
 export default function QueueScreen() {
+  return (
+    <CrashBoundary scope="offers" title="Ride offers" fill>
+      <QueueScreenBody />
+    </CrashBoundary>
+  )
+}
+
+function QueueScreenBody() {
   const router = useRouter()
   const params = useLocalSearchParams<{ filter?: string }>()
   const insets = useSafeAreaInsets()

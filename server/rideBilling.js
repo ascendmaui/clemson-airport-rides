@@ -15,16 +15,24 @@ function finiteCents(value) {
 
 /**
  * Server balance for this rider.
- * Reads credit_accounts.balance_cents only. A missing account row is zero.
- * A failed read is unknown — never a made-up positive balance.
+ * Sums available rider_credit_lots (the single source of truth). No lots is
+ * zero. A failed read is unknown — never a made-up positive balance.
  */
 export async function readRideCreditBalance(sb, userId) {
   if (!sb || !userId) return { balanceCents: 0, known: false }
-  const acct = await sb.from('credit_accounts').select('balance_cents').eq('user_id', userId).maybeSingle()
-  if (acct.error) return { balanceCents: 0, known: false }
-  if (!acct.data || acct.data.balance_cents == null) return { balanceCents: 0, known: true }
-  const cents = finiteCents(acct.data.balance_cents)
-  return { balanceCents: cents == null ? 0 : cents, known: true }
+  const lots = await sb
+    .from('rider_credit_lots')
+    .select('remaining_cents')
+    .eq('profile_id', userId)
+    .eq('status', 'available')
+    .gt('remaining_cents', 0)
+  if (lots.error) return { balanceCents: 0, known: false }
+  let total = 0
+  for (const row of lots.data || []) {
+    const cents = finiteCents(row?.remaining_cents)
+    if (cents != null && cents > 0) total += cents
+  }
+  return { balanceCents: total, known: true }
 }
 
 export function creditsCoverFare(balanceCents, fareCents) {

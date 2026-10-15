@@ -51,7 +51,7 @@ export function makeShareToken() {
 }
 
 export function tripShareMessage({ pickup, dropoff, url, status }) {
-  const lines = ['Follow my Clemson RIDES trip']
+  const lines = ['Follow my Clemson Rides trip']
   if (pickup || dropoff) lines.push(`${pickup || 'Pickup'} → ${dropoff || 'Dropoff'}`)
   if (status) lines.push(`Status: ${status}`)
   if (url) lines.push(url)
@@ -64,7 +64,7 @@ export function buildSosText({ lat, lng, tripId }) {
     ? `${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}`
     : 'GPS unavailable'
   const lines = [
-    'SOS Clemson RIDES',
+    'SOS Clemson Rides',
     `Trip: ${tripId || 'unknown'}`,
     `Location: ${coordText}`,
   ]
@@ -84,7 +84,7 @@ export function sosChannelHref(channel, text) {
     case 'sms':
       return `sms:911?&body=${encodeURIComponent(text)}`
     case 'mailto':
-      return `mailto:${CUPD_EMAIL}?subject=${encodeURIComponent('SOS Clemson RIDES')}&body=${encodeURIComponent(text)}`
+      return `mailto:${CUPD_EMAIL}?subject=${encodeURIComponent('SOS Clemson Rides')}&body=${encodeURIComponent(text)}`
     case 'web_share':
     case 'banner':
       return null

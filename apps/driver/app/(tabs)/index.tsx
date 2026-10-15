@@ -100,6 +100,7 @@ import { WorthItLegend } from 'rides-native/WorthItLegend'
 import { offerCardGauge } from 'rides-native/offerGauge'
 import { fetchOfferPreview, riderInitials } from 'rides-native/offerPreviewClient'
 import { OfferGauge } from '@/components/OfferGauge'
+import { CrashBoundary } from '@/components/CrashBoundary'
 import { tipBoostOfferLine } from '../../../../shared/prepaidTip.js'
 import { ACTIVE_TRIP_RECONCILE_MS, reconcileActiveTrip } from 'rides-native/activeTripReconcile'
 import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
@@ -134,7 +135,16 @@ function demandWord(intensity: number): string {
   return 'Quiet'
 }
 
+/** Home carries the GO button and the offer cards; a render error here must not blank the app. */
 export default function DriverHome() {
+  return (
+    <CrashBoundary scope="home" title="Home" fill>
+      <DriverHomeBody />
+    </CrashBoundary>
+  )
+}
+
+function DriverHomeBody() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { colors, scheme, earningsPrivate, autoAccept, setAutoAccept } = useTheme()
