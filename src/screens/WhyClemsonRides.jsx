@@ -1,4 +1,4 @@
-import { navigate } from '../lib/navigation'
+import { bookRideHref } from '../lib/bookRideLink'
 import { SitePage } from '../components/SitePage'
 import { MarketingPhoto } from '../components/MarketingPhoto'
 import { GlassGlyph } from '../components/GlassGlyph'
@@ -53,10 +53,10 @@ export function WhyClemsonRides() {
           A boost goes to the driver.
         </p>
         <div className="site-hero-actions">
-          <button type="button" className="mkt-choice pressable" onClick={() => navigate('home')}>
+          <a className="mkt-choice pressable" href={bookRideHref()}>
             <span>Book a ride</span>
             <SiteIcon name="arrow-right" size={18} />
-          </button>
+          </a>
         </div>
       </div>
       <section className="mkt-why" aria-labelledby="why-page-heading">
@@ -66,10 +66,10 @@ export function WhyClemsonRides() {
           ))}
         </div>
         <div className="mkt-section-end site-section-end">
-          <button type="button" className="mkt-choice pressable" onClick={() => navigate('home')}>
+          <a className="mkt-choice pressable" href={bookRideHref()}>
             <span>Book a ride</span>
             <SiteIcon name="arrow-right" size={18} />
-          </button>
+          </a>
         </div>
       </section>
     </SitePage>

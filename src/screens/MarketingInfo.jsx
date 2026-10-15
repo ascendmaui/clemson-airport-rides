@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { bookRideHref } from '../lib/bookRideLink'
 import { getHashRoute, navigate } from '../lib/navigation'
 import { MarketingChrome } from '../components/MarketingChrome'
 import { MarketingPhoto } from '../components/MarketingPhoto'
@@ -323,13 +324,13 @@ export function GetTheAppPage() {
           <a className="mkt-text pressable" href={installOffer(app.id).pagePath}>
             Phone install page
           </a>
-          <button
-            type="button"
-            className="mkt-text pressable"
-            onClick={() => navigate(app.id === 'driver' ? 'driver' : 'home')}
-          >
-            {app.id === 'driver' ? 'Open the driver desk' : 'Book a ride'}
-          </button>
+          {app.id === 'driver' ? (
+            <button type="button" className="mkt-text pressable" onClick={() => navigate('driver')}>
+              Open the driver desk
+            </button>
+          ) : (
+            <a className="mkt-text pressable" href={bookRideHref()}>Book a ride</a>
+          )}
         </article>
       ))}
     </MarketingChrome>

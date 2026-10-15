@@ -53,6 +53,13 @@ export function getHashRoute() {
   }
   if (path === 'receipt' && segments[1] && !params.trip) params.trip = segments[1]
   if ((path === 'partners' || path === 'drivers') && segments[1] && !params.sub) params.sub = segments[1]
+  if (path === 'book' || path === 'ride') {
+    return { path: 'home', params, segments }
+  }
+  if (path === 'trip') {
+    if (segments[1] && !params.trip) params.trip = decodeURIComponent(segments[1])
+    return { path: segments[1] ? 'requested' : 'home', params, segments }
+  }
 
   // Persist share/friends token so a later hash clear (auth) can recover.
   if (typeof window !== 'undefined' && params.token && (path === 'share' || path === 'live')) {

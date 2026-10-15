@@ -25,7 +25,7 @@ Declared Android permissions (manifest list in `app.json`; background location i
 | Rider | `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION` |
 | Driver | `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`, `POST_NOTIFICATIONS`. The image-picker plugin also asks for camera and photo library for license, insurance, and vehicle documents. |
 
-Both current apps declare `autoVerify` https intent filters for `clemsonrides.com` and `www.clemsonrides.com` with `pathPrefix: /`.
+Both current apps declare `autoVerify` https intent filters for `clemsonrides.com` and `www.clemsonrides.com`. Rider claims `/book`, `/ride`, `/drive`, `/trip`, `/trip/`, and `/auth/callback`. Driver claims `/driver` and `/driver/`. `assetlinks.json` is not served until the SHA-256 fingerprints in `shared/appLinks.js` are real.
 
 There is no Android block under `submit` in either current `eas.json`. Rider submit config is iOS-only (`ascAppId` `6815430021`). Driver submit config is iOS-only (`ascAppId` `6815445517`). `apps/mobile` `submit.production` is empty. Do not add a Play track to those files from this checklist.
 

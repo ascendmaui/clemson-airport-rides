@@ -1,4 +1,12 @@
 {
+  "headers": [
+    {
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/stripe/webhook",
@@ -161,7 +169,7 @@
       "destination": "/api/$1"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/|\\.well-known/).*)",
       "destination": "/index.html"
     }
   ],

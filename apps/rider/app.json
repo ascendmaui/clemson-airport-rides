@@ -49,16 +49,18 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            {
-              "scheme": "https",
-              "host": "clemsonrides.com",
-              "pathPrefix": "/"
-            },
-            {
-              "scheme": "https",
-              "host": "www.clemsonrides.com",
-              "pathPrefix": "/"
-            }
+            { "scheme": "https", "host": "clemsonrides.com", "path": "/book" },
+            { "scheme": "https", "host": "clemsonrides.com", "path": "/ride" },
+            { "scheme": "https", "host": "clemsonrides.com", "path": "/drive" },
+            { "scheme": "https", "host": "clemsonrides.com", "path": "/trip" },
+            { "scheme": "https", "host": "clemsonrides.com", "pathPrefix": "/trip/" },
+            { "scheme": "https", "host": "clemsonrides.com", "path": "/auth/callback" },
+            { "scheme": "https", "host": "www.clemsonrides.com", "path": "/book" },
+            { "scheme": "https", "host": "www.clemsonrides.com", "path": "/ride" },
+            { "scheme": "https", "host": "www.clemsonrides.com", "path": "/drive" },
+            { "scheme": "https", "host": "www.clemsonrides.com", "path": "/trip" },
+            { "scheme": "https", "host": "www.clemsonrides.com", "pathPrefix": "/trip/" },
+            { "scheme": "https", "host": "www.clemsonrides.com", "path": "/auth/callback" }
           ],
           "category": [
             "BROWSABLE",

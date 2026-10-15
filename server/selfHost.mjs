@@ -3,12 +3,17 @@
  * Rewrites are read from vercel.json so the self-hosted routes stay aligned with it.
  */
 import { createReadStream, readFileSync } from 'node:fs'
+import { assetLinksDocument, assetLinksEnabled, ASSETLINKS_PATH } from '../shared/appLinks.js'
 import { lstat, readdir, readFile, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const BODY_LIMIT = 1_000_000
+
+const EXACT_CONTENT_TYPES = {
+  '/.well-known/apple-app-site-association': 'application/json',
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -280,6 +285,20 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body))
 }
 
+async function serveAssetLinks(req, res) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.setHeader('Allow', 'GET, HEAD')
+    sendJson(res, 405, { error: 'Method not allowed' })
+    return
+  }
+  const document = assetLinksEnabled() ? assetLinksDocument() : null
+  if (!document) {
+    sendJson(res, 404, { error: 'Android asset links are not configured' })
+    return
+  }
+  sendJson(res, 200, document)
+}
+
 function healthPayload() {
   return {
     ok: true,
@@ -341,7 +360,7 @@ async function serveFile(req, res, file, pathname) {
   if (!info.isFile()) return false
   const ext = path.extname(file).toLowerCase()
   res.statusCode = 200
-  res.setHeader('Content-Type', MIME[ext] || 'application/octet-stream')
+  res.setHeader('Content-Type', EXACT_CONTENT_TYPES[pathname] || MIME[ext] || 'application/octet-stream')
   res.setHeader('Cache-Control', cacheControlFor(pathname))
   res.setHeader('Content-Length', String(info.size))
   if (req.method === 'HEAD') {
@@ -513,6 +532,14 @@ async function dispatch(req, res, { routes, rewrites, distDir, downloadsDir }) {
   if (!isApiPath(originalPath) && (req.method === 'GET' || req.method === 'HEAD')) {
     const file = safeStaticPath(distDir, originalPath)
     if (file && await serveFile(req, res, file, originalPath)) return
+    if (originalPath.startsWith('/.well-known/')) {
+      if (normalizePath(originalPath) === ASSETLINKS_PATH) {
+        await serveAssetLinks(req, res)
+        return
+      }
+      sendJson(res, 404, { error: 'Not found' })
+      return
+    }
   }
 
   let pathname = originalPath

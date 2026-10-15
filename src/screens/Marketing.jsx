@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { bookRideHref } from '../lib/bookRideLink'
 import { getHashRoute, navigate } from '../lib/navigation'
 import { MarketingChrome } from '../components/MarketingChrome'
 import { FeatureSections } from '../components/FeatureSections'
@@ -46,7 +47,7 @@ export function Marketing() {
             <h1>{HOMEPAGE_HEADLINE}</h1>
             <p className="mkt-lede">{HOMEPAGE_SUBLINE}</p>
             <div className="mkt-hero-actions">
-              <PrimaryButton className="mkt-book" onClick={() => navigate('home')}>
+              <PrimaryButton className="mkt-book" href={bookRideHref()}>
                 <span className="site-btn-label">Book a ride</span>
                 <SiteIcon name="arrow-right" size={20} />
               </PrimaryButton>
@@ -145,10 +146,10 @@ export function Marketing() {
             </nav>
           </div>
           <div className="mkt-close">
-            <button type="button" className="mkt-choice pressable" onClick={() => navigate('home')}>
+            <a className="mkt-choice pressable" href={bookRideHref()}>
               <span>Book a ride</span>
               <SiteIcon name="arrow-right" size={18} />
-            </button>
+            </a>
           </div>
         </div>
       </section>

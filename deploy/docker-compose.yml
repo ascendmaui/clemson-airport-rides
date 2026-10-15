@@ -46,6 +46,12 @@ x-web-labels: &web-labels
   - traefik.http.routers.clemson-www.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
   - traefik.http.routers.clemson-www.middlewares=clemson-www-redirect
   - traefik.http.routers.clemson-www.service=clemson
+  - traefik.http.routers.clemson-www-aasa.rule=Host(`www.clemsonrides.com`) && Path(`/.well-known/apple-app-site-association`)
+  - traefik.http.routers.clemson-www-aasa.priority=200
+  - traefik.http.routers.clemson-www-aasa.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+  - traefik.http.routers.clemson-www-aasa.tls=true
+  - traefik.http.routers.clemson-www-aasa.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+  - traefik.http.routers.clemson-www-aasa.service=clemson
   - traefik.http.middlewares.clemson-www-redirect.redirectregex.regex=^https://www\.clemsonrides\.com/(.*)
   - traefik.http.middlewares.clemson-www-redirect.redirectregex.replacement=https://clemsonrides.com/$${1}
   - traefik.http.middlewares.clemson-www-redirect.redirectregex.permanent=true
@@ -67,6 +73,12 @@ x-web-next-labels: &web-next-labels
   - traefik.http.routers.clemson-www-next.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
   - traefik.http.routers.clemson-www-next.middlewares=clemson-www-redirect
   - traefik.http.routers.clemson-www-next.service=clemson-next
+  - traefik.http.routers.clemson-www-aasa-next.rule=Host(`www.clemsonrides.com`) && Path(`/.well-known/apple-app-site-association`)
+  - traefik.http.routers.clemson-www-aasa-next.priority=210
+  - traefik.http.routers.clemson-www-aasa-next.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+  - traefik.http.routers.clemson-www-aasa-next.tls=true
+  - traefik.http.routers.clemson-www-aasa-next.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+  - traefik.http.routers.clemson-www-aasa-next.service=clemson-next
   - traefik.http.middlewares.clemson-www-redirect.redirectregex.regex=^https://www\.clemsonrides\.com/(.*)
   - traefik.http.middlewares.clemson-www-redirect.redirectregex.replacement=https://clemsonrides.com/$${1}
   - traefik.http.middlewares.clemson-www-redirect.redirectregex.permanent=true

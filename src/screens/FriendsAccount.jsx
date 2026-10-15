@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { BottomTabs } from '../components/BottomTabs'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { useAuth } from '../lib/auth'
+import { bookRideHref } from '../lib/bookRideLink'
 import { navigate, shareUrl } from '../lib/navigation'
 import { createLocationShare, startSharingLocation } from '../lib/locationShare'
 import { fetchProfile, updateMyProfile } from '../lib/ratings'
@@ -184,7 +185,7 @@ export function FriendsScreen() {
               <div style={{ fontSize: 13, color: 'var(--ink-tertiary)', lineHeight: 1.4, marginBottom: 12 }}>
                 Request a ride first, then share live location from here.
               </div>
-              <PrimaryButton onClick={() => navigate('home')}>Book a ride</PrimaryButton>
+              <PrimaryButton href={bookRideHref()}>Book a ride</PrimaryButton>
             </>
           )}
           {link && (
