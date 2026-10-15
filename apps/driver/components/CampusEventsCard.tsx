@@ -23,7 +23,7 @@ export function CampusEventsCard() {
   if (!events || events.length === 0) return null
   return (
     <Card accessibilityLabel="Upcoming campus events">
-      <Text style={[styles.kicker, { color: colors.purple }]}>CAMPUS CALENDAR</Text>
+      <Text style={[styles.kicker, { color: colors.link }]}>CAMPUS CALENDAR</Text>
       {bonus ? <Text style={{ color: colors.orange, fontWeight: '800' }}>Bonus live now: {bonus}</Text> : null}
       {events.map((e) => (
         <View key={e.id} style={styles.row}>

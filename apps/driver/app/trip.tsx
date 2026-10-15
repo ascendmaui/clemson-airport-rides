@@ -937,6 +937,6 @@ function tripStyles(colors: Palette) {
     navText: { color: colors.onAccent, fontWeight: '800', letterSpacing: -0.2 },
     settle: { color: colors.title, fontWeight: '700', lineHeight: 20 },
     airport: { borderRadius: radius.lg, padding: 12, gap: 2, backgroundColor: colors.purpleSoft },
-    airportChip: { color: colors.purple, fontWeight: '800', letterSpacing: 0.6 },
+    airportChip: { color: colors.link, fontWeight: '800', letterSpacing: 0.6 },
   })
 }

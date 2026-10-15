@@ -43,7 +43,7 @@ export function LocationDisclosure({ visible, onAccept, onDecline }: { visible: 
             onPress={onDecline}
             style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
           >
-            <Text style={[typeScale.button, { color: colors.purple }]}>{COPY.decline}</Text>
+            <Text style={[typeScale.button, { color: colors.link }]}>{COPY.decline}</Text>
           </Pressable>
         </View>
       </View>
