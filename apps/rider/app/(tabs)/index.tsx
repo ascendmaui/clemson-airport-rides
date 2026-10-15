@@ -16,6 +16,7 @@ import { GestureDetector } from 'react-native-gesture-handler'
 import Reanimated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, SheetHandle } from '@/components/Button'
+import { RetryAction } from '@/components/RetryAction'
 import { pressStyle, useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
 import type { CampusMapHandle, LatLng, MapKind } from '@/components/mapTypes'
@@ -47,6 +48,7 @@ import { hotCatalogPlaces, lookupCatalogPlace, searchCatalogPlaces } from 'rides
 import { lift } from '@/lib/elevation'
 import { HOME_SHEET_BOTTOM_PADDING, homeTabClearance } from '@/lib/homeSheetSnap'
 import { useHomeSheetSnap } from '@/lib/useHomeSheetSnap'
+import { useReconnectRetry } from '@/lib/useReconnectRetry'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
@@ -104,6 +106,7 @@ export function RiderHome() {
   const [caption, setCaption] = useState('Popular campus spots from ride requests — dorms, downtown, stadium.')
   const [blended, setBlended] = useState(false)
   const [spotsLoading, setSpotsLoading] = useState(true)
+  const [homeRetry, setHomeRetry] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [mapType, setMapType] = useState<MapKind>('standard')
   const [userCoord, setUserCoord] = useState<LatLng | null>(null)
@@ -152,29 +155,44 @@ export function RiderHome() {
   async function loadGameNotice() {
     if (!supabase) {
       setGameNotice(gameDayNotice(null))
-      return
+      return true
     }
     try {
       const row = await loadGameDay(supabase)
       setGameNotice(gameDayNotice(row))
+      return true
     } catch (err) {
       logCaught('home-game-day', err)
       setGameNotice(gameDayNotice(null))
+      return false
     }
   }
 
   async function loadScheduledReminders() {
     if (!user?.id) {
       setScheduledRows([])
-      return
+      return true
     }
     try {
       setScheduledRows(await listScheduledTrips(user.id))
       setClock(new Date())
+      return true
     } catch (err) {
       toastCaught('home-scheduled', err, 'Could not load scheduled rides')
       setScheduledRows([])
+      return false
     }
+  }
+
+  async function refreshBooking() {
+    const spotsOk = await reloadSpots(heatWindow).then(() => true).catch((err: unknown) => {
+      logCaught('home-busy-spots', err)
+      setSpotsLoading(false)
+      return false
+    })
+    const gameOk = await loadGameNotice()
+    const ridesOk = await loadScheduledReminders()
+    setHomeRetry(spotsOk && gameOk && ridesOk ? null : 'Could not refresh rides. Retry when you reconnect.')
   }
 
   useEffect(() => {
@@ -189,7 +207,10 @@ export function RiderHome() {
         if (alive) setGameNotice(gameDayNotice(row))
       } catch (err) {
         logCaught('home-game-day', err)
-        if (alive) setGameNotice(gameDayNotice(null))
+        if (alive) {
+          setGameNotice(gameDayNotice(null))
+          setHomeRetry('Could not refresh rides. Retry when you reconnect.')
+        }
       }
     })()
     return () => {
@@ -214,7 +235,10 @@ export function RiderHome() {
       setClock(new Date())
     }).catch((err: unknown) => {
       toastCaught('home-scheduled', err, 'Could not load scheduled rides')
-      if (alive) setScheduledRows([])
+      if (alive) {
+        setScheduledRows([])
+        setHomeRetry('Could not refresh rides. Retry when you reconnect.')
+      }
     })
     return () => {
       alive = false
@@ -232,12 +256,17 @@ export function RiderHome() {
       setSpotsLoading(false)
     }).catch((err: unknown) => {
       logCaught('home-busy-spots', err)
-      if (alive) setSpotsLoading(false)
+      if (alive) {
+        setSpotsLoading(false)
+        setHomeRetry('Could not refresh rides. Retry when you reconnect.')
+      }
     })
     return () => {
       alive = false
     }
   }, [heatWindow])
+
+  useReconnectRetry('booking-home', () => refreshBooking(), homeRetry != null)
 
   const goSearch = (dest?: string) => {
     if (dest) {
@@ -469,11 +498,7 @@ export function RiderHome() {
               tintColor={colors.orange}
               onRefresh={() => {
                 setRefreshing(true)
-                Promise.all([
-                  reloadSpots(heatWindow),
-                  loadGameNotice(),
-                  loadScheduledReminders(),
-                ]).finally(() => setRefreshing(false))
+                refreshBooking().finally(() => setRefreshing(false))
               }}
             />
           )}
@@ -487,6 +512,15 @@ export function RiderHome() {
           ) : (
             <Text style={styles.welcome}>Welcome, {name}</Text>
           )}
+          {homeRetry ? (
+            <View accessibilityLiveRegion="polite">
+              <Text style={styles.locateNote}>{homeRetry}</Text>
+              <RetryAction
+                hint="Loads campus spots, game day, and scheduled rides again"
+                onPress={() => { void refreshBooking() }}
+              />
+            </View>
+          ) : null}
           {gameDayExperience.ready && gameDayExperience.model.phase !== 'off' ? (
             <GameDayBanner model={gameDayExperience.model} onPress={() => router.push('/game-day')} />
           ) : !gameDayExperience.ready && gameNotice?.live ? (

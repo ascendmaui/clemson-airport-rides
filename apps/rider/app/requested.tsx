@@ -6,6 +6,7 @@ import { reconcileCheckout } from 'rides-native/riderMoney.js'
 import { AppState, AccessibilityInfo, Animated, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { RetryAction } from '@/components/RetryAction'
 import { FlowErrorBoundary } from '@/components/FlowErrorBoundary'
 import { MidrideCancelSheet } from '@/components/MidrideCancelSheet'
 import { useEnterMotion } from '@/components/enter'
@@ -39,6 +40,7 @@ import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { logCaught, toastCaught } from '@/lib/caught'
+import { useReconnectRetry } from '@/lib/useReconnectRetry'
 import { registerRiderPush } from '@/lib/push'
 import { riderFlightView } from 'rides-native/flightStatus'
 import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
@@ -301,6 +303,8 @@ function RequestedRide() {
   const announcedRideStatus = useRef<string | null>(null)
   const announcedCheckout = useRef(false)
 
+  useReconnectRetry('requested-trip', () => { retryTracking() }, Boolean(error || locationIssue))
+
   useEffect(() => {
     const status = shown?.status || null
     if (status !== 'accepted' && status !== 'arriving') {
@@ -537,7 +541,12 @@ function RequestedRide() {
             </Text>
           </View>
         )}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? (
+          <View accessibilityLiveRegion="polite">
+            <Text style={styles.error}>{error}</Text>
+            <RetryAction hint="Loads this trip again" onPress={() => { void reloadMap(true) }} />
+          </View>
+        ) : null}
         {!user ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Sign in to share this ride</Text>
