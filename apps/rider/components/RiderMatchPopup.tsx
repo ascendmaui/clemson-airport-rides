@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { Modal, Pressable, Text, View } from 'react-native'
 import { riderModalClosed, riderModalOpened } from '@/lib/afterModal'
+import { logCaught } from '@/lib/caught'
 import { PrimaryButton } from '@/components/Button'
 import { useAuth } from '@/lib/auth'
 import { fetchMatchNotice } from '@/lib/scheduleApi'
@@ -46,7 +47,8 @@ export function RiderMatchPopup() {
     try {
       const prompt = failedHoldPrompt({ metadata: row?.metadata ?? null })
       return typeof prompt?.title === 'string' ? prompt.title : null
-    } catch {
+    } catch (err) {
+      logCaught('match-hold', err)
       return null
     }
   }
@@ -98,7 +100,8 @@ export function RiderMatchPopup() {
       try {
         const fetched = await fetchMatchNotice(row.id)
         next = { ...fetched, tripId: row.id, holdTitle: holdTitleFor(row) }
-      } catch {
+      } catch (err) {
+        logCaught('match-notice', err)
         const fallbackNotice = buildRiderMatchNotice({
           pickupAt: row.pickup_at || row.scheduled_for || row.metadata?.scheduled_pickup_at,
         })
