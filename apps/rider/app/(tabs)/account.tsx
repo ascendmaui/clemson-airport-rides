@@ -283,7 +283,7 @@ export function AccountScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.rowTitle}>{link.label}</Text>
                     {link.badge ? (
-                      <Text style={{ alignSelf: 'flex-start', backgroundColor: PLAN_BADGE_COLOR, color: '#FFFFFF', fontSize: 11, fontWeight: '800', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, overflow: 'hidden' }}>{link.badge}</Text>
+                      <Text style={{ alignSelf: 'flex-start', backgroundColor: PLAN_BADGE_COLOR, color: '#FFFFFF', fontSize: 12, fontWeight: '800', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, overflow: 'hidden' }}>{link.badge}</Text>
                     ) : null}
                     <Text style={styles.copy}>{link.mailSubject ? supportEmail() : link.hint}</Text>
                   </View>
@@ -391,7 +391,7 @@ function makeStyles(colors: Palette) {
       borderWidth: 1,
       borderColor: colors.border,
     },
-    safetyKicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
+    safetyKicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12 },
     safetyTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16, marginTop: 4 },
     safetyBody: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 },
     row: {

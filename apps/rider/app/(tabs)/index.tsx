@@ -16,6 +16,7 @@ import { GestureDetector } from 'react-native-gesture-handler'
 import Reanimated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, SheetHandle } from '@/components/Button'
+import { DenseText } from '@/components/DenseText'
 import { pressStyle, useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
 import type { CampusMapHandle, LatLng, MapKind } from '@/components/mapTypes'
@@ -309,9 +310,9 @@ export function RiderHome() {
                 <Text style={styles.brandMarkText}>CR</Text>
               </View>
               <View style={styles.brandCopy}>
-                <Text style={styles.brandKicker}>RIDE • GAME • REPEAT</Text>
+                <DenseText style={styles.brandKicker}>RIDE • GAME • REPEAT</DenseText>
                 <Text style={styles.brandTitle}>Clemson <Text style={styles.brandSoft}>Rides</Text></Text>
-                <Text style={styles.brandPillText}>TIGERS GET YOU THERE</Text>
+                <DenseText style={styles.brandPillText}>TIGERS GET YOU THERE</DenseText>
               </View>
             </View>
             <Pressable
@@ -348,7 +349,7 @@ export function RiderHome() {
                     accessibilityState={{ selected: on }}
                     hitSlop={10}
                   >
-                    <Text style={[styles.kindText, on && styles.kindTextOn]}>{mapKindLabel(kind)}</Text>
+                    <DenseText style={[styles.kindText, on && styles.kindTextOn]}>{mapKindLabel(kind)}</DenseText>
                   </Pressable>
                 )
               })}
@@ -762,10 +763,10 @@ function makeStyles(colors: Palette) {
     },
     brandMarkText: { color: colors.onAccent, fontSize: 12, fontWeight: '800' as const, letterSpacing: 0.4 },
     brandCopy: { flex: 1 },
-    brandKicker: { color: colors.orange, fontSize: 9, fontWeight: '700' as const, letterSpacing: 1.1 },
+    brandKicker: { color: colors.orange, fontSize: 12, fontWeight: '700' as const, letterSpacing: 1.1 },
     brandTitle: { color: colors.title, fontSize: 16, fontWeight: '800' as const, letterSpacing: -0.3, marginTop: 1 },
     brandSoft: { fontWeight: '600' as const, color: colors.ink },
-    brandPillText: { color: colors.inkSecondary, fontSize: 9, fontWeight: '700' as const, letterSpacing: 0.6, marginTop: 2 },
+    brandPillText: { color: colors.inkSecondary, fontSize: 12, fontWeight: '700' as const, letterSpacing: 0.6, marginTop: 2 },
     avatar: {
       width: 44,
       height: 44,
@@ -792,7 +793,7 @@ function makeStyles(colors: Palette) {
     },
     kindChip: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
     kindOn: { backgroundColor: colors.purple },
-    kindText: { color: colors.link, fontSize: 11, fontWeight: '700' as const },
+    kindText: { color: colors.link, fontSize: 12, fontWeight: '700' as const },
     kindTextOn: { color: colors.onAccent },
     locate: {
       width: 44,
@@ -856,7 +857,7 @@ function makeStyles(colors: Palette) {
     dragHint: {
       textAlign: 'center' as const,
       color: colors.placeholder,
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: '600' as const,
       letterSpacing: 0.2,
       lineHeight: 16,
@@ -889,7 +890,7 @@ function makeStyles(colors: Palette) {
       borderLeftWidth: 3,
       borderLeftColor: colors.orange,
     },
-    liveKicker: { color: colors.orange, fontSize: 11, fontWeight: '800' as const, letterSpacing: 1.1 },
+    liveKicker: { color: colors.orange, fontSize: 12, fontWeight: '800' as const, letterSpacing: 1.1 },
     liveTitle: { color: colors.title, fontSize: 17, fontWeight: '700' as const, letterSpacing: -0.2, marginTop: 4 },
     liveBody: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 },
     gameCard: { backgroundColor: colors.orangeSoft, borderLeftColor: colors.purple },

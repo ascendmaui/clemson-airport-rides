@@ -24,7 +24,7 @@ export default function GameDayScreen() {
           <Text style={{ color: colors.title, fontSize: 18, fontWeight: '700' }}>←</Text>
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: '#F56600', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 }}>GAME DAY</Text>
+          <Text style={{ color: '#F56600', fontSize: 12, fontWeight: '800', letterSpacing: 1.2 }}>GAME DAY</Text>
           <Text style={{ color: '#522D80', fontSize: 22, fontWeight: '800' }}>Stadium guide</Text>
         </View>
       </View>

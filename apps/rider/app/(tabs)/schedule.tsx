@@ -1342,7 +1342,7 @@ function makeStyles(colors: Palette) {
       borderColor: colors.orange,
       gap: 2,
     },
-    remindKicker: { color: colors.orange, fontSize: 11, fontWeight: '800' as const, letterSpacing: 1.1 },
+    remindKicker: { color: colors.orange, fontSize: 12, fontWeight: '800' as const, letterSpacing: 1.1 },
     remindTitle: { color: colors.purple, fontSize: 16, fontWeight: '800' as const, marginTop: 4 },
   }
 }

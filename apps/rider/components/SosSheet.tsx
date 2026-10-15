@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   bannerCopy: { flex: 1 },
-  bannerKicker: { color: '#F56600', fontWeight: '800', fontSize: 11, letterSpacing: 1 },
+  bannerKicker: { color: '#F56600', fontWeight: '800', fontSize: 12, letterSpacing: 1 },
   bannerTitle: { color: '#fff', fontWeight: '700', marginTop: 2 },
   bannerMeta: { color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 2 },
   bannerDismiss: { color: '#fff', fontSize: 22, fontWeight: '700', paddingHorizontal: 6 },

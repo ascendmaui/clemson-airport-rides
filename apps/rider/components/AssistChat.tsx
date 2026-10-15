@@ -184,7 +184,7 @@ function makeStyles(colors: Palette) {
     mineText: { color: colors.onAccent, fontSize: 15, lineHeight: 20 },
     theirsText: { color: colors.ink, fontSize: 15, lineHeight: 20 },
     draftCard: { backgroundColor: colors.card, borderRadius: 16, padding: 12, gap: 6 },
-    kicker: { color: colors.orange, fontWeight: '800' as const, fontSize: 11, letterSpacing: 1 },
+    kicker: { color: colors.orange, fontWeight: '800' as const, fontSize: 12, letterSpacing: 1 },
     draftTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16 },
     input: {
       minHeight: 48,
