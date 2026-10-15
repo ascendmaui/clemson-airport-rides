@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   label: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     backgroundColor: 'transparent',
     textShadowOffset: { width: 0, height: 0 },

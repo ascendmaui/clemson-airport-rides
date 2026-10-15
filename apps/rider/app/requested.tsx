@@ -653,7 +653,7 @@ function makeStyles(colors: Palette) {
     back: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
     backLabel: { fontSize: 18, color: colors.title, fontWeight: '700' as const },
     headerCopy: { flex: 1 },
-    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
+    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12 },
     title: { color: colors.title, fontSize: 22, fontWeight: '700' as const, letterSpacing: -0.4, marginTop: 2 },
     sheet: { flex: 1 },
     sheetScroll: { flex: 1 },

@@ -218,7 +218,7 @@ function makeStyles(colors: Palette) {
       borderWidth: 1,
       borderColor: colors.border,
     },
-    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
+    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12 },
     title: { color: colors.title, fontSize: 20, fontWeight: '800' as const, marginTop: 4, marginBottom: 8 },
     body: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20, marginBottom: 8 },
     empty: { backgroundColor: colors.orangeSoft, borderRadius: 16, padding: 14, marginBottom: 12 },

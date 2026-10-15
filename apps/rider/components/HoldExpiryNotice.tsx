@@ -63,7 +63,7 @@ function makeStyles(colors: Palette) {
       color: colors.orange,
       fontWeight: '800' as const,
       letterSpacing: 1.1,
-      fontSize: 11,
+      fontSize: 12,
     },
     copy: {
       color: colors.purple,

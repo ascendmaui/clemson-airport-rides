@@ -213,8 +213,8 @@ export default function RideTiers() {
             >
               <GlassCard app="rider" scheme={scheme} pointerEvents="none" selected={on} style={styles.cardGlass} />
               <View style={styles.rowMain}>
-                <View style={[styles.iconWell, on && styles.iconWellOn]}>
-                  <Glyph name={rideTypeIconName(tier.id)} size={22} color={on ? colors.orange : colors.purple} />
+                <View style={[styles.iconWell, { borderColor: on ? colors.orange : colors.purple }, on && styles.iconWellOn]}>
+                  <Glyph name={rideTypeIconName(tier.id)} size={26} color={on ? colors.orange : colors.purple} />
                 </View>
                 <View style={styles.tierCopy}>
                   <Text style={styles.name}>{tier.name}</Text>
@@ -358,10 +358,11 @@ function makeStyles(colors: Palette) {
     rowOn: { borderColor: colors.orange, backgroundColor: colors.orangeSoft },
     rowFleet: { borderColor: colors.purple, backgroundColor: colors.purpleSoft },
     iconWell: {
-      width: 44,
-      height: 44,
-      borderRadius: 14,
+      width: 48,
+      height: 48,
+      borderRadius: 16,
       backgroundColor: colors.purpleSoft,
+      borderWidth: 1.5,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
     },
@@ -371,8 +372,8 @@ function makeStyles(colors: Palette) {
     name: { fontWeight: '700' as const, fontSize: 16, color: colors.ink },
     meta: { color: colors.inkSecondary, fontSize: 12, marginTop: 2 },
     price: { fontWeight: '800' as const, color: colors.ink, fontSize: 16 },
-    was: { color: colors.inkSecondary, fontSize: 11, textDecorationLine: 'line-through' as const },
-    discount: { color: colors.orange, fontSize: 11, fontWeight: '700' as const, marginTop: 2 },
+    was: { color: colors.inkSecondary, fontSize: 12, textDecorationLine: 'line-through' as const },
+    discount: { color: colors.orange, fontSize: 12, fontWeight: '700' as const, marginTop: 2 },
     footer: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
   }
 }

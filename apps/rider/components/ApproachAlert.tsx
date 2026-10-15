@@ -345,7 +345,7 @@ function makeStyles(colors: Palette) {
     copy: { flex: 1 },
     kicker: {
       color: accentText,
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: '700' as const,
       letterSpacing: 0.8,
     },

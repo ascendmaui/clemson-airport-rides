@@ -323,7 +323,7 @@ function makeStyles(colors: Palette) {
     },
     kicker: {
       color: colors.orange,
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: '800' as const,
       letterSpacing: 1.1,
     },

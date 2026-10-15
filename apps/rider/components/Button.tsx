@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, View } from 'react-native'
+import { DenseText } from '@/components/DenseText'
 import { GlassButton } from 'rides-native/glass'
 import { type as typeScale } from 'rides-native/shared/theme.js'
 import type { Palette } from '@/lib/palette'
@@ -60,9 +61,9 @@ export function Pill({
 }) {
   const styles = useThemedStyles(makeStyles)
   const body = (
-    <Text style={[styles.pillLabel, active && styles.pillLabelOn]} numberOfLines={1}>
+    <DenseText style={[styles.pillLabel, active && styles.pillLabelOn]} numberOfLines={1}>
       {label}
-    </Text>
+    </DenseText>
   )
   if (!onPress) {
     return (
