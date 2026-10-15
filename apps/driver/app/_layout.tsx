@@ -21,6 +21,7 @@ import { ProfileRequiredGate } from 'rides-native/PartyScreens'
 import { PasswordRecoveryListener } from '@/lib/passwordRecovery'
 import { reconcileTripBackgroundLocation } from '@/lib/backgroundLocation'
 import { DriverAgreementPrompt } from '@/components/DriverAgreementPrompt'
+import { CrashBoundary } from '@/components/CrashBoundary'
 
 /** Shared glass toast (packages/rides-native/ToastHost). */
 function ToastMount() {
@@ -129,13 +130,16 @@ function ThemedStack() {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <CrashBoundary scope="app" title="Clemson Rides" fill>
       <ThemeProvider>
         <AuthProvider>
           <FeedbackProvider>
             <Gate>
               <PasswordRecoveryListener />
               <PushBridge />
-              <OfferBridge />
+              <CrashBoundary scope="offer-alerts" compact>
+                <OfferBridge />
+              </CrashBoundary>
               <DriverAgreementPrompt>
                 <ThemedStack />
                 <ActiveTripResume />
@@ -147,6 +151,7 @@ export default function RootLayout() {
           </FeedbackProvider>
         </AuthProvider>
       </ThemeProvider>
+      </CrashBoundary>
     </GestureHandlerRootView>
   )
 }
