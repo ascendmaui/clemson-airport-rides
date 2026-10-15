@@ -102,6 +102,7 @@ import { fetchOfferPreview, riderInitials } from 'rides-native/offerPreviewClien
 import { OfferGauge } from '@/components/OfferGauge'
 import { CrashBoundary } from '@/components/CrashBoundary'
 import { failureToast, quiet, quietly, withRetry } from '@/lib/softFail'
+import { useSecondClock } from '@/lib/useSecondClock'
 import { tipBoostOfferLine } from '../../../../shared/prepaidTip.js'
 import { ACTIVE_TRIP_RECONCILE_MS, reconcileActiveTrip } from 'rides-native/activeTripReconcile'
 import { sendTripHeartbeat } from 'rides-native/tripHeartbeat'
@@ -882,7 +883,7 @@ export function RideCard({
   onDecline: () => void
 }) {
   const { colors } = useTheme()
-  const [tick, setTick] = useState(() => Date.now())
+  const tick = useSecondClock()
   const acceptClock = offerAcceptSeconds(card, tick)
   const exclusiveLeft = acceptClock?.kind === 'exclusive' ? acceptClock.seconds : null
   const poolLeft = acceptClock?.kind === 'pool' ? acceptClock.seconds : null
@@ -906,12 +907,13 @@ export function RideCard({
   const prepaidTipCents = Number((card as { prepaidTipCents?: number }).prepaidTipCents) || 0
   const tipBoostLine = tipBoostOfferLine(vm.pay.netCents + prepaidTipCents, prepaidTipCents)
   const payoutFigures = offerPayoutFigures(card, driver)
-  const pickupPoint = card.pickupLat != null && card.pickupLng != null
+  // Stable between countdown ticks so the memoised route map skips the 1s re-render.
+  const pickupPoint = useMemo(() => (card.pickupLat != null && card.pickupLng != null
     ? { latitude: Number(card.pickupLat), longitude: Number(card.pickupLng) }
-    : null
-  const dropoffPoint = card.dropoffLat != null && card.dropoffLng != null
+    : null), [card.pickupLat, card.pickupLng])
+  const dropoffPoint = useMemo(() => (card.dropoffLat != null && card.dropoffLng != null
     ? { latitude: Number(card.dropoffLat), longitude: Number(card.dropoffLng) }
-    : null
+    : null), [card.dropoffLat, card.dropoffLng])
   const preferredNote = preferredRequestNote(card)
   const reduceMotion = useReduceMotion()
   const rise = useState(() => new Animated.Value(reduceMotion ? 0 : 16))[0]
@@ -920,10 +922,6 @@ export function RideCard({
   const [viewport, setViewport] = useState(0)
   const [content, setContent] = useState(0)
   const overflows = viewport > 0 && content > viewport + 1
-  useEffect(() => {
-    const timer = setInterval(() => setTick(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [card.id])
   useEffect(() => {
     if (reduceMotion) {
       rise.setValue(0)

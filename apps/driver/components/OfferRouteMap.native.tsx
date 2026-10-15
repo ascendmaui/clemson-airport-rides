@@ -1,13 +1,14 @@
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import { StyleSheet, View } from 'react-native'
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import { sameRouteProps } from '@/lib/markerRedraw'
 import { offerRouteLegs, offerRoutePoints, offerRouteRegion } from 'rides-native/offerRoute.js'
 
 type Coord = { latitude: number; longitude: number } | null
 
 const PAD = { top: 28, right: 28, bottom: 28, left: 28 }
 
-export function OfferRouteMap({
+function OfferRouteMapView({
   driver,
   pickup,
   dropoff,
@@ -64,3 +65,6 @@ export function OfferRouteMap({
 const styles = StyleSheet.create({
   map: { height: 148, borderRadius: 16, overflow: 'hidden' },
 })
+
+/** Memoised: the offer card ticks every second, but the map only re-renders when a pin moves. */
+export const OfferRouteMap = memo(OfferRouteMapView, sameRouteProps)
