@@ -73,7 +73,7 @@ export function TierRow({ tier, selected, onSelect }) {
             fontWeight: 700,
           }}
         >
-          ✓
+          <SiteIcon name="check" size={13} />
         </div>
       )}
     </button>

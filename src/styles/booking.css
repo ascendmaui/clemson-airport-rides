@@ -86,3 +86,6 @@
     grid-column: 1;
   }
 }
+
+/* Places rejected the key: hide Google's error dropdown so catalog suggestions stay clickable. */
+html[data-places-off] .pac-container { display: none !important; }

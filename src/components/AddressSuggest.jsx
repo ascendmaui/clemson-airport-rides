@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useJsApiLoader } from '@react-google-maps/api'
 import { placeFromStop, searchCatalogPlaces } from '../lib/placeCatalog'
 import { LOCATION_MISSING_MESSAGE, placeFromCoordinates, readBrowserPosition, reverseGeocodeLabel } from '../lib/currentPlace'
+import { keepInputUsable } from '../lib/placesFallback'
 import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
 import { SiteIcon } from './SiteIcon'
 
@@ -39,6 +40,7 @@ export function AddressSuggest({ label, value, onChange, placeholder }) {
       componentRestrictions: { country: 'us' },
     })
     acRef.current = ac
+    const releaseInput = keepInputUsable(inputRef.current, inputRef.current.getAttribute('placeholder'))
     const listener = ac.addListener('place_changed', () => {
       const place = ac.getPlace()
       const loc = place?.geometry?.location
@@ -53,6 +55,7 @@ export function AddressSuggest({ label, value, onChange, placeholder }) {
     })
     return () => {
       if (listener) listener.remove()
+      releaseInput()
       acRef.current = null
     }
   }, [isLoaded, apiKey])

@@ -374,13 +374,15 @@ html body .site.mkt .mkt-nav .mkt-nav-links button[aria-current="page"] {
 html body .site.mkt .mkt-nav .mkt-nav-links button.mkt-nav-cta {
   margin-left: var(--s-2);
   padding: 0 18px !important;
-  background: var(--orange) !important;
+  /* Deep Clemson orange: white 14px text needs 4.5:1, which #F56600 (3.1:1) misses. */
+  background: #C24E00 !important;
   color: #fff !important;
+  font-weight: 700 !important;
   box-shadow: 0 6px 18px -6px rgba(245, 102, 0, 0.7) !important;
 }
 
 html body .site.mkt .mkt-nav .mkt-nav-links button.mkt-nav-cta:hover {
-  background: var(--orange-hover) !important;
+  background: #A94400 !important;
   transform: translateY(-1px);
 }
 
@@ -2471,5 +2473,34 @@ html body .site .site-feature-chevron {
   }
   html body .site .site-footer .mkt-footer-inner {
     gap: var(--s-5) var(--s-4) !important;
+  }
+}
+
+/* ---------- First paint ----------
+   Above-the-fold motion is transform-only. Fading the route, page and hero
+   from opacity 0 held back first paint by about a second on phones. */
+@keyframes site-lift {
+  from { transform: translate3d(0, 18px, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+html body .route-fade.route-site,
+html body .site.mkt.fade-in {
+  animation-name: site-lift !important;
+}
+
+html body .site.mkt-home .mkt-stage-copy,
+html body .site .mkt-home-hero .mkt-hero-shot,
+html body .site.mkt .mkt-page-hero > * {
+  animation-name: site-lift !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html body .route-fade.route-site,
+  html body .site.mkt.fade-in,
+  html body .site.mkt-home .mkt-stage-copy,
+  html body .site .mkt-home-hero .mkt-hero-shot,
+  html body .site.mkt .mkt-page-hero > * {
+    animation: none !important;
   }
 }

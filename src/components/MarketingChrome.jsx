@@ -186,7 +186,7 @@ export function MarketingChrome({ current = '', home = false, children }) {
       </header>
       {home ? (
         <>
-          {children}
+          <main className="site-home-main" style={{ display: 'contents' }}>{children}</main>
           <SiteFooter current={current} />
         </>
       ) : (

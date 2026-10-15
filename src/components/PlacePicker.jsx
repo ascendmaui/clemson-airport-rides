@@ -3,6 +3,7 @@ import { useJsApiLoader } from '@react-google-maps/api'
 import { FRIEND_PLACES } from '../lib/friendRides'
 import { hotCatalogPlaces, lookupCatalogPlace, placeFromStop, searchCatalogPlaces } from '../lib/placeCatalog'
 import { LOCATION_MISSING_MESSAGE, readBrowserPosition } from '../lib/currentPlace'
+import { keepInputUsable } from '../lib/placesFallback'
 import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
 import { SiteIcon } from './SiteIcon'
 
@@ -93,6 +94,7 @@ export function PlacePicker({
       componentRestrictions: { country: 'us' },
     })
     acRef.current = ac
+    const releaseInput = keepInputUsable(inputRef.current, inputRef.current.getAttribute('placeholder'))
     const listener = ac.addListener('place_changed', () => {
       const place = ac.getPlace()
       const loc = place?.geometry?.location
@@ -105,6 +107,7 @@ export function PlacePicker({
     })
     return () => {
       if (listener) listener.remove()
+      releaseInput()
       acRef.current = null
     }
   }, [mode, isLoaded, apiKey, onChange])

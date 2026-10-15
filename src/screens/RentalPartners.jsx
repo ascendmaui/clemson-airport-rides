@@ -62,7 +62,7 @@ function TextInput({ id, value, onChange, error, ...rest }) {
 export function VehicleRules({ compact = false }) {
   return (
     <section className="rider-card" style={{ ...card, background: '#faf7fd' }} aria-labelledby="vehicle-rules-h">
-      <h2 id="vehicle-rules-h" style={{ fontSize: 17, margin: '0 0 8px' }}>Clemson RIDES vehicle standards</h2>
+      <h2 id="vehicle-rules-h" style={{ fontSize: 17, margin: '0 0 8px' }}>Clemson Rides vehicle standards</h2>
       <ul style={{ margin: 0, paddingLeft: 20, fontSize: compact ? 13 : 14, lineHeight: 1.55 }}>
         {VEHICLE_RULES_COPY.map((r) => <li key={r}>{r}</li>)}
       </ul>
@@ -99,7 +99,7 @@ export function PartnerJoin({ onDone }) {
   return (
     <main style={wrap} data-testid="partner-join">
       <p style={{ color: '#BA4700', fontWeight: 700, margin: 0 }}>Rental Partners</p>
-      <h1 style={{ margin: '4px 0 8px' }}>Rent your vehicles to cleared Clemson RIDES drivers</h1>
+      <h1 style={{ margin: '4px 0 8px' }}>Rent your vehicles to cleared Clemson Rides drivers</h1>
       <p style={{ color: '#4b3f5c', marginTop: 0 }}>List cars for weekly rental. Only drivers whose license and background check passed can see your listings. New partners are reviewed by our team before listings go live.</p>
       <PaymentNote />
       <VehicleRules />
