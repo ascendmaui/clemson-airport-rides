@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const expo = JSON.parse(readFileSync(path.join(root, 'apps/driver/app.json'), 'utf8')).expo
 
 const ACTIVE_TRIP =
-  'Clemson RIDES uses your location during an active trip, including while you use Maps or the phone is locked, so your rider can see your car and knows when you arrive. Location sharing stops when the trip ends.'
+  'Clemson Rides uses your location during an active trip, including while you use Maps or the phone is locked, so your rider can see your car and knows when you arrive. Location sharing stops when the trip ends.'
 
 function pluginEntry(name) {
   const entry = expo.plugins.find((item) => item === name || (Array.isArray(item) && item[0] === name))
@@ -31,7 +31,7 @@ test('driver location omits motion and keeps active-trip always strings', () => 
   assert.equal(location.motionUsagePermission, false)
   assert.equal(
     location.locationWhenInUsePermission,
-    'Clemson RIDES uses your location while you are online so riders can see your car on the map.',
+    'Clemson Rides uses your location while you are online so riders can see your car on the map.',
   )
   assert.equal(location.locationAlwaysAndWhenInUsePermission, ACTIVE_TRIP)
   assert.equal(location.locationAlwaysPermission, ACTIVE_TRIP)
@@ -43,6 +43,6 @@ test('driver audio plugin is unchanged', () => {
   assert.equal(Object.hasOwn(audio, 'enableBackgroundPlayback'), false)
   assert.equal(
     audio.microphonePermission,
-    'Clemson RIDES uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone.',
+    'Clemson Rides uses the microphone only when you start an audio or video recording during an active ride. The clip stays on this phone.',
   )
 })

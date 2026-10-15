@@ -37,7 +37,7 @@ export default function ReferScreen() {
         <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
           {ref?.enabled
             ? `Earn ${bonus} when a driver you refer completes ${ref.targetTrips} trips. It lands in your payouts.`
-            : 'Share Clemson RIDES with a friend who wants to drive.'}
+            : 'Share Clemson Rides with a friend who wants to drive.'}
         </Text>
         {ref?.code ? (
           <Text selectable style={{ color: colors.orange, fontWeight: '800', fontSize: 24, letterSpacing: 2 }} accessibilityLabel={`Your code ${ref.code.split('').join(' ')}`}>
@@ -48,8 +48,8 @@ export default function ReferScreen() {
           label="Share link"
           onPress={() => {
             const msg = ref?.link
-              ? `Drive with Clemson RIDES. Sign up with my code ${ref.code}: ${ref.link}`
-              : 'Drive with Clemson RIDES. Campus and airport trips for Clemson students.'
+              ? `Drive with Clemson Rides. Sign up with my code ${ref.code}: ${ref.link}`
+              : 'Drive with Clemson Rides. Campus and airport trips for Clemson students.'
             Share.share({ message: msg }).catch(quiet('share referral'))
           }}
         />

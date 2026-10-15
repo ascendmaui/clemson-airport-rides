@@ -7,10 +7,10 @@ const read = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf
 test('native driver config declares active-trip background location on both platforms', () => {
   const { expo } = JSON.parse(read('apps/driver/app.json'))
   const [, location] = expo.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-location')
-  const always = 'Clemson RIDES uses your location during an active trip, including while you use Maps or the phone is locked, so your rider can see your car and knows when you arrive. Location sharing stops when the trip ends.'
+  const always = 'Clemson Rides uses your location during an active trip, including while you use Maps or the phone is locked, so your rider can see your car and knows when you arrive. Location sharing stops when the trip ends.'
   assert.equal(location.locationAlwaysAndWhenInUsePermission, always)
   assert.equal(location.locationAlwaysPermission, always)
-  assert.equal(location.locationWhenInUsePermission, 'Clemson RIDES uses your location while you are online so riders can see your car on the map.')
+  assert.equal(location.locationWhenInUsePermission, 'Clemson Rides uses your location while you are online so riders can see your car on the map.')
   for (const key of ['isIosBackgroundLocationEnabled', 'isAndroidBackgroundLocationEnabled', 'isAndroidForegroundServiceEnabled']) {
     assert.equal(location[key], true, key)
   }
@@ -70,6 +70,6 @@ test('foreground and background reuse the dual-table publisher and persisted thr
   assert.match(task, /deferredUpdatesInterval: TRIP_LOCATION_HEARTBEAT_MS/)
   assert.match(task, /pausesUpdatesAutomatically: false/)
   assert.match(task, /showsBackgroundLocationIndicator: true/)
-  assert.match(task, /notificationTitle: 'Clemson RIDES trip in progress'/)
+  assert.match(task, /notificationTitle: 'Clemson Rides trip in progress'/)
   assert.match(task, /notificationBody: 'Sharing your location with your rider until the trip ends\.'/)
 })
