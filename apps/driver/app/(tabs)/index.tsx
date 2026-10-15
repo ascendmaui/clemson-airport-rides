@@ -87,7 +87,7 @@ import { followEtaLine } from 'rides-native/roadFollow'
 import { driverPickupTarget } from 'rides-native/riderLivePickup'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { useReduceMotion } from 'rides-native/shared/reduceMotion.js'
-import { motion } from 'rides-native/shared/theme.js'
+import { motion, shadowStyle } from 'rides-native/shared/theme.js'
 import { gameDayNotice, type GameDayNotice } from 'rides-native/gameDayNotice.js'
 import { GameDaySurgeLine } from 'rides-native/GameDayBoard.jsx'
 import { useGameDayExperience } from 'rides-native/useGameDayExperience.js'
@@ -1142,8 +1142,7 @@ const styles = StyleSheet.create({
   heatChipOn: {
     backgroundColor: PURPLE,
     borderColor: 'rgba(255,255,255,0.16)',
-    shadowColor: PURPLE, shadowOpacity: 0.22, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    ...shadowStyle(PURPLE, 'rest', 'dark'),
   },
   hotspotRow: { flexGrow: 0, marginTop: 10 },
   hotspots: { paddingHorizontal: 16, gap: 8 },
