@@ -137,9 +137,12 @@ services:
     profiles: ["staging"]
     image: ghcr.io/ascendmaui/clemson-airport-rides:${STAGING_IMAGE_TAG:-staging}
     container_name: clemson-rides-staging
-    env_file: /opt/clemson-rides/.env
-    # Overrides the shared env file for this container only. Do not put these
-    # in /opt/clemson-rides/.env or production will refuse cron too.
+    # Staging has its own env file so it stays on Stripe TEST keys while
+    # production (/opt/clemson-rides/.env) runs live keys. Never point staging
+    # at the production file.
+    env_file: /opt/clemson-rides/.env.staging
+    # Overrides for this container only. Do not put these in
+    # /opt/clemson-rides/.env or production will refuse cron too.
     environment:
       DISABLE_CRON_ENDPOINTS: "1"
       ALLOW_STAGING_DRY_RUN: "1"
@@ -158,7 +161,7 @@ services:
     profiles: ["overlap"]
     image: ghcr.io/ascendmaui/clemson-airport-rides:${STAGING_IMAGE_TAG:-staging}
     container_name: clemson-rides-staging-next
-    env_file: /opt/clemson-rides/.env
+    env_file: /opt/clemson-rides/.env.staging
     environment:
       DISABLE_CRON_ENDPOINTS: "1"
       ALLOW_STAGING_DRY_RUN: "1"
