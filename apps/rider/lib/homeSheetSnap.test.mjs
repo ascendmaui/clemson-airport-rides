@@ -3,6 +3,7 @@ import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readDisplayMode, resolveScheme } from './appearance.ts'
 import {
   HOME_SHEET_BOTTOM_PADDING,
   HOME_SHEET_HANDLE_FALLBACK,
@@ -145,4 +146,35 @@ test('rider home wires the snap helper through gesture-handler and does not touc
   assert.match(hook, /collapsedSheetHeight|buildHomeSheetSnapPoints/)
   assert.match(swipe, /PanResponder/)
   assert.doesNotMatch(swipe, /homeSheetSnap|useHomeSheetSnap/)
+})
+
+test('appearance defaults to the system scheme and keeps explicit overrides', () => {
+  assert.equal(readDisplayMode(undefined), 'auto')
+  assert.equal(readDisplayMode('nope'), 'auto')
+  assert.equal(readDisplayMode('auto'), 'auto')
+  assert.equal(readDisplayMode('light'), 'light')
+  assert.equal(readDisplayMode('dark'), 'dark')
+  assert.equal(resolveScheme('auto', 'dark'), 'dark')
+  assert.equal(resolveScheme('auto', 'light'), 'light')
+  assert.equal(resolveScheme('auto', null), 'light')
+  assert.equal(resolveScheme('auto', undefined), 'light')
+  assert.equal(resolveScheme('light', 'dark'), 'light')
+  assert.equal(resolveScheme('dark', 'light'), 'dark')
+  const theme = read('apps/rider/lib/theme.tsx')
+  assert.match(theme, /useColorScheme/)
+  assert.match(theme, /displayMode: 'auto'/)
+  assert.match(theme, /readDisplayMode\(parsed\.displayMode\)/)
+  assert.doesNotMatch(theme, /it now opens light/)
+})
+
+test('xxx large type keeps the home headline inside the scrolling sheet', () => {
+  const home = read('apps/rider/app/(tabs)/index.tsx')
+  const scrollAt = home.indexOf('<ScrollView')
+  const promptAt = home.indexOf('Where are you headed, Tiger?')
+  assert.ok(scrollAt > 0 && promptAt > scrollAt, 'headline scrolls with the sheet')
+  assert.match(home, /maxFontSizeMultiplier=\{DENSE_FONT_SCALE\}/)
+  assert.match(home, /numberOfLines=\{3\}/)
+  assert.match(home, /numberOfLines=\{2\}/)
+  assert.match(home, /height: insets\.top/)
+  assert.match(home, /minWidth: 0/)
 })
