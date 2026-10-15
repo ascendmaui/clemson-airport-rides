@@ -34,6 +34,12 @@ const supabaseUrl = dataUrl(`
   export function __setSupabase(next) { supabase = next }
 `)
 
+const caughtUrl = dataUrl(`
+  export function logCaught() {}
+  export function caughtMessage(_err, fallback) { return fallback }
+  export function toastCaught() {}
+`)
+
 const PARENT = '/apps/rider/lib/accountApi.ts'
 
 registerHooks({
@@ -42,6 +48,7 @@ registerHooks({
     if (!parent.includes(PARENT)) return nextResolve(specifier, context)
     if (specifier === '@/lib/storage') return { url: storageUrl, shortCircuit: true }
     if (specifier === '@/lib/supabase') return { url: supabaseUrl, shortCircuit: true }
+    if (specifier === '@/lib/caught') return { url: caughtUrl, shortCircuit: true }
     if (specifier === 'rides-native/apiErrors.js') return { url: 'file://' + process.cwd() + '/packages/rides-native/apiErrors.js', shortCircuit: true }
     return nextResolve(specifier, context)
   },
