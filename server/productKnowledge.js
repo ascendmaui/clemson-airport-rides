@@ -35,7 +35,7 @@ export function sanitizeActions(actions) {
 }
 
 export const PRODUCT_BRIEF = `
-Clemson RIDES is a campus and airport rideshare for Clemson, South Carolina. It is software that connects riders with independent drivers. It is not Clemson University transit and not a common carrier.
+Clemson Rides is a campus and airport rideshare for Clemson, South Carolina. It is software that connects riders with independent drivers. It is not Clemson University transit and not a common carrier.
 
 Bottom tabs: Rides, Schedule, Friends, Account (Rides opens the rider home, route "home").
 
@@ -199,7 +199,7 @@ export const TOPICS = [
     steps: [
       'Open Account → Billing.',
       'Tap Card, Cash App Pay, Apple Pay, Google Pay, Link, or Add another payment method.',
-      'On the phone, Stripe PaymentSheet saves the method. On the website, the Payment Element does. Nothing is charged while saving. Clemson RIDES stores the brand and last 4, not the full number.',
+      'On the phone, Stripe PaymentSheet saves the method. On the website, the Payment Element does. Nothing is charged while saving. Clemson Rides stores the brand and last 4, not the full number.',
       'The saved card is authorized for the estimated fare plus a buffer when you request a ride. A Carpool hold equals the quoted seat fare. The final fare is charged when the trip ends. A backup card on the account may be charged if the default card is declined. Friend and carpool charges use the saved card when it is on file.',
     ],
     actions: [action('Open Billing', 'account', { tab: 'billing' })],

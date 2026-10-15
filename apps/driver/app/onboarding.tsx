@@ -624,7 +624,7 @@ export default function OnboardingScreen() {
           onPress={() => { void Linking.openURL(WEB_DRIVER_RENTALS_URL) }}
           accessibilityRole="link"
           accessibilityLabel="No car? Rent one"
-          accessibilityHint="Opens weekly rentals from Clemson RIDES partners. Available after your license and background check pass."
+          accessibilityHint="Opens weekly rentals from Clemson Rides partners. Available after your license and background check pass."
         >
           <Text style={styles.link}>No car? Rent one from a rental partner</Text>
         </Pressable>
@@ -652,7 +652,7 @@ export default function OnboardingScreen() {
                 style={[styles.stepChip, item.id === stepId && styles.stepChipOn]}
               >
                 <Text style={[styles.stepChipText, item.id === stepId && styles.stepChipTextOn]}>
-                  {done ? '✓ ' : ''}{item.label}
+                  {item.label}
                 </Text>
               </Pressable>
             )
@@ -822,7 +822,7 @@ export default function OnboardingScreen() {
                 >
                   <View style={[styles.box, backgroundAuthorized && styles.boxOn]} />
                   <Text style={styles.checkCopy}>
-                    I authorize Clemson RIDES to request a background check, including motor-vehicle records, if a screening vendor is connected later. Signing this does not mean a check was completed.
+                    I authorize Clemson Rides to request a background check, including motor-vehicle records, if a screening vendor is connected later. Signing this does not mean a check was completed.
                   </Text>
                 </Pressable>
                 <Field label="Type your legal name to sign" value={signature} onChangeText={setSignature} />
@@ -863,7 +863,7 @@ export default function OnboardingScreen() {
         {kind === 'tax' ? (
           <Card>
             <Text style={styles.cardTitle}>W-9</Text>
-            <Text style={styles.hint}>Clemson RIDES contractor tax info. This is not legal or tax advice. The full TIN is stored by the database function. This screen keeps the last four.</Text>
+            <Text style={styles.hint}>Clemson Rides contractor tax info. This is not legal or tax advice. The full TIN is stored by the database function. This screen keeps the last four.</Text>
             {w9Step === 0 ? <Field label="Legal name" value={legalName} onChangeText={setLegalName} /> : null}
             {w9Step === 1 ? <Field label="Business name (if any)" value={businessName} onChangeText={setBusinessName} placeholder="Optional" /> : null}
             {w9Step === 2 ? (
@@ -1148,7 +1148,7 @@ function useOnboardingStyles() {
     kicker: { color: colors.orange, ...typeScale.kicker, marginTop: 12 },
     title: { ...typeScale.title, color: colors.title },
     copy: { color: colors.inkSecondary, ...typeScale.body },
-    link: { color: colors.purple, fontSize: 14, fontWeight: '800' as const, lineHeight: 20 },
+    link: { color: colors.link, fontSize: 14, fontWeight: '800' as const, lineHeight: 20 },
     progressTrack: { height: 8, borderRadius: 999, backgroundColor: colors.track, overflow: 'hidden' as const },
     progressFill: { height: '100%' as const, backgroundColor: colors.orange, borderRadius: 999 },
     progressLabel: { color: colors.title, fontWeight: '700' as const, fontSize: 13 },
@@ -1171,7 +1171,7 @@ function useOnboardingStyles() {
     boxOn: { backgroundColor: colors.orange, borderColor: colors.orange },
     checkCopy: { flex: 1, color: colors.ink, fontSize: 14, lineHeight: 20 },
     hint: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18 },
-    nextStep: { color: colors.purple, fontWeight: '700' as const, fontSize: 14, lineHeight: 20 },
+    nextStep: { color: colors.link, fontWeight: '700' as const, fontSize: 14, lineHeight: 20 },
     saved: { color: colors.title, fontWeight: '700' as const, fontSize: 13 },
     agreement: { maxHeight: 180, backgroundColor: colors.input, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 12 },
     agreementTall: { maxHeight: 280, backgroundColor: colors.input, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 12 },

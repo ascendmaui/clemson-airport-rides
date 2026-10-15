@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Linking, Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native'
+import { Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native'
 import { supportEmail, supportMailto } from '../../../../shared/productLinks.js'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
@@ -11,7 +11,8 @@ import { useAuth } from '@/lib/auth'
 import { hapticsEnabled, playMatchChime, setHapticsEnabled, setSoundsEnabled, soundsEnabled, tapHaptic } from '@/lib/feedback'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
-import { useTheme } from '@/lib/theme'
+import { useTheme, type DisplayMode } from '@/lib/theme'
+import { DENSE_FONT_SCALE } from '@/lib/denseType'
 import { nativeGlassAvailable } from 'rides-native/glass'
 import { Glyph } from 'rides-native/icons'
 import { useThemedStyles } from '@/lib/useThemedStyles'
@@ -67,8 +68,8 @@ const GROUPS: { title: string; links: AccountLink[] }[] = [
     links: [
       { href: '/help', label: 'Help', hint: 'How booking, Schedule, friends, and billing work', icon: 'help' },
       { href: '/support', label: 'Support', hint: 'Charge, ride, bug, or safety tickets', icon: 'chat' },
-      { label: 'Email help', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson RIDES help' },
-      { label: 'Email support', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson RIDES support' },
+      { label: 'Email help', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson Rides help' },
+      { label: 'Email support', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson Rides support' },
       { href: '/lost-found', label: 'Lost & found', hint: 'An item left in the car after a ride', icon: 'lostFound' },
     ],
   },
@@ -80,7 +81,7 @@ export function AccountScreen() {
   const insets = useSafeAreaInsets()
   const { user, configured, signOut, signIn, resetPassword } = useAuth()
   const student = useStudentStatus()
-  const { colors, scheme, setDisplayMode } = useTheme()
+  const { colors, scheme, displayMode, setDisplayMode } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
@@ -221,6 +222,7 @@ export function AccountScreen() {
         {!user ? (
           <SignInScreen
             embedded
+            colors={colors}
             signIn={signIn}
             resetPassword={resetPassword}
             onSuccess={() => setNote('Signed in')}
@@ -279,11 +281,11 @@ export function AccountScreen() {
                 accessibilityLabel={link.mailSubject ? `${link.label}, ${supportEmail()}` : link.label}
               >
                 <View style={styles.settingLine}>
-                  <Glyph name={link.icon} size={22} color={colors.purple} scheme={scheme} />
+                  <Glyph name={link.icon} size={22} color={link.icon === 'chat' || link.icon === 'mail' ? colors.link : colors.purple} scheme={scheme} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.rowTitle}>{link.label}</Text>
                     {link.badge ? (
-                      <Text style={{ alignSelf: 'flex-start', backgroundColor: PLAN_BADGE_COLOR, color: '#FFFFFF', fontSize: 11, fontWeight: '800', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, overflow: 'hidden' }}>{link.badge}</Text>
+                      <Text style={{ alignSelf: 'flex-start', backgroundColor: PLAN_BADGE_COLOR, color: colors.onAccent, fontSize: 12, fontWeight: '800', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, overflow: 'hidden' }}>{link.badge}</Text>
                     ) : null}
                     <Text style={styles.copy}>{link.mailSubject ? supportEmail() : link.hint}</Text>
                   </View>
@@ -298,18 +300,13 @@ export function AccountScreen() {
           <View style={styles.settingLine}>
             <Glyph name={scheme === 'dark' ? 'moon' : 'sun'} size={22} color={colors.orange} active={scheme === 'dark'} scheme={scheme} knockout={colors.card} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>Night mode</Text>
-              <Text style={styles.copy}>Opens in light mode. Turn on for dark screens and icons. Saved on this phone.</Text>
-            </View>
-            <Switch
-              value={scheme === 'dark'}
-              onValueChange={(on: boolean) => {
+              <Text style={styles.rowTitle}>Appearance</Text>
+              <Text style={styles.copy}>System follows this phone’s color scheme. Light and Dark stay on until you change them.</Text>
+              <AppearanceChoices mode={displayMode} colors={colors} onChange={(mode) => {
                 void tapHaptic()
-                setDisplayMode(on ? 'dark' : 'light')
-              }}
-              trackColor={{ true: colors.orange, false: colors.track }}
-              accessibilityLabel="Night mode"
-            />
+                setDisplayMode(mode)
+              }} />
+            </View>
           </View>
         </View>
         <View style={[styles.row, lift(colors, 'rest')]}>
@@ -376,6 +373,37 @@ export function AccountScreen() {
   )
 }
 
+const APPEARANCE_CHOICES: { mode: DisplayMode; label: string }[] = [
+  { mode: 'auto', label: 'System' },
+  { mode: 'light', label: 'Light' },
+  { mode: 'dark', label: 'Dark' },
+]
+
+function AppearanceChoices({ mode, colors, onChange }: { mode: DisplayMode; colors: Palette; onChange: (mode: DisplayMode) => void }) {
+  return (
+    <View
+      accessibilityRole="radiogroup"
+      style={{ flexDirection: 'row', backgroundColor: colors.segment, borderRadius: 999, padding: 3, marginTop: 10 }}
+    >
+      {APPEARANCE_CHOICES.map((choice) => {
+        const selected = mode === choice.mode
+        return (
+          <Pressable
+            key={choice.mode}
+            onPress={() => onChange(choice.mode)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            accessibilityLabel={`${choice.label} appearance`}
+            style={{ flex: 1, borderRadius: 999, paddingVertical: 8, alignItems: 'center', backgroundColor: selected ? colors.segmentOn : 'transparent' }}
+          >
+            <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={{ color: selected ? colors.segmentTextOn : colors.segmentText, fontWeight: '700', fontSize: 13 }}>{choice.label}</Text>
+          </Pressable>
+        )
+      })}
+    </View>
+  )
+}
+
 function makeStyles(colors: Palette) {
   return {
     screen: { flex: 1, backgroundColor: colors.background },
@@ -391,7 +419,7 @@ function makeStyles(colors: Palette) {
       borderWidth: 1,
       borderColor: colors.border,
     },
-    safetyKicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
+    safetyKicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12 },
     safetyTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16, marginTop: 4 },
     safetyBody: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 },
     row: {

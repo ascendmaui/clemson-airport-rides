@@ -21,6 +21,8 @@ import Animated, {
 } from 'react-native-reanimated'
 import { GAUGE_PALETTE, type GaugeEffects, type GaugeTier } from 'rides-native/offerGauge'
 import { useTheme } from '@/lib/theme'
+import { Glyph } from 'rides-native/icons'
+import { gaugeCrownColors } from '@/lib/palette'
 
 type Gauge = {
   text: string
@@ -154,13 +156,16 @@ export function OfferGauge({ gauge, offerId }: { gauge: Gauge; offerId: string }
             <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
           </Animated.View>
         ) : null}
-        <Arc fill={gauge.fill} color={tier === 'crown' ? '#FFFFFF' : swatch.accent} track={scheme === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.10)'} still={reduce} />
+        <Arc fill={gauge.fill} color={tier === 'crown' ? gaugeCrownColors.arc : swatch.accent} track={scheme === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.10)'} still={reduce} />
         <View>
-          <Text style={[styles.value, { color: swatch.fg }]}>{tier === 'crown' ? '♛ ' : ''}{gauge.text}</Text>
+          <View style={styles.valueRow}>
+            {tier === 'crown' ? <Glyph name="sparkle" size={14} color={swatch.fg} active /> : null}
+            <Text style={[styles.value, { color: swatch.fg }]}>{gauge.text}</Text>
+          </View>
           {gauge.tierLabel ? <Text style={[styles.label, { color: swatch.fg }]}>{gauge.tierLabel}</Text> : null}
         </View>
         {sparkles.map((i) => (
-          <Sparkle key={i} index={i} count={sparkles.length} color={tier === 'crown' ? '#FFE9A8' : '#FFFFFF'} still={reduce} />
+          <Sparkle key={i} index={i} count={sparkles.length} color={tier === 'crown' ? gaugeCrownColors.sparkle : gaugeCrownColors.sparkleDefault} still={reduce} />
         ))}
       </View>
       </View>
@@ -178,6 +183,7 @@ const styles = StyleSheet.create({
   lift: { borderRadius: 999 },
   ring: { position: 'absolute', width: ARC, height: ARC, borderRadius: ARC / 2, borderWidth: STROKE },
   value: { fontSize: 16, fontWeight: '700', fontVariant: ['tabular-nums'], letterSpacing: -0.4 },
+  valueRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   label: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 1 },
   sweep: { position: 'absolute', top: -20, bottom: -20, width: 28 },
   glow: { position: 'absolute', top: -8, bottom: -8, left: -8, right: -8, borderRadius: 999, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } },

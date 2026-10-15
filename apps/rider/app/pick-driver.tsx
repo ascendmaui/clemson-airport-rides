@@ -5,8 +5,10 @@ import { resolveDriverPortrait } from '../../../shared/driverPortrait.js'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
+import { DenseText } from '@/components/DenseText'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { RetryAction } from '@/components/RetryAction'
 import { FlowErrorBoundary } from '@/components/FlowErrorBoundary'
 import { TipBoostPicker } from '@/components/TipBoostPicker'
 import { pressStyle, useEnterMotion } from '@/components/enter'
@@ -43,8 +45,10 @@ import {
 } from 'rides-native/drivers'
 import { destPoint, pickupPoint } from 'rides-native/places.js'
 import { logCaught } from '@/lib/caught'
+import { useReconnectRetry } from '@/lib/useReconnectRetry'
 import { pickerDriverCard, readablePickerDrivers, rosterCard, sanitizeOnlineDrivers, textField } from '@/lib/driverFields'
 import { lift } from '@/lib/elevation'
+import { RIDER_LIST_WINDOW, pickerListRows } from '@/lib/virtualRows'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
@@ -155,9 +159,9 @@ function DriverRoster({
           </Text>
         </Pressable>
         <View style={styles.badges}>
-          {card.saved ? <Text style={styles.badgePurple}>Preferred</Text> : null}
-          {card.comfort ? <Text style={styles.badgeOrange}>Comfort</Text> : null}
-          {card.priority ? <Text style={styles.badgePurple}>Priority</Text> : null}
+          {card.saved ? <DenseText style={styles.badgePurple}>Preferred</DenseText> : null}
+          {card.comfort ? <DenseText style={styles.badgeOrange}>Comfort</DenseText> : null}
+          {card.priority ? <DenseText style={styles.badgePurple}>Priority</DenseText> : null}
           <Pressable
             onPress={() => onToggleFavorite(card.id)}
             hitSlop={16}
@@ -176,49 +180,63 @@ function DriverRoster({
     )
   }
 
-  function renderGroups() {
-    const passFirst = (groups.passPreferred || []).length > 0
-    const blocks = [
-      passFirst ? { title: 'Preferred', rows: groups.passPreferred || [] } : null,
-      groups.preferred.length ? { title: passFirst ? 'Favorites' : 'Preferred', rows: groups.preferred } : null,
-      groups.online.length ? { title: 'Online now', rows: groups.online } : null,
-    ].filter((block): block is { title: string; rows: OnlineDriver[] } => Boolean(block))
-    return blocks.map((block) => (
-      <View key={block.title} style={styles.section}>
-        {blocks.length > 1 ? <Text style={styles.sectionTitle}>{block.title}</Text> : null}
-        {block.rows.map((driver: OnlineDriver) => renderDriver(driver))}
-      </View>
-    ))
-  }
+  const passFirst = (groups.passPreferred || []).length > 0
+  const rosterBlocks = [
+    passFirst ? { title: 'Preferred', rows: groups.passPreferred || [] } : null,
+    groups.preferred.length ? { title: passFirst ? 'Favorites' : 'Preferred', rows: groups.preferred } : null,
+    groups.online.length ? { title: 'Online now', rows: groups.online } : null,
+  ].filter((block): block is { title: string; rows: OnlineDriver[] } => Boolean(block))
+  const rosterRows = phase === 'results' ? pickerListRows(rosterBlocks) : []
 
   return (
-    <Animated.ScrollView style={[styles.listScroll, listMotion]} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-      {phase === 'results' && !drivers.some((driver: OnlineDriver) => driver.online) ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>{drivers.length ? 'Preferred drivers are offline' : 'Still searching'}</Text>
-          <Text style={styles.sub}>
-            {error || (drivers.length
-              ? PREFERRED_OFFLINE_COPY
-              : 'No approved driver is online. The orange and purple cars are a preview, not people you can request.')}
-          </Text>
-          <PrimaryButton
-            label={notified ? 'Notify me · saved' : 'Notify me'}
-            disabled={notified}
-            onPress={onNotify}
-          />
-          <PrimaryButton label="Retry" tone="ghost" onPress={onRetry} />
-        </View>
-      ) : null}
-      {(groups.passPreferred || []).length > 0 ? (
-        <Text style={styles.meta}>{TIGER_PASS_NAME} offers preferred drivers first, then your other saved drivers.</Text>
-      ) : null}
-      {favNote ? <Text style={styles.meta}>{favNote}</Text> : null}
-      {phase === 'results' && favoriteIds.length === 0 ? (
-        <Text style={styles.sub}>{EMPTY_FAVORITES_COPY}</Text>
-      ) : null}
-      {phase === 'results' ? renderGroups() : null}
-      {extra}
-    </Animated.ScrollView>
+    <Animated.FlatList
+      style={[styles.listScroll, listMotion]}
+      contentContainerStyle={styles.list}
+      showsVerticalScrollIndicator={false}
+      data={rosterRows}
+      keyExtractor={(row) => row.key}
+      {...RIDER_LIST_WINDOW}
+      ListHeaderComponent={(
+        <>
+          {phase === 'results' && !drivers.some((driver: OnlineDriver) => driver.online) ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>{drivers.length ? 'Preferred drivers are offline' : 'Still searching'}</Text>
+              <Text style={styles.sub}>
+                {error || (drivers.length
+                  ? PREFERRED_OFFLINE_COPY
+                  : 'No approved driver is online. The orange and purple cars are a preview, not people you can request.')}
+              </Text>
+              <PrimaryButton
+                label={notified ? 'Notify me · saved' : 'Notify me'}
+                disabled={notified}
+                onPress={onNotify}
+              />
+              <PrimaryButton label="Retry" tone="ghost" onPress={onRetry} />
+            </View>
+          ) : null}
+          {(groups.passPreferred || []).length > 0 ? (
+            <Text style={styles.meta}>{TIGER_PASS_NAME} offers preferred drivers first, then your other saved drivers.</Text>
+          ) : null}
+          {favNote ? <Text style={styles.meta}>{favNote}</Text> : null}
+          {phase === 'results' && favoriteIds.length === 0 ? (
+            <Text style={styles.sub}>{EMPTY_FAVORITES_COPY}</Text>
+          ) : null}
+        </>
+      )}
+      renderItem={({ item }) => {
+        switch (item.kind) {
+          case 'section':
+            return <Text style={styles.sectionTitle}>{item.title}</Text>
+          case 'driver':
+            return renderDriver(item.driver)
+          default: {
+            const _exhaustive: never = item
+            return _exhaustive
+          }
+        }
+      }}
+      ListFooterComponent={extra ? <View>{extra}</View> : null}
+    />
   )
 }
 
@@ -363,6 +381,8 @@ function PickDriver() {
     if (!tipParam || !Number.isFinite(cents) || cents < 0) return
     setPrepaidTipCents(Math.round(cents))
   }, [tipParam])
+
+  useReconnectRetry('pick-driver', () => setAttempt((value: number) => value + 1), Boolean(error))
 
   const selectedDriver = drivers.find((row: OnlineDriver) => row.id === selected) || null
   const comfortNotice = comfortFleetNotice(tier === 'comfort' || tier === 'comfort' || Boolean(selectedDriver?.comfortClass))
@@ -605,7 +625,7 @@ function PickDriver() {
                             </View>
                             <Text style={styles.sub}>{card.vehicleLabel}</Text>
                           </View>
-                          <Text style={{ fontSize: 11, fontWeight: '700', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 5, overflow: 'hidden', backgroundColor: card.status === 'on_trip' ? colors.orangeSoft : colors.track, color: card.status === 'on_trip' ? colors.orange : colors.inkSecondary }}>{card.statusLabel}</Text>
+                          <DenseText style={{ fontSize: 12, fontWeight: '700', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 5, overflow: 'hidden', backgroundColor: card.status === 'on_trip' ? colors.orangeSoft : colors.track, color: card.status === 'on_trip' ? colors.orange : colors.inkSecondary }}>{card.statusLabel}</DenseText>
                         </View>
                       </View>
                     )
@@ -639,7 +659,10 @@ function PickDriver() {
         ) : null}
         <TipBoostPicker cents={prepaidTipCents} onChange={setPrepaidTipCents} />
         {error && drivers.some((driver: OnlineDriver) => driver.online) ? (
-          <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="assertive">{error}</Text>
+          <View accessibilityLiveRegion="assertive">
+            <Text style={styles.error} accessibilityRole="alert">{error}</Text>
+            <RetryAction label="Retry request" hint="Sends the ride request again" onPress={() => { void onRequest() }} />
+          </View>
         ) : null}
         <PrimaryButton
           label={requesting ? 'Requesting…' : selectedDriver ? `Request ${selectedDriver.name}` : (anyOnline ? 'Request next driver' : 'Select a driver')}
@@ -710,7 +733,7 @@ function makeStyles(colors: Palette) {
       borderColor: colors.border,
     },
     kindOn: { backgroundColor: colors.purple, borderColor: colors.purple },
-    kindText: { color: colors.link, fontSize: 11, fontWeight: '800' as const },
+    kindText: { color: colors.link, fontSize: 12, fontWeight: '800' as const },
     kindTextOn: { color: colors.onAccent },
     listScroll: { flex: 1, marginTop: 12 },
     list: { paddingHorizontal: 20, paddingBottom: 16, gap: 10 },
@@ -729,8 +752,8 @@ function makeStyles(colors: Palette) {
     name: { fontSize: 17, fontWeight: '700' as const, letterSpacing: -0.2, color: colors.ink },
     meta: { color: colors.link, fontSize: 12, fontWeight: '600' as const },
     badges: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, alignItems: 'center' as const, marginTop: 4 },
-    badgeOrange: { color: colors.orange, backgroundColor: colors.orangeSoft, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, fontWeight: '800' as const },
-    badgePurple: { color: colors.link, backgroundColor: colors.purpleSoft, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, fontWeight: '800' as const },
+    badgeOrange: { color: colors.orange, backgroundColor: colors.orangeSoft, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, fontSize: 12, fontWeight: '800' as const },
+    badgePurple: { color: colors.link, backgroundColor: colors.purpleSoft, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, fontSize: 12, fontWeight: '800' as const },
     ratingRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
     saveOn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: colors.purple, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
     saveOff: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },

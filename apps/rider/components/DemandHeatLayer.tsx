@@ -12,7 +12,7 @@ import {
   HEAT_BREATH_MS,
   renderDemandHeatImage,
 } from '@/lib/demandHeatMap'
-import type { Scheme } from '@/lib/palette'
+import { heatLabelFor, type Scheme } from '@/lib/palette'
 
 export function DemandHeatLayer({
   spots,
@@ -79,7 +79,7 @@ export function DemandHeatLayer({
             key={`heat-area-${index}`}
             style={[styles.labelSlot, { left: `${place.left}%`, top: `${place.top}%` }]}
           >
-            <Text style={[styles.label, area.label === 'Quiet' ? styles.quiet : null, { color: busynessInk(area.label) }]}>
+            <Text style={[styles.label, area.label === 'Quiet' ? styles.quiet : null, { color: busynessInk(area.label), textShadowColor: heatLabelFor(scheme).shadow }]}>
               {area.label}
             </Text>
           </View>
@@ -100,10 +100,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   label: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     backgroundColor: 'transparent',
-    textShadowColor: 'rgba(255,255,255,0.9)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 3,
   },

@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router'
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useCardShadow } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
@@ -8,7 +8,8 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { setMyMarker } from '@/lib/myMarker'
 import { firstRideChipCopy, loadDriverPerks, type DriverPerks, type Leaderboard, type StreakView, type SurgeView, type PartyQueueView, type SafetyScoreView, type ScorecardView, setPartyQueueOptIn } from 'rides-native/driverDesk'
-import { quiet } from '@/lib/softFail'
+import { failureToast, quiet } from '@/lib/softFail'
+import { toggleWithRevert } from '@/lib/partyToggle'
 
 const dollars = (cents: number) => `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`
 
@@ -17,6 +18,8 @@ export function PerksStrip() {
   const { user } = useAuth()
   const router = useRouter()
   const [perks, setPerks] = useState<DriverPerks | null>(null)
+  const [partySaving, setPartySaving] = useState(false)
+  const partyBusy = useRef(false)
   useFocusEffect(useCallback(() => {
     if (!user || !supabase) return undefined
     let alive = true
@@ -53,15 +56,34 @@ export function PerksStrip() {
         accessibilityState={{ checked: party.optedIn }}
         accessibilityLabel={`Party-ride queue, ${party.label}. ${party.optedIn ? 'On' : 'Off'}`}
         accessibilityHint="Turns late-night party pickups on or off"
-        onPress={() => {
+        accessibilityValue={partySaving ? { text: 'Saving' } : undefined}
+        disabled={partySaving}
+        onPress={function toggleParty() {
           if (!supabase) return
+          const client = supabase
+          const before = perks
           const next = !party.optedIn
-          setPerks({ ...perks, partyQueue: { ...party, optedIn: next } })
-          setPartyQueueOptIn(supabase, next).then(() => loadDriverPerks(supabase!).then(setPerks)).catch(() => setPerks(perks))
+          setPartySaving(true)
+          void toggleWithRevert<DriverPerks>({
+            current: before,
+            next: { ...before, partyQueue: { ...party, optedIn: next } },
+            apply: setPerks,
+            save: () => setPartyQueueOptIn(client, next),
+            reload: () => loadDriverPerks(client),
+            busy: partyBusy,
+            onFail: (err) => failureToast({
+              key: 'party-queue',
+              title: next ? 'Couldn’t join the party queue' : 'Couldn’t leave the party queue',
+              err,
+              fallback: `Party queue is still ${party.optedIn ? 'on' : 'off'}.`,
+              retry: toggleParty,
+            }),
+            onReloadFail: quiet('party queue reload'),
+          }).finally(() => setPartySaving(false))
         }}
       >
         <PerkChip
-          title={`Party queue · ${party.optedIn ? 'On' : 'Off'}`}
+          title={`Party queue · ${partySaving ? 'Saving…' : party.optedIn ? 'On' : 'Off'}`}
           line={party.optedIn
             ? party.open ? `${party.label} · you’re #${party.position} of ${party.size}` : `${party.label} · opens ${hours}`
             : `Tap to join ${party.label} late-night pickups`}
@@ -72,7 +94,7 @@ export function PerksStrip() {
   const card = perks.scorecard as ScorecardView | undefined
   if (card?.enabled) {
     const pct = (r: number | null | undefined) => (r == null ? '—' : `${Math.round(r * 100)}%`)
-    const line = `Accept ${pct(card.acceptance?.rate)} · Complete ${pct(card.completion?.rate)} · ★ ${card.rating != null ? card.rating.toFixed(2) : '—'}`
+    const line = `Accept ${pct(card.acceptance?.rate)} · Complete ${pct(card.completion?.rate)} · Rating ${card.rating != null ? card.rating.toFixed(2) : '—'}`
     chips.unshift(
       <Pressable key="scorecard" onPress={() => router.push('/scorecard')} accessibilityRole="button" accessibilityLabel={`Scorecard. ${line}`}>
         <PerkChip title="Scorecard" line={line} />
@@ -115,8 +137,9 @@ export function PerkChip({ title, line, progress, tone, accessibilityLabel }: { 
     <View
       style={[styles.chip, shadow, {
         backgroundColor: tone === 'orange' ? colors.orangeSoft : tone === 'purple' ? colors.purpleSoft : colors.card,
-        borderLeftWidth: tone ? 3 : 0,
-        borderLeftColor: accent,
+        // Brand rail on every chip: orange for money/urgent, purple otherwise.
+        borderLeftWidth: 3,
+        borderLeftColor: tone === 'orange' ? colors.orange : colors.purple,
       }]}
       accessible
       accessibilityLabel={accessibilityLabel || `${title}. ${line}`}
@@ -137,7 +160,8 @@ function toneColor(colors: Palette, tone?: 'orange' | 'purple') {
     case 'orange':
       return colors.orange
     case 'purple':
-      return colors.purple
+      // Text on dark cards: the lighter brand purple keeps contrast at night.
+      return colors.link
     case undefined:
       return colors.title
     default: {
@@ -160,7 +184,7 @@ function StreakChip({ label, unit, view }: { label: string; unit: string; view: 
 
 const styles = StyleSheet.create({
   row: { gap: 8, paddingHorizontal: 16, paddingVertical: 6 },
-  chip: { borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, minWidth: 150, gap: 2 },
+  chip: { borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, minWidth: 150, gap: 2 },
   track: { height: 4, borderRadius: 2, marginTop: 4, overflow: 'hidden' },
   fill: { height: 4, borderRadius: 2 },
 })

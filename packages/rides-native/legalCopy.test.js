@@ -154,7 +154,7 @@ test('PRIVACY_SECTIONS contains critical compliance and campus policy statements
 
 test('TERMS_SECTIONS conforms to required structure and unique headings', () => {
   assert.ok(Array.isArray(TERMS_SECTIONS))
-  assert.equal(TERMS_SECTIONS.length, 23)
+  assert.equal(TERMS_SECTIONS.length, 30)
 
   const expectedHeadings = [
     'Article 1. Agreement',
@@ -180,6 +180,13 @@ test('TERMS_SECTIONS conforms to required structure and unique headings', () => 
     'Article 21. Termination',
     'Article 22. Changes',
     'Article 23. Notices and Contact',
+    'Article 24. Supplemental Protective Terms: Scope and Precedence',
+    'Article 25. Dispatch Platform and Independent Drivers',
+    'Article 26. Supplemental Assumption of Risk',
+    'Article 27. Supplemental Release, Unknown Claims, and Covenant Not to Sue',
+    'Article 28. Supplemental Indemnity and Damages Limits',
+    'Article 29. Supplemental Dispute Resolution Terms',
+    'Article 30. Supplemental Acknowledgment, Changes, Severability, and Survival',
   ]
 
   const headings = TERMS_SECTIONS.map((s) => s.heading)
@@ -396,7 +403,7 @@ test('simulated app rendering matches rider and web consumer logic', () => {
     const title = doc === 'terms' ? 'Terms of Service' : 'Privacy Policy'
     const rendered = {
       title,
-      meta: `Clemson RIDES · Last updated ${LEGAL_UPDATED}`,
+      meta: `Clemson Rides · Last updated ${LEGAL_UPDATED}`,
       renderedSections: sections.map((section) => ({
         heading: section.heading,
         paragraphCount: section.paragraphs?.length ?? 0,
@@ -412,7 +419,7 @@ test('simulated app rendering matches rider and web consumer logic', () => {
 
   const nativeTerms = renderNativeScreen('terms')
   assert.equal(nativeTerms.title, 'Terms of Service')
-  assert.equal(nativeTerms.renderedSections.length, 23)
+  assert.equal(nativeTerms.renderedSections.length, 30)
 
   // Emulate rendering logic from src/screens/LegalPages.jsx
   const renderWebBody = (sections) => {
@@ -426,5 +433,5 @@ test('simulated app rendering matches rider and web consumer logic', () => {
   const webPrivacy = renderWebBody(PRIVACY_SECTIONS)
   assert.equal(webPrivacy.length, 12)
   const webTerms = renderWebBody(TERMS_SECTIONS)
-  assert.equal(webTerms.length, 23)
+  assert.equal(webTerms.length, 30)
 })

@@ -2,7 +2,7 @@ import { GlassBadge, Glyph } from 'rides-native/icons'
 import { MainTabs } from '@/components/MainTabs'
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { FlatList, Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { useAuth } from '@/lib/auth'
@@ -16,6 +16,7 @@ import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { RequireAuth } from '@/components/RequireAuth'
 import { caughtMessage, logCaught } from '@/lib/caught'
+import { RIDER_LIST_WINDOW } from '@/lib/virtualRows'
 
 type RideRow = {
   id: string
@@ -83,23 +84,32 @@ function HistoryScreen() {
           <Text style={[styles.segmentText, { color: colors.onAccent }]}>History</Text>
         </View>
       </View>
-      <ScrollView contentContainerStyle={styles.list}>
-        {!user ? (
+      <FlatList
+        style={{ flex: 1 }}
+        data={rows}
+        keyExtractor={(row: RideRow) => row.id}
+        contentContainerStyle={styles.list}
+        {...RIDER_LIST_WINDOW}
+        ListHeaderComponent={(
           <>
-            <Text style={styles.copy}>Sign in to see rides on this account.</Text>
-            <PrimaryButton label="Sign in" onPress={() => router.push('/sign-in')} />
+            {!user ? (
+              <>
+                <Text style={styles.copy}>Sign in to see rides on this account.</Text>
+                <PrimaryButton label="Sign in" onPress={() => router.push('/sign-in')} />
+              </>
+            ) : null}
+            {loading ? <Text style={styles.copy}>Loading…</Text> : null}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {user && !loading && !error && rows.length === 0 ? (
+              <View style={styles.empty}>
+                <GlassBadge name="empty" size={56} tone="purple" scheme={scheme} />
+                <Text style={styles.copy}>No rides yet. Campus → GSP starts from the map.</Text>
+              </View>
+            ) : null}
           </>
-        ) : null}
-        {loading ? <Text style={styles.copy}>Loading…</Text> : null}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {user && !loading && !error && rows.length === 0 ? (
-          <View style={styles.empty}>
-            <GlassBadge name="empty" size={56} tone="purple" scheme={scheme} />
-            <Text style={styles.copy}>No rides yet. Campus → GSP starts from the map.</Text>
-          </View>
-        ) : null}
-        {rows.map((row: RideRow) => (
-          <View key={row.id} style={[styles.card, lift(colors, 'rest')]}>
+        )}
+        renderItem={({ item: row }) => (
+          <View style={[styles.card, lift(colors, 'rest')]}>
             <View style={styles.cardHead}>
               <Glyph name={row.status === 'completed' ? 'complete' : row.status === 'canceled' || row.status === 'cancelled' ? 'close' : 'clock'} size={20} color={row.status === 'completed' ? colors.online : colors.purple} />
               <Text style={[styles.cardTitle, { flex: 1 }]}>{row.dropoff_label || 'Ride'}</Text>
@@ -151,8 +161,8 @@ function HistoryScreen() {
               </Pressable>
             ) : null}
           </View>
-        ))}
-      </ScrollView>
+        )}
+      />
       <MainTabs active="rides" />
     </View>
   )

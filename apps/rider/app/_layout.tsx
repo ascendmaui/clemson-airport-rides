@@ -17,6 +17,7 @@ import { ThemeProvider, useTheme } from '@/lib/theme'
 import { useApproachingTrip } from '@/lib/useRiderTrip'
 import { useRiderPickupStream } from '@/lib/useRiderPickupStream'
 import { BootScreen } from '@/components/BootScreen'
+import { NetworkWatch, OfflineBanner } from '@/components/OfflineBanner'
 import { clearAmbassadorCode, loadAmbassadorCode, saveAmbassadorCode } from '@/lib/ambassadorCode'
 import { supabase } from '@/lib/supabase'
 import { ambassadorCodeFromLocation } from 'rides-native/shared/ambassadorAttribution.js'
@@ -215,6 +216,8 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
+        <NetworkWatch />
+        <OfflineBanner />
         <AuthProvider>
           <PasswordRecoveryListener />
           <AmbassadorDeepLink />

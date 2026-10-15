@@ -17,6 +17,7 @@ import { studentSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 import { bookableRideTiers } from '../../packages/rides-native/places.js'
 import { useRideOptions } from '../lib/useRideOptions'
 import { isOfferedRideTier, NO_DRIVERS_AVAILABLE_COPY, SCHEDULE_AHEAD_LABEL } from '../../shared/rideOptions.js'
+import { SiteIcon } from '../components/SiteIcon'
 
 export function RideTiers({
   dest = '1900 GSP Dr',
@@ -129,7 +130,7 @@ export function RideTiers({
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'transparent' }}>
       <div style={{ padding: '12px 16px 0' }}>
-        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to pickup confirmation" onClick={() => navigate('confirm', { dest, destLat, destLng, pickup, pickupLat, pickupLng, ...(billing ? { billing } : {}) })} style={{ marginBottom: 8 }}>←</button>
+        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to pickup confirmation" onClick={() => navigate('confirm', { dest, destLat, destLng, pickup, pickupLat, pickupLng, ...(billing ? { billing } : {}) })} style={{ marginBottom: 8 }}><SiteIcon name="arrow-left" size={20} /></button>
         <div className="glass-panel" style={{ borderRadius: 16, overflow: 'hidden', padding: 4 }}>
           <CampusMap
             height={140}

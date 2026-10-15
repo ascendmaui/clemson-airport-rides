@@ -9,7 +9,7 @@ import { oneParam } from '@/lib/oneParam'
 import { useAuth } from '@/lib/auth'
 import { registerDriverPush, type PushState } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
-import { useTheme, type NavApp, type RideAlertMode, type RideAlertTier } from '@/lib/theme'
+import { useTheme, type DisplayMode, type NavApp, type RideAlertMode, type RideAlertTier } from '@/lib/theme'
 import { loadDriverDesk, loadDriverProfile, setPriorityMode } from 'rides-native/driverDesk'
 import { riderDriverFirstName } from '../../../../shared/riderDriverPrivacy.js'
 import { QuietHoursChoices } from '@/components/QuietHoursChoices'
@@ -49,6 +49,35 @@ function sectionTitle(section: Section): string {
       return unknown
     }
   }
+}
+
+const APPEARANCE_CHOICES: { mode: DisplayMode; label: string }[] = [
+  { mode: 'auto', label: 'System' },
+  { mode: 'light', label: 'Light' },
+  { mode: 'dark', label: 'Dark' },
+]
+
+function AppearanceChoices({ mode, onChange }: { mode: DisplayMode; onChange: (mode: DisplayMode) => void }) {
+  const { colors } = useTheme()
+  return (
+    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', backgroundColor: colors.segment, borderRadius: 999, padding: 3 }}>
+      {APPEARANCE_CHOICES.map((choice) => {
+        const selected = mode === choice.mode
+        return (
+          <Pressable
+            key={choice.mode}
+            onPress={() => onChange(choice.mode)}
+            accessibilityRole="radio"
+            accessibilityLabel={`${choice.label} appearance`}
+            accessibilityState={{ selected }}
+            style={{ flex: 1, borderRadius: 999, paddingVertical: 8, alignItems: 'center', backgroundColor: selected ? colors.segmentOn : 'transparent' }}
+          >
+            <Text maxFontSizeMultiplier={1.4} style={{ color: selected ? colors.segmentTextOn : colors.segmentText, fontWeight: '700', fontSize: 13 }}>{choice.label}</Text>
+          </Pressable>
+        )
+      })}
+    </View>
+  )
 }
 
 export default function SettingsSection() {
@@ -115,11 +144,11 @@ export default function SettingsSection() {
           <Card>
             <View style={styles.row}>
               <Glyph name={theme.scheme === 'dark' ? 'moon' : 'sun'} size={22} color={colors.orange} active={theme.scheme === 'dark'} scheme={theme.scheme} knockout={colors.card} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.ink, fontWeight: '800' }}>Night mode</Text>
-                <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>The app opens in light mode. Turn this on for a dark map, screens, and icons. Saved on this phone.</Text>
+              <View style={{ flex: 1, gap: 8 }}>
+                <Text style={{ color: colors.ink, fontWeight: '800' }}>Appearance</Text>
+                <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>System follows this phone’s color scheme. Light and Dark stay on until you change them.</Text>
+                <AppearanceChoices mode={theme.displayMode} onChange={theme.setDisplayMode} />
               </View>
-              <Toggle on={theme.scheme === 'dark'} onPress={() => theme.setDisplayMode(theme.scheme === 'dark' ? 'light' : 'dark')} label="Night mode" />
             </View>
           </Card>
         ) : null}
@@ -268,7 +297,7 @@ function SoundChoices() {
       </Card>
       {ALERT_TIERS.map((tier) => (
         <View key={tier.id} style={{ gap: 8 }}>
-          <Text style={{ color: colors.purple, fontWeight: '800' }}>{tier.label}</Text>
+          <Text style={{ color: colors.link, fontWeight: '800' }}>{tier.label}</Text>
           <ChoiceCards
             options={ALERT_MODES}
             value={theme.rideAlerts[tier.id]}
@@ -309,7 +338,7 @@ function AutoAcceptChoices() {
                 accessibilityState={{ selected: on }}
                 style={[styles.chip, { backgroundColor: on ? colors.orange : colors.segment }]}
               >
-                <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800' }}>{miles} mi</Text>
+                <Text style={{ color: on ? colors.onAccent : colors.title, fontWeight: '800' }}>{miles} mi</Text>
               </Pressable>
             )
           })}
@@ -332,7 +361,7 @@ function AutoAcceptChoices() {
                 accessibilityState={{ selected: on }}
                 style={[styles.chip, { backgroundColor: on ? colors.purple : colors.segment }]}
               >
-                <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800' }}>${dollars}/hr</Text>
+                <Text style={{ color: on ? colors.onAccent : colors.title, fontWeight: '800' }}>${dollars}/hr</Text>
               </Pressable>
             )
           })}

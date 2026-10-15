@@ -13,6 +13,10 @@ import {
   switchFeePayoutForTrip,
 } from '../shared/backupDriverQueue.js'
 import { driverTripEarnings, tigerHeatPayoutCents } from '../shared/driverTripEarnings.js'
+import { payoutApprovalRequired } from '../shared/payoutApproval.js'
+import {
+  approvalIdempotencyKey, isDefiniteStripeError, markApprovalFailed, markApprovalSent, payoutGate, usableConnectAccount,
+} from './payoutApproval.js'
 
 export { tigerHeatPayoutCents }
 
@@ -54,7 +58,32 @@ export function buildPayoutRecord(trip) {
   }
 }
 
-export async function attemptDriverPayout({ trip, stripe, connectAccountId, now = Date.now(), idempotencyPrefix = 'payout' }) {
+const PREFIX_KINDS = {
+  payout: 'trip_payout',
+  'payout-backup': 'standby',
+  'payout-cancel': 'cancel_fee',
+  'payout-switch': 'switch_fee',
+  'payout-tip': 'tip',
+}
+
+/** Stable approval source for one payout (never includes the attempt number). */
+export function payoutSourceRef(trip, idempotencyPrefix = 'payout') {
+  if (idempotencyPrefix === 'payout' && trip?.status === 'cancelled_wait') return `payout-wait:${trip.id}`
+  return `${idempotencyPrefix}:${trip?.id}`
+}
+
+export function payoutKind(trip, idempotencyPrefix = 'payout') {
+  if (idempotencyPrefix === 'payout' && trip?.status === 'cancelled_wait') return 'wait_cancel'
+  return PREFIX_KINDS[idempotencyPrefix] || 'trip_payout'
+}
+
+function destinationMissing(err) {
+  return /no such destination|no such account|test mode|live mode/i.test(String(err?.message || ''))
+}
+
+export async function attemptDriverPayout({
+  trip, stripe, connectAccountId, now = Date.now(), idempotencyPrefix = 'payout', sb = null, env = process.env,
+}) {
   const stored = trip?.metadata?.payout || buildPayoutRecord(trip)
   const existing = trip.status === 'cancelled_wait'
     ? { ...stored, ...buildWaitCancelPayoutRecord(trip), status: stored.status,
@@ -80,32 +109,92 @@ export async function attemptDriverPayout({ trip, stripe, connectAccountId, now 
     console.error('[payout]', { tripId: trip.id, attempt: payout.attempts, error: payout.lastError })
     return { ok: false, payout }
   }
+  // Live money: admin approval first, and the destination must be a live account.
+  let approval = null
+  if (payoutApprovalRequired(env)) {
+    const usable = await usableConnectAccount(stripe, connectAccountId, env)
+    if (usable.needsReonboard) {
+      return {
+        ok: false,
+        needsReonboard: true,
+        payout: { ...existing, status: existing.status === 'pending_approval' ? 'pending' : existing.status, pending: true, lastError: 'needs_reonboard', nextRetryAt: null },
+      }
+    }
+    const gate = await payoutGate({
+      sb,
+      env,
+      kind: payoutKind(trip, idempotencyPrefix),
+      sourceRef: payoutSourceRef(trip, idempotencyPrefix),
+      payeeId: trip.driver_id,
+      amountCents,
+      sourceId: trip.id,
+      tripId: trip.id,
+      destination: connectAccountId,
+      details: { idempotencyPrefix },
+    })
+    if (gate.alreadySent) {
+      const paid = applyPayoutAttempt(existing, { ok: true, now, amountCents, transferId: gate.request?.stripe_transfer_id || null })
+      return { ok: true, payout: { ...paid, approvalRequestId: gate.request?.id || null, approvalStatus: 'sent' }, idempotent: true }
+    }
+    if (!gate.allowed) {
+      const requestId = gate.request?.id || null
+      if (gate.status === 'pending_approval') {
+        return {
+          ok: false,
+          pendingApproval: true,
+          payout: { ...existing, status: 'pending_approval', pending: true, lastError: null, nextRetryAt: null, approvalRequestId: requestId, approvalStatus: 'pending_approval' },
+        }
+      }
+      if (gate.status === 'rejected') {
+        // Released back to the driver's unpaid balance (cash-out can request it again).
+        return {
+          ok: false,
+          rejected: true,
+          payout: { ...existing, status: 'pending', pending: true, lastError: 'rejected_by_admin', nextRetryAt: null, approvalRequestId: requestId, approvalStatus: 'rejected' },
+        }
+      }
+      return {
+        ok: false,
+        skipped: true,
+        reason: gate.status,
+        payout: { ...existing, status: existing.status === 'pending_approval' ? 'pending' : existing.status, lastError: gate.status || 'approval_unavailable', approvalRequestId: requestId },
+      }
+    }
+    approval = gate.request || null
+  }
   try {
     if (!stripe?.transfers?.create) throw new Error('Stripe transfers unavailable')
     // One wait transfer even if concurrent ticks or a lost response replay it.
+    // An approved request uses its own key, so one approval can only ever pay once.
+    const idempotencyKey = approval
+      ? approvalIdempotencyKey(approval)
+      : (trip.status === 'cancelled_wait' ? `payout-wait:${trip.id}` : `${idempotencyPrefix}:${trip.id}:${existing.attempts || 0}`)
     const transfer = await stripe.transfers.create({
       amount: amountCents,
       currency: 'usd',
       destination: connectAccountId,
       transfer_group: trip.id,
-      metadata: { tripId: trip.id, driverId: trip.driver_id || '' },
-    }, { idempotencyKey: trip.status === 'cancelled_wait' ? `payout-wait:${trip.id}` : `${idempotencyPrefix}:${trip.id}:${existing.attempts || 0}` })
+      metadata: { tripId: trip.id, driverId: trip.driver_id || '', ...(approval ? { approvalRequestId: approval.id } : {}) },
+    }, { idempotencyKey })
     const payout = applyPayoutAttempt(existing, {
       ok: true,
       now,
       amountCents,
       transferId: transfer.id,
     })
-    return { ok: true, payout }
+    if (approval) await markApprovalSent(sb, approval, { transferId: transfer.id })
+    return { ok: true, payout: approval ? { ...payout, approvalRequestId: approval.id, approvalStatus: 'sent' } : payout }
   } catch (err) {
+    const needsReonboard = Boolean(approval) && destinationMissing(err)
     const payout = applyPayoutAttempt(existing, {
       ok: false,
-      error: err?.message || 'payout_failed',
+      error: needsReonboard ? 'needs_reonboard' : (err?.message || 'payout_failed'),
       now,
       amountCents,
     })
+    if (approval) await markApprovalFailed(sb, approval, err, { definite: isDefiniteStripeError(err) })
     console.error('[payout]', { tripId: trip.id, attempt: payout.attempts, error: payout.lastError })
-    return { ok: false, payout }
+    return { ok: false, payout, needsReonboard: needsReonboard || undefined }
   }
 }
 
@@ -143,7 +232,7 @@ export async function writePayout(sb, trip, payout) {
 export async function enqueueAndAttemptPayout({ sb, stripe, trip, connectAccountId, now }) {
   const record = trip?.metadata?.payout?.status ? trip.metadata.payout : buildPayoutRecord(trip)
   const nextTrip = { ...trip, metadata: { ...(trip.metadata || {}), payout: record } }
-  const result = await attemptDriverPayout({ trip: nextTrip, stripe, connectAccountId, now })
+  const result = await attemptDriverPayout({ trip: nextTrip, stripe, connectAccountId, now, sb })
   await writePayout(sb, trip, result.payout)
   return result
 }
@@ -170,7 +259,7 @@ export async function enqueueWaitCancelPayout({ sb, trip, stripe, connectAccount
 }
 
 /** Standby backup bonus. Separate transfer so the completing driver's payout row stays put. */
-export async function attemptStandbyBackupPayout({ sb, trip, stripe, connectAccountId, now = Date.now(), dryRun = false }) {
+export async function attemptStandbyBackupPayout({ sb, trip, stripe, connectAccountId, now = Date.now(), dryRun = false, env = process.env }) {
   const plan = payoutPlanForTrip(trip, 0)
   if (!plan?.standbyDriverId || plan.standbyCents <= 0) return null
   const existing = trip?.metadata?.backup_standby_payout
@@ -209,6 +298,8 @@ export async function attemptStandbyBackupPayout({ sb, trip, stripe, connectAcco
     connectAccountId: account,
     now,
     idempotencyPrefix: 'payout-backup',
+    sb,
+    env,
   })
   await writeStandbyPayout(sb, trip, { ...result.payout, driverId: plan.standbyDriverId, role: 'standby' })
   return result
@@ -245,7 +336,7 @@ async function writeStandbyPayout(sb, trip, payout) {
 }
 
 /** Rider-cancel fee. One transfer, even if a switch had already assigned that same fee. */
-export async function attemptCancelFeePayout({ sb, trip, stripe, connectAccountId, now = Date.now(), dryRun = false }) {
+export async function attemptCancelFeePayout({ sb, trip, stripe, connectAccountId, now = Date.now(), dryRun = false, env = process.env }) {
   const queue = readBackupQueue(trip)
   if (!queue?.cancelFeeDriverId || !queue.cancelFeeCents) return null
   return attemptRolePayout({
@@ -263,11 +354,12 @@ export async function attemptCancelFeePayout({ sb, trip, stripe, connectAccountI
     },
     metadataKey: 'backup_cancel_payout',
     idempotencyPrefix: 'payout-cancel',
+    env,
   })
 }
 
 /** One-time switch fee for the former primary. Separate from the fare payout. */
-export async function attemptSwitchFeePayout({ sb, trip, stripe, connectAccountId, now = Date.now(), dryRun = false }) {
+export async function attemptSwitchFeePayout({ sb, trip, stripe, connectAccountId, now = Date.now(), dryRun = false, env = process.env }) {
   const plan = switchFeePayoutForTrip(trip)
   if (!plan) return null
   return attemptRolePayout({
@@ -280,6 +372,7 @@ export async function attemptSwitchFeePayout({ sb, trip, stripe, connectAccountI
     plan,
     metadataKey: 'backup_switch_payout',
     idempotencyPrefix: 'payout-switch',
+    env,
   })
 }
 
@@ -299,7 +392,7 @@ export function tipPayoutPlan(trip) {
   return { driverId: trip.driver_id, cents, label: 'Tip', role: 'tip' }
 }
 
-export async function attemptTipPayout({ sb, trip, stripe, connectAccountId, now = Date.now(), dryRun = false }) {
+export async function attemptTipPayout({ sb, trip, stripe, connectAccountId, now = Date.now(), dryRun = false, env = process.env }) {
   const plan = tipPayoutPlan(trip)
   if (!plan) return null
   const existing = trip?.metadata?.tip_payout
@@ -313,11 +406,12 @@ export async function attemptTipPayout({ sb, trip, stripe, connectAccountId, now
     sb, trip, stripe, connectAccountId, now, dryRun, plan,
     metadataKey: 'tip_payout',
     idempotencyPrefix: 'payout-tip',
+    env,
   })
 }
 
 async function attemptRolePayout({
-  sb, trip, stripe, connectAccountId, now, dryRun, plan, metadataKey, idempotencyPrefix,
+  sb, trip, stripe, connectAccountId, now, dryRun, plan, metadataKey, idempotencyPrefix, env = process.env,
 }) {
   const existing = trip?.metadata?.[metadataKey]
   if (existing?.status === 'paid') return { ok: true, payout: existing, idempotent: true }
@@ -357,6 +451,8 @@ async function attemptRolePayout({
     connectAccountId: account,
     now,
     idempotencyPrefix,
+    sb,
+    env,
   })
   await writeRolePayout(sb, trip, { ...result.payout, driverId: plan.driverId, role: plan.role, label: plan.label }, metadataKey)
   return result

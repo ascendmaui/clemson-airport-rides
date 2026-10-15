@@ -374,13 +374,15 @@ html body .site.mkt .mkt-nav .mkt-nav-links button[aria-current="page"] {
 html body .site.mkt .mkt-nav .mkt-nav-links button.mkt-nav-cta {
   margin-left: var(--s-2);
   padding: 0 18px !important;
-  background: var(--orange) !important;
+  /* Deep Clemson orange: white 14px text needs 4.5:1, which #F56600 (3.1:1) misses. */
+  background: #C24E00 !important;
   color: #fff !important;
+  font-weight: 700 !important;
   box-shadow: 0 6px 18px -6px rgba(245, 102, 0, 0.7) !important;
 }
 
 html body .site.mkt .mkt-nav .mkt-nav-links button.mkt-nav-cta:hover {
-  background: var(--orange-hover) !important;
+  background: #A94400 !important;
   transform: translateY(-1px);
 }
 
@@ -2253,10 +2255,18 @@ html body .glass-motion .site .mkt-reveal.is-in {
   }
 }
 
-/* Phones: the hero card already leads with Book a ride, so the nav keeps Drive and Get the App. */
+/* Phones: Book stays in the header. The wordmark collapses to the app icon to make room. */
 @media (max-width: 439px) {
-  html body .site.mkt .mkt-nav .mkt-nav-links > button:not(.mkt-nav-cta):first-child {
-    display: none;
+  html body .site.mkt .mkt-nav button.mkt-brand .site-brand-word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  html body .site.mkt .mkt-nav .mkt-nav-links {
+    gap: 2px !important;
   }
 }
 
@@ -2320,4 +2330,187 @@ html body .site.mkt .dp-offer .dp-offer-meta {
 
 html body .site.mkt .dp-offer .dp-bar {
   background: rgba(82, 45, 128, 0.1);
+}
+
+/* ---------- Home: six compact feature cards + See all ---------- */
+
+html body .site .site-features-compact .site-head-row {
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-5);
+}
+
+html body .site.mkt .site-see-all {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 4px !important;
+  border: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  color: var(--purple) !important;
+  font-weight: 700 !important;
+  font-size: var(--fs-body) !important;
+}
+
+html body .site.mkt .site-see-all:hover {
+  color: var(--orange) !important;
+}
+
+html body .site .site-feature-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-3);
+}
+
+@media (min-width: 760px) {
+  html body .site .site-feature-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-4);
+  }
+}
+
+@media (min-width: 1100px) {
+  html body .site .site-feature-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+html body .site.mkt button.mkt-card.site-feature-card {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--s-4);
+  width: 100%;
+  min-height: 0;
+  margin: 0 !important;
+  padding: var(--s-5) !important;
+  text-align: left;
+  white-space: normal;
+  color: var(--ink) !important;
+}
+
+html body .site .site-feature-card .mkt-glass-glyph {
+  margin: 0 !important;
+}
+
+html body .site .site-feature-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+html body .site .site-feature-title {
+  font-family: var(--font-display, 'Outfit', sans-serif);
+  font-size: var(--fs-h3);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+html body .site .site-feature-what {
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+html body .site .site-feature-chevron {
+  margin-top: 4px;
+  color: var(--ink-3);
+  transition: transform 200ms var(--ease), color 200ms var(--ease);
+}
+
+@media (hover: hover) {
+  html body .site .site-feature-card:hover .site-feature-chevron {
+    color: var(--orange);
+    transform: translateX(3px);
+  }
+}
+
+/* ---------- Home on phones: keep it about four screens of content ---------- */
+
+@media (max-width: 759px) {
+  html body .site .site-type-list {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: var(--s-3) !important;
+  }
+  html body .site.mkt .site-type-card {
+    padding: var(--s-4) !important;
+    gap: 6px !important;
+    min-height: 0 !important;
+  }
+  html body .site .site-type-detail {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 0.8125rem !important;
+  }
+  html body .site .site-type-more {
+    display: none !important;
+  }
+  html body .site.mkt button.mkt-card.site-feature-card {
+    padding: var(--s-4) !important;
+    gap: var(--s-3);
+  }
+  html body .site .site-feature-what {
+    -webkit-line-clamp: 2;
+  }
+  html body .site.mkt-home .site-section {
+    padding-block: var(--s-7) 0 !important;
+  }
+  html body .site.mkt-home .site-footer {
+    margin-top: var(--s-8) !important;
+  }
+  html body .site .site-footer .mkt-footer-inner {
+    gap: var(--s-5) var(--s-4) !important;
+  }
+}
+
+/* ---------- First paint ----------
+   Above-the-fold motion is transform-only. Fading the route, page and hero
+   from opacity 0 held back first paint by about a second on phones. */
+@keyframes site-lift {
+  from { transform: translate3d(0, 18px, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+html body .route-fade.route-site,
+html body .site.mkt.fade-in {
+  animation-name: site-lift !important;
+}
+
+html body .site.mkt-home .mkt-stage-copy,
+html body .site .mkt-home-hero .mkt-hero-shot,
+html body .site.mkt .mkt-page-hero > * {
+  animation-name: site-lift !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html body .route-fade.route-site,
+  html body .site.mkt.fade-in,
+  html body .site.mkt-home .mkt-stage-copy,
+  html body .site .mkt-home-hero .mkt-hero-shot,
+  html body .site.mkt .mkt-page-hero > * {
+    animation: none !important;
+  }
+}
+
+/* Home shell: the static hero already painted, so the mounted hero must not
+   replay its entrance (it would jump 18px after the page is visible). */
+html[data-home-shell="1"] .route-fade.route-site[data-route="landing"],
+html[data-home-shell="1"] .site.mkt-home,
+html[data-home-shell="1"] .site.mkt-home .mkt-stage-photo,
+html[data-home-shell="1"] .site.mkt-home .mkt-stage-copy,
+html[data-home-shell="1"] .site .mkt-home-hero .mkt-hero-shot {
+  animation: none !important;
 }

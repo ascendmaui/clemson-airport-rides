@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Easing, Text, View } from 'react-native'
-import type { Palette } from '@/lib/palette'
+import { pawInk, type Palette } from '@/lib/palette'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
 const MARK = 84
 const DISC = 68
-const PAW = '#1A1033'
+const PAW = pawInk
 
 export function ClemsonLoader({ label = 'Finding a Tiger driver' }: { label?: string }) {
   const styles = useThemedStyles(makeStyles)

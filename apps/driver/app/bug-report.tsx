@@ -75,7 +75,7 @@ export default function BugReportScreen() {
       <Pressable
         accessibilityRole="link"
         accessibilityLabel={`Email support at ${supportEmail()}`}
-        onPress={() => { void Linking.openURL(supportMailto('Clemson RIDES driver support')) }}
+        onPress={() => { void Linking.openURL(supportMailto('Clemson Rides driver support')) }}
       >
         <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
           This files the existing support ticket. You can also email {supportEmail()}.

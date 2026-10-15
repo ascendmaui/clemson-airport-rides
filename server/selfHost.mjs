@@ -6,6 +6,8 @@ import { createReadStream, readFileSync } from 'node:fs'
 import { lstat, readdir, readFile, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
+import { brotliCompress, constants as zlibConstants, gzip } from 'node:zlib'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const BODY_LIMIT = 1_000_000
@@ -28,6 +30,35 @@ const MIME = {
   '.map': 'application/json; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
   '.webmanifest': 'application/manifest+json',
+}
+
+const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.css', '.json', '.svg', '.map', '.txt', '.webmanifest'])
+const COMPRESS_MIN_BYTES = 1024
+const COMPRESS_CACHE_MAX = 64
+const brotliAsync = promisify(brotliCompress)
+const gzipAsync = promisify(gzip)
+const compressedCache = new Map()
+
+/** Pick br or gzip from Accept-Encoding; null when the client takes neither. */
+function pickEncoding(req) {
+  const accept = headerValue(req, 'accept-encoding').toLowerCase()
+  if (/\bbr\b/.test(accept)) return 'br'
+  if (/\bgzip\b/.test(accept)) return 'gzip'
+  return null
+}
+
+/** Compressed bytes for a static file, cached per file, mtime and encoding. */
+async function compressedBody(file, info, encoding) {
+  const key = `${encoding}:${file}`
+  const hit = compressedCache.get(key)
+  if (hit && hit.mtimeMs === info.mtimeMs && hit.size === info.size) return hit.body
+  const raw = await readFile(file)
+  const body = encoding === 'br'
+    ? await brotliAsync(raw, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 9, [zlibConstants.BROTLI_PARAM_SIZE_HINT]: raw.length } })
+    : await gzipAsync(raw, { level: 9 })
+  if (compressedCache.size >= COMPRESS_CACHE_MAX) compressedCache.delete(compressedCache.keys().next().value)
+  compressedCache.set(key, { mtimeMs: info.mtimeMs, size: info.size, body })
+  return body
 }
 
 function headerValue(req, name) {
@@ -343,6 +374,15 @@ async function serveFile(req, res, file, pathname) {
   res.statusCode = 200
   res.setHeader('Content-Type', MIME[ext] || 'application/octet-stream')
   res.setHeader('Cache-Control', cacheControlFor(pathname))
+  const encoding = COMPRESSIBLE.has(ext) && info.size >= COMPRESS_MIN_BYTES ? pickEncoding(req) : null
+  if (COMPRESSIBLE.has(ext)) res.setHeader('Vary', 'Accept-Encoding')
+  if (encoding) {
+    const body = await compressedBody(file, info, encoding)
+    res.setHeader('Content-Encoding', encoding)
+    res.setHeader('Content-Length', String(body.length))
+    res.end(req.method === 'HEAD' ? undefined : body)
+    return true
+  }
   res.setHeader('Content-Length', String(info.size))
   if (req.method === 'HEAD') {
     res.end()

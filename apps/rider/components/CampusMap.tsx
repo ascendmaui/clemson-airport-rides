@@ -5,7 +5,7 @@ import { SIMULATED_FLEET_BADGE, refuseSimulatedDriverTap, simulatedFleetPercent 
 import { demoCarPaint, SEARCH_MAP_DELTA_END, SEARCH_MAP_DELTA_START, SEARCH_MAP_ZOOM_MS } from 'rides-native/searchPreview.js'
 import { useSimulatedFleet } from 'rides-native/useSimulatedFleet.js'
 import { mapKindLabel, type CampusMapHandle, type CampusMapProps, type MapPin } from '@/components/mapTypes'
-import type { Palette } from '@/lib/palette'
+import { searchTheaterColors, type Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
@@ -140,8 +140,8 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
 function makeStyles(colors: Palette) {
   return {
     map: { flex: 1, position: 'relative' as const, overflow: 'hidden' as const, backgroundColor: colors.mapFallback, alignItems: 'center' as const, justifyContent: 'center' as const },
-    searchStage: { ...StyleSheet.absoluteFill, backgroundColor: '#1B2836' },
-    searchField: { ...StyleSheet.absoluteFill, backgroundColor: '#243447' },
+    searchStage: { ...StyleSheet.absoluteFill, backgroundColor: searchTheaterColors.stage },
+    searchField: { ...StyleSheet.absoluteFill, backgroundColor: searchTheaterColors.field },
     searchCar: {
       position: 'absolute' as const,
       marginLeft: -7,
@@ -156,23 +156,23 @@ function makeStyles(colors: Palette) {
       marginTop: -6,
       borderRadius: 6,
       borderWidth: 2,
-      borderColor: '#FFFFFF',
+      borderColor: colors.onAccent,
     },
     wash: { ...StyleSheet.absoluteFill, backgroundColor: colors.orangeSoft },
-    kind: { position: 'absolute' as const, top: 12, left: 12, color: colors.link, fontWeight: '800' as const, fontSize: 11 },
+    kind: { position: 'absolute' as const, top: 12, left: 12, color: colors.link, fontWeight: '800' as const, fontSize: 12 },
     theaterRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 8 },
     car: { width: 18, height: 12, borderRadius: 4 },
-    preview: { color: colors.link, fontSize: 11, fontWeight: '700' as const },
+    preview: { color: colors.link, fontSize: 12, fontWeight: '700' as const },
     badges: { flexDirection: 'row' as const, gap: 6, marginBottom: 8 },
-    badge: { backgroundColor: colors.purple, color: colors.onAccent, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, fontSize: 11, fontWeight: '800' as const },
+    badge: { backgroundColor: colors.purple, color: colors.onAccent, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, fontSize: 12, fontWeight: '800' as const },
     surge: { backgroundColor: colors.orange },
-    tigerLive: { backgroundColor: '#F56600', borderWidth: 2, borderColor: '#522D80' },
-    tigerPreview: { backgroundColor: '#522D80', borderWidth: 2, borderColor: '#F56600' },
+    tigerLive: { backgroundColor: colors.orange, borderWidth: 2, borderColor: colors.purple },
+    tigerPreview: { backgroundColor: colors.purple, borderWidth: 2, borderColor: colors.orange },
     row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
     pin: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
     pinText: { color: colors.onAccent, fontWeight: '800' as const, fontSize: 12 },
     line: { width: 64, height: 3, borderRadius: 2, backgroundColor: colors.border },
-    pinLabel: { marginTop: 4, color: colors.link, fontSize: 11, fontWeight: '700' as const },
+    pinLabel: { marginTop: 4, color: colors.link, fontSize: 12, fontWeight: '700' as const },
     busyCar: {
       position: 'absolute' as const,
       minWidth: 44,
@@ -180,20 +180,20 @@ function makeStyles(colors: Palette) {
       marginLeft: -22,
       marginTop: -22,
       borderRadius: 22,
-      backgroundColor: '#522D80',
+      backgroundColor: colors.purple,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
       paddingHorizontal: 8,
     },
-    busyCarDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#FFFFFF' },
+    busyCarDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.onAccent },
     busyNote: {
       position: 'absolute' as const,
       right: 12,
       bottom: 12,
       overflow: 'hidden' as const,
       borderRadius: 999,
-      backgroundColor: '#522D80',
-      color: '#FFFFFF',
+      backgroundColor: colors.purple,
+      color: colors.onAccent,
       fontSize: 12,
       fontWeight: '800' as const,
       paddingHorizontal: 10,

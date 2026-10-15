@@ -46,7 +46,7 @@ test('SUPPORT_EMAIL defaults to the Hostinger mailbox and can be overridden', ()
     supportEmail({ SUPPORT_EMAIL: 'desk@example.com', VITE_SUPPORT_EMAIL: 'web@example.com' }),
     'desk@example.com',
   )
-  assert.equal(supportMailto('Clemson RIDES help'), `mailto:${NEEDLE}?subject=Clemson%20RIDES%20help`)
+  assert.equal(supportMailto('Clemson Rides help'), `mailto:${NEEDLE}?subject=Clemson%20Rides%20help`)
 })
 
 test('privacy, terms, and the marketing chrome use the support mailbox', () => {
@@ -66,8 +66,8 @@ test('privacy, terms, and the marketing chrome use the support mailbox', () => {
   assert.match(account, /supportMailto\(link\.mailSubject\)/)
   assert.match(driverMenu, /title: 'Help'/)
   assert.match(driverMenu, /title: 'Support'/)
-  assert.match(driverMenu, /supportMailto\('Clemson RIDES help'\)/)
-  assert.match(driverMenu, /supportMailto\('Clemson RIDES support'\)/)
+  assert.match(driverMenu, /supportMailto\('Clemson Rides help'\)/)
+  assert.match(driverMenu, /supportMailto\('Clemson Rides support'\)/)
 })
 
 test('production source keeps the mailbox in the shared constant', () => {

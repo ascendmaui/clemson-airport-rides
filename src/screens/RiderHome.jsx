@@ -21,8 +21,16 @@ import { HEAT_WINDOWS } from '../lib/rideDemand'
 import { RiderWaitBanner } from '../components/WaitFeeCard'
 import { SHORTCUTS } from '../../packages/rides-native/places.js'
 import { ownerSavedPlaces, welcomeHeading } from '../lib/homePrivacy'
+import { useWideLayout } from '../lib/useWideLayout'
+
+function placeIconName(place) {
+  if (place?.id === 'clemson') return 'graduation-cap'
+  if (/airport|gsp|clt/i.test(`${place?.label || ''} ${place?.sub || ''}`)) return 'plane'
+  return 'map-pin'
+}
 
 export function RiderHome() {
+  const wide = useWideLayout()
   const { notice, ready } = useGameDayNotice()
   const gameDay = useGameDayExperience(supabase)
   const student = useStudentStatus()
@@ -99,9 +107,48 @@ export function RiderHome() {
     })
   }
 
+  const mapCard = (
+    <div className="glass-panel card-soft booking-home-map" style={{ marginTop: 22, borderRadius: 18, padding: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 4px', gap: 8 }}>
+        <span style={{ fontWeight: 600, fontSize: 15 }}>Campus map</span>
+        <button type="button" className="pressable" onClick={() => setShowBusy((v) => !v)}
+          style={{ fontSize: 12, fontWeight: 700, color: showBusy ? '#fff' : 'var(--purple)',
+            background: showBusy ? 'linear-gradient(135deg, #522D80 0%, #F56600 100%)' : 'var(--purple-soft)',
+            border: '1px solid rgba(82,45,128,0.35)', borderRadius: 999, padding: '6px 12px' }}>
+          {showBusy ? 'Busy Areas · On' : 'Busy Areas · Off'}
+        </button>
+      </div>
+      {showBusy && (
+        <>
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '0 4px 8px' }}>
+            {HEAT_WINDOWS.map((w) => (
+              <button key={w.id} type="button" className="pressable" onClick={() => setHeatWindow(w.id)}
+                style={{ flex: '0 0 auto', fontSize: 11, fontWeight: 600, padding: '6px 10px', borderRadius: 999,
+                  border: `1px solid ${heatWindow === w.id ? 'rgba(245,102,0,0.55)' : 'rgba(82,45,128,0.25)'}`,
+                  background: heatWindow === w.id ? 'var(--orange-soft)' : 'var(--surface)',
+                  color: heatWindow === w.id ? 'var(--orange)' : 'var(--purple)' }}>
+                {w.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--ink-secondary)', margin: '0 4px 8px' }}>
+            {heatMeta?.caption || 'Popular campus spots from ride requests — dorms, downtown, stadium.'}
+            {heatMeta?.blended ? <span style={{ marginLeft: 6, fontWeight: 700, color: 'var(--purple)' }}>Live + typical</span> : null}
+          </div>
+        </>
+      )}
+      <CampusMap height={wide ? '100%' : 240} showHeat={showBusy} heatMode="busy" heatWindow={heatWindow}
+        onHeatMeta={setHeatMeta} showMapTypeControl interactive={showBusy}
+        gameDayLabel={notice.live ? notice.headline : null}
+        center={showBusy ? DOWNTOWN_CENTER : STADIUM} zoom={showBusy ? 15 : 14}
+        marker={showBusy ? DOWNTOWN_CENTER : STADIUM}
+        showSimulatedFleet />
+    </div>
+  )
+
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'transparent' }}>
-      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 8 }}>
+    <div className="fade-in booking-home" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'transparent' }}>
+      <div className="booking-home-scroll" style={{ flex: 1, overflowY: 'auto', paddingBottom: 8 }}>
         <div style={{ padding: '14px 20px 0' }}>
           <header
             style={{
@@ -153,7 +200,7 @@ export function RiderHome() {
           </header>
         </div>
 
-        <div style={{ padding: '20px 20px 0', position: 'relative' }}>
+        <div className="booking-home-main" style={{ padding: '20px 20px 0', position: 'relative' }}>
           <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: -0.4 }}>
             {welcomeHeading(profileName, user?.user_metadata?.full_name)}
           </h1>
@@ -247,51 +294,14 @@ export function RiderHome() {
                 onClick={() => goSearch(s.sub)}
                 style={{ flex: '0 0 auto', minWidth: 118, padding: '14px 14px', borderRadius: 16, textAlign: 'left' }}
               >
-                <div style={{ marginBottom: 8, color: 'var(--orange)' }}>
-                  <SiteIcon name={s.id === 'clemson' ? 'graduation-cap' : 'map-pin'} size={22} />
-                </div>
+                <div style={{ marginBottom: 8, color: s.id === 'clemson' ? '#522D80' : '#F56600', display: 'grid' }}><SiteIcon name={placeIconName(s)} size={22} /></div>
                 <div style={{ fontWeight: 600, fontSize: 13 }}>{s.label}</div>
                 <div style={{ fontSize: 11, color: 'var(--ink-tertiary)', marginTop: 2 }}>{s.sub}</div>
               </button>
             ))}
           </div>
 
-          <div className="glass-panel card-soft" style={{ marginTop: 22, borderRadius: 18, padding: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 4px', gap: 8 }}>
-              <span style={{ fontWeight: 600, fontSize: 15 }}>Campus map</span>
-              <button type="button" className="pressable" onClick={() => setShowBusy((v) => !v)}
-                style={{ fontSize: 12, fontWeight: 700, color: showBusy ? '#fff' : 'var(--purple)',
-                  background: showBusy ? 'linear-gradient(135deg, #522D80 0%, #F56600 100%)' : 'var(--purple-soft)',
-                  border: '1px solid rgba(82,45,128,0.35)', borderRadius: 999, padding: '6px 12px' }}>
-                {showBusy ? 'Busy Areas · On' : 'Busy Areas · Off'}
-              </button>
-            </div>
-            {showBusy && (
-              <>
-                <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '0 4px 8px' }}>
-                  {HEAT_WINDOWS.map((w) => (
-                    <button key={w.id} type="button" className="pressable" onClick={() => setHeatWindow(w.id)}
-                      style={{ flex: '0 0 auto', fontSize: 11, fontWeight: 600, padding: '6px 10px', borderRadius: 999,
-                        border: `1px solid ${heatWindow === w.id ? 'rgba(245,102,0,0.55)' : 'rgba(82,45,128,0.25)'}`,
-                        background: heatWindow === w.id ? 'var(--orange-soft)' : 'var(--surface)',
-                        color: heatWindow === w.id ? 'var(--orange)' : 'var(--purple)' }}>
-                      {w.label}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--ink-secondary)', margin: '0 4px 8px' }}>
-                  {heatMeta?.caption || 'Popular campus spots from ride requests — dorms, downtown, stadium.'}
-                  {heatMeta?.blended ? <span style={{ marginLeft: 6, fontWeight: 700, color: 'var(--purple)' }}>Live + typical</span> : null}
-                </div>
-              </>
-            )}
-            <CampusMap height={240} showHeat={showBusy} heatMode="busy" heatWindow={heatWindow}
-              onHeatMeta={setHeatMeta} showMapTypeControl interactive={showBusy}
-              gameDayLabel={notice.live ? notice.headline : null}
-              center={showBusy ? DOWNTOWN_CENTER : STADIUM} zoom={showBusy ? 15 : 14}
-              marker={showBusy ? DOWNTOWN_CENTER : STADIUM}
-              showSimulatedFleet />
-          </div>
+          {wide ? null : mapCard}
 
           <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <GameDayStatus notice={notice} ready={ready} />
@@ -363,6 +373,7 @@ export function RiderHome() {
         </div>
       </div>
 
+      {wide ? <aside className="booking-home-side" aria-label="Campus map">{mapCard}</aside> : null}
       <BottomTabs
         active={tab}
         onChange={(id) => {

@@ -170,7 +170,7 @@ function makeStyles(colors: Palette) {
     sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '88%' as const },
     handle: { alignSelf: 'center' as const, width: 36, height: 4, borderRadius: 2, marginTop: 10 },
     content: { padding: 20, gap: 8 },
-    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
+    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12 },
     title: { color: colors.title, fontSize: 22, fontWeight: '800' as const, letterSpacing: -0.3 },
     body: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     fee: { color: colors.ink, fontWeight: '800' as const, fontSize: 16 },

@@ -194,7 +194,7 @@ export function ListRow({
       ]}
     >
       <View style={[styles.rowIcon, { backgroundColor: colors.track }]}>
-        <Glyph name={icon} size={18} color={colors.purple} />
+        <Glyph name={icon} size={18} color={colors.link} />
       </View>
       <View style={styles.rowBody}>
         <Text style={[styles.rowTitle, { color: colors.ink }]}>{title}</Text>
@@ -216,12 +216,15 @@ export function StackPage({
   children,
   footer,
   right,
+  scroll = true,
 }: {
   title: string
   onBack: () => void
   children: ReactNode
   footer?: ReactNode
   right?: ReactNode
+  /** false: the page body is a virtualized list that scrolls itself (no outer ScrollView). */
+  scroll?: boolean
 }) {
   const insets = useSafeAreaInsets()
   const { colors, scheme } = useTheme()
@@ -233,9 +236,13 @@ export function StackPage({
         <Text style={[styles.pageTitle, { color: colors.title }]}>{title}</Text>
         <View style={styles.pageRight}>{right || <View style={styles.circle} />}</View>
       </View>
-      <ScrollView contentContainerStyle={styles.pageGrow} showsVerticalScrollIndicator={false}>
-        <Enter style={styles.pageBody}>{children}</Enter>
-      </ScrollView>
+      {scroll ? (
+        <ScrollView contentContainerStyle={styles.pageGrow} showsVerticalScrollIndicator={false}>
+          <Enter style={styles.pageBody}>{children}</Enter>
+        </ScrollView>
+      ) : (
+        <Enter style={styles.pageList}>{children}</Enter>
+      )}
       {footer ? (
         <GlassSurface app="driver" scheme={scheme} variant="header" style={[styles.footer, barShadow, { paddingBottom: insets.bottom + 12 }]}>
           {footer}
@@ -296,6 +303,7 @@ const styles = StyleSheet.create({
   pageRight: { width: 48, alignItems: 'flex-end' },
   pageGrow: { flexGrow: 1 },
   pageBody: { padding: 16, paddingBottom: 40, gap: 12 },
+  pageList: { flex: 1 },
   footer: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 16,

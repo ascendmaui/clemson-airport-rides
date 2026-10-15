@@ -17,6 +17,7 @@ import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from
 import { loadRatingSummary } from 'rides-native/PartyScreens'
 import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
 import { quietly } from '@/lib/softFail'
+import { offerSheetBottomInset } from 'rides-native/offerStack.js'
 
 function vehicleSubtitle(vehicle: VehicleRow | null): string {
   if (!vehicle) return 'Add the car riders will see'
@@ -97,15 +98,15 @@ export default function MenuScreen() {
     { icon: 'speedometer', title: 'Safety score', subtitle: 'Estimate and tips', onPress: () => router.push('/safety-score') },
   ]
   const inbox: MenuRow[] = [
-    { icon: 'inbox', title: 'Inbox', subtitle: 'Messages from Clemson RIDES and riders', onPress: () => router.push('/inbox') },
+    { icon: 'inbox', title: 'Inbox', subtitle: 'Messages from Clemson Rides and riders', onPress: () => router.push('/inbox') },
     { icon: 'discover', title: 'Discover', subtitle: 'Busy spots, game days, and boosts', onPress: () => router.push('/discover') },
   ]
   const money: MenuRow[] = [
     { icon: 'calculator', title: 'Tax info', subtitle: 'Year-end mileage and earnings', onPress: () => router.push('/tax') },
   ]
   const supportRows: MenuRow[] = [
-    { icon: 'help', title: 'Help', subtitle: supportEmail(), onPress: () => { void Linking.openURL(supportMailto('Clemson RIDES help')) } },
-    { icon: 'chat', title: 'Support', subtitle: supportEmail(), onPress: () => { void Linking.openURL(supportMailto('Clemson RIDES support')) } },
+    { icon: 'help', title: 'Help', subtitle: supportEmail(), onPress: () => { void Linking.openURL(supportMailto('Clemson Rides help')) } },
+    { icon: 'chat', title: 'Support', subtitle: supportEmail(), onPress: () => { void Linking.openURL(supportMailto('Clemson Rides support')) } },
   ]
   const resources: MenuRow[] = [
     { icon: 'school', title: 'Learning Center', subtitle: quizLabel, onPress: () => router.push('/learning') },
@@ -119,7 +120,7 @@ export default function MenuScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top + 12 }]}>
-      <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: offerSheetBottomInset(insets.bottom) + 24 }]} showsVerticalScrollIndicator={false}>
         <FadeIn style={styles.stack}>
           <View style={styles.profile}>
             <View style={[styles.avatar, shadow, { backgroundColor: colors.fill }]}>

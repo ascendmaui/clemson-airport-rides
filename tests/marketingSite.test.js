@@ -167,7 +167,7 @@ test('public support route has real support content and contact links', () => {
   const support = info.slice(info.indexOf('export function SupportPage()'), info.indexOf('export function GetTheAppPage()'))
   assert.match(siteRoutes, /'support'/)
   assert.match(app, /case 'support':\s*return <SupportPage \/>/)
-  assert.match(app, /\bSupportPage,/)
+  assert.match(app, /const SupportPage = lazy\(\(\) => import\('\.\/screens\/MarketingInfo'\)/)
   assert.match(chrome, /\{ id: 'support', label: 'Support' \},\s*\{ id: 'privacy'/)
   assert.match(support, /<MarketingChrome current="support">/)
   assert.match(support, /<PageHead kicker="Help" title="Support" lede="Contact the support mailbox\." \/>/)

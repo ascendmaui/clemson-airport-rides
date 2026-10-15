@@ -67,7 +67,7 @@ function StudentPlansScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <StackHeader title="Student plans" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={[styles.badge, { backgroundColor: PLAN_BADGE_COLOR }]}>CLEMSON RIDES · STUDENT</Text>
+        <Text style={[styles.badge, { backgroundColor: PLAN_BADGE_COLOR }]}>Clemson Rides · Student</Text>
 
         {!v?.emailVerified ? (
           <View style={styles.panel}>
@@ -143,7 +143,7 @@ function makeStyles(colors: Palette) {
   return {
     screen: { flex: 1, backgroundColor: colors.background },
     body: { padding: 20, gap: 12 },
-    badge: { alignSelf: 'flex-start' as const, color: '#FFFFFF', fontWeight: '800' as const, fontSize: 12, letterSpacing: 1, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' as const },
+    badge: { alignSelf: 'flex-start' as const, color: colors.onAccent, fontWeight: '800' as const, fontSize: 12, letterSpacing: 1, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' as const },
     panel: { backgroundColor: colors.orangeSoft, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.orange, gap: 8 },
     state: { color: colors.title, fontWeight: '800' as const, fontSize: 18 },
     big: { color: colors.title, fontWeight: '700' as const, fontSize: 16 },

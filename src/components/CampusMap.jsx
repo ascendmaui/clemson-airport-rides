@@ -230,6 +230,33 @@ function TigerHeatChip({ zone }) {
   )
 }
 
+/*
+ * Google calls window.gm_authFailure when the key rejects this host
+ * (RefererNotAllowedMapError, InvalidKey). The script still "loads", so watch for it
+ * and swap Google's grey error box for the branded fallback.
+ */
+const mapsAuthListeners = new Set()
+let mapsAuthFailed = false
+if (typeof window !== 'undefined') {
+  const previous = window.gm_authFailure
+  window.gm_authFailure = () => {
+    mapsAuthFailed = true
+    mapsAuthListeners.forEach((fn) => fn(true))
+    if (typeof previous === 'function') previous()
+  }
+}
+function useMapsAuthFailed() {
+  const [failed, setFailed] = useState(mapsAuthFailed)
+  useEffect(() => {
+    mapsAuthListeners.add(setFailed)
+    if (mapsAuthFailed) setFailed(true)
+    return () => mapsAuthListeners.delete(setFailed)
+  }, [])
+  return failed
+}
+
+const MAP_UNAVAILABLE = 'Map unavailable right now. Type your pickup and drop-off below; booking still works.'
+
 function FallbackMap({ wrapStyle, message, badge, route = null, tigerZones = [] }) {
   return (
     <div
@@ -322,6 +349,25 @@ export function CampusMap({
 }) {
   const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim()
   const { isLoaded, loadError } = useJsApiLoader(mapsLoaderOptions(apiKey))
+  const authFailed = useMapsAuthFailed()
+  const fallbackWrap = typeof height === 'number' ? { position: 'relative' } : { position: 'absolute', inset: 0 }
+  const [mapError, setMapError] = useState(false)
+  const mapWrapRef = useRef(null)
+  // Billing or key errors that skip gm_authFailure still paint Google's error box. Watch for it.
+  useEffect(() => {
+    const node = mapWrapRef.current
+    if (!node || typeof MutationObserver === 'undefined') return undefined
+    const check = () => {
+      if (node.querySelector('.gm-err-container, .gm-err-message')
+        || /can.t load Google Maps correctly/i.test(node.textContent || '')) {
+        setMapError(true)
+      }
+    }
+    const observer = new MutationObserver(check)
+    observer.observe(node, { childList: true, subtree: true })
+    check()
+    return () => observer.disconnect()
+  })
 
   const wrapStyle =
     typeof height === 'number'
@@ -519,13 +565,13 @@ export function CampusMap({
 
   if (!apiKey) {
     return (
-      <div style={{ position: 'relative' }}>
+      <div style={fallbackWrap}>
         <FallbackMap
           wrapStyle={wrapStyle}
           badge={gameDayLabel}
           route={route}
           tigerZones={showHeat ? tigerZones : []}
-          message="Map preview needs VITE_GOOGLE_MAPS_API_KEY (Maps JavaScript API)."
+          message={MAP_UNAVAILABLE}
         />
         <PreviewFleetMotion enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
         <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
@@ -533,19 +579,17 @@ export function CampusMap({
       </div>
     )
   }
-  if (loadError) {
+  if (loadError || authFailed || mapError) {
     return (
-      <div style={{ position: 'relative' }}>
-        <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} route={route} tigerZones={showHeat ? tigerZones : []} message="Google Maps failed to load. Check the API key / referrer." />
-        <PreviewFleetMotion enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
-        <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
-        {showSimulatedFleet ? <FleetBadge /> : null}
+      <div style={fallbackWrap}>
+        {/* No preview cars here: cars driving over "Map unavailable" reads as broken. */}
+        <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} route={route} tigerZones={showHeat ? tigerZones : []} message={MAP_UNAVAILABLE} />
       </div>
     )
   }
   if (!isLoaded) {
     return (
-      <div style={{ position: 'relative' }}>
+      <div style={fallbackWrap}>
         <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} route={route} tigerZones={showHeat ? tigerZones : []} message="Loading map…" />
         <PreviewFleetMotion enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
         <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
@@ -560,7 +604,7 @@ export function CampusMap({
   const mapStyles = useClemsonStyles ? (preferDark ? googleMapStyle('dark') : CLEMSON_MAP_STYLES) : null
 
   return (
-    <div style={wrapStyle} data-heat-fallback="circles" data-maps-loader={MAPS_LOADER_ID} data-map-type-control={showMapTypeControl ? 'dropdown' : undefined}>
+    <div ref={mapWrapRef} style={wrapStyle} data-heat-fallback="circles" data-maps-loader={MAPS_LOADER_ID} data-map-type-control={showMapTypeControl ? 'dropdown' : undefined}>
       <GoogleMap
         mapContainerStyle={{ height: '100%', width: '100%' }}
         center={mapCenter}

@@ -1,13 +1,15 @@
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import { StyleSheet, View } from 'react-native'
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import { sameRouteProps } from '@/lib/markerRedraw'
 import { offerRouteLegs, offerRoutePoints, offerRouteRegion } from 'rides-native/offerRoute.js'
+import { color as brand } from 'rides-native/shared/theme.js'
 
 type Coord = { latitude: number; longitude: number } | null
 
 const PAD = { top: 28, right: 28, bottom: 28, left: 28 }
 
-export function OfferRouteMap({
+function OfferRouteMapView({
   driver,
   pickup,
   dropoff,
@@ -53,9 +55,9 @@ export function OfferRouteMap({
         {legs.map((leg) => (
           <Polyline key={leg.id} coordinates={leg.coordinates} strokeColor={leg.color} strokeWidth={4} />
         ))}
-        {points.driver ? <Marker coordinate={points.driver} pinColor="#F56600" anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false} /> : null}
-        {points.pickup ? <Marker coordinate={points.pickup} pinColor="#F56600" anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false} /> : null}
-        {points.dropoff ? <Marker coordinate={points.dropoff} pinColor="#522D80" anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false} /> : null}
+        {points.driver ? <Marker coordinate={points.driver} pinColor={brand.orange} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false} /> : null}
+        {points.pickup ? <Marker coordinate={points.pickup} pinColor={brand.orange} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false} /> : null}
+        {points.dropoff ? <Marker coordinate={points.dropoff} pinColor={brand.purple} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false} /> : null}
       </MapView>
     </View>
   )
@@ -64,3 +66,6 @@ export function OfferRouteMap({
 const styles = StyleSheet.create({
   map: { height: 148, borderRadius: 16, overflow: 'hidden' },
 })
+
+/** Memoised: the offer card ticks every second, but the map only re-renders when a pin moves. */
+export const OfferRouteMap = memo(OfferRouteMapView, sameRouteProps)
