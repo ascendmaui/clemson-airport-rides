@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { RetryAction } from '@/components/RetryAction'
 import { FlowErrorBoundary } from '@/components/FlowErrorBoundary'
 import { TipBoostPicker } from '@/components/TipBoostPicker'
 import { pressStyle, useEnterMotion } from '@/components/enter'
@@ -43,6 +44,7 @@ import {
 } from 'rides-native/drivers'
 import { destPoint, pickupPoint } from 'rides-native/places.js'
 import { logCaught } from '@/lib/caught'
+import { useReconnectRetry } from '@/lib/useReconnectRetry'
 import { pickerDriverCard, readablePickerDrivers, rosterCard, sanitizeOnlineDrivers, textField } from '@/lib/driverFields'
 import { lift } from '@/lib/elevation'
 import { RIDER_LIST_WINDOW, pickerListRows } from '@/lib/virtualRows'
@@ -379,6 +381,8 @@ function PickDriver() {
     setPrepaidTipCents(Math.round(cents))
   }, [tipParam])
 
+  useReconnectRetry('pick-driver', () => setAttempt((value: number) => value + 1), Boolean(error))
+
   const selectedDriver = drivers.find((row: OnlineDriver) => row.id === selected) || null
   const comfortNotice = comfortFleetNotice(tier === 'comfort' || tier === 'comfort' || Boolean(selectedDriver?.comfortClass))
 
@@ -654,7 +658,10 @@ function PickDriver() {
         ) : null}
         <TipBoostPicker cents={prepaidTipCents} onChange={setPrepaidTipCents} />
         {error && drivers.some((driver: OnlineDriver) => driver.online) ? (
-          <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="assertive">{error}</Text>
+          <View accessibilityLiveRegion="assertive">
+            <Text style={styles.error} accessibilityRole="alert">{error}</Text>
+            <RetryAction label="Retry request" hint="Sends the ride request again" onPress={() => { void onRequest() }} />
+          </View>
         ) : null}
         <PrimaryButton
           label={requesting ? 'Requesting…' : selectedDriver ? `Request ${selectedDriver.name}` : (anyOnline ? 'Request next driver' : 'Select a driver')}

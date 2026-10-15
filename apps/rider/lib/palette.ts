@@ -13,6 +13,8 @@ export type Palette = {
   link: string
   orange: string
   orangeBright: string
+  /** Small text. Brand orange is about 3:1 on white, under AA. */
+  orangeInk: string
   purple: string
   fill: string
   onAccent: string
@@ -48,6 +50,7 @@ export const lightPalette: Palette = {
   link: color.purple,
   orange: color.orange,
   orangeBright: color.orangeBright,
+  orangeInk: '#9A3F00',
   purple: color.purple,
   fill: color.purple,
   onAccent: '#FFFFFF',
@@ -88,6 +91,7 @@ export const darkPalette: Palette = {
   link: '#D4C4F0',
   orange: color.orange,
   orangeBright: color.orangeBright,
+  orangeInk: '#FFC9A3',
   purple: color.purple,
   fill: color.purple,
   onAccent: '#FFFFFF',
@@ -125,3 +129,46 @@ export function paletteFor(scheme: Scheme): Palette {
     }
   }
 }
+
+/** Fixed colours that do not follow the app scheme. Screens import these instead of raw hex. */
+export const mapUnavailableColors = { surface: '#F4F5F8', body: '#5B6472' } as const
+
+/** Web search-theater backdrop behind the preview cars. */
+export const searchTheaterColors = { stage: '#1B2836', field: '#243447' } as const
+
+/** Paw drawn on the orange loader disc. */
+export const pawInk = '#1A1033'
+
+/** Demand-heat label ink. Tests pin this to the dark brown used on the wash. */
+export const heatInk = '#1F1208'
+
+/** Heat labels: no white halo on a dark map. */
+export const heatLabelColors = {
+  light: { chip: 'rgba(255,252,248,0.94)', shadow: 'rgba(255,255,255,0.9)' },
+  dark: { chip: 'rgba(22,18,31,0.94)', shadow: 'rgba(0,0,0,0.9)' },
+} as const
+
+export function heatLabelFor(scheme: Scheme): { chip: string; shadow: string } {
+  switch (scheme) {
+    case 'light':
+      return heatLabelColors.light
+    case 'dark':
+      return heatLabelColors.dark
+    default: {
+      const unknown: never = scheme
+      return unknown
+    }
+  }
+}
+
+/** SOS is a fixed red field in both schemes. White type sits on that field, not on a dark card. */
+export const emergencyColors = {
+  gradient: ['#4A0C0C', '#B42318', '#6E1212'] as const,
+  fab: '#B42318',
+  banner: '#3B1020',
+  field: '#6E1212',
+  breathe: '#FF8A75',
+  ink: '#FFE4DC',
+  call: '#9B1B1B',
+  shadow: '#3B0707',
+} as const

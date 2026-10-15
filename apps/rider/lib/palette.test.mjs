@@ -8,6 +8,8 @@ test('rider brand tokens stay Clemson orange and purple', () => {
     assert.equal(palette.purple, '#522D80')
     assert.equal(palette.fill, '#522D80')
   }
+  assert.equal(lightPalette.orangeInk, '#9A3F00')
+  assert.equal(darkPalette.orangeInk, '#FFC9A3')
 })
 
 test('dark mode uses the driver night field', () => {

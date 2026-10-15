@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { RetryAction } from '@/components/RetryAction'
 import { pressStyle, useEnterMotion } from '@/components/enter'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
@@ -23,6 +24,7 @@ import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { toastCaught } from '@/lib/caught'
+import { useReconnectRetry } from '@/lib/useReconnectRetry'
 
 export default function RideTiers() {
   const router = useRouter()
@@ -53,6 +55,8 @@ export default function RideTiers() {
   const tiers = bookableRideTiers()
   const [pass, setPass] = useState<TigerPassStatus | null>(null)
   const [quote, setQuote] = useState<AirportQuote | null>(null)
+  const [quoteError, setQuoteError] = useState<string | null>(null)
+  const [quoteAttempt, setQuoteAttempt] = useState(0)
   const [selected, setSelected] = useState(tiers.some((tier) => tier.id === presetTier) ? presetTier : tiers[0].id)
   const [seats, setSeats] = useState(presetSeats)
   const [promptOpen, setPromptOpen] = useState(false)
@@ -85,15 +89,19 @@ export default function RideTiers() {
     }).then((next) => {
       if (!alive) return
       setQuote(next)
+      setQuoteError(null)
       const preferred = (next.preferredCarTypes || []).find((id) => tiers.some((tier) => tier.id === id))
       if (preferred && !tiers.some((tier) => tier.id === presetTier)) setSelected(preferred)
     }).catch((err: unknown) => {
+      if (alive) setQuoteError('Could not load this fare')
       toastCaught('tiers-quote', err, 'Could not load this fare')
     })
     return () => {
       alive = false
     }
-  }, [user, pickup, pickupLat, pickupLng, dest, destLat, destLng, presetTier])
+  }, [user, pickup, pickupLat, pickupLng, dest, destLat, destLng, presetTier, quoteAttempt])
+
+  useReconnectRetry('booking-tiers', () => setQuoteAttempt((value) => value + 1), quoteError != null)
 
   const next = {
     pathname: '/pick-driver' as const,
@@ -165,6 +173,12 @@ export default function RideTiers() {
           </Text>
         </Pressable>
       ) : null}
+      {quoteError ? (
+        <View accessibilityLiveRegion="polite">
+          <Text style={styles.promoDetail}>{quoteError}</Text>
+          <RetryAction hint="Loads this fare again" onPress={() => setQuoteAttempt((value) => value + 1)} />
+        </View>
+      ) : null}
       <Animated.ScrollView style={[{ flex: 1 }, listMotion]} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
         {tiers.map((tier) => {
           const on = tier.id === selected
@@ -234,7 +248,7 @@ export default function RideTiers() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   borderWidth: seats === count ? 2 : 1,
-                  borderColor: seats === count ? '#F56600' : 'rgba(82,45,128,0.25)',
+                  borderColor: seats === count ? colors.orange : colors.border,
                 }}
               >
                 <Text style={styles.name}>{count === 1 ? '1 seat' : '2 seats'}</Text>

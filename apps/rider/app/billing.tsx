@@ -329,7 +329,7 @@ function BillingScreen() {
           <Text style={styles.creditsLabel} accessibilityRole="header">credits</Text>
         </View>
         <View style={[styles.card, lift(colors, 'rest')]} accessibilityLabel="credits">
-          <Text style={[styles.cardLast, { fontSize: 40, fontWeight: '800', color: '#F56600' }]}>
+          <Text style={[styles.cardLast, { fontSize: 40, fontWeight: '800', color: colors.orange }]}>
             {!creditsLoaded
               ? '…'
               : creditsUnavailable || creditsCents == null

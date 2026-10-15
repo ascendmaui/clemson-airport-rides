@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { color } from 'rides-native/shared/theme.js'
 
 export function BootScreen({ mark = 'CR' }: { mark?: string }) {
   return (
@@ -23,6 +24,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 14,
   },
-  markLabel: { color: '#fff', fontWeight: '800', fontSize: 20 },
-  title: { color: '#fff', fontWeight: '800', fontSize: 22, letterSpacing: -0.3 },
+  markLabel: { color: color.white, fontWeight: '800', fontSize: 20 },
+  title: { color: color.white, fontWeight: '800', fontSize: 22, letterSpacing: -0.3 },
 })
