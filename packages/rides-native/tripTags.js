@@ -24,7 +24,7 @@ export function comfortFleetNotice() {
 
 /** Same sentence the database raises when an accept of an unpaid airport deposit is rejected. */
 export const UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR =
-  'Airport deposit still unpaid. This ride is not claimable until the rider pays the deposit.'
+  'This airport ride still has an unpaid card hold. It is not claimable until the rider pays.'
 
 const QUEUE_FILTERS = ['all', 'student', 'game_day', 'weekend_party']
 

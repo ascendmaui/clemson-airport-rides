@@ -180,13 +180,13 @@ export default function MenuScreen() {
             onPress={() => router.push('/delete-account')}
             accessibilityRole="button"
             accessibilityLabel="Delete account"
-            accessibilityHint="Opens the account deletion request screen"
+            accessibilityHint="Opens the account deletion screen. Deletion is immediate."
             style={[styles.deleteRow, { backgroundColor: colors.card, borderColor: colors.danger }]}
           >
             <Glyph name="trash-outline" size={20} color={colors.danger} />
             <View style={styles.deleteCopy}>
               <Text style={[styles.deleteTitle, { color: colors.danger }]}>Delete account</Text>
-              <Text style={{ color: colors.inkSecondary }}>Request deletion of your account and trip history</Text>
+              <Text style={{ color: colors.inkSecondary }}>Deletes this account immediately</Text>
             </View>
           </Pressable>
           ) : null}

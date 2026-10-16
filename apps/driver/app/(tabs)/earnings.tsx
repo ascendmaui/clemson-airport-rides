@@ -351,7 +351,7 @@ export default function EarningsHub() {
             </>
           ) : null}
           {error ? <ErrorText>{error}</ErrorText> : null}
-          {data?.apiError ? <ErrorText>{`Deposit rows: ${data.apiError}`}</ErrorText> : null}
+          {data?.apiError ? <ErrorText>{`Payout history: ${data.apiError}`}</ErrorText> : null}
           {data?.payoutError ? <ErrorText>{`Payout status: ${data.payoutError}`}</ErrorText> : null}
         </FadeIn>
       </ScrollView>

@@ -1,5 +1,6 @@
 import { Component, Fragment, type ErrorInfo, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
+import { hideDriverSplash } from '@/lib/hideSplash'
 import { paletteFor } from '@/lib/palette'
 import { useOptionalTheme } from '@/lib/theme'
 import { driverPresence } from '@/lib/presence'
@@ -142,6 +143,7 @@ export class CrashBoundary extends Component<Props, BoundaryState> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    hideDriverSplash()
     reportCrash(this.props.scope, error, info?.componentStack ?? null)
   }
 
