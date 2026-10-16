@@ -6,7 +6,7 @@
  * Rules for new rows:
  * - Do not reuse an id or label from NEIGHBORHOODS (carpoolEngine.js); pricing reads those.
  * - Never put GSP, CLT, ATL, Greenville, Charlotte or Hartsfield in a label or alias.
- *   airportCodeForPlace() treats those words as an airport flat-rate trip.
+ *   lookupCatalogPlace() and label-only places still map those words to an airport.
  * - Keep aliases 4+ characters unless they are an exact lot code; searchCatalogPlaces
  *   also matches when the typed query contains an alias.
  */

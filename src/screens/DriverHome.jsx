@@ -115,10 +115,10 @@ export function DriverHome({ openChatTripId = '' }) {
       <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-secondary)' }}>Loading…</div>
     )
   }
-  return <DriverShell driverId={user?.id || null} />
+  return <DriverShell driverId={user?.id || null} openChatTripId={openChatTripId} />
 }
 
-function DriverShell({ driverId }) {
+function DriverShell({ driverId, openChatTripId = '' }) {
   const { user } = useAuth()
   const game = useGameDayNotice()
   const gameDay = useGameDayExperience(supabase, { driverId })

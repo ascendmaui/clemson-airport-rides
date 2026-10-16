@@ -15,7 +15,8 @@ test('disclosure copy meets Play prominent-disclosure wording', () => {
   assert.ok(COPY.points.some((p) => /stops when the trip ends/.test(p)))
   assert.equal(COPY.accept, 'Continue')
   assert.equal(COPY.decline, 'Not now')
-  assert.doesNotMatch(JSON.stringify(COPY), /RIDES/)
+  assert.equal(COPY.next, 'On the next screen, choose "Always".')
+  assert.doesNotMatch(JSON.stringify(COPY), /RIDES|Android|Expo/)
 })
 
 test('shown only before a missing permission, once per trip', () => {

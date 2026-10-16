@@ -78,7 +78,10 @@ function norm(value) {
 function matchesQuery(row, query) {
   const label = norm(row.label)
   if (label === query || label.startsWith(query) || label.includes(query)) return true
-  return row.aliases.some((alias) => alias === query || alias.startsWith(query) || alias.includes(query) || query.includes(alias))
+  // "Query contains the alias" helps lot codes and landmarks, but an airport
+  // must not match a street that merely names its city ("Old Greenville Hwy").
+  const containsAlias = row.kind !== 'airport'
+  return row.aliases.some((alias) => alias === query || alias.startsWith(query) || alias.includes(query) || (containsAlias && query.includes(alias)))
 }
 
 function rank(row, query) {
