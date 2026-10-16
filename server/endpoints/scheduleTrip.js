@@ -322,7 +322,7 @@ export default async function handler(req, res, deps = {}) {
     board = await (deps.notifyScheduledBoard || notifyScheduledBoard)(sb, {
       riderIsE2E: isE2ETestUser(user),
       trip: { ...row, id: inserted.data.id, pickup_at: inserted.data.pickup_at || row.pickup_at },
-    })
+    }, deps)
   } catch (error) {
     console.error('[scheduled-board]', inserted.data.id, error?.message || error)
     board = { ok: false, notified: 0, reason: 'board_alert_failed' }
