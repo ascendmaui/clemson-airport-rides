@@ -103,6 +103,7 @@ import { fetchOfferPreview, riderInitials } from 'rides-native/offerPreviewClien
 import { OfferGauge } from '@/components/OfferGauge'
 import { CrashBoundary } from '@/components/CrashBoundary'
 import { failureToast, quiet, quietly, withRetry } from '@/lib/softFail'
+import { DRIVER_STATUS_TIMEOUT_COPY, STARTUP_TIMEOUT_MS } from '@/lib/startupGate'
 import { useSecondClock } from '@/lib/useSecondClock'
 import { tipBoostOfferLine } from '../../../../shared/prepaidTip.js'
 import { ACTIVE_TRIP_RECONCILE_MS, reconcileActiveTrip } from 'rides-native/activeTripReconcile'
@@ -340,7 +341,24 @@ function DriverHomeBody() {
   }, [desk?.active?.id, desk?.active?.status, desk?.active?.riderId, user])
 
   useEffect(() => {
-    refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not load driver home'))
+    let alive = true
+    const timer = setTimeout(() => {
+      if (alive) setError(DRIVER_STATUS_TIMEOUT_COPY)
+    }, STARTUP_TIMEOUT_MS)
+    refresh()
+      .then(() => {
+        if (!alive) return
+        setError((current) => (current === DRIVER_STATUS_TIMEOUT_COPY ? null : current))
+      })
+      .catch((err: unknown) => {
+        if (!alive) return
+        setError(err instanceof Error ? err.message : 'Could not load driver home')
+      })
+      .finally(() => clearTimeout(timer))
+    return () => {
+      alive = false
+      clearTimeout(timer)
+    }
   }, [refresh])
 
   useEffect(() => {
