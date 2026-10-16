@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { useColorScheme } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated'
 import { useReduceMotion } from 'rides-native/shared/reduceMotion.js'
-import { readDisplayMode, resolveScheme, type DisplayMode } from '@/lib/appearance'
+import { migrateAppearance, resolveScheme, type DisplayMode } from '@/lib/appearance'
 import { authStorage } from '@/lib/storage'
 import { paletteFor, type Palette, type Scheme } from '@/lib/palette'
 import { isNavApp as isKnownNavApp, type NavApp as SharedNavApp } from 'rides-native/mapsLink'
@@ -29,6 +29,7 @@ type RideAlerts = Record<RideAlertTier, RideAlertMode>
 
 type Prefs = {
   displayMode: DisplayMode
+  appearanceMigrated: true
   earningsPrivate: boolean
   sounds: boolean
   navApp: NavApp
@@ -69,6 +70,7 @@ const DEFAULT_AUTO: AutoAcceptPrefs = {
 }
 const DEFAULT_PREFS: Prefs = {
   displayMode: 'auto',
+  appearanceMigrated: true,
   earningsPrivate: false,
   sounds: true,
   navApp: 'apple',
@@ -123,8 +125,10 @@ function readPrefs(raw: string | null): Prefs {
   if (!raw) return DEFAULT_PREFS
   try {
     const parsed = JSON.parse(raw) as Partial<Prefs>
+    const appearance = migrateAppearance(parsed)
     return {
-      displayMode: readDisplayMode(parsed.displayMode),
+      displayMode: appearance.displayMode,
+      appearanceMigrated: appearance.appearanceMigrated,
       earningsPrivate: Boolean(parsed.earningsPrivate),
       sounds: parsed.sounds === false ? false : true,
       navApp: isNavApp(parsed.navApp) ? parsed.navApp : DEFAULT_PREFS.navApp,
@@ -144,7 +148,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     authStorage.getItem(PREFS_KEY).then((raw) => {
-      setPrefs(readPrefs(raw))
+      const next = readPrefs(raw)
+      setPrefs(next)
+      let already = false
+      if (raw) {
+        try {
+          already = (JSON.parse(raw) as { appearanceMigrated?: unknown }).appearanceMigrated === true
+        } catch {
+          already = false
+        }
+      }
+      if (!already) {
+        authStorage.setItem(PREFS_KEY, JSON.stringify(next)).catch(quiet('theme prefs save'))
+      }
     }).catch(quiet('theme prefs read'))
   }, [])
 

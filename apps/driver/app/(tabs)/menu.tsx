@@ -175,6 +175,7 @@ export default function MenuScreen() {
               />
             </View>
           ) : null}
+          {user ? (
           <Pressable
             onPress={() => router.push('/delete-account')}
             accessibilityRole="button"
@@ -188,6 +189,7 @@ export default function MenuScreen() {
               <Text style={{ color: colors.inkSecondary }}>Request deletion of your account and trip history</Text>
             </View>
           </Pressable>
+          ) : null}
         </FadeIn>
       </ScrollView>
     </View>

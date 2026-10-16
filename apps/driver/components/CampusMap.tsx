@@ -47,6 +47,8 @@ export function CampusMap({
   /** Native-only Tiger Heat grid; web keeps the existing heat view. */
   demandCells?: unknown[]
   peak?: boolean
+  /** Native legend offset. Web has no heat legend. */
+  legendTop?: number
 }) {
   const { colors, scheme } = useTheme()
   const mode = colorScheme || scheme

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { readDisplayMode, resolveScheme } from '../apps/driver/lib/appearance.ts'
+import { migrateAppearance, readDisplayMode, resolveScheme } from '../apps/driver/lib/appearance.ts'
 import { color, motion, motionDuration, radius, type } from '../packages/rides-native/shared/theme.js'
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8')
@@ -99,7 +99,12 @@ test('driver appearance follows the system scheme unless Light or Dark is saved'
   const index = read('apps/driver/app/settings/index.tsx')
   assert.match(theme, /useColorScheme/)
   assert.match(theme, /displayMode: 'auto'/)
+  assert.match(theme, /migrateAppearance\(parsed\)/)
+  assert.match(theme, /appearanceMigrated: true/)
   assert.doesNotMatch(theme, /it now opens light/)
+  assert.deepEqual(migrateAppearance({ displayMode: 'dark' }), { displayMode: 'auto', appearanceMigrated: true })
+  assert.deepEqual(migrateAppearance({ displayMode: 'dark', appearanceMigrated: true }), { displayMode: 'dark', appearanceMigrated: true })
+  assert.deepEqual(migrateAppearance(null), { displayMode: 'auto', appearanceMigrated: true })
   assert.match(settings, /System follows this phone/)
   assert.doesNotMatch(index, /sunrise and sunset/)
 })
@@ -126,6 +131,13 @@ test('driver dark surfaces keep the fare card, checklist, icons, and demand read
   assert.match(menu, /offerSheetBottomInset\(insets\.bottom\)/)
   assert.match(menu, /Busy spots, game days, and boosts/)
   assert.match(map, /color: heat\.title/)
+  assert.match(map, /top: legendTop/)
+  assert.match(home, /paddingBottom: dockHeight \+ tabClearance/)
+  assert.match(home, /legendTop=\{heatBottom/)
+  assert.doesNotMatch(home, /maxHeight: 400/)
+  const deleteAt = menu.indexOf('>Delete account</Text>')
+  const gated = menu.slice(menu.lastIndexOf('{user ? (', deleteAt), deleteAt)
+  assert.match(gated, /router\.push\('\/delete-account'\)/)
   assert.match(read('apps/driver/lib/palette.ts'), /legend: '#16121F'/)
   assert.match(read('apps/driver/lib/palette.ts'), /legend: '#FFFFFF'/)
 })

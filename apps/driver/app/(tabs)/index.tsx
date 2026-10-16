@@ -236,9 +236,11 @@ function DriverHomeBody() {
     transform: [{ translateY: clutterY.value }],
   }))
   const tabClearance = offerSheetBottomInset(insets.bottom)
-  // The dock sits between the status bar and the tab bar, including the home-indicator inset.
+  // The dock is only as tall as the fare card and GO button, sitting above the tab bar.
   // While an offer is up, END, the queue, and the earnings pill step aside so the sheet can use that space.
   const dockTop = insets.top + TOP_MARGIN
+  const [dockHeight, setDockHeight] = useState(260)
+  const [heatBottom, setHeatBottom] = useState<number | null>(null)
 
   useEffect(() => {
     if (!supabase) {
@@ -608,17 +610,13 @@ function DriverHomeBody() {
         gameDayLabel={gameNotice?.live ? gameNotice.headline : null}
         lockOnCenter={Boolean(online && self)}
         onPinPress={onPinPress}
+        legendTop={heatBottom ?? insets.top + 210}
       />
       <View pointerEvents="box-none" style={styles.overlay}>
         <Reanimated.View
           pointerEvents={clutterInteractive && !liveCard ? 'box-none' : 'none'}
-          style={[styles.clutter, clutterStyle]}
+          style={[styles.clutter, clutterStyle, { paddingBottom: dockHeight + tabClearance }]}
         >
-          <View style={[styles.top, { paddingTop: dockTop }]} pointerEvents="box-none">
-            <CircleButton icon="inbox" label="Messages" onPress={() => router.push('/inbox')} />
-            <View style={styles.topSpacer} />
-            <CircleButton icon="search" label="Search and discover" onPress={() => router.push('/discover')} />
-          </View>
           {offerOwnsBottom ? null : (
           <View pointerEvents="box-none" style={[styles.earningsWrap, { top: dockTop }]}>
             <Pressable
@@ -633,8 +631,24 @@ function DriverHomeBody() {
             </Pressable>
           </View>
           )}
-
-          <View style={[styles.heatPanel, { backgroundColor: colors.card, borderRadius: 16, marginHorizontal: 12, paddingVertical: 8 }]}>
+          <ScrollView
+            style={styles.clutterScroll}
+            contentContainerStyle={styles.clutterContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+          <View style={[styles.top, { paddingTop: dockTop }]} pointerEvents="box-none">
+            <CircleButton icon="inbox" label="Messages" onPress={() => router.push('/inbox')} />
+            <View style={styles.topSpacer} />
+            <CircleButton icon="search" label="Search and discover" onPress={() => router.push('/discover')} />
+          </View>
+          <View
+            onLayout={(event) => {
+              const next = Math.ceil(event.nativeEvent.layout.y + event.nativeEvent.layout.height + 8)
+              setHeatBottom((current) => (next > 0 && next !== current ? next : current))
+            }}
+            style={[styles.heatPanel, { backgroundColor: colors.card, borderRadius: 16, marginHorizontal: 12, paddingVertical: 8 }]}
+          >
             <Pressable
               onPress={() => setDemandOpen((value: boolean) => !value)}
               accessibilityRole="button"
@@ -766,9 +780,17 @@ function DriverHomeBody() {
               />
             </View>
           ) : null}
+          </ScrollView>
         </Reanimated.View>
 
-        <View pointerEvents="box-none" style={[styles.dock, styles.offerDock, { top: dockTop, bottom: tabClearance }]}>
+        <View
+          pointerEvents="box-none"
+          onLayout={(event) => {
+            const next = Math.ceil(event.nativeEvent.layout.height)
+            setDockHeight((current) => (next > 0 && Math.abs(next - current) > 1 ? next : current))
+          }}
+          style={[styles.dock, styles.offerDock, { bottom: tabClearance }]}
+        >
           {!configured ? <ErrorText>Add EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable, then rebuild.</ErrorText> : null}
           {locationTracking.error ? (
             <View>
@@ -1118,7 +1140,9 @@ const styles = StyleSheet.create({
   topSpacer: { flex: 1 },
   earningsWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   earningsButton: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center' },
-  clutter: { gap: GAP },
+  clutter: { flex: 1 },
+  clutterScroll: { flex: 1 },
+  clutterContent: { gap: GAP, paddingBottom: 12 },
   demandToggle: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, minHeight: 44,
@@ -1200,6 +1224,6 @@ const styles = StyleSheet.create({
   docGateSections: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
   docGateLink: { fontWeight: '800', fontSize: 14 },
   docGateReason: { fontWeight: '600', fontSize: 13, lineHeight: 18 },
-  statusWrap: { flexShrink: 1, maxHeight: 400 },
+  statusWrap: { flexShrink: 1 },
   statusScrollBody: { flexGrow: 1 },
 })
