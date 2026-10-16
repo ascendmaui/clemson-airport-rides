@@ -109,7 +109,7 @@ test('a Geoapify failure falls back to Photon, and both failing returns no rows'
   assert.deepEqual(b, { provider: null, results: [] })
 
   clearAddressCache()
-  const none = await suggestAddresses('sloan street', { apiKey: '', fetchImpl: undefined })
+  const none = await suggestAddresses('sloan street', { apiKey: '', fetchImpl: null })
   assert.deepEqual(none, { provider: null, results: [] })
 })
 
