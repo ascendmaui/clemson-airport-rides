@@ -33,6 +33,7 @@ import { listScheduledTrips, type ScheduledRow } from '@/lib/scheduleApi'
 import { playMatchChime, tapHaptic } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { displayFirstName } from 'rides-native/authErrors'
+import { SIMULATED_FLEET_BADGE } from 'rides-native/simulatedDrivers.js'
 import { nativeGlassAvailable } from 'rides-native/glass'
 import { campusOverlays } from 'rides-native/riderShell.js'
 import { loadGameDay } from 'rides-native/driverDesk'
@@ -141,8 +142,8 @@ export function RiderHome() {
 
   const name = user
     ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Tiger')
-    : 'Tiger'
-  const initial = name.slice(0, 1).toUpperCase()
+    : null
+  const initial = name ? name.slice(0, 1).toUpperCase() : ''
 
   async function reloadSpots() {
     const result = await loadBusySpots('now')
@@ -307,14 +308,14 @@ export function RiderHome() {
   }
 
   return (
-    <View style={[styles.screen, nativeTabs ? { paddingBottom: homeTabClearance(insets.bottom) } : null]}>
+    <View style={styles.screen}>
       <View
         ref={(node) => {
           mapSwipe.ref.current = node
         }}
         onLayout={mapSwipe.onLayout}
         collapsable={false}
-        style={styles.mapSlot}
+        style={[styles.mapSlot, { minHeight: insets.top + 176 }]}
       >
         <View style={{ height: insets.top }} />
         <View style={styles.mapFill}>
@@ -329,13 +330,15 @@ export function RiderHome() {
           surge={surge}
           userCoordinate={userCoord}
           showSimulatedFleet
+          showFleetBadge={false}
         />
         </View>
         <Animated.View pointerEvents="box-none" style={[styles.mapChrome, { paddingTop: insets.top + 8 }, chromeMotion]}>
+          <View pointerEvents="box-none" style={styles.chromeTop}>
           <View style={styles.topBar}>
             <View style={[styles.brand, lift(colors, 'float')]}>
               <View style={styles.brandMark}>
-                <Text style={styles.brandMarkText}>CR</Text>
+                <Text style={styles.brandMarkText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1}>CR</Text>
               </View>
               <View style={styles.brandCopy}>
                 <DenseText style={styles.brandKicker}>RIDE • GAME • REPEAT</DenseText>
@@ -359,8 +362,16 @@ export function RiderHome() {
               }}
               style={({ pressed }) => [styles.avatar, lift(colors, 'rest'), pressStyle(pressed)]}
             >
-              <Text style={styles.avatarText}>{initial}</Text>
+              {initial ? (
+                <Text style={styles.avatarText} maxFontSizeMultiplier={1}>{initial}</Text>
+              ) : (
+                <Glyph name="account" size={22} color={colors.onAccent} />
+              )}
             </Pressable>
+          </View>
+          <View pointerEvents="none" style={styles.previewRow}>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1} style={styles.previewPill}>{SIMULATED_FLEET_BADGE}</Text>
+          </View>
           </View>
           <View style={styles.mapControls}>
             <View style={[styles.kindRow, lift(colors, 'rest')]}>
@@ -425,17 +436,13 @@ export function RiderHome() {
             <SheetHandle />
           </View>
         </GestureDetector>
-        <Reanimated.View
-          pointerEvents="none"
-          style={sheet.hintStyle}
-          accessibilityElementsHidden={sheet.detent === 'collapsed'}
-        >
-          <Text style={styles.dragHint}>Drag down to expand the map</Text>
-        </Reanimated.View>
         <ScrollView
           ref={scrollRef}
           style={styles.sheetScroll}
-          contentContainerStyle={styles.sheetContent}
+          contentContainerStyle={[
+            styles.sheetContent,
+            nativeTabs ? { paddingBottom: homeTabClearance(insets.bottom) + 28 } : null,
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           onScroll={remeasureTabs}
@@ -453,6 +460,9 @@ export function RiderHome() {
             />
           )}
         >
+        {sheet.detent !== 'collapsed' ? (
+          <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} numberOfLines={2} style={styles.dragHint}>Drag down to expand the map</Text>
+        ) : null}
         <View onLayout={sheet.onSearchLayout} style={styles.searchBlock}>
           <Text style={styles.prompt} numberOfLines={3} maxFontSizeMultiplier={DENSE_FONT_SCALE} accessibilityElementsHidden={sheet.detent === 'collapsed'}>Where are you headed, Tiger?</Text>
           <View
@@ -514,7 +524,7 @@ export function RiderHome() {
               <Skeleton height={56} />
             </View>
           ) : (
-            <Text style={styles.welcome}>Welcome, {name}</Text>
+            <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={styles.welcome}>{name ? `Welcome, ${name}` : 'Welcome'}</Text>
           )}
           {homeRetry ? (
             <View accessibilityLiveRegion="polite">
@@ -573,7 +583,7 @@ export function RiderHome() {
                 }}
                 style={({ pressed }) => [styles.destChip, query === stop.label && styles.destChipOn, pressStyle(pressed)]}
               >
-                <Text style={[styles.destChipText, query === stop.label && styles.destChipTextOn]}>{stop.label}</Text>
+                <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} numberOfLines={1} style={[styles.destChipText, query === stop.label && styles.destChipTextOn]}>{stop.label}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -591,7 +601,7 @@ export function RiderHome() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Glyph name="search" size={18} color={colors.link} />
-              <Text style={styles.searchLinkText}>Search destination</Text>
+              <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} numberOfLines={1} style={styles.searchLinkText}>Search destination</Text>
               <Glyph name="forward" size={16} color={colors.link} />
             </View>
           </Pressable>
@@ -614,8 +624,8 @@ export function RiderHome() {
                     style={({ pressed }) => [styles.action, lift(colors, 'rest'), pressStyle(pressed)]}
                   >
                     <GlassBadge name={action.icon} size={40} tone={action.id === 'safety' ? 'purple' : 'orange'} scheme={scheme} style={styles.actionIcon} />
-                    <Text style={styles.actionLabel}>{action.label}</Text>
-                    <Text style={styles.actionDetail}>{action.detail}</Text>
+                    <Text style={styles.actionLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={1.15}>{action.label}</Text>
+                    <Text style={styles.actionDetail} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={1.15}>{action.detail}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -742,6 +752,7 @@ function makeStyles(colors: Palette) {
       justifyContent: 'space-between' as const,
       paddingBottom: 28,
     },
+    chromeTop: { alignItems: 'flex-start' as const },
     topBar: {
       paddingHorizontal: 16,
       flexDirection: 'row' as const,
@@ -769,6 +780,7 @@ function makeStyles(colors: Palette) {
       backgroundColor: colors.orange,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
+      overflow: 'hidden' as const,
     },
     brandMarkText: { color: colors.onAccent, fontSize: 12, fontWeight: '800' as const, letterSpacing: 0.4 },
     brandCopy: { flex: 1, minWidth: 0 },
@@ -788,6 +800,17 @@ function makeStyles(colors: Palette) {
       borderColor: colors.onAccent,
     },
     avatarText: { color: colors.onAccent, fontWeight: '800' as const, fontSize: 17 },
+    previewRow: { paddingHorizontal: 16, marginTop: 8, alignItems: 'flex-start' as const, maxWidth: '80%' as const },
+    previewPill: {
+      overflow: 'hidden' as const,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      fontSize: 12,
+      fontWeight: '800' as const,
+      backgroundColor: colors.purple,
+      color: colors.onAccent,
+    },
     mapControls: {
       flexDirection: 'row' as const,
       justifyContent: 'space-between' as const,
@@ -867,6 +890,7 @@ function makeStyles(colors: Palette) {
       fontWeight: '600' as const,
       letterSpacing: 0.2,
       lineHeight: 16,
+      marginBottom: 8,
     },
     sheetScroll: { flex: 1, minHeight: 0 },
     sheetContent: { paddingBottom: 28 },

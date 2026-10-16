@@ -10,7 +10,7 @@ import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
 export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function CampusMap(
-  { spots, showHeat, heatWindow = 'now', mapType = 'standard', theater = false, searchMotion = false, gameDay = false, gameDayLabel = null, surge = false, userCoordinate = null, pins = [], showSimulatedFleet = false },
+  { spots, showHeat, heatWindow = 'now', mapType = 'standard', theater = false, searchMotion = false, gameDay = false, gameDayLabel = null, surge = false, userCoordinate = null, pins = [], showSimulatedFleet = false, showFleetBadge = true },
   ref: any,
 ) {
   const { colors, scheme } = useTheme()
@@ -87,7 +87,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         <View style={styles.theaterRow}>
           <View style={[styles.car, { backgroundColor: colors.orange }]} />
           <View style={[styles.car, { backgroundColor: colors.purple }]} />
-          <Text style={styles.preview}>Preview cars</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1} style={styles.preview}>Preview cars</Text>
         </View>
       ) : null}
       <View style={styles.badges}>
@@ -125,8 +125,8 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
             )
           })
         : null}
-      {showSimulatedFleet ? (
-        <Text style={styles.busyNote}>{SIMULATED_FLEET_BADGE}</Text>
+      {showSimulatedFleet && showFleetBadge ? (
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1} style={styles.busyNote}>{SIMULATED_FLEET_BADGE}</Text>
       ) : null}
       <Text style={styles.caption}>
         {DOWNTOWN.latitude.toFixed(3)}, {STADIUM.longitude.toFixed(3)}
