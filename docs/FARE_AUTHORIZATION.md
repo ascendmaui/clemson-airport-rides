@@ -7,6 +7,7 @@ Rider payments work like Uber and Lyft: an authorization hold on the rider's car
 ## Hold
 
 - Buffer: 20% of the estimate, at least $2. A $0 estimate authorizes $0.
+- Carpool: the buffer is $0. The card hold equals the quoted fare, plus any boost or prepaid tip. Capture is that quoted fare.
 - Placed when a rider requests a driver, and when a scheduled ride with `deposit_cents = 0` is released into the live pool.
 - Not placed at Schedule, and not placed when the rider chose ride credits.
 - Capture method is `manual`. The card is asked for incremental authorization when the issuer allows it, so a higher final fare can grow the same hold.

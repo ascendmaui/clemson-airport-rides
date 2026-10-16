@@ -411,9 +411,7 @@ export function CarpoolHubScreen() {
           <Text style={styles.brand}>Clemson Rides</Text>
           <Text style={styles.heroTitle}>Split the surge.</Text>
           <Text style={styles.heroBody}>
-            One person to Grand Marc or College Ave on a game night is about {formatUsd(pitch.soloCents)}.
-            Four Tigers in one car pay about {formatUsd(pitch.fullShareCents)} each.
-            The driver earns more than that solo trip.
+            Standard is about {formatUsd(pitch.soloCents)}. A Carpool seat is {formatUsd(pitch.fullShareCents)}, 50% of that Standard fare, when 3 or 4 riders share the trip. The driver earns more than a solo trip.
           </Text>
           <View style={styles.pills}>
             <Text style={styles.pill}>

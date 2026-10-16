@@ -150,7 +150,7 @@ export function carpoolDriverId(drivers) {
 }
 
 function seatHold(riderId, perSeat) {
-  const auth = fareAuthorizationCents(perSeat)
+  const auth = fareAuthorizationCents(perSeat, { bufferBps: 0 })
   return {
     riderId,
     estimatedFareCents: perSeat,
