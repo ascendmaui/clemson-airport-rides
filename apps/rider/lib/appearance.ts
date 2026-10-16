@@ -12,6 +12,21 @@ export function readDisplayMode(value: unknown): DisplayMode {
   }
 }
 
+/**
+ * Build 44 saved Night mode as `displayMode: 'dark'` with no migration flag.
+ * The first launch of the System/Light/Dark control resets that once.
+ * A later explicit choice sets `appearanceMigrated` and is left alone.
+ */
+export function migrateAppearance(parsed: { displayMode?: unknown; appearanceMigrated?: unknown } | null | undefined): {
+  displayMode: DisplayMode
+  appearanceMigrated: true
+} {
+  if (parsed?.appearanceMigrated === true) {
+    return { displayMode: readDisplayMode(parsed.displayMode), appearanceMigrated: true }
+  }
+  return { displayMode: 'auto', appearanceMigrated: true }
+}
+
 /** `auto` uses the iOS/Android color scheme. A null scheme opens light. */
 export function resolveScheme(mode: DisplayMode, systemScheme: 'light' | 'dark' | null | undefined): 'light' | 'dark' {
   switch (mode) {

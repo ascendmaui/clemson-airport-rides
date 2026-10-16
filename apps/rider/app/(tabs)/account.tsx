@@ -281,7 +281,7 @@ export function AccountScreen() {
                 accessibilityLabel={link.mailSubject ? `${link.label}, ${supportEmail()}` : link.label}
               >
                 <View style={styles.settingLine}>
-                  <Glyph name={link.icon} size={22} color={link.icon === 'chat' || link.icon === 'mail' ? colors.link : colors.purple} scheme={scheme} />
+                  <Glyph name={link.icon} size={22} color={accountIconColor(link.icon, colors)} scheme={scheme} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.rowTitle}>{link.label}</Text>
                     {link.badge ? (
@@ -371,6 +371,18 @@ export function AccountScreen() {
       </ScrollView>
     </View>
   )
+}
+
+function accountIconColor(icon: string, colors: Palette): string {
+  switch (icon) {
+    case 'chat':
+    case 'mail':
+    case 'help':
+    case 'lostFound':
+      return colors.link
+    default:
+      return colors.purple
+  }
 }
 
 const APPEARANCE_CHOICES: { mode: DisplayMode; label: string }[] = [
