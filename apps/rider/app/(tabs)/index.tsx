@@ -607,7 +607,7 @@ export function RiderHome() {
           </Pressable>
           {destError ? <Text style={styles.locateNote}>{destError}</Text> : null}
 
-          <Text style={styles.sectionLabel}>Get around</Text>
+          <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={styles.sectionLabel}>Get around</Text>
           <View style={styles.actions}>
             {[0, 1].map((column) => (
               <View key={column} style={styles.actionCol}>
@@ -632,7 +632,7 @@ export function RiderHome() {
             ))}
           </View>
 
-          <Text style={styles.sectionLabel}>Places</Text>
+          <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={styles.sectionLabel}>Places</Text>
           <TabSwipeRegion>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcuts}>
             {PLACES.map((shortcut) => (
@@ -655,7 +655,7 @@ export function RiderHome() {
           <View style={[styles.campusCard, lift(colors, 'rest')]}>
             <View style={styles.mapHead}>
               <View style={styles.campusCopy}>
-                <Text style={styles.mapTitle}>Campus map</Text>
+                <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={styles.mapTitle}>Campus map</Text>
                 <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={styles.busyDays}>Busy days</Text>
               </View>
             </View>
@@ -699,9 +699,9 @@ export function RiderHome() {
             <View style={styles.offerIcon}>
               <Glyph name="learning" size={24} color={colors.purple} />
             </View>
-            <View style={styles.gamedayCopy}>
-              <Text style={styles.gamedayTitle}>{studentOffer.title}</Text>
-              <Text style={styles.gamedayBody}>{studentOffer.detail}</Text>
+            <View style={[styles.gamedayCopy, styles.studentCopy]}>
+              <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} numberOfLines={2} style={styles.gamedayTitle}>{studentOffer.title}</Text>
+              <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} numberOfLines={4} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.gamedayBody}>{studentOffer.detail}</Text>
             </View>
           </Pressable>
 
@@ -1005,6 +1005,7 @@ function makeStyles(colors: Palette) {
       justifyContent: 'center' as const,
     },
     gamedayCopy: { flex: 1 },
+    studentCopy: { minWidth: 0 },
     gamedayTitle: { fontWeight: '700' as const, fontSize: 15, letterSpacing: -0.2, color: colors.ink },
     gamedayBody: { fontSize: 13, lineHeight: 18, color: colors.inkSecondary, marginTop: 2 },
     gamedayBtn: { backgroundColor: colors.purple, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8 },
