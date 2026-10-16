@@ -1,8 +1,13 @@
+import { useEffect } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
 import { color, shadowStyle } from 'rides-native/shared/theme.js'
+import { hideDriverSplash } from '@/lib/hideSplash'
 
 export function BootScreen() {
+  useEffect(() => {
+    hideDriverSplash()
+  }, [])
   return (
     <View style={styles.screen}>
       <View style={styles.mark}>
