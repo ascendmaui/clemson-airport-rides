@@ -1,24 +1,24 @@
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
-import { Alert, Pressable, StyleSheet, Text } from 'react-native'
+import { Alert, Pressable, StyleSheet, Text, TextInput } from 'react-native'
 import { Card, ErrorText, Primary } from '@/components/chrome'
 import { StackPage } from '@/components/shell'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
-import { buildAccountDeletionTicket } from 'rides-native/accountDeletion.js'
 import { authedJson } from 'rides-native/apiClient'
 
 export default function DeleteAccountScreen() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const { colors, scheme } = useTheme()
+  const [confirmText, setConfirmText] = useState('')
   const [busy, setBusy] = useState(false)
-  const [note, setNote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const ready = confirmText.trim() === 'DELETE'
 
-  async function fileRequest() {
-    if (busy || note) return
+  async function deleteNow() {
+    if (busy || !ready) return
     if (!user || !supabase) {
       router.push('/sign-in')
       return
@@ -26,29 +26,31 @@ export default function DeleteAccountScreen() {
     setBusy(true)
     setError(null)
     try {
-      const result = await authedJson(supabase, '/api/support-ticket', {
+      await authedJson(supabase, '/api/account?action=delete', {
         method: 'POST',
-        body: buildAccountDeletionTicket({ email: user.email, roleVariant: 'driver' }),
+        body: { confirm: 'DELETE' },
       })
-      const ticket = result.ticket as { id?: string } | undefined
-      setNote(ticket?.id
-        ? `Request ${ticket.id} is open. Your account stays signed in until support processes it. You can sign out from Account.`
-        : 'Your deletion request was filed. Your account stays signed in until support processes it.')
+      try {
+        await signOut()
+      } catch {
+        // The account is already gone. Leave the signed-in screen either way.
+      }
+      router.replace('/sign-in')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not file the deletion request')
+      setError(err instanceof Error ? err.message : 'Could not delete the account')
     } finally {
       setBusy(false)
     }
   }
 
   function confirmRequest() {
-    if (busy || note) return
+    if (busy || !ready) return
     Alert.alert(
-      'Request account deletion?',
-      'This files a confirmed support request to delete your account and trip history. It does not erase the account immediately.',
+      'Delete account?',
+      'This deletes your Clemson Rides driver account immediately. If you have a trip in progress, deletion waits until that trip ends. You will be signed out.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'File deletion request', style: 'destructive', onPress: () => void fileRequest() },
+        { text: 'Delete account', style: 'destructive', onPress: () => void deleteNow() },
       ],
     )
   }
@@ -57,29 +59,40 @@ export default function DeleteAccountScreen() {
     <StackPage title="Delete account" onBack={() => router.back()}>
       <Card>
         <Text style={[styles.copy, { color: colors.inkSecondary }]}>
-          Filing this request asks support to delete your driver account and the trip history tied to it. Your account stays active until support processes the request.
+          Deletion is immediate. This removes your driver account and signs you out. A trip in progress must end before the account can be deleted.
         </Text>
         <Text style={[styles.copy, { color: colors.inkSecondary }]}>
-          Records needed for pending payouts and tax reporting are kept where required by law. Account and trip records may also be retained for a reasonable period afterward for accounting, disputes, and safety, as the privacy policy describes.
+          Records needed for completed ride receipts, payouts, and tax reporting are kept in de-identified form where the law requires them.
         </Text>
         <Text style={[styles.copy, { color: colors.inkSecondary }]}>
-          Signed in as {user?.email || 'this account'}.
+          Signed in as {user?.email || 'this account'}. Type DELETE to confirm.
         </Text>
+        {user ? (
+          <TextInput
+            value={confirmText}
+            onChangeText={setConfirmText}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            editable={!busy}
+            placeholder="DELETE"
+            placeholderTextColor={colors.inkSecondary}
+            accessibilityLabel="Type DELETE to confirm account deletion"
+            style={[styles.input, { backgroundColor: colors.input, color: colors.ink, borderColor: colors.border }]}
+          />
+        ) : null}
       </Card>
-      {note ? <Text accessibilityRole="alert" style={[styles.note, { color: colors.link }]}>{note}</Text> : (
-        user ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="File deletion request"
-            accessibilityState={{ disabled: busy }}
-            disabled={busy}
-            onPress={confirmRequest}
-            style={[styles.deleteButton, { backgroundColor: colors.danger, opacity: busy ? 0.55 : 1 }]}
-          >
-            <Text style={[styles.deleteLabel, { color: scheme === 'dark' ? colors.card : colors.onAccent }]}>{busy ? 'Filing…' : 'File deletion request'}</Text>
-          </Pressable>
-        ) : <Primary label="Sign in to request deletion" onPress={() => router.push('/sign-in')} />
-      )}
+      {user ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Delete account"
+          accessibilityState={{ disabled: busy || !ready }}
+          disabled={busy || !ready}
+          onPress={confirmRequest}
+          style={[styles.deleteButton, { backgroundColor: colors.danger, opacity: busy || !ready ? 0.55 : 1 }]}
+        >
+          <Text style={[styles.deleteLabel, { color: scheme === 'dark' ? colors.card : colors.onAccent }]}>{busy ? 'Deleting…' : 'Delete account'}</Text>
+        </Pressable>
+      ) : <Primary label="Sign in to delete your account" onPress={() => router.push('/sign-in')} />}
       {error ? <ErrorText>{error}</ErrorText> : null}
     </StackPage>
   )
@@ -87,7 +100,7 @@ export default function DeleteAccountScreen() {
 
 const styles = StyleSheet.create({
   copy: { fontSize: 15, lineHeight: 22 },
-  note: { fontSize: 14, lineHeight: 21, fontWeight: '700' },
+  input: { borderWidth: 1, borderRadius: 16, minHeight: 48, paddingHorizontal: 14, fontSize: 16, marginTop: 8 },
   deleteButton: { borderRadius: 16, minHeight: 48, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
   deleteLabel: { fontSize: 16, fontWeight: '700' },
 })

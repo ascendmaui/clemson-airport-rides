@@ -357,10 +357,12 @@ export function AccountScreen() {
           <Text style={styles.rowTitle}>Terms of service</Text>
           <Text style={styles.copy}>Fares, wait fees, and driver duties.</Text>
         </Pressable>
-        <Pressable onPress={() => router.push('/delete-account')} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
-          <Text style={styles.rowTitle}>Delete account</Text>
-          <Text style={styles.copy}>Files a confirmed support request. The account stays until that request is processed.</Text>
-        </Pressable>
+        {user ? (
+          <Pressable onPress={() => router.push('/delete-account')} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
+            <Text style={styles.rowTitle}>Delete account</Text>
+            <Text style={styles.copy}>Deletes this account immediately. Open rides are canceled.</Text>
+          </Pressable>
+        ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {note ? <Text style={styles.note}>{note}</Text> : null}
         {user ? (
