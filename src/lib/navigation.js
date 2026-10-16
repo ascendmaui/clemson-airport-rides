@@ -38,6 +38,8 @@ export function getHashRoute() {
   const segments = pathPart.split('/').filter(Boolean)
   const path = segments[0] || 'landing'
   const params = Object.fromEntries(new URLSearchParams(qs || ''))
+  // /partner is an alias for the Advertise with us page (not /partners, the rental portal).
+  if (path === 'partner' && !segments[1]) return { path: 'advertise', params, segments }
   if (path === 'driver' && segments[1] === 'download' && !segments[2]) {
     return { path: 'driver-download', params, segments }
   }

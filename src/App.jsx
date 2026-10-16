@@ -65,6 +65,7 @@ const PromosPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ d
 const RideTypesPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.RideTypesPage })))
 const SafetyPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.SafetyPage })))
 const SupportPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.SupportPage })))
+const Advertise = lazy(() => import('./screens/Advertise').then((m) => ({ default: m.Advertise })))
 const TigerPassPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.TigerPassPage })))
 /** Rider booking, account and legal screens also load on demand so the marketing home paints fast. */
 const PartnerJoin = lazy(() => import('./screens/RentalPartners').then((m) => ({ default: m.PartnerJoin })))
@@ -132,6 +133,8 @@ const SITE_ROUTES = new Set([
   'driver-download',
   'affiliate',
   'affiliates',
+  'advertise',
+  'partner',
 ])
 
 function Screen({ path, params }) {
@@ -155,6 +158,9 @@ function Screen({ path, params }) {
       return <WhyClemsonRides />
     case 'drive':
       return <DriveWithUs />
+    case 'advertise':
+    case 'partner':
+      return <Advertise />
     case 'how-it-works':
       return <HowItWorks />
     case 'ride-types':

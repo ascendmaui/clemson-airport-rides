@@ -1,0 +1,121 @@
+/* /advertise partner page. Mobile first; Clemson orange #F56600 and purple #522D80. */
+.adv-hero { display: grid; gap: 14px; padding: 40px 0 24px; }
+.adv-hero h1 { max-width: 18ch; }
+.adv-lede { max-width: 52ch; font-size: 17px; line-height: 1.5; margin: 0; }
+.adv-section { display: grid; gap: 18px; margin-top: 40px; scroll-margin-top: 96px; }
+
+.adv-tablet {
+  border-radius: 22px;
+  padding: 12px;
+  background: #1b1325;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+  aspect-ratio: 16 / 10;
+  display: grid;
+}
+.adv-tablet-screen {
+  position: relative;
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 4px;
+  color: #fff;
+  background: linear-gradient(135deg, #522D80 0%, #3a1f5c 55%, #F56600 140%);
+  overflow: hidden;
+}
+.adv-tablet-screen strong { font-size: clamp(20px, 5vw, 28px); letter-spacing: -0.02em; }
+.adv-tablet-tag {
+  align-self: flex-start;
+  background: #F56600;
+  color: #fff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 650;
+  margin-bottom: auto;
+}
+.adv-tablet-qr {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, #fff 50%, transparent 50%) 0 0 / 14px 14px,
+    linear-gradient(#fff 50%, #1b1325 50%) 0 0 / 14px 14px;
+  border: 4px solid #fff;
+}
+.adv-step-num {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: #522D80;
+  color: #fff;
+  font-weight: 700;
+}
+.adv-stats { display: grid; gap: 12px; }
+html body .site.mkt .adv-stat { gap: 4px; }
+.adv-stat strong { color: #522D80; font-size: 22px; letter-spacing: -0.02em; }
+
+.adv-soon { align-items: flex-start; }
+html body .site.mkt .adv-soon { border-left: 6px solid #F56600 !important; }
+.adv-soon-chip {
+  background: rgba(82, 45, 128, 0.1);
+  color: #522D80;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.adv-soon-copy { font-size: 19px; font-weight: 600; color: #1b1325; margin: 0; max-width: 40ch; }
+.adv-price { font-size: 26px; font-weight: 700; color: #F56600; margin: 0; }
+html body .site.mkt .adv-tier--highlight { border: 2px solid #522D80 !important; }
+
+.adv-form-grid { display: grid; gap: 14px; }
+.adv-field { display: grid; gap: 6px; }
+.adv-field label { font-weight: 600; color: #1b1325; font-size: 15px; }
+.adv-field input,
+.adv-field select,
+.adv-field textarea {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid #d9d3e2;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 16px;
+  background: #fff;
+  color: #1b1325;
+  box-sizing: border-box;
+}
+.adv-field textarea { min-height: 112px; resize: vertical; }
+.adv-field input:focus-visible,
+.adv-field select:focus-visible,
+.adv-field textarea:focus-visible { outline: 2px solid #F56600; outline-offset: 1px; border-color: #F56600; }
+.adv-field--error input,
+.adv-field--error select { border-color: #b42318; }
+.adv-field .field-error-text { color: #b42318; font-size: 14px; margin: 0; }
+.adv-notice { color: #b42318; font-weight: 600; margin: 0; }
+.adv-submit { width: 100%; }
+.adv-fine { font-size: 13px; color: #6b6178; margin: 0; }
+.adv-hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.adv-sent h3 { color: #522D80; }
+
+@media (min-width: 720px) {
+  .adv-form-grid { grid-template-columns: 1fr 1fr; }
+  .adv-submit { width: auto; justify-self: start; }
+  .adv-hero { padding-top: 64px; }
+}
+
+/* Site card rules set ink colors with high specificity; restate ours at the same level. */
+html body .site.mkt .adv-tablet-screen { padding-right: 88px; }
+html body .site.mkt .adv-tablet-screen,
+html body .site.mkt .adv-tablet-screen strong,
+html body .site.mkt .adv-tablet-screen span { color: #fff !important; }
+html body .site.mkt .adv-stat strong { color: #522D80 !important; }
+html body .site.mkt .adv-soon-copy { font-size: 19px !important; font-weight: 600 !important; color: #1b1325 !important; }
+html body .site.mkt .adv-price { color: #F56600 !important; }
