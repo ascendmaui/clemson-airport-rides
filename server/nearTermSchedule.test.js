@@ -145,7 +145,7 @@ test('scheduling a slot notifies every approved driver and keeps the ride on the
   assert.equal(res.json.slot.minutesOut, 12)
   assert.equal(res.json.board.notified, 3)
   assert.equal(res.json.board.drivers, 3)
-  assert.match(res.json.board.pushGap, /No server push sender/)
+  assert.match(res.json.board.pushGap, /APNs key on the Expo project/)
   const trip = tables.trips.find((row) => row.rider_id === 'rider-1')
   assert.equal(trip.status, 'scheduled')
   assert.equal(trip.metadata.near_term_slot, true)
@@ -155,7 +155,7 @@ test('scheduling a slot notifies every approved driver and keeps the ride on the
   assert.equal(alerts.some((row) => row.driver_id === 'demo-marcus'), false)
   assert.equal(alerts.every((row) => row.offer_marker === 'scheduled-board'), true)
   assert.equal(alerts.every((row) => row.channels.sms.reason === 'board_prefers_in_app'), true)
-  assert.equal(alerts.find((row) => row.driver_id === 'driver-near').channels.push.reason, 'push_sender_missing')
+  assert.equal(alerts.find((row) => row.driver_id === 'driver-near').channels.push.reason, 'expo_push_rejected')
   globalThis.fetch = originalFetch
 })
 
