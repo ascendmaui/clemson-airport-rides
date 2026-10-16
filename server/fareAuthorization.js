@@ -15,6 +15,7 @@ import { holdQuoteCents, readBoostCents } from '../shared/scheduledBoost.js'
 import { readPrepaidTipCents } from '../shared/prepaidTip.js'
 import { readBackupQueue } from '../shared/backupDriverQueue.js'
 import { MIN_CARD_CHARGE_CENTS } from '../src/lib/fareRates.js'
+import { readTripPromo, riderFareAfterPromoCents } from '../shared/promoCodes.js'
 import { insertPaymentRow, setPaymentHold } from './collectPayment.js'
 
 function authKey(tripId, suffix) {
@@ -60,6 +61,7 @@ async function createAuthorization(stripe, {
   riderId,
   quote,
   idempotencyKey,
+  extraMetadata = null,
 }) {
   try {
     const params = {
@@ -81,6 +83,7 @@ async function createAuthorization(stripe, {
         estimatedFareCents: String(quote.estimatedFareCents),
         bufferCents: String(quote.bufferCents),
         boostCents: String(quote.boostCents || 0),
+        ...(extraMetadata || {}),
       },
     }
     let pi
@@ -216,6 +219,7 @@ export async function placeFareAuthorization({
   boostCents = 0,
   prepaidTipCents = 0,
   idempotencySuffix = '',
+  extraMetadata = null,
   carpool = false,
 }) {
   const quote = holdQuoteCents(estimatedFareCents, boostCents, prepaidTipCents, {
@@ -256,6 +260,7 @@ export async function placeFareAuthorization({
       riderId,
       quote,
       idempotencyKey: authKey(tripId, keySuffix),
+      extraMetadata,
     })
     attempts.push({
       paymentMethodId: pmId,
@@ -347,7 +352,12 @@ export async function authorizeRideRequest({
 } = {}) {
   const boostCents = readBoostCents(trip)
   const prepaidTipCents = readPrepaidTipCents(trip)
-  const fareCents = estimatedFareCents ?? trip?.fare_cents
+  const grossFareCents = estimatedFareCents ?? trip?.fare_cents
+  // A rider promo code lowers the hold the same way it lowers the capture.
+  // The tip boost, booked boost and backup fee are never discounted.
+  const promo = readTripPromo(trip)
+  const fareCents = promo ? riderFareAfterPromoCents(trip, grossFareCents) : grossFareCents
+  const promoDiscountCents = promo ? Math.max(0, Math.round(Number(grossFareCents) || 0) - fareCents) : 0
   const choice = trip?.metadata?.billing_choice
   // Ride credits settle the fare. A boost and a booked backup fee are still
   // card money. With neither, scheduling stays on the credits path.
@@ -375,11 +385,14 @@ export async function authorizeRideRequest({
     boostCents: quote.boostCents,
     prepaidTipCents: quote.prepaidTipCents,
     idempotencySuffix: creditsFare ? 'boost' : '',
+    extraMetadata: promo ? { promoCode: String(promo.code || ''), promoDiscountCents: String(promoDiscountCents) } : null,
     carpool,
   })
   if (sb && trip?.id && !placed.skipped) {
     await mergeTripMetadata(sb, trip.id, {
-      fare_authorization: placed.authorization || {
+      fare_authorization: placed.authorization
+        ? { ...placed.authorization, ...(promo ? { promoDiscountCents, grossFareCents: Math.round(Number(grossFareCents) || 0) } : {}) }
+        : {
         status: 'failed',
         authorizationCents: quote.authorizationCents,
         estimatedFareCents: quote.estimatedFareCents,

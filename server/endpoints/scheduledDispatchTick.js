@@ -1,6 +1,7 @@
 /**
  * GET or POST /api/scheduled-dispatch-tick
  * Minute job for the backup-driver confirm window. Idempotent.
+ * Also drains the promo code email outbox (off unless PROMO_CODE_EMAILS_ENABLED=1).
  * Cron: Authorization Bearer CRON_SECRET. On Vercel a platform cron signal
  * is also required. Off Vercel the bearer alone runs the tick.
  * DISABLE_CRON_ENDPOINTS=1 refuses the tick. Dry-run is allowed only when
@@ -17,6 +18,7 @@ import {
 import { runScheduledDispatchTick } from '../backupDriverDispatch.js'
 import { sweepStaleTrips } from '../staleTripSweep.js'
 import { clientErrorMessage } from '../clientError.js'
+import { runPromoEmailOutbox } from '../promoEmailOutbox.js'
 
 export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
@@ -53,7 +55,14 @@ export default async function handler(req, res, deps = {}) {
       console.error('[scheduled-dispatch-tick] stale trips', error?.message || error)
       staleTrips = { error: 'stale_sweep_failed' }
     }
-    return json(res, 200, { ok: true, dryRun, ...summary, staleTrips })
+    let promoEmails = null
+    try {
+      promoEmails = await (deps.runPromoEmails || runPromoEmailOutbox)({ sb, env, now, dryRun, fetchImpl: deps.fetchImpl })
+    } catch (error) {
+      console.error('[scheduled-dispatch-tick] promo emails', error?.message || error)
+      promoEmails = { error: 'promo_email_failed' }
+    }
+    return json(res, 200, { ok: true, dryRun, ...summary, staleTrips, promoEmails })
   } catch (error) {
     console.error('[scheduled-dispatch-tick]', error?.message || error)
     return json(res, 500, { error: clientErrorMessage(error, 'Dispatch tick failed') })

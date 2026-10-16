@@ -397,6 +397,8 @@ export function SignUpScreen({
   subtitle = 'Metered fares to GSP and CLT. Students save 10% on Standard.',
   mark = 'CR',
   showPromo = true,
+  promoPlaceholder = "Friend's or promo code",
+  promoNote = 'Applied when you create the account. Friend rewards are paid only after your first completed ride. A Clemson Rides promo code is used on your next ride.',
   socialProviders,
   onSocial,
   onOpenLegal,
@@ -608,14 +610,12 @@ export function SignUpScreen({
             hint="(optional)"
             autoCapitalize="characters"
             autoCorrect={false}
-            placeholder="Friend's code"
+            placeholder={promoPlaceholder}
             value={promo}
             onChangeText={(value) => setPromo(normalizePromoCode(value))}
             editable={!blocked && !created}
           />
-          <Text style={styles.promoNote}>
-            Applied when you create the account. You and your friend are rewarded only after you complete your first ride.
-          </Text>
+          <Text style={styles.promoNote}>{promoNote}</Text>
         </>
       ) : null}
       {!created && profileHint ? <Text style={styles.cooldown}>{profileHint}</Text> : null}

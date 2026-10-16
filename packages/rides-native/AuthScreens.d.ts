@@ -68,6 +68,8 @@ export function SignUpScreen(props: {
   subtitle?: string
   mark?: string
   showPromo?: boolean
+  promoPlaceholder?: string
+  promoNote?: string
   socialProviders?: SocialProvider[]
   onSocial?: (
     providerId: SocialProvider['id'],
