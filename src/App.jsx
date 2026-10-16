@@ -66,6 +66,8 @@ const RideTypesPage = lazy(() => import('./screens/MarketingInfo').then((m) => (
 const SafetyPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.SafetyPage })))
 const SupportPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.SupportPage })))
 const Advertise = lazy(() => import('./screens/Advertise').then((m) => ({ default: m.Advertise })))
+const AdsSignup = lazy(() => import('./screens/AdsSignup').then((m) => ({ default: m.AdsSignup })))
+const TabletPlayer = lazy(() => import('./screens/TabletPlayer').then((m) => ({ default: m.TabletPlayer })))
 const TigerPassPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.TigerPassPage })))
 /** Rider booking, account and legal screens also load on demand so the marketing home paints fast. */
 const PartnerJoin = lazy(() => import('./screens/RentalPartners').then((m) => ({ default: m.PartnerJoin })))
@@ -160,7 +162,10 @@ function Screen({ path, params }) {
       return <DriveWithUs />
     case 'advertise':
     case 'partner':
+      if (params.sub === 'signup' || params.sub === 'my') return <AdsSignup sub={params.sub} />
       return <Advertise />
+    case 'tablet':
+      return <TabletPlayer params={params} />
     case 'how-it-works':
       return <HowItWorks />
     case 'ride-types':

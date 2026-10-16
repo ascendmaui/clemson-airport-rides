@@ -193,6 +193,10 @@
     {
       "path": "/api/stripe-payment-methods?action=student-plans&op=nightly",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/ads?action=cron",
+      "schedule": "0 14 * * *"
     }
   ]
 }

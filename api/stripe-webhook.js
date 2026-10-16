@@ -17,6 +17,7 @@ import { handleAffiliateConnectEvent, isAffiliateConnectEvent } from '../server/
 import { handleDriverConnectEvent, isDriverConnectEvent } from '../server/driverPayoutMethods.js'
 import { clientErrorMessage } from '../server/clientError.js'
 import { studentPlanMeta, syncStudentPlanFromStripe } from '../server/studentPlans.js'
+import { handleAdsStripeEvent, isAdsStripeEvent } from '../server/ads/billing.js'
 
 export { recordDeposit, applyPaidCheckoutSession }
 
@@ -179,6 +180,15 @@ export default async function handler(req, res, deps = {}) {
       event = JSON.parse(rawBody.toString('utf8'))
     } else {
       return sendWebhookJson(res, 400, { error: 'Webhook signing secret is not configured' })
+    }
+
+    if (isAdsStripeEvent(event)) {
+      // In-car tablet ad campaign paid (invoice.paid or Checkout). Activates the campaign.
+      const client = deps.serviceClient ? deps.serviceClient() : (activeServiceKey ? serviceClient() : null)
+      const adsFn = deps.handleAdsStripeEvent || handleAdsStripeEvent
+      const ads = await adsFn(client, event)
+      console.log('[stripe-webhook] ad_campaign', { type: event.type, id: event.data?.object?.id, ads })
+      return sendWebhookJson(res, ads?.ok === false && !ads?.skipped ? 500 : 200, { received: true, type: event.type, ads })
     }
 
     if (event.type === 'payment_intent.succeeded' && event.data?.object?.metadata?.kind === 'tip') {
