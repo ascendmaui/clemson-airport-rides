@@ -70,14 +70,23 @@ test('rider offers Sign in with Apple beside Google', () => {
   }
 })
 
-test('rider Account confirms deletion before the server ticket', () => {
+test('rider Account confirms immediate deletion for a signed-in user', () => {
   const account = read('apps/rider/app/(tabs)/account.tsx')
   assert.match(account, /router\.push\('\/delete-account'\)/)
   assert.match(account, />Delete account<\/Text>/)
+  assert.match(account, /Deletes this account immediately/)
+  const deleteAt = account.indexOf('>Delete account</Text>')
+  const gated = account.slice(account.lastIndexOf('{user ? (', deleteAt), deleteAt)
+  assert.match(gated, /router\.push\('\/delete-account'\)/)
   assert.doesNotMatch(account, /AdminAccountRow/)
   const route = read('apps/rider/app/delete-account.tsx')
   assert.match(route, /Alert\.alert\(/)
   assert.match(route, /style:\s*'destructive'/)
-  assert.match(route, /buildAccountDeletionTicket\(\{\s*email:\s*user\?\.email,\s*roleVariant:\s*'rider'/)
-  assert.match(route, /\/api\/admin-drivers\?action=ticket/)
+  assert.match(route, /confirmText\.trim\(\) === 'DELETE'/)
+  assert.match(route, /authedJson\(supabase, '\/api\/account\?action=delete'/)
+  assert.match(route, /confirm:\s*'DELETE'/)
+  assert.match(route, /Deletion is immediate/)
+  assert.match(route, /router\.replace\('\/sign-in'\)/)
+  assert.match(route, /signOut\(\)/)
+  assert.doesNotMatch(route, /buildAccountDeletionTicket|admin-drivers\?action=ticket/)
 })

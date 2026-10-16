@@ -1,56 +1,56 @@
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
-import { Alert, ScrollView, Text, View } from 'react-native'
+import { Alert, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { RequireAuth } from '@/components/RequireAuth'
 import { StackHeader } from '@/components/StackHeader'
-import { apiUrl, authHeaders } from '@/lib/apiAuth'
 import { useAuth } from '@/lib/auth'
+import { supabase } from '@/lib/supabase'
 import type { Palette } from '@/lib/palette'
 import { useThemedStyles } from '@/lib/useThemedStyles'
-import { supportTicketRequest } from 'rides-native/assistClient.js'
-import { buildAccountDeletionTicket } from 'rides-native/accountDeletion.js'
+import { authedJson } from 'rides-native/apiClient.js'
 
 function DeleteAccountScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const styles = useThemedStyles(makeStyles)
+  const [confirmText, setConfirmText] = useState('')
   const [busy, setBusy] = useState(false)
-  const [note, setNote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const ready = confirmText.trim() === 'DELETE'
 
-  async function fileRequest() {
+  async function deleteNow() {
+    if (busy || !ready) return
     setBusy(true)
     setError(null)
     try {
-      const headers = await authHeaders()
-      const data = await supportTicketRequest({
-        url: apiUrl('/api/admin-drivers?action=ticket'),
-        headers,
+      await authedJson(supabase, '/api/account?action=delete', {
         method: 'POST',
-        body: buildAccountDeletionTicket({ email: user?.email, roleVariant: 'rider' }),
+        body: { confirm: 'DELETE' },
       })
-      const id = data.ticket?.id
-      setNote(id
-        ? `Request ${id} is open. The account stays signed in until support processes it. You can sign out from Account.`
-        : 'The deletion request was filed.')
+      try {
+        await signOut()
+      } catch {
+        // The account is already gone. Leave the signed-in screen either way.
+      }
+      router.replace('/sign-in')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not file the deletion request')
+      setError(err instanceof Error ? err.message : 'Could not delete the account')
     } finally {
       setBusy(false)
     }
   }
 
   function confirmRequest() {
-    if (busy || note) return
+    if (busy || !ready) return
     Alert.alert(
       'Delete account?',
-      'This sends a confirmed request to delete your account and the trip history tied to it. The account stays signed in until that request is processed.',
+      'This deletes your Clemson Rides account immediately. Open rides are canceled and card holds are released. You will be signed out.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete account', style: 'destructive', onPress: () => void fileRequest() },
+        { text: 'Delete account', style: 'destructive', onPress: () => void deleteNow() },
       ],
     )
   }
@@ -58,14 +58,29 @@ function DeleteAccountScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <StackHeader title="Delete account" onBack={() => router.back()} />
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <Text style={styles.copy}>
-          Deletion is a support request, the same path named in the privacy policy. Filing this opens a confirmed account ticket. It does not erase the account on this tap.
+          Deletion is immediate. This removes your Clemson Rides account, signs you out, and returns you to the welcome screen. Completed ride receipts stay in de-identified form where the law requires them.
         </Text>
         <Text style={styles.copy}>Signed in as {user?.email || 'this account'}.</Text>
-        {note ? <Text style={styles.note}>{note}</Text> : (
-          <PrimaryButton label={busy ? 'Filing…' : 'Delete account'} onPress={confirmRequest} disabled={busy} tone="purple" />
-        )}
+        <Text style={styles.copy}>Type DELETE to confirm.</Text>
+        <TextInput
+          value={confirmText}
+          onChangeText={setConfirmText}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          placeholder="DELETE"
+          placeholderTextColor={styles.placeholder.color}
+          style={styles.input}
+          accessibilityLabel="Type DELETE to confirm account deletion"
+          editable={!busy}
+        />
+        <PrimaryButton
+          label={busy ? 'Deleting…' : 'Delete account'}
+          onPress={confirmRequest}
+          disabled={busy || !ready}
+          tone="purple"
+        />
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <PrimaryButton label="Read the privacy policy" tone="ghost" onPress={() => router.push({ pathname: '/legal', params: { doc: 'privacy' } })} />
       </ScrollView>
@@ -78,7 +93,17 @@ function makeStyles(colors: Palette) {
     screen: { flex: 1, backgroundColor: colors.background },
     body: { padding: 16, gap: 12, paddingBottom: 40 },
     copy: { color: colors.inkSecondary, fontSize: 15, lineHeight: 22 },
-    note: { color: colors.link, fontWeight: '700' as const, fontSize: 14, lineHeight: 20 },
+    input: {
+      backgroundColor: colors.input,
+      color: colors.ink,
+      borderColor: colors.border,
+      borderWidth: 1,
+      borderRadius: 16,
+      minHeight: 48,
+      paddingHorizontal: 14,
+      fontSize: 16,
+    },
+    placeholder: { color: colors.placeholder },
     error: { color: colors.danger, fontSize: 13 },
   }
 }
