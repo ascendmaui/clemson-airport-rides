@@ -379,6 +379,8 @@ function accountIconColor(icon: string, colors: Palette): string {
     case 'mail':
     case 'help':
     case 'lostFound':
+    case 'money':
+    case 'bell':
       return colors.link
     default:
       return colors.purple

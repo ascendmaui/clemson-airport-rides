@@ -3,7 +3,7 @@ import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { migrateAppearance, readDisplayMode, resolveScheme } from './appearance.ts'
+import { migrateAppearance, nativeColorScheme, readDisplayMode, resolveScheme } from './appearance.ts'
 import {
   HOME_SHEET_BOTTOM_PADDING,
   HOME_SHEET_HANDLE_FALLBACK,
@@ -165,7 +165,14 @@ test('appearance defaults to the system scheme and keeps explicit overrides', ()
   assert.match(theme, /displayMode: 'auto'/)
   assert.match(theme, /migrateAppearance\(parsed\)/)
   assert.match(theme, /appearanceMigrated: true/)
+  assert.match(theme, /Appearance\.setColorScheme\(nativeColorScheme\(prefs\.displayMode\)\)/)
   assert.doesNotMatch(theme, /it now opens light/)
+  assert.equal(nativeColorScheme('auto'), 'unspecified')
+  assert.equal(nativeColorScheme('light'), 'light')
+  assert.equal(nativeColorScheme('dark'), 'dark')
+  const tabs = read('apps/rider/app/(tabs)/_layout.tsx')
+  assert.match(tabs, /backgroundColor=\{colors\.tabBar\}/)
+  assert.match(tabs, /blurEffect=\{scheme === 'dark' \? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'\}/)
 })
 
 test('saved Night mode resets to System once', () => {
@@ -191,6 +198,9 @@ test('xxx large type keeps the home headline inside the scrolling sheet', () => 
   assert.ok(hintAt > scrollAt && promptAt > hintAt, 'drag hint sits in the sheet above the headline')
   assert.match(home, /maxFontSizeMultiplier=\{1\.15\}/)
   assert.match(home, /adjustsFontSizeToFit/)
+  assert.match(home, /shortcutLabel\} numberOfLines=\{2\} adjustsFontSizeToFit/)
+  assert.match(home, /maxFontSizeMultiplier=\{DENSE_FONT_SCALE\} style=\{styles\.busyDays\}/)
+  assert.match(home, /maxFontSizeMultiplier=\{DENSE_FONT_SCALE\} style=\{styles\.live\}/)
   assert.match(home, /showFleetBadge=\{false\}/)
   assert.match(home, /SIMULATED_FLEET_BADGE/)
   assert.match(home, /name \? `Welcome, \$\{name\}` : 'Welcome'/)
