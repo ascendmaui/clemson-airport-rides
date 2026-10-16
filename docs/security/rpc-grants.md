@@ -104,3 +104,19 @@ Source of truth: `supabase/migrations/20261014233000_security_lockdown.sql`. Cal
 | `trip_wait_apply` | service_role only (server/internal) |
 | `women_only_pair_allowed` | authenticated: driver app comfortPreference.js + server; caller must be one of the pair (guard added) |
 | `women_only_visible_trips` | authenticated: driver app comfortPreference.js; scoped to auth.uid() |
+
+## Promo campaign codes (20261015160000, not yet applied)
+
+Source: `supabase/migrations/20261015160000_promo_campaign_codes.sql`. Tables `promo_campaign_codes`, `promo_code_redemptions`, `promo_code_admin_events`, `promo_code_attempts`, `promo_auto_settings`, `promo_email_outbox` have RLS on and no anon/authenticated grants; only the server (service role) reads or writes them.
+
+| Function | Grant / reason |
+|---|---|
+| `promo_check_code` | service_role only: server/promoCodes.js (`/api/promo/check`) |
+| `promo_claim_code` | service_role only: server/promoCodes.js (`/api/promo/claim`, sign-up) |
+| `promo_reserve_for_trip` | service_role only: request-driver, row-locked, idempotent on trip_id |
+| `promo_release_for_trip` | service_role only: request-driver failure paths |
+| `promo_finalize_for_trip` | service_role only: tripSettle after capture |
+| `promo_issue_auto_code` | service_role only: also called by the profiles triggers (sign-up, first card, $50 credits) |
+| `promo_claim_email_batch` | service_role only: server/promoEmailOutbox.js (minute tick), FOR UPDATE SKIP LOCKED lease |
+| `promo_compute_discount`, `promo_attempts_blocked`, `promo__fail`, `promo__unusable_reason`, `promo__group_reason`, `promo__random_code` | service_role only: internal helpers |
+| `promo_trip_status_sync`, `promo_campaign_code_unique_guard`, `promo_profile_auto_issue`, `promo_redemption_terminal_guard` | trigger: no RPC grant |

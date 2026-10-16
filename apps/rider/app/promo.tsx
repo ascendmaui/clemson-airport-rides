@@ -15,6 +15,9 @@ import {
   riderPromoShareUrl,
 } from 'rides-native/riderMoney.js'
 import { normalizePromoCode } from 'rides-native/authErrors'
+import { claimCampaignPromo, promoDeviceId } from 'rides-native/promoCodesClient.js'
+import { promoReasonMessage } from '../../../shared/promoCodes.js'
+import { authStorage } from '@/lib/storage'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
@@ -62,8 +65,18 @@ export default function PromoScreen() {
     setBusy(true)
     setNote(null)
     try {
-      const result = await claimPromoCode(supabase, code)
-      setNote(promoClaimMessage(result))
+      // Clemson Rides campaign codes first; anything else is a friend's code.
+      const campaign = await claimCampaignPromo(supabase, {
+        code, side: 'rider', deviceId: await promoDeviceId(authStorage),
+      }).catch((err) => { logCaught('promo campaign claim', err); return null })
+      if (campaign?.ok) {
+        setNote(`${campaign.code} is saved to your account and is used on your next ride.`)
+      } else if (campaign?.reason && campaign.reason !== 'not_found' && campaign.reason !== 'promo_unavailable') {
+        setNote(campaign.message || promoReasonMessage(campaign.reason))
+      } else {
+        const result = await claimPromoCode(supabase, code)
+        setNote(promoClaimMessage(result))
+      }
       setCode('')
       if (user) {
         const row = await loadPromoDesk(supabase, user.id)

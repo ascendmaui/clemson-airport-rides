@@ -26,6 +26,8 @@ import { claimCompletion, completionResult, releaseCompletion } from './tripComp
 import { readBoostCents } from '../shared/scheduledBoost.js'
 import { readPrepaidTipCents } from '../shared/prepaidTip.js'
 import { allStopsDone, stopFlowStarted, tripStops } from '../shared/carpoolStops.js'
+import { readTripPromo, tripPromoDiscountCents } from '../shared/promoCodes.js'
+import { finalizePromoForTrip } from './promoCodes.js'
 
 function stopsPendingResult() {
   return { http: 409, body: { error: 'Finish every stop before completing this carpool.', code: 'stops_pending', progressed: false } }
@@ -155,9 +157,15 @@ async function settleClaimedTrip({
 }) {
   const kind = feeKindFor(action, feeKind)
   const precomputed = explicitAmountCents == null ? readPrecomputedFeeCents(trip, kind) : null
+  // Rider promo: off the final fare only (not the backup fee, boost, tip or
+  // wait fee). fare_cents stays the pre-promo fare, so the driver payout below
+  // is unchanged and the platform funds the discount.
+  const promoDiscountCents = action === 'complete' ? tripPromoDiscountCents(trip) : 0
   const due = amountDueForAction({
     action,
-    fareCents: action === 'complete' ? riderCaptureFareCents(trip) : trip.fare_cents,
+    fareCents: action === 'complete'
+      ? (promoDiscountCents > 0 ? Math.max(0, riderCaptureFareCents(trip) - promoDiscountCents) : riderCaptureFareCents(trip))
+      : trip.fare_cents,
     paidCents: paidTowardFareCents(trip, payments),
     hold: trip.metadata?.payment_hold || null,
     explicitAmountCents,
@@ -199,6 +207,7 @@ async function settleClaimedTrip({
     boost_billed_cents: boostCents,
     prepaid_tip_billed_cents: prepaidTipCents,
     wait_fee_billed_cents: waitToBillCents,
+    ...(promoDiscountCents > 0 ? { promo_discount_cents: promoDiscountCents } : {}),
   } : {}
   let fareHold = null
   if (action === 'complete' && !override && (due.amountCents > 0 || captureCents > 0)) {
@@ -486,6 +495,14 @@ async function settleClaimedTrip({
   }
 
   if (!sb && action === 'cancel') await releaseOpenFareHold({ sb, stripe, trip, reason: 'settle_cancel' })
+
+  if (action === 'complete' && readTripPromo(trip) && !campusUncollected) {
+    await (deps?.finalizePromo || finalizePromoForTrip)(sb, {
+      tripId: trip.id,
+      discountCents: promoDiscountCents,
+      fareCents: trip.fare_cents,
+    })
+  }
 
   let payout = null
   // This complete did not collect the fare. A Connect transfer would pay the

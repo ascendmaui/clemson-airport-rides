@@ -11,6 +11,8 @@ import { PrimaryButton } from '@/components/Button'
 import { RetryAction } from '@/components/RetryAction'
 import { FlowErrorBoundary } from '@/components/FlowErrorBoundary'
 import { TipBoostPicker } from '@/components/TipBoostPicker'
+import { PromoCodeField } from '@/components/PromoCodeField'
+import { promoDeviceId } from 'rides-native/promoCodesClient.js'
 import { pressStyle, useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
 import { ClemsonLoader } from '@/components/ClemsonLoader'
@@ -303,6 +305,7 @@ function PickDriver() {
   const [selected, setSelected] = useState<string | null>(null)
   const [requesting, setRequesting] = useState(false)
   const [prepaidTipCents, setPrepaidTipCents] = useState(0)
+  const [promoCode, setPromoCode] = useState('')
   const [promptOpen, setPromptOpen] = useState(false)
   const [mapType, setMapType] = useState<MapKind>('standard')
   const [notified, setNotified] = useState(false)
@@ -509,11 +512,18 @@ function PickDriver() {
         note,
         prepaidTipCents,
         ...(gate.source === 'apple_pay' ? { applePay: true } : {}),
+        ...(promoCode ? { promoCode } : {}),
+        deviceId: await promoDeviceId(authStorage),
       })
       await playDriverFoundCue()
       router.replace({
         pathname: '/requested',
-        params: { dest, trip: trip.id, driver: chosen?.name || 'Next driver' },
+        params: {
+          dest,
+          trip: trip.id,
+          driver: chosen?.name || 'Next driver',
+          ...(trip.promo?.message ? { promoNote: trip.promo.message } : {}),
+        },
       })
     } catch (err) {
       if (paymentMethodRequiredError(err)) {
@@ -658,6 +668,7 @@ function PickDriver() {
           <Text style={styles.student}>Student pricing is 10% off Standard. This tier stays full price.</Text>
         ) : null}
         <TipBoostPicker cents={prepaidTipCents} onChange={setPrepaidTipCents} />
+        <PromoCodeField code={promoCode} onChange={setPromoCode} />
         {error && drivers.some((driver: OnlineDriver) => driver.online) ? (
           <View accessibilityLiveRegion="assertive">
             <Text style={styles.error} accessibilityRole="alert">{error}</Text>

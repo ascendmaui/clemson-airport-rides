@@ -1,6 +1,18 @@
 {
   "rewrites": [
     {
+      "source": "/api/promo/check",
+      "destination": "/api/weekly-coupon?action=promo-check"
+    },
+    {
+      "source": "/api/promo/claim",
+      "destination": "/api/weekly-coupon?action=promo-claim"
+    },
+    {
+      "source": "/api/promo/campaigns",
+      "destination": "/api/weekly-coupon?action=promo-campaigns"
+    },
+    {
       "source": "/api/stripe/webhook",
       "destination": "/api/stripe-webhook"
     },

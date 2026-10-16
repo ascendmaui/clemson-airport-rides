@@ -54,6 +54,8 @@ export function createAuth(opts: {
   passwordResetRedirectTo?: string
   onSignOut?: () => Promise<void> | void
   onPasswordRecovery?: () => void
+  /** Which campaign codes the sign-up promo box accepts. Default rider. */
+  promoSide?: 'rider' | 'driver'
 }): {
   AuthProvider: (props: { children: ReactNode }) => ReactNode
   useAuth: () => AuthApi

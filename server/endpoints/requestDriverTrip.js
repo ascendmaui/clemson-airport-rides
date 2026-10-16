@@ -38,6 +38,7 @@ import { authorizeRideRequest } from '../fareAuthorization.js'
 import { assertRiderPaymentMethod } from '../ridePaymentGate.js'
 import { enrollCarpoolSeat } from '../carpoolSeatBook.js'
 import { isE2ETestUser } from '../../shared/e2eTestAccounts.js'
+import { applyPromoToRideRequest, releasePromoForTrip } from '../promoCodes.js'
 
 function optionError(res, error) {
   return json(res, error.status || 400, {
@@ -193,22 +194,45 @@ export default async function handler(req, res, deps = {}) {
   const distance = await serverDistance(routeOrigin, places.dropoff)
   const isStudent = studentDiscountGranted(user)
   const seats = carpoolSeatCount(tier, body.passengers ?? body.partySize ?? body.party_size)
-  const priced = priceDriverRequest(places, {
-    isStudent,
+  const priceInputs = {
     at: when,
     tier,
     gameDayMultiplier,
     distanceM: distance.distanceM,
     durationS: distance.durationS,
-    tigerPassBps: prefs.discountBps,
     seatCount: seats,
-  })
-  if (priced?.fareCents == null || !Number.isFinite(Number(priced.fareCents))) {
+  }
+  const recurringPriced = priceDriverRequest(places, { ...priceInputs, isStudent, tigerPassBps: prefs.discountBps })
+  if (recurringPriced?.fareCents == null || !Number.isFinite(Number(recurringPriced.fareCents))) {
     return json(res, 409, { error: 'Fare is not set', code: 'fare_not_set' })
+  }
+
+  // Campaign promo code (typed now, or claimed at sign-up). One per ride, no
+  // stacking with student / Tiger Pass: the rider gets the lower of the two
+  // prices. When the code wins, fare_cents is the list fare and the discount
+  // only lowers the hold and capture, so driver pay is on the pre-promo fare.
+  const promoCode = body.promoCode ?? body.promo_code ?? null
+  const promoPlan = deps.applyPromo === false
+    ? { tripId: null, priced: recurringPriced, promo: null, snapshot: null }
+    : await (deps.applyPromo || applyPromoToRideRequest)({
+      sb,
+      stripe: deps.stripe,
+      userId: user.id,
+      code: promoCode,
+      deviceId: body.deviceId ?? null,
+      recurring: recurringPriced,
+      list: priceDriverRequest(places, { ...priceInputs, isStudent: false, tigerPassBps: 0 }),
+      now: when,
+    })
+  const priced = promoPlan.snapshot ? promoPlan.priced : recurringPriced
+  const promoTripId = promoPlan.snapshot ? promoPlan.tripId : null
+  const dropPromo = async (reason) => {
+    if (promoTripId) await releasePromoForTrip(sb, promoTripId, reason)
   }
 
   const billing = await billingForPricedRide(sb, user.id, body, priced)
   if (billing.error) {
+    await dropPromo('billing_failed')
     return json(res, billing.error.status || 409, {
       error: billing.error.error,
       code: billing.error.code,
@@ -263,6 +287,7 @@ export default async function handler(req, res, deps = {}) {
     }
     : {}
   const row = {
+    ...(promoTripId ? { id: promoTripId } : {}),
     rider_id: user.id,
     driver_id: null,
     // trip_status has searching, not "requested". That value aborts the insert.
@@ -283,7 +308,11 @@ export default async function handler(req, res, deps = {}) {
       ...(priced.breakdown || priced.quote?.breakdown || {}),
       route_source: priced.routeSource || null,
       fare_source: 'server',
-      rider_pays_cents: priced.fareCents,
+      // Estimate: the code's discount is recomputed on the final fare at capture.
+      rider_pays_cents: promoPlan.snapshot
+        ? Math.max(0, priced.fareCents - promoPlan.snapshot.estimated_discount_cents)
+        : priced.fareCents,
+      ...(promoPlan.snapshot ? { promo_discount_cents: promoPlan.snapshot.estimated_discount_cents, promo_code: promoPlan.snapshot.code } : {}),
     },
     passengers: seats,
     ...(prepaidTipCents > 0 ? { prepaid_tip_cents: prepaidTipCents } : {}),
@@ -320,17 +349,20 @@ export default async function handler(req, res, deps = {}) {
       airport: priced.airport,
       ...billing.snapshot,
       ...(tigerHeat ? { tiger_heat: tigerHeat } : {}),
+      ...(promoPlan.snapshot ? { promo: promoPlan.snapshot } : {}),
     },
   }
 
   const profileRes = await runEnsureProfile(sb, user)
   if (!profileRes?.ok) {
+    await dropPromo('profile_missing')
     if (tigerHeat) await releaseTigerHeatReservation({ sb, trip: { metadata: { tiger_heat: tigerHeat } } })
     return json(res, 500, { error: 'Could not create your rider profile', code: 'profile_missing' })
   }
 
   const paymentGate = await assertRiderPaymentMethod(sb, user.id, body)
   if (!paymentGate.ok) {
+    await dropPromo('payment_method_missing')
     if (tigerHeat) await releaseTigerHeatReservation({ sb, trip: { metadata: { tiger_heat: tigerHeat } } })
     return json(res, paymentGate.status || 402, {
       error: paymentGate.error,
@@ -340,6 +372,7 @@ export default async function handler(req, res, deps = {}) {
 
   const inserted = await sb.from('trips').insert(row).select('id, status, driver_id, dropoff_label, fare_cents, deposit_cents').single()
   if (inserted.error || !inserted.data) {
+    await dropPromo('trip_insert_failed')
     if (tigerHeat) await releaseTigerHeatReservation({ sb, trip: { metadata: { tiger_heat: tigerHeat } } })
     return json(res, 500, { error: inserted.error?.message || 'Could not request trip' })
   }
@@ -405,6 +438,7 @@ export default async function handler(req, res, deps = {}) {
       discountCents: priced.discountCents,
       studentDiscountApplied: priced.isStudent,
       authorization,
+      promo: promoPlan.promo,
       eventWarning: eventError.message || 'Could not record trip event',
     })
   }
@@ -416,5 +450,6 @@ export default async function handler(req, res, deps = {}) {
     discountCents: priced.discountCents,
     studentDiscountApplied: priced.isStudent,
     authorization,
+    promo: promoPlan.promo,
   })
 }
