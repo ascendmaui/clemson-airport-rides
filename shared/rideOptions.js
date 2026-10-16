@@ -28,7 +28,7 @@ export const RIDE_OPTION_CATALOG = [
   { id: 'standard', name: 'Standard', icon: '🚗', eta: '4 min', meta: '4 seats', price: 18.5 },
   { id: 'wait', name: 'Wait & Save', icon: '⏱️', eta: '12 min', meta: 'Save ~20%', price: 14.2 },
   { id: 'comfort', name: 'Extra Comfort', icon: '🚙', eta: '6 min', meta: 'Nicer cars', price: 23 },
-  { id: 'carpool', name: 'Carpool', icon: '👥', eta: '8 min', meta: '50% of Standard per seat', price: 15.73 },
+  { id: 'carpool', name: 'Carpool', icon: '👥', eta: '8 min', meta: '50% of Standard per seat', price: 9.25 },
 ]
 
 /** Bottom line on the Standard card: approximate pickup ETA and trip time. */

@@ -1,4 +1,4 @@
-import { CARPOOL_DISCOUNT_BPS, percentOffCents } from '../../../src/lib/fareRates.js'
+import { CARPOOL_SEAT_FRACTION_BPS, scaleCents } from '../../../src/lib/fareRates.js'
 import { studentDiscountGranted } from '../../../src/lib/studentDomain.js'
 import { apiBase, authedJson } from 'rides-native/apiClient'
 import type { AuthUser } from 'rides-native/createAuth'
@@ -59,18 +59,28 @@ function airportCode(label: string): 'GSP' | 'CLT' | null {
   return null
 }
 
+/** One Carpool seat is half of the same Standard quote this screen would show. */
+function carpoolSeatQuote(standardCents: number) {
+  const fareCents = scaleCents(standardCents, CARPOOL_SEAT_FRACTION_BPS)
+  return {
+    fareCents,
+    discountCents: Math.max(0, standardCents - fareCents),
+    label: 'Carpool · 50% of Standard per seat',
+  }
+}
+
 export function quoteRide(pickup: RidePlace, dropoff: RidePlace, isStudent: boolean, tier = 'standard'): RideQuote {
   const airport = airportCode(dropoff.label)
   const shared = tier === 'carpool'
   if (airport) {
     const raw = airportFareCents(airport) || 0
     const student = applyStudentDiscount(raw, isStudent && !shared)
-    const priced = shared ? percentOffCents(student.fareCents, CARPOOL_DISCOUNT_BPS) : null
-    const fareCents = priced ? priced.amountCents : student.fareCents
+    const priced = shared ? carpoolSeatQuote(student.fareCents) : null
+    const fareCents = priced ? priced.fareCents : student.fareCents
     return {
       fareCents,
       discountCents: student.discountCents + (priced?.discountCents || 0),
-      label: shared ? 'Carpool · 15% off per seat' : student.label,
+      label: priced ? priced.label : student.label,
       depositCents: depositCents(fareCents),
       estimate: false,
       airport,
@@ -79,12 +89,12 @@ export function quoteRide(pickup: RidePlace, dropoff: RidePlace, isStudent: bool
   }
   const meters = haversineMeters(pickup, dropoff) || 0
   const student = applyStudentDiscount(distanceFareCents(meters), isStudent && !shared)
-  const priced = shared ? percentOffCents(student.fareCents, CARPOOL_DISCOUNT_BPS) : null
-  const fareCents = priced ? priced.amountCents : student.fareCents
+  const priced = shared ? carpoolSeatQuote(student.fareCents) : null
+  const fareCents = priced ? priced.fareCents : student.fareCents
   return {
     fareCents,
     discountCents: student.discountCents + (priced?.discountCents || 0),
-    label: shared ? 'Carpool · 15% off per seat' : student.label,
+    label: priced ? priced.label : student.label,
     depositCents: 0,
     estimate: true,
     airport: null,

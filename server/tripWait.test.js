@@ -670,7 +670,7 @@ test('chargeWaitFees successfully charges auto-cancelled wait + cancel package (
   assert.equal(createParams.payment_method, 'pm_card_1')
   assert.equal(createParams.off_session, true)
   assert.equal(createParams.confirm, true)
-  assert.equal(createParams.description, 'Clemson RIDES wait time + cancellation')
+  assert.equal(createParams.description, 'Clemson Rides wait time + cancellation')
   assert.deepEqual(createParams.metadata, {
     tripId: 'trip_100',
     riderId: 'rider_1',
@@ -718,7 +718,7 @@ test('chargeWaitFees charges completed trip wait fee only (no cancel fee row)', 
   assert.equal(res.status, 'succeeded')
   assert.equal(res.amountCents, 200)
   assert.equal(res.cancelFeeCents, 0)
-  assert.equal(createParams.description, 'Clemson RIDES wait time')
+  assert.equal(createParams.description, 'Clemson Rides wait time')
   assert.equal(createParams.metadata.kind, 'wait_fee')
   assert.equal(createParams.metadata.reason, 'complete')
 

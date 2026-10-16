@@ -271,13 +271,13 @@ export function CampusMap({
       ) : null}
       {showHeat ? (
         <View pointerEvents="none" style={[styles.heatLegend, { backgroundColor: heat.legend }]} accessibilityLabel="Demand heat map legend, low to high">
-          <Text style={[styles.heatLegendText, { color: heat.body }]}>Demand</Text>
+          <Text style={[styles.heatLegendText, { color: heat.title }]}>Demand</Text>
           <View style={styles.heatLegendRamp}>
             {HEAT_LEGEND_STOPS.map((v) => (
               <View key={v} style={[styles.heatLegendSwatch, { backgroundColor: `rgb(${heatRgb(v, colorScheme).join(',')})` }]} />
             ))}
           </View>
-          <Text style={[styles.heatLegendText, { color: heat.body }]}>Low · High</Text>
+          <Text style={[styles.heatLegendText, { color: heat.title }]}>Low · High</Text>
         </View>
       ) : null}
       {info ? (
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   heatLegend: { position: 'absolute', left: 12, top: 160, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, alignItems: 'center', gap: 4 },
   heatLegendRamp: { flexDirection: 'row', borderRadius: 4, overflow: 'hidden' },
   heatLegendSwatch: { width: 14, height: 8 },
-  heatLegendText: { fontSize: 10, fontWeight: '700' },
+  heatLegendText: { fontSize: 12, fontWeight: '700' },
   carMarker: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   carStripe: { position: 'absolute', width: 6, height: 40, transform: [{ rotate: '35deg' }], opacity: 0.6 },
   peakBadge: {

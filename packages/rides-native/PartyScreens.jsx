@@ -268,7 +268,7 @@ export function ProfileSetupScreen({
       </View>
       <Text style={styles.title}>Your ride profile</Text>
       <Text style={styles.copy}>
-        Riders and drivers both need a profile before using Clemson RIDES. The other person sees it once a ride is accepted.
+        Riders and drivers both need a profile before using Clemson Rides. The other person sees it once a ride is accepted.
       </Text>
       {!user ? (
         <Text style={styles.copy}>Sign in to save your profile.</Text>

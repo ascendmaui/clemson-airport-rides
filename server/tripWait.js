@@ -209,8 +209,8 @@ export async function chargeWaitFees(sb, trip) {
         off_session: true,
         confirm: true,
         description: cancelFee > 0
-          ? 'Clemson RIDES wait time + cancellation'
-          : 'Clemson RIDES wait time',
+          ? 'Clemson Rides wait time + cancellation'
+          : 'Clemson Rides wait time',
         metadata: {
           tripId: String(trip.id),
           riderId: String(trip.rider_id),

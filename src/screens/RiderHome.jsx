@@ -275,7 +275,7 @@ export function RiderHome() {
               Schedule a ride
             </Pill>
             <Pill icon="users" tone="purple" onClick={() => navigate('carpool', { hub: '1' })}>
-              Carpool · split the surge
+              Carpool · 50% of Standard
             </Pill>
             <Pill icon="moon" tone="orange" onClick={() => navigate('party-night')}>
               Party night
@@ -349,7 +349,7 @@ export function RiderHome() {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 15 }}>Game day carpool</div>
               <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 2 }}>
-                About $10–$15 each instead of $30–$40.
+                50% of the Standard fare per seat when 3 or 4 riders share the trip.
               </div>
             </div>
             <button

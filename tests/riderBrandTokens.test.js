@@ -4,6 +4,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { darkPalette, heatLabelFor, lightPalette } from '../apps/rider/lib/palette.ts'
+import { authToneFromPalette } from '../packages/rides-native/authTone.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const HEX = /#[0-9A-Fa-f]{6}\b|#[0-9A-Fa-f]{3}\b/g
@@ -51,6 +52,28 @@ test('dark heat labels do not use a white glow', () => {
   assert.match(heatLabelFor('dark').shadow, /rgba\(0,0,0/)
   assert.doesNotMatch(heatLabelFor('dark').shadow, /255,\s*255,\s*255/)
   assert.match(heatLabelFor('dark').chip, /22,18,31/)
+})
+
+test('support and email icons and the sign-in card clear AA on both themes', () => {
+  for (const palette of [lightPalette, darkPalette]) {
+    assert.ok(contrast(palette.link, palette.card) >= 4.5, palette.link)
+    const tone = authToneFromPalette(palette)
+    assert.equal(tone.title, palette.link)
+    assert.equal(tone.card, palette.card)
+    assert.equal(tone.ink, palette.ink)
+    assert.ok(contrast(tone.title, tone.card) >= 4.5)
+    assert.ok(contrast(tone.ink, palette.input) >= 4.5)
+  }
+  assert.equal(authToneFromPalette(null), null)
+  assert.ok(contrast(darkPalette.purple, darkPalette.card) < 3)
+  const account = fs.readFileSync(path.join(ROOT, 'apps/rider/app/(tabs)/account.tsx'), 'utf8')
+  const signIn = fs.readFileSync(path.join(ROOT, 'apps/rider/app/sign-in.tsx'), 'utf8')
+  assert.match(account, /link\.icon === 'chat' \|\| link\.icon === 'mail' \? colors\.link/)
+  assert.match(account, /System follows this phone/)
+  assert.match(signIn, /colors=\{colors\}/)
+  const auth = fs.readFileSync(path.join(ROOT, 'packages/rides-native/AuthScreens.jsx'), 'utf8')
+  assert.match(auth, /authToneFromPalette\(colors\)/)
+  assert.match(auth, /authToneStyle\(tone, 'card'\)/)
 })
 
 test('rider screens keep hex in the palette only', () => {

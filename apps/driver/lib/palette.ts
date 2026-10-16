@@ -137,8 +137,8 @@ export function paletteFor(scheme: Scheme): Palette {
  */
 /** Heat-map card and legend: follow the *map* style (dark map at night), not the app scheme. */
 export const mapHeatColors = {
-  light: { surface: '#FFFFFF', title: '#1B1B1F', estimate: '#9A3F00', body: '#3E4654', legend: 'rgba(255,255,255,0.92)', border: 'rgba(82,45,128,0.12)' },
-  dark: { surface: '#16121F', title: '#FFFFFF', estimate: '#FFC9A3', body: '#D5D0DC', legend: 'rgba(22,18,31,0.9)', border: 'rgba(255,255,255,0.14)' },
+  light: { surface: '#FFFFFF', title: '#1B1B1F', estimate: '#9A3F00', body: '#3E4654', legend: '#FFFFFF', border: 'rgba(82,45,128,0.12)' },
+  dark: { surface: '#16121F', title: '#FFFFFF', estimate: '#FFC9A3', body: '#D5D0DC', legend: '#16121F', border: 'rgba(255,255,255,0.14)' },
 } as const
 
 /** Android "map unavailable" placeholder (shown before tiles load). */

@@ -242,7 +242,7 @@ export async function notifyAdminOfApplication({ profile, vehicle }) {
   }
 
   const text = [
-    `${name} submitted a Clemson RIDES driver application and is waiting for review.`,
+    `${name} submitted a Clemson Rides driver application and is waiting for review.`,
     profile?.email ? `Email: ${profile.email}` : null,
     profile?.phone ? `Phone: ${profile.phone}` : null,
     vehicleLabel ? `Vehicle: ${vehicleLabel}` : null,

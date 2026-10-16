@@ -194,7 +194,7 @@ export function ListRow({
       ]}
     >
       <View style={[styles.rowIcon, { backgroundColor: colors.track }]}>
-        <Glyph name={icon} size={18} color={colors.purple} />
+        <Glyph name={icon} size={18} color={colors.link} />
       </View>
       <View style={styles.rowBody}>
         <Text style={[styles.rowTitle, { color: colors.ink }]}>{title}</Text>
