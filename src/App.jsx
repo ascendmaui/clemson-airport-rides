@@ -79,6 +79,7 @@ const AccountScreen = lazy(() => import('./screens/FriendsAccount').then((m) => 
 const SignInScreen = lazy(() => import('./screens/AuthScreens').then((m) => ({ default: m.SignInScreen })))
 const SignUpScreen = lazy(() => import('./screens/AuthScreens').then((m) => ({ default: m.SignUpScreen })))
 const DriverSignup = lazy(() => import('./screens/DriverSignup').then((m) => ({ default: m.DriverSignup })))
+const DriverSignIn = lazy(() => import('./screens/DriverSignIn').then((m) => ({ default: m.DriverSignIn })))
 const PickDriver = lazy(() => import('./screens/PickDriver').then((m) => ({ default: m.PickDriver })))
 const Requested = lazy(() => import('./screens/Requested').then((m) => ({ default: m.Requested })))
 const LegalPrivacy = lazy(() => import('./screens/LegalPages').then((m) => ({ default: m.LegalPrivacy })))
@@ -142,6 +143,8 @@ function Screen({ path, params }) {
       return <SignInScreen />
     case 'sign-up':
       return <SignUpScreen />
+    case 'driver-sign-in':
+      return <DriverSignIn />
     case 'privacy':
       return <LegalPrivacy />
     case 'terms':
