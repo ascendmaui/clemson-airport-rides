@@ -25,6 +25,7 @@ export const MARKETING_MENU = [
   { id: 'safety', label: 'Safety' },
   { id: 'why-clemson-rides', label: 'Why Clemson' },
   { id: 'drive', label: 'Drive with us' },
+  { id: 'advertise', label: 'Advertise with us' },
   { id: 'promos', label: 'Promos' },
   { id: 'faq', label: 'FAQ' },
   { id: 'support', label: 'Support' },
@@ -35,7 +36,7 @@ export const MARKETING_MENU = [
 /** Footer columns reuse the menu ids so every footer link is a real route. */
 const FOOTER_COLUMNS = [
   { title: 'Ride', ids: ['how-it-works', 'ride-types', 'service-area', 'tiger-pass', 'promos'] },
-  { title: 'Clemson Rides', ids: ['why-clemson-rides', 'safety', 'drive'] },
+  { title: 'Clemson Rides', ids: ['why-clemson-rides', 'safety', 'drive', 'advertise'] },
   { title: 'Help', ids: ['faq', 'support', 'privacy', 'terms'] },
 ]
 const MENU_LABELS = new Map(MARKETING_MENU.map((item) => [item.id, item.label]))
