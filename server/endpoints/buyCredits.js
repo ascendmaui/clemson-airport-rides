@@ -76,7 +76,7 @@ export default async function handler(req, res, deps = {}) {
           currency: 'usd',
           unit_amount: pack.loadCents,
           product_data: {
-            name: `Clemson RIDES credits — ${pack.label}`,
+            name: `Clemson Rides credits — ${pack.label}`,
             description: 'Prepaid ride credits. The pack discount applies when these credits pay for a ride.',
           },
         },

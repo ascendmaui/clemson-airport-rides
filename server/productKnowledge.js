@@ -35,7 +35,7 @@ export function sanitizeActions(actions) {
 }
 
 export const PRODUCT_BRIEF = `
-Clemson RIDES is a campus and airport rideshare for Clemson, South Carolina. It is software that connects riders with independent drivers. It is not Clemson University transit and not a common carrier.
+Clemson Rides is a campus and airport rideshare for Clemson, South Carolina. It is software that connects riders with independent drivers. It is not Clemson University transit and not a common carrier.
 
 Bottom tabs: Rides, Schedule, Friends, Account (Rides opens the rider home, route "home").
 
@@ -45,8 +45,8 @@ Help explains how the app works. Support is a different chat for bugs, billing p
 Booking a local ride (rider):
 1. Rides tab. Enter a destination or pick a shortcut.
 2. Confirm pickup.
-3. Choose a tier: Standard, Wait & Save, Extra Comfort, or Carpool. A tier is shown only when an approved driver can serve it. A person drives every ride. Carpool is 50% of Standard per seat (see CARPOOL_SEAT_FRACTION_BPS) when 3 to 4 nearby riders share one trip. Each rider gets a hold on their card for their own seat, and the full seat fare is charged when the trip ends. Demo cars do not count. Extra Comfort matches only vehicles with service_class comfort. Wait & Save is under Standard. The tier screen shows 10% off Standard only when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Otherwise it says why student pricing is off. Wait & Save, Extra Comfort, and Carpool are not included in the student discount. Standard on that screen can open an Extra Comfort upsell before Pick driver.
-4. Pick driver lists approved drivers who are online, plus any drivers this rider saved. Name, rating, vehicle, and a straight-line ETA show when that data exists. A request is status "searching" with no driver pinned. Any approved driver can accept it. A decline leaves it in the pool. Requesting a ride places a card hold for the estimated fare plus a buffer. The final fare is charged when the trip ends. Scheduling does not charge a card and does not place that hold.
+3. Choose a tier: Standard, Wait & Save, Extra Comfort, or Carpool. A tier is shown only when an approved driver can serve it. A person drives every ride. Carpool is 50% of Standard per seat (see CARPOOL_SEAT_FRACTION_BPS) when 3 to 4 nearby riders share one trip. Each rider gets a card hold equal to their own seat fare, and that fare is charged when the trip ends. Demo cars do not count. Extra Comfort matches only vehicles with service_class comfort. Wait & Save is under Standard. The tier screen shows 10% off Standard only when the signed-in email is confirmed and ends with @clemson.edu or @g.clemson.edu. Otherwise it says why student pricing is off. Wait & Save, Extra Comfort, and Carpool are not included in the student discount. Standard on that screen can open an Extra Comfort upsell before Pick driver.
+4. Pick driver lists approved drivers who are online, plus any drivers this rider saved. Name, rating, vehicle, and a straight-line ETA show when that data exists. A request is status "searching" with no driver pinned. Any approved driver can accept it. A decline leaves it in the pool. Requesting a ride places a card hold for the estimated fare plus a buffer. A Carpool hold equals the quoted fare. The final fare is charged when the trip ends. Scheduling does not charge a card and does not place that hold.
 5. Requested screen tracks the trip.
 Sign-in is required to book. Guest browsing of marketing and schedule is allowed.
 
@@ -199,8 +199,8 @@ export const TOPICS = [
     steps: [
       'Open Account → Billing.',
       'Tap Card, Cash App Pay, Apple Pay, Google Pay, Link, or Add another payment method.',
-      'On the phone, Stripe PaymentSheet saves the method. On the website, the Payment Element does. Nothing is charged while saving. Clemson RIDES stores the brand and last 4, not the full number.',
-      'The saved card is authorized for the estimated fare plus a buffer when you request a ride. The final fare is charged when the trip ends. A backup card on the account may be charged if the default card is declined. Friend and carpool charges use the saved card when it is on file.',
+      'On the phone, Stripe PaymentSheet saves the method. On the website, the Payment Element does. Nothing is charged while saving. Clemson Rides stores the brand and last 4, not the full number.',
+      'The saved card is authorized for the estimated fare plus a buffer when you request a ride. A Carpool hold equals the quoted seat fare. The final fare is charged when the trip ends. A backup card on the account may be charged if the default card is declined. Friend and carpool charges use the saved card when it is on file.',
     ],
     actions: [action('Open Billing', 'account', { tab: 'billing' })],
   },

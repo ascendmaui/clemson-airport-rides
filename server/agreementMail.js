@@ -197,9 +197,9 @@ export async function sendAgreementForSignature({
       body: JSON.stringify(resendPayload({
         from: String(env.RESEND_FROM).trim(),
         to,
-        subject: 'Sign your Clemson RIDES contractor agreement',
+        subject: 'Sign your Clemson Rides contractor agreement',
         text: [
-          'An admin asked you to sign the Clemson RIDES independent contractor agreement.',
+          'An admin asked you to sign the Clemson Rides independent contractor agreement.',
           'This link expires in 7 days and works once.',
           '',
           url,

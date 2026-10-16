@@ -652,7 +652,7 @@ function DriverHomeBody() {
           </View>
           )}
 
-          <View style={styles.heatPanel}>
+          <View style={[styles.heatPanel, { backgroundColor: colors.card, borderRadius: 16, marginHorizontal: 12, paddingVertical: 8 }]}>
             <Pressable
               onPress={() => setDemandOpen((value: boolean) => !value)}
               accessibilityRole="button"
@@ -660,7 +660,7 @@ function DriverHomeBody() {
               accessibilityState={{ expanded: demandOpen }}
               style={styles.demandToggle}
             >
-              <Text style={[styles.heatLabel, { color: colors.inkSecondary }]}>Busy areas, peak, and live demand</Text>
+              <Text style={[styles.heatLabel, { color: colors.title }]}>Busy areas, peak, and live demand</Text>
               <Text style={{ color: colors.orange, fontWeight: '800' }}>{demandOpen ? 'Hide' : 'Show'}</Text>
             </Pressable>
             {demandOpen ? (
@@ -792,14 +792,6 @@ function DriverHomeBody() {
               />
             </View>
           ) : null}
-          {!online ? (
-            <GameDaySurgeLine
-              model={gameDayExperience.ready ? gameDayExperience.model : null}
-              online={false}
-              peak={peak}
-              onPress={() => router.push('/game-day')}
-            />
-          ) : null}
         </Reanimated.View>
 
         <View pointerEvents="box-none" style={[styles.dock, styles.offerDock, { top: dockTop, bottom: tabClearance }]}>
@@ -867,6 +859,16 @@ function DriverHomeBody() {
             />
           ) : null}
           {offerOwnsBottom ? null : (
+          <>
+          {!online ? (
+            <GameDaySurgeLine
+              model={gameDayExperience.ready ? gameDayExperience.model : null}
+              online={false}
+              peak={peak}
+              colors={colors}
+              onPress={() => router.push('/game-day')}
+            />
+          ) : null}
           <View style={styles.goRow} pointerEvents="box-none">
             {online ? (
               <CircleButton icon="list" label="Ride queue" onPress={() => router.push('/queue')} />
@@ -885,6 +887,7 @@ function DriverHomeBody() {
             </View>
             <View style={styles.goSide} />
           </View>
+          </>
           )}
         </View>
       </View>

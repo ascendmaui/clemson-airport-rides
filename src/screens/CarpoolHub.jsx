@@ -145,9 +145,10 @@ export function CarpoolHub() {
             Split the surge.
           </h1>
           <p style={{ margin: '10px 0 0', fontSize: 15, lineHeight: 1.45, maxWidth: 420 }}>
-            One person to Grand Marc or College Ave on a game night is about {pitch ? formatUsd(pitch.soloCents) : '$30–$40'}.
-            Four Tigers in one car pay about {pitch ? formatUsd(pitch.fullShareCents) : '$10–$15'} each.
-            The driver earns more than that solo trip.
+            {pitch
+              ? `Standard is about ${formatUsd(pitch.soloCents)}. A Carpool seat is ${formatUsd(pitch.fullShareCents)}, 50% of that Standard fare, when 3 or 4 riders share the trip.`
+              : 'A Carpool seat is 50% of the Standard fare when 3 or 4 riders share the trip.'}
+            {' '}The driver earns more than a solo trip.
           </p>
           <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ background: 'rgba(255,255,255,0.16)', borderRadius: 999, padding: '6px 10px', fontSize: 12, fontWeight: 700 }}>

@@ -129,7 +129,7 @@ exports[`Driver Settings snapshot 1`] = `
     {
       "icon": "moon",
       "title": "Appearance",
-      "subtitle": "Night mode"
+      "subtitle": "System, Light, or Dark"
     },
     {
       "icon": "chatbubbles",

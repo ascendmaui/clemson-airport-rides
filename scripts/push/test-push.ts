@@ -66,7 +66,7 @@ export async function loadStoredPushTokens(sb: { from: (table: string) => unknow
 
 export async function deliverTestPush({
   tokens,
-  title = 'Clemson RIDES test',
+  title = 'Clemson Rides test',
   body = 'Push is configured. You can dismiss this.',
   fetchImpl,
   env,

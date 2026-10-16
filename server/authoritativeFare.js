@@ -324,7 +324,7 @@ function priceScheduledRequestWith({
 }
 
 /**
- * Carpool quotes are per seat. Two seats cost twice the discounted seat.
+ * Carpool quotes are per seat. Two seats cost twice that half-fare seat.
  * Other tiers are unchanged. TODO: matching still dispatches each carpool
  * request on its own standard-eligible car.
  */

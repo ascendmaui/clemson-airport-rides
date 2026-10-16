@@ -129,10 +129,10 @@ export function driverPayoutWithBoost(fareNetCents, boostCents) {
  * The buffer stays a percent of the estimate only. The boost is added in full.
  * A $0 estimate with a boost still authorizes the boost.
  */
-export function holdQuoteCents(estimatedFareCents, boostCents = 0, prepaidTipCents = 0) {
+export function holdQuoteCents(estimatedFareCents, boostCents = 0, prepaidTipCents = 0, options = {}) {
   const boost = clampBoostCents(boostCents)
   const tip = clampPrepaidTipCents(prepaidTipCents)
-  const base = fareAuthorizationCents(estimatedFareCents)
+  const base = fareAuthorizationCents(estimatedFareCents, options)
   return {
     estimatedFareCents: base.estimatedFareCents,
     bufferCents: base.bufferCents,

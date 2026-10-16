@@ -16,7 +16,7 @@ export default function SettingsScreen() {
   ]
   const general: MenuRow[] = [
     { icon: 'accessibility', title: 'Accessibility', subtitle: 'Text size follows the phone', onPress: () => router.push('/settings/accessibility') },
-    { icon: 'moon', title: 'Appearance', subtitle: 'Night mode', onPress: () => router.push('/settings/display') },
+    { icon: 'moon', title: 'Appearance', subtitle: 'System, Light, or Dark', onPress: () => router.push('/settings/display') },
     { icon: 'chatbubbles', title: 'Communication', subtitle: 'Lock screen and in-app ride alerts', onPress: () => router.push('/settings/communication') },
     { icon: 'navigate', title: 'Navigation', subtitle: 'Apple Maps or Google Maps', onPress: () => router.push('/settings/navigation') },
     { icon: 'volume-high', title: 'Sounds and voice', subtitle: 'Chime and vibration by ride type', onPress: () => router.push('/settings/sounds') },
@@ -35,7 +35,7 @@ export default function SettingsScreen() {
         <SectionLabel>General</SectionLabel>
         <RowGroup rows={general} />
         <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-          Auto display follows sunrise and sunset. It does not follow the phone’s system appearance.
+          System follows this phone’s color scheme. Light and Dark stay on until you change them.
         </Text>
       </FadeIn>
     </StackPage>
