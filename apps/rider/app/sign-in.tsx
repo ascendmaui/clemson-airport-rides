@@ -5,6 +5,7 @@ import { RIDER_SOCIAL_PROVIDERS } from 'rides-native/socialAuth'
 import { takeAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { useSocialSignIn } from '@/lib/socialSignIn'
+import { useTheme } from '@/lib/theme'
 
 function finish(router: ReturnType<typeof useRouter>) {
   const next = takeAuthNext()
@@ -14,6 +15,7 @@ function finish(router: ReturnType<typeof useRouter>) {
 
 export default function SignInRoute() {
   const router = useRouter()
+  const { colors } = useTheme()
   const { signIn, resetPassword } = useAuth()
   const onSocial = useSocialSignIn()
   const googleState = googleAuthButtonState(process.env, { scheme: 'clemsonrides', provider: 'supabase' })
@@ -33,6 +35,7 @@ export default function SignInRoute() {
 
   return (
     <SignInScreen
+      colors={colors}
       signIn={signIn}
       resetPassword={resetPassword}
       socialProviders={socialProviders}

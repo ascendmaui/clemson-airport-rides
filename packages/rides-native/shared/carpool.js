@@ -1,6 +1,6 @@
 /**
- * Rider carpool helpers. Matching, neighborhoods, and the $30–$40 vs $10–$15
- * split stay in src/lib/carpoolEngine.js (flagship PR #17). Do not fork that math.
+ * Rider carpool helpers. Matching and the 50% of Standard seat fare
+ * stay in src/lib/carpoolEngine.js. Do not fork that math.
  */
 import {
   NEIGHBORHOODS,

@@ -70,7 +70,7 @@ function relevantGaps(question, list) {
 
 function opener(context, role) {
   if (!context?.signedIn) {
-    return 'You are not signed in, so this is general Clemson RIDES guidance. Sign in and reopen Help if you want steps based on your trips and billing.'
+    return 'You are not signed in, so this is general Clemson Rides guidance. Sign in and reopen Help if you want steps based on your trips and billing.'
   }
   const name = context.name || 'there'
   const title = role === 'driver' ? 'Driver Help' : 'Rider Help'
@@ -84,7 +84,7 @@ function opener(context, role) {
 
 export function helpSystemPrompt(roleVariant, context) {
   const role = roleVariant === 'driver' ? 'driver' : 'rider'
-  return `You are the Clemson RIDES ${role === 'driver' ? 'Driver' : 'Rider'} Help agent.
+  return `You are the Clemson Rides ${role === 'driver' ? 'Driver' : 'Rider'} Help agent.
 You only explain how the product works and walk the signed-in user through the screens.
 You do not create support tickets, do not escalate cases, do not change accounts, payments, trips, or driver status, and you have no tools.
 If they have a bug, a wrong charge, a ride dispute, or a safety issue, tell them to open Account → Support. That is a different agent. Do not collect a ticket and do not output TICKET_DRAFT.
@@ -121,7 +121,7 @@ export function buildHelpTurn({ messages, context, roleVariant }) {
   const actions = []
 
   if (issue) {
-    paragraphs.push(`I only walk through how Clemson RIDES works. I cannot file a ticket, reverse a charge, or change a trip. Open Account → Support and describe what happened. Email ${supportEmail()} if you would rather write a person directly.`)
+    paragraphs.push(`I only walk through how Clemson Rides works. I cannot file a ticket, reverse a charge, or change a trip. Open Account → Support and describe what happened. Email ${supportEmail()} if you would rather write a person directly.`)
     actions.push(action('Open Support', 'account', { tab: 'support' }))
   }
 

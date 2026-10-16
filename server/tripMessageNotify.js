@@ -27,7 +27,7 @@ export function messageNoticeCopy(body) {
   const preview = clean(body, 140)
   return {
     title: 'New ride message',
-    body: preview || 'Open Clemson RIDES to read it.',
+    body: preview || 'Open Clemson Rides to read it.',
     email: false,
   }
 }
@@ -38,7 +38,7 @@ export function lostItemNoticeCopy(description, reporterRole) {
     title: 'Lost item on your ride',
     body: lostItemNoticeBody({ description: item, reporterRole, days: WINDOW_DAYS }),
     email: true,
-    subject: 'A lost item was reported on your Clemson RIDES trip',
+    subject: 'A lost item was reported on your Clemson Rides trip',
   }
 }
 

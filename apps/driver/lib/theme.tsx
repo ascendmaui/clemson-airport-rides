@@ -1,14 +1,15 @@
 import * as Location from 'expo-location'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useColorScheme } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated'
 import { useReduceMotion } from 'rides-native/shared/reduceMotion.js'
+import { readDisplayMode, resolveScheme, type DisplayMode } from '@/lib/appearance'
 import { authStorage } from '@/lib/storage'
 import { paletteFor, type Palette, type Scheme } from '@/lib/palette'
-import { CLEMSON_LAT, CLEMSON_LNG, isDaylight } from '@/lib/solar'
 import { isNavApp as isKnownNavApp, type NavApp as SharedNavApp } from 'rides-native/mapsLink'
 import { quiet } from '@/lib/softFail'
 
-export type DisplayMode = 'auto' | 'light' | 'dark'
+export type { DisplayMode }
 export type NavApp = SharedNavApp
 export type RideAlertTier = 'standard' | 'wait' | 'comfort' | 'carpool'
 export type RideAlertMode = 'chime_vibrate' | 'chime' | 'vibrate' | 'silent'
@@ -67,7 +68,7 @@ const DEFAULT_AUTO: AutoAcceptPrefs = {
   favoriteRiders: [],
 }
 const DEFAULT_PREFS: Prefs = {
-  displayMode: 'light',
+  displayMode: 'auto',
   earningsPrivate: false,
   sounds: true,
   navApp: 'apple',
@@ -114,10 +115,6 @@ function readAuto(raw: unknown): AutoAcceptPrefs {
 
 const ThemeContext = createContext<ThemeValue | null>(null)
 
-function isDisplayMode(value: unknown): value is DisplayMode {
-  return value === 'auto' || value === 'light' || value === 'dark'
-}
-
 function isNavApp(value: unknown): value is NavApp {
   return isKnownNavApp(value)
 }
@@ -127,7 +124,7 @@ function readPrefs(raw: string | null): Prefs {
   try {
     const parsed = JSON.parse(raw) as Partial<Prefs>
     return {
-      displayMode: isDisplayMode(parsed.displayMode) && parsed.displayMode === 'dark' ? 'dark' : 'light',
+      displayMode: readDisplayMode(parsed.displayMode),
       earningsPrivate: Boolean(parsed.earningsPrivate),
       sounds: parsed.sounds === false ? false : true,
       navApp: isNavApp(parsed.navApp) ? parsed.navApp : DEFAULT_PREFS.navApp,
@@ -140,36 +137,15 @@ function readPrefs(raw: string | null): Prefs {
   }
 }
 
-function resolveScheme(mode: DisplayMode, _daylight: boolean): Scheme {
-  switch (mode) {
-    case 'light':
-      return 'light'
-    case 'dark':
-      return 'dark'
-    case 'auto':
-      // Night mode is opt-in. Older builds saved 'auto'; it now opens light.
-      return 'light'
-    default: {
-      const unknown: never = mode
-      return unknown
-    }
-  }
-}
-
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const systemScheme = useColorScheme()
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS)
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
-  const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
     authStorage.getItem(PREFS_KEY).then((raw) => {
       setPrefs(readPrefs(raw))
     }).catch(quiet('theme prefs read'))
-  }, [])
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60_000)
-    return () => clearInterval(timer)
   }, [])
 
   useEffect(() => {
@@ -191,8 +167,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  const daylight = isDaylight(now, coords?.lat ?? CLEMSON_LAT, coords?.lng ?? CLEMSON_LNG)
-  const scheme = resolveScheme(prefs.displayMode, daylight)
+  const scheme = resolveScheme(prefs.displayMode, systemScheme)
   const colors = paletteFor(scheme)
 
   const value: ThemeValue = {

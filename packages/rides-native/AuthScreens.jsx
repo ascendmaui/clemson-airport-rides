@@ -23,31 +23,32 @@ import {
   googleAuthButtonState,
   mapGoogleAuthError,
 } from './googleAuthConfig.js'
+import { authToneFromPalette, authToneStyle } from './authTone.js'
 import { DANGER, INK, INK_SECONDARY, ORANGE, PURPLE, SURFACE } from './places.js'
 import { SIGNUP_PROFILE_DRAFT_KEY, isProfileComplete, profileFieldError } from './partyProfile.js'
 import { RideStyleChips } from './PartyScreens.jsx'
 
-function AuthShell({ title, subtitle, mark, onBack, embedded = false, children }) {
+function AuthShell({ title, subtitle, mark, onBack, embedded = false, tone = null, children }) {
   const body = (
     <>
       {embedded ? null : (
         <Pressable
           onPress={onBack}
-          style={styles.back}
+          style={[styles.back, authToneStyle(tone, 'back')]}
           accessibilityRole="button"
           accessibilityLabel="Back"
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityHint="Returns to the previous screen"
         >
-          <Glyph name="back" size={20} color={PURPLE} accessibilityLabel="Back" />
+          <Glyph name="back" size={20} color={tone?.link || PURPLE} accessibilityLabel="Back" />
         </Pressable>
       )}
-      <View style={styles.card}>
+      <View style={[styles.card, authToneStyle(tone, 'card')]}>
           <View style={styles.mark}>
             <Text style={styles.markLabel}>{mark}</Text>
           </View>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>{subtitle}</Text>
+          <Text style={[styles.title, authToneStyle(tone, 'title')]}>{title}</Text>
+          <Text style={[styles.subtitle, authToneStyle(tone, 'body')]}>{subtitle}</Text>
           {children}
       </View>
     </>
@@ -55,7 +56,7 @@ function AuthShell({ title, subtitle, mark, onBack, embedded = false, children }
   if (embedded) return <View style={styles.embedded}>{body}</View>
   return (
     <KeyboardAvoidingView
-      style={styles.screen}
+      style={[styles.screen, authToneStyle(tone, 'screen')]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
@@ -65,7 +66,7 @@ function AuthShell({ title, subtitle, mark, onBack, embedded = false, children }
   )
 }
 
-function SocialButtons({ providers, busyId, disabled, onPress }) {
+function SocialButtons({ providers, busyId, disabled, onPress, tone = null }) {
   if (!providers?.length) return null
   const visible = providers.filter((p) => !p.hidden)
   if (!visible.length) return null
@@ -89,6 +90,7 @@ function SocialButtons({ providers, busyId, disabled, onPress }) {
               disabled={isProviderDisabled}
               style={[
                 styles.social,
+                authToneStyle(tone, 'social'),
                 isProviderDisabled && styles.disabled,
                 provider.disabled && styles.socialDisabled,
               ]}
@@ -100,6 +102,7 @@ function SocialButtons({ providers, busyId, disabled, onPress }) {
               <Text
                 style={[
                   styles.socialLabel,
+                  authToneStyle(tone, 'link'),
                   provider.disabled && styles.socialLabelDisabled,
                 ]}
               >
@@ -107,26 +110,26 @@ function SocialButtons({ providers, busyId, disabled, onPress }) {
               </Text>
             </Pressable>
             {provider.disabled && honestCopy ? (
-              <Text style={styles.socialHint}>{honestCopy}</Text>
+              <Text style={[styles.socialHint, authToneStyle(tone, 'body')]}>{honestCopy}</Text>
             ) : null}
           </View>
         )
       })}
-      <Text style={styles.or}>or use email</Text>
+      <Text style={[styles.or, authToneStyle(tone, 'body')]}>or use email</Text>
     </View>
   )
 }
 
-function Field({ label, hint, ...inputProps }) {
+function Field({ label, hint, tone = null, ...inputProps }) {
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>
+      <Text style={[styles.label, authToneStyle(tone, 'body')]}>
         {label}
         {hint ? <Text style={styles.hint}> {hint}</Text> : null}
       </Text>
       <TextInput
-        placeholderTextColor="#8B939E"
-        style={styles.input}
+        placeholderTextColor={tone?.placeholder || '#8B939E'}
+        style={[styles.input, authToneStyle(tone, 'input')]}
         accessibilityLabel={label}
         {...inputProps}
       />
@@ -148,7 +151,9 @@ export function SignInScreen({
   onOpenLegal,
   ownerRequest = false,
   embedded = false,
+  colors = null,
 }) {
+  const tone = authToneFromPalette(colors)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
@@ -273,14 +278,16 @@ export function SignInScreen({
   const showRequesting = ownerRequest && (busy || socialId || holdingRequest || genericHidden)
 
   return (
-    <AuthShell title="Welcome back" subtitle={subtitle} mark={mark} onBack={onBack} embedded={embedded}>
+    <AuthShell title="Welcome back" subtitle={subtitle} mark={mark} onBack={onBack} embedded={embedded} tone={tone}>
       <SocialButtons
         providers={effectiveProviders}
         busyId={socialId}
         disabled={busy || resetBusy}
         onPress={onSocialPress}
+        tone={tone}
       />
       <Field
+        tone={tone}
         label="Email"
         autoCapitalize="none"
         autoComplete="email"
@@ -290,6 +297,7 @@ export function SignInScreen({
         onChangeText={setEmail}
       />
       <Field
+        tone={tone}
         label="Password"
         secureTextEntry
         autoComplete="current-password"
@@ -307,7 +315,7 @@ export function SignInScreen({
           accessibilityHint="Opens password reset"
           hitSlop={14}
         >
-          <Text style={styles.forgot}>Forgot password?</Text>
+          <Text style={[styles.forgot, authToneStyle(tone, 'link')]}>Forgot password?</Text>
         </Pressable>
       ) : resetPassword ? (
         <Pressable
@@ -322,7 +330,7 @@ export function SignInScreen({
           accessibilityState={{ disabled: resetBusy, busy: resetBusy }}
           hitSlop={14}
         >
-          <Text style={styles.forgot}>{resetBusy ? 'Sending reset email…' : 'Forgot password?'}</Text>
+          <Text style={[styles.forgot, authToneStyle(tone, 'link')]}>{resetBusy ? 'Sending reset email…' : 'Forgot password?'}</Text>
         </Pressable>
       ) : null}
       {showRequesting ? (
@@ -332,29 +340,29 @@ export function SignInScreen({
           accessibilityRole="progressbar"
           accessibilityLabel="Requesting"
         >
-          <ActivityIndicator color={ORANGE} />
-          <Text style={styles.requestingLabel}>Requesting</Text>
+          <ActivityIndicator color={tone?.orange || ORANGE} />
+          <Text style={[styles.requestingLabel, authToneStyle(tone, 'link')]}>Requesting</Text>
         </View>
       ) : null}
-      {error && !genericHidden ? <Text style={styles.error} accessibilityLiveRegion="assertive" accessibilityRole="alert">{error}</Text> : null}
-      {info ? <Text style={styles.info} accessibilityLiveRegion="polite">{info}</Text> : null}
+      {error && !genericHidden ? <Text style={[styles.error, authToneStyle(tone, 'danger')]} accessibilityLiveRegion="assertive" accessibilityRole="alert">{error}</Text> : null}
+      {info ? <Text style={[styles.info, authToneStyle(tone, 'link')]} accessibilityLiveRegion="polite">{info}</Text> : null}
       <Pressable
         onPress={onSubmit}
         disabled={busy || !email.trim() || !password}
-        style={[styles.primary, (busy || !email.trim() || !password) && styles.disabled]}
+        style={[styles.primary, authToneStyle(tone, 'primary'), (busy || !email.trim() || !password) && styles.disabled]}
         accessibilityRole="button"
         accessibilityLabel={busy ? 'Signing in…' : 'Sign in'}
         accessibilityState={{ disabled: Boolean(busy || !email.trim() || !password) }}
         accessibilityLabel={busy ? 'Signing in' : 'Sign in'}
         accessibilityState={{ disabled: busy || !email.trim() || !password, busy }}
       >
-        <Text style={styles.primaryLabel}>{busy ? 'Signing in…' : 'Sign in'}</Text>
+        <Text style={[styles.primaryLabel, authToneStyle(tone, 'onAccent')]}>{busy ? 'Signing in…' : 'Sign in'}</Text>
       </Pressable>
-      <Text style={styles.switchRow}>
+      <Text style={[styles.switchRow, authToneStyle(tone, 'body')]}>
         New here?{' '}
         <Text
           onPress={onCreateAccount}
-          style={styles.switch}
+          style={[styles.switch, authToneStyle(tone, 'link')]}
           accessibilityRole="link"
           accessibilityLabel="Create an account"
           accessibilityHint="Opens sign up"
@@ -363,18 +371,18 @@ export function SignInScreen({
           Create an account
         </Text>
       </Text>
-      <LegalLinks onOpenLegal={onOpenLegal} />
+      <LegalLinks onOpenLegal={onOpenLegal} tone={tone} />
     </AuthShell>
   )
 }
 
-function LegalLinks({ onOpenLegal }) {
+function LegalLinks({ onOpenLegal, tone = null }) {
   if (!onOpenLegal) return null
   return (
-    <Text style={styles.switchRow}>
-      <Text onPress={() => onOpenLegal('privacy')} style={styles.switch} accessibilityRole="link" accessibilityLabel="Privacy" hitSlop={12}>Privacy</Text>
+    <Text style={[styles.switchRow, authToneStyle(tone, 'body')]}>
+      <Text onPress={() => onOpenLegal('privacy')} style={[styles.switch, authToneStyle(tone, 'link')]} accessibilityRole="link" accessibilityLabel="Privacy" hitSlop={12}>Privacy</Text>
       {' · '}
-      <Text onPress={() => onOpenLegal('terms')} style={styles.switch} accessibilityRole="link" accessibilityLabel="Terms" hitSlop={12}>Terms</Text>
+      <Text onPress={() => onOpenLegal('terms')} style={[styles.switch, authToneStyle(tone, 'link')]} accessibilityRole="link" accessibilityLabel="Terms" hitSlop={12}>Terms</Text>
     </Text>
   )
 }
@@ -542,7 +550,7 @@ export function SignUpScreen({
   const profileHint = profileFieldError({ full_name: fullName, phone, bio, ride_style: rideStyle })
 
   return (
-    <AuthShell title="Join Clemson RIDES" subtitle={subtitle} mark={mark} onBack={onBack}>
+    <AuthShell title="Join Clemson Rides" subtitle={subtitle} mark={mark} onBack={onBack}>
       <SocialButtons
         providers={effectiveProviders}
         busyId={socialId}
@@ -686,7 +694,7 @@ export function ForgotPasswordScreen({
   return (
     <AuthShell
       title="Forgot password"
-      subtitle="We'll email a reset link that opens Clemson RIDES so you can choose a new password."
+      subtitle="We'll email a reset link that opens Clemson Rides so you can choose a new password."
       mark={mark}
       onBack={onBack}
     >

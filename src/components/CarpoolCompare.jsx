@@ -2,8 +2,8 @@ import { useMemo } from 'react'
 import { confirmChargeNote, formatUsd, otherFirstRideLabels, surgeDelta } from '../lib/carpoolEngine'
 
 /**
- * Pre-confirm price story. The big numbers are always
- * surge-alone (~$30–$40) versus a full car (~$10–$15).
+ * Pre-confirm price story. The big numbers are Standard versus a
+ * Carpool seat at 50% of that Standard fare.
  * mode="confirm" also states the amount this button will charge.
  */
 export function CarpoolCompare({
@@ -52,13 +52,13 @@ export function CarpoolCompare({
       </div>
       <div style={{ display: 'flex', alignItems: 'stretch', gap: 8, marginTop: 10 }}>
         <PriceBox
-          label="Alone in surge"
+          label="Standard"
           amount={formatUsd(delta.soloSurgeCents)}
           muted
         />
         <div style={{ alignSelf: 'center', fontSize: 22, fontWeight: 800, color: '#F56600' }} aria-hidden="true">→</div>
         <PriceBox
-          label="Your seat · 4 riders"
+          label="Carpool seat"
           amount={formatUsd(delta.fullCarShareCents)}
         />
       </div>

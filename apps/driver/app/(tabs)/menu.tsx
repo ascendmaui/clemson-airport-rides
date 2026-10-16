@@ -17,6 +17,7 @@ import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from
 import { loadRatingSummary } from 'rides-native/PartyScreens'
 import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
 import { quietly } from '@/lib/softFail'
+import { offerSheetBottomInset } from 'rides-native/offerStack.js'
 
 function vehicleSubtitle(vehicle: VehicleRow | null): string {
   if (!vehicle) return 'Add the car riders will see'
@@ -119,7 +120,7 @@ export default function MenuScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top + 12 }]}>
-      <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: offerSheetBottomInset(insets.bottom) + 24 }]} showsVerticalScrollIndicator={false}>
         <FadeIn style={styles.stack}>
           <View style={styles.profile}>
             <View style={[styles.avatar, shadow, { backgroundColor: colors.fill }]}>

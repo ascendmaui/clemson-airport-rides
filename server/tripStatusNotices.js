@@ -77,7 +77,7 @@ export function tripStatusNoticeCopy(kind, {
     case 'driver_en_route':
       return {
         title: `${who} is on the way`,
-        body: vehicle ? `${vehicle}. Heading to ${pickup}.` : `Heading to ${pickup}. Track the car in Clemson RIDES.`,
+        body: vehicle ? `${vehicle}. Heading to ${pickup}.` : `Heading to ${pickup}. Track the car in Clemson Rides.`,
       }
     case 'driver_arriving':
       return { title: `${who} is about 1 min away`, body: `Head to ${pickup} so you are ready.` }

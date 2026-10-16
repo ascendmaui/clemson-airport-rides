@@ -214,7 +214,7 @@ export function RideTiers({
             const studentNote = row?.discountCents > 0 ? 'Clemson student · 10% off Standard' : ''
             const meta = [
               t.id === 'carpool'
-                ? (savedPercent > 0 ? `Save ${savedPercent}% per seat` : 'Per seat')
+                ? '50% of Standard per seat'
                 : sameAsStandard ? '4 seats' : savedPercent > 0 ? `Save ${savedPercent}%` : t.meta,
               studentNote,
             ].filter(Boolean).join(' · ')
@@ -223,7 +223,9 @@ export function RideTiers({
                 key={t.id}
                 tier={{
                   ...t,
-                  price: row ? row.fareCents / 100 : null,
+                  price: row
+                    ? (t.id === 'carpool' && selected?.id === 'carpool' ? (row.fareCents * seats) / 100 : row.fareCents / 100)
+                    : null,
                   meta,
                 }}
                 selected={selected?.id === t.id}
