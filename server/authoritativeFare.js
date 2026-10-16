@@ -371,10 +371,14 @@ function canonicalAirportStop(code) {
 function stopFromFields(label, lat, lng) {
   const name = String(label || '').trim().slice(0, 160)
   const catalog = name ? lookupCatalogPlace(name) : null
-  const code = airportCodeForPlace({ label: name }) || airportCodeForPlace(catalog)
-  if (code === 'GSP' || code === 'CLT' || code === 'ATL') return canonicalAirportStop(code)
   const la = finiteCoord(lat)
   const ln = finiteCoord(lng)
+  // Coordinates decide when the client sent them; the label alone is only a
+  // fallback for stored or label-only places.
+  const code = la != null && ln != null
+    ? airportCodeForPlace({ label: name, lat: la, lng: ln })
+    : airportCodeForPlace({ label: name }) || airportCodeForPlace(catalog)
+  if (code === 'GSP' || code === 'CLT' || code === 'ATL') return canonicalAirportStop(code)
   if (name && la != null && ln != null) return { label: name, lat: la, lng: ln }
   if (catalog && Number.isFinite(Number(catalog.lat)) && Number.isFinite(Number(catalog.lng))) {
     return { label: catalog.label, lat: Number(catalog.lat), lng: Number(catalog.lng) }

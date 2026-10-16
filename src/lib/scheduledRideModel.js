@@ -83,13 +83,50 @@ export function pinForDisplay(trip) {
   return formatApproxPin(trip.pickup_lat, trip.pickup_lng)
 }
 
+/** A place within this distance of an airport terminal pin is that airport. */
+export const AIRPORT_MATCH_RADIUS_M = 1500
+
+const AIRPORT_CODES = new Set(AIRPORT_PLACES.map((row) => row.code))
+
+/** Labels that name only the airport itself (not the city it is in). */
+const AIRPORT_EXACT_LABELS = new Map(
+  AIRPORT_PLACES.flatMap((row) => [
+    [row.code, row.code],
+    [`${row.code} AIRPORT`, row.code],
+    [row.label.toUpperCase(), row.code],
+  ]),
+)
+
+function airportCodeFromId(value) {
+  const code = String(value || '').trim().toUpperCase()
+  return AIRPORT_CODES.has(code) ? code : null
+}
+
+/**
+ * Airport for a place, or null. Any one of these makes it an airport:
+ * - coordinates within AIRPORT_MATCH_RADIUS_M of a GSP, CLT, or ATL terminal pin,
+ * - an explicit airport code, or a catalog airport row (kind 'airport', id 'gsp'),
+ * - a label that is exactly the airport's own name ("GSP", "GSP Airport",
+ *   "Greenville-Spartanburg International (GSP)"), so a short pin under an
+ *   airport label still prices as the airport.
+ * City names and substrings never count: "Old Greenville Highway, Clemson",
+ * "Atlantic Ave" and "Charlotte St" are local places.
+ */
 export function airportCodeForPlace(place) {
-  const label = `${place?.label || ''} ${place?.code || ''}`.toUpperCase()
-  if (!label.trim()) return null
-  if (label.includes('ATL') || label.includes('HARTSFIELD')) return 'ATL'
-  if (label.includes('CLT') || label.includes('CHARLOTTE')) return 'CLT'
-  if (label.includes('GSP') || label.includes('GREENVILLE')) return 'GSP'
-  return null
+  if (!place) return null
+  const lat = place.lat == null || place.lat === '' ? NaN : Number(place.lat)
+  const lng = place.lng == null || place.lng === '' ? NaN : Number(place.lng)
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    for (const airport of AIRPORT_PLACES) {
+      const meters = tripMeters({ lat, lng }, airport)
+      if (meters != null && meters <= AIRPORT_MATCH_RADIUS_M) return airport.code
+    }
+  }
+  const explicit = airportCodeFromId(place.code)
+    || (place.kind === 'airport' ? airportCodeFromId(place.id) : null)
+  if (explicit) return explicit
+  const label = String(place.label || '').trim().toUpperCase()
+  return AIRPORT_EXACT_LABELS.get(label) || null
 }
 
 export function tripMeters(pickup, dropoff) {
