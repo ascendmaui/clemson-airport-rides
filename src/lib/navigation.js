@@ -41,6 +41,9 @@ export function getHashRoute() {
   if (path === 'driver' && segments[1] === 'download' && !segments[2]) {
     return { path: 'driver-download', params, segments }
   }
+  if (path === 'driver' && (segments[1] === 'sign-in' || segments[1] === 'login') && !segments[2]) {
+    return { path: 'driver-sign-in', params, segments }
+  }
   // Support #/share|live|friends|carpool/<token> and path equivalents
   if ((path === 'share' || path === 'live' || path === 'friends' || path === 'carpool' || path === 'party-night') && segments[1] && !params.token) {
     params.token = decodeURIComponent(segments[1])

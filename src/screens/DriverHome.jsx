@@ -57,6 +57,7 @@ import { loadLocalPrefs } from '../lib/notificationPrefs'
 import { offerVisibleToDriver, visibleOfferQuery } from '../../shared/driverOrder.js'
 import { readBackupQueue } from '../../shared/backupDriverQueue.js'
 import { driverRouteForOnboarding } from '../../shared/driverRoute.js'
+import { pickupCodeState, requestBrowserOfferPermission, todayDriverEarnings } from '../lib/webDriverConsole'
 import { isStaleLiveOffer } from '../../shared/staleLiveOffer.js'
 import { acceptTrip, declineTrip, listPassedTripIds } from '../../packages/rides-native/driverDesk.js'
 import {
@@ -156,6 +157,9 @@ function DriverShell({ driverId }) {
   const onShiftRef = useRef(false)
   onShiftRef.current = online
   const [earningsCents, setEarningsCents] = useState(0)
+  const [todayEarnings, setTodayEarnings] = useState({ cents: 0, trips: 0 })
+  const [pickupExpected, setPickupExpected] = useState(null)
+  const [pickupEntered, setPickupEntered] = useState('')
   const [incentiveExtraCents, setIncentiveExtraCents] = useState(0)
   const [extraByTrip, setExtraByTrip] = useState({})
   const [recentCompleted, setRecentCompleted] = useState([])
@@ -231,6 +235,7 @@ function DriverShell({ driverId }) {
     const rows = data || []
     setRecentCompleted(rows)
     setEarningsCents(rows.reduce((sum, t) => sum + (Number(t.fare_cents) || 0), 0))
+    setTodayEarnings(todayDriverEarnings(rows))
     const extras = await fetchDriverIncentiveExtras(driverId, rows.map((t) => t.id))
     setExtraByTrip(extras)
     setIncentiveExtraCents(Object.values(extras).reduce((sum, n) => sum + n, 0))
@@ -573,6 +578,20 @@ function DriverShell({ driverId }) {
     })
   }, [approved, online, offer?.id, activeTrip?.id, driverId, loadEarnings, loadScheduled, clearCanceledTrip])
 
+  // Pickup code: the rider's phone shows it; the driver confirms it before Start.
+  const pickupTripId = activeTrip && ['accepted', 'arriving', 'arrived'].includes(activeTrip.status) ? activeTrip.id : null
+  useEffect(() => {
+    setPickupEntered('')
+    setPickupExpected(null)
+    if (!pickupTripId) return undefined
+    let alive = true
+    api(`/api/pickup-beacon?tripId=${encodeURIComponent(pickupTripId)}`)
+      .then((data) => { if (alive) setPickupExpected(data?.pickupCode || null) })
+      .catch(() => { if (alive) setPickupExpected(null) })
+    return () => { alive = false }
+  }, [pickupTripId])
+  const pickupCheck = pickupCodeState({ expected: pickupExpected, entered: pickupEntered })
+
   async function acceptOffer() {
     if (!approved) return
     if (!canReceiveOffers({ onShift: online, approved })) {
@@ -667,6 +686,9 @@ function DriverShell({ driverId }) {
     })
     onShiftRef.current = nextOnline
     setShiftBusy(true)
+    // Web-only drivers: ask for browser notifications from this tap so a new
+    // offer still alerts while the console tab is in the background.
+    if (nextOnline) requestBrowserOfferPermission().catch(() => {})
     try {
       await setDriverOnline(driverId, change.presence.online)
       setOnline(nextOnline)
@@ -1003,7 +1025,7 @@ function DriverShell({ driverId }) {
       />
 
       <DriverDeskHeader
-        earningsLabel={centsToDollars(earningsCents)}
+        earningsLabel={`Today ${centsToDollars(todayEarnings.cents)}`}
         onMenu={() => navigate('landing')}
         onEarnings={() => navigate('earnings')}
         showMapType={!activeTrip}
@@ -1477,6 +1499,27 @@ function DriverShell({ driverId }) {
               {advancing ? 'Updating…' : statusActionLabel('arriving')}
             </PurpleAcceptButton>
           )}
+          {(activeTrip.status === 'arriving' || activeTrip.status === 'arrived') && pickupCheck.required && (
+            <div className="sheet" data-testid="pickup-code-check" style={{ marginTop: 12, padding: 14, borderRadius: 16, border: '1px solid rgba(82,45,128,0.18)' }}>
+              <label htmlFor="driver-pickup-code" style={{ display: 'block', fontSize: 13, fontWeight: 800, color: 'var(--purple)', marginBottom: 6 }}>
+                Trip code from the rider’s phone
+              </label>
+              <input
+                id="driver-pickup-code"
+                value={pickupEntered}
+                onChange={(e) => setPickupEntered(e.target.value.toUpperCase().slice(0, 3))}
+                autoComplete="off"
+                autoCapitalize="characters"
+                inputMode="text"
+                aria-invalid={pickupCheck.mismatch ? 'true' : undefined}
+                aria-describedby="driver-pickup-code-help"
+                style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: `2px solid ${pickupCheck.verified ? 'var(--purple)' : pickupCheck.mismatch ? 'var(--danger)' : 'rgba(82,45,128,0.22)'}`, fontSize: 22, fontWeight: 800, letterSpacing: 6, textAlign: 'center' }}
+              />
+              <p id="driver-pickup-code-help" role="status" style={{ fontSize: 13, marginTop: 6, color: pickupCheck.mismatch ? 'var(--danger)' : 'var(--ink-secondary)' }}>
+                {pickupCheck.verified ? 'Code matches. You can start the trip.' : pickupCheck.mismatch ? 'That code does not match. Check the rider’s screen.' : 'Ask the rider for the code on their screen before you start.'}
+              </p>
+            </div>
+          )}
           {(activeTrip.status === 'arriving' || activeTrip.status === 'arrived') && (
             <WaitFeeCard
               trip={activeTrip}
@@ -1485,7 +1528,7 @@ function DriverShell({ driverId }) {
               busy={wait.busy || advancing}
               error={wait.error}
               charge={wait.charge}
-              onStart={activeTrip.status === 'arrived' ? () => advanceTrip('in_progress') : undefined}
+              onStart={activeTrip.status === 'arrived' && pickupCheck.verified ? () => advanceTrip('in_progress') : undefined}
               onCancel={() => advanceTrip('cancelled_wait')}
             />
           )}
