@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useJsApiLoader } from '@react-google-maps/api'
 import { FRIEND_PLACES } from '../lib/friendRides'
-import { hotCatalogPlaces, lookupCatalogPlace, placeFromStop, searchCatalogPlaces } from '../lib/placeCatalog'
-import { LOCATION_MISSING_MESSAGE, readBrowserPosition } from '../lib/currentPlace'
-import { keepInputUsable } from '../lib/placesFallback'
-import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
+import { catalogKindLabel, hotCatalogPlaces, lookupCatalogPlace, placeFromStop, searchCatalogPlaces } from '../lib/placeCatalog'
+import { LOCATION_MISSING_MESSAGE, readBrowserPosition, reverseGeocodeLabel } from '../lib/currentPlace'
+import { mergeSuggestions, useAddressSuggestions } from '../lib/useAddressSuggestions'
+import { MAPS_LOADER_ID, MAP_LIBRARIES } from '../lib/googleMapsLoader'
+import { AddressAttribution } from './AddressAttribution'
 import { SiteIcon } from './SiteIcon'
 
 const CURRENT = { label: 'Current location', lat: null, lng: null, _current: true }
@@ -20,30 +20,9 @@ const chipStyle = (on) => ({
   cursor: 'pointer',
 })
 
-function reverseGeocodeLabel(lat, lng) {
-  return new Promise((resolve) => {
-    try {
-      if (!window.google?.maps?.Geocoder) {
-        resolve(`Current location (${lat.toFixed(4)}, ${lng.toFixed(4)})`)
-        return
-      }
-      const geocoder = new window.google.maps.Geocoder()
-      geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-        if (status === 'OK' && results?.[0]?.formatted_address) {
-          resolve(results[0].formatted_address)
-        } else {
-          resolve(`Current location (${lat.toFixed(4)}, ${lng.toFixed(4)})`)
-        }
-      })
-    } catch {
-      resolve(`Current location (${lat.toFixed(4)}, ${lng.toFixed(4)})`)
-    }
-  })
-}
-
 /**
  * Pickup: Current location + campus preset chips.
- * Dropoff: Places Autocomplete free-form + preset chips.
+ * Dropoff: catalog first, then Geoapify / Photon street suggestions + preset chips.
  * value shape: { label, lat, lng }
  */
 export function PlacePicker({
@@ -54,20 +33,22 @@ export function PlacePicker({
   presets = FRIEND_PLACES,
   showCoordinates = true,
 }) {
-  const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim()
-  const { isLoaded } = useJsApiLoader(mapsLoaderOptions(apiKey))
   const [locBusy, setLocBusy] = useState(false)
   const [locError, setLocError] = useState(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const inputRef = useRef(null)
-  const acRef = useRef(null)
-  const suggestions = useMemo(() => {
+  const isPickup = mode === 'pickup'
+  const catalogRows = useMemo(() => {
     if (!searchOpen) return []
     const found = searchCatalogPlaces(query)
     return (found.length ? found : query.trim().length < 2 ? hotCatalogPlaces() : []).slice(0, 6)
   }, [query, searchOpen])
+  const remote = useAddressSuggestions(query, { enabled: searchOpen && !isPickup })
+  const remoteRows = searchOpen && !isPickup ? remote.results : []
+  const suggestions = useMemo(() => mergeSuggestions(catalogRows, remoteRows), [catalogRows, remoteRows])
+  const showsRemote = suggestions.some((row) => row.kind === 'address')
 
   useEffect(() => {
     if (!inputRef.current || document.activeElement === inputRef.current) return
@@ -82,35 +63,6 @@ export function PlacePicker({
     setSearchOpen(false)
     if (inputRef.current) inputRef.current.value = place.label
   }
-
-  useEffect(() => {
-    // TODO: free-form street addresses need a billed VITE_GOOGLE_MAPS_API_KEY (Places).
-    // Campus and airport stops use the local catalog and do not need that key.
-    if (mode !== 'dropoff' || !isLoaded || !apiKey || !inputRef.current) return undefined
-    if (!window.google?.maps?.places?.Autocomplete) return undefined
-    if (acRef.current) return undefined
-    const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
-      fields: ['formatted_address', 'geometry', 'name'],
-      componentRestrictions: { country: 'us' },
-    })
-    acRef.current = ac
-    const releaseInput = keepInputUsable(inputRef.current, inputRef.current.getAttribute('placeholder'))
-    const listener = ac.addListener('place_changed', () => {
-      const place = ac.getPlace()
-      const loc = place?.geometry?.location
-      if (!loc) return
-      const lat = loc.lat()
-      const lng = loc.lng()
-      const placeLabel = place.formatted_address || place.name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`
-      onChange?.({ label: placeLabel, lat, lng })
-      setSearchOpen(false)
-    })
-    return () => {
-      if (listener) listener.remove()
-      releaseInput()
-      acRef.current = null
-    }
-  }, [mode, isLoaded, apiKey, onChange])
 
   async function useCurrentLocation() {
     setLocError(null)
@@ -133,10 +85,9 @@ export function PlacePicker({
   }
 
   const selectedLabel = value?.label || ''
-  const isPickup = mode === 'pickup'
 
   return (
-    <div style={{ marginBottom: 12 }} data-places-loader={MAPS_LOADER_ID}>
+    <div style={{ marginBottom: 12 }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-secondary)', marginBottom: 4 }}>{label}</div>
 
       {isPickup ? (
@@ -168,7 +119,7 @@ export function PlacePicker({
       <input
         ref={inputRef}
         defaultValue={selectedLabel}
-        placeholder={apiKey && !isPickup ? 'Search campus, airport, or an address…' : 'Search Grand Marc, stadium, GSP…'}
+        placeholder={!isPickup ? 'Search campus, airport, or an address…' : 'Search Grand Marc, stadium, GSP…'}
         onFocus={() => setSearchOpen(true)}
         onInput={(e) => {
           setQuery(e.target.value)
@@ -197,22 +148,18 @@ export function PlacePicker({
             >
               {stop.label}
               <span style={{ fontWeight: 600, color: 'var(--ink-tertiary)', marginLeft: 8 }}>
-                {stop.kind === 'airport' ? 'Airport' : 'Campus'}
+                {stop.kind === 'address' ? 'Address' : catalogKindLabel(stop.kind)}
               </span>
             </button>
           ))}
         </div>
       ) : null}
+      {searchOpen && showsRemote ? <AddressAttribution provider={remote.provider} /> : null}
       {searchOpen && query.trim().length >= 2 && suggestions.length === 0 ? (
         <p style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 6 }}>
-          {apiKey && !isPickup
-            ? 'No campus or airport match. Use a Google address suggestion, or pick a chip.'
+          {!isPickup
+            ? 'No match yet. Keep typing a street address, or pick a chip.'
             : 'No campus or airport match. Try Grand Marc, College Ave, the stadium, or GSP.'}
-        </p>
-      ) : null}
-      {!apiKey && !isPickup ? (
-        <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 6 }}>
-          Street addresses need a Maps key. Campus and airport stops work from the list.
         </p>
       ) : null}
 

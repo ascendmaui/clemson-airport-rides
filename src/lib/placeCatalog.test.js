@@ -91,23 +91,25 @@ test('placeFromCoordinates keeps a GPS fix as the pickup place', async () => {
 
 test('reverseGeocodeLabel uses the GPS label when the geocoder never answers', async () => {
   const { reverseGeocodeLabel } = await import('./currentPlace.js')
-  const previous = globalThis.window
-  globalThis.window = {
-    google: {
-      maps: {
-        Geocoder: class {
-          geocode() {}
-        },
-      },
-    },
-  }
-  try {
-    const label = await reverseGeocodeLabel(34.6834, -82.8371)
-    assert.equal(label, 'Current location (34.6834, -82.8371)')
-  } finally {
-    if (previous === undefined) delete globalThis.window
-    else globalThis.window = previous
-  }
+  const label = await reverseGeocodeLabel(34.6834, -82.8371, { lookup: () => new Promise(() => {}) })
+  assert.equal(label, 'Current location (34.6834, -82.8371)')
+})
+
+test('reverseGeocodeLabel uses the provider label, and the GPS label when it fails', async () => {
+  const { reverseGeocodeLabel } = await import('./currentPlace.js')
+  assert.equal(
+    await reverseGeocodeLabel(34.6834, -82.8371, { lookup: async () => '105 Sloan St, Clemson, SC 29631' }),
+    '105 Sloan St, Clemson, SC 29631',
+  )
+  assert.equal(
+    await reverseGeocodeLabel(34.6834, -82.8371, { lookup: async () => { throw new Error('offline') } }),
+    'Current location (34.6834, -82.8371)',
+  )
+  assert.equal(
+    await reverseGeocodeLabel(34.6834, -82.8371, { lookup: async () => null }),
+    'Current location (34.6834, -82.8371)',
+  )
+  assert.equal(await reverseGeocodeLabel('north', null), 'Current location')
 })
 
 test('finiteCoordinate treats a blank pin as missing', async () => {

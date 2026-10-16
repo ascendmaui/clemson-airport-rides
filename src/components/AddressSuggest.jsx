@@ -1,18 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useJsApiLoader } from '@react-google-maps/api'
-import { placeFromStop, searchCatalogPlaces } from '../lib/placeCatalog'
+import { catalogKindLabel, placeFromStop, searchCatalogPlaces } from '../lib/placeCatalog'
 import { LOCATION_MISSING_MESSAGE, placeFromCoordinates, readBrowserPosition, reverseGeocodeLabel } from '../lib/currentPlace'
-import { keepInputUsable } from '../lib/placesFallback'
-import { MAPS_LOADER_ID, MAP_LIBRARIES, mapsLoaderOptions } from '../lib/googleMapsLoader'
+import { mergeSuggestions, useAddressSuggestions } from '../lib/useAddressSuggestions'
+import { AddressAttribution } from './AddressAttribution'
 import { SiteIcon } from './SiteIcon'
 
 /**
- * Typed pickup or drop-off. Catalog matches show as the rider types.
- * A billed Maps key also attaches Google address suggestions on the same field.
+ * Typed pickup or drop-off. Catalog matches show first as the rider types.
+ * After 3+ characters, street suggestions come from Geoapify (or Photon when
+ * no key is set) under the catalog rows. If both fail, catalog rows only.
  */
 export function AddressSuggest({ label, value, onChange, placeholder }) {
-  const apiKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim()
-  const { isLoaded } = useJsApiLoader(mapsLoaderOptions(apiKey))
   const [query, setQuery] = useState(value?.label || '')
   const [open, setOpen] = useState(false)
   const [locating, setLocating] = useState(false)
@@ -21,44 +19,18 @@ export function AddressSuggest({ label, value, onChange, placeholder }) {
     ? 'Use current location as drop-off'
     : 'Use current location as pickup'
   const inputRef = useRef(null)
-  const acRef = useRef(null)
-  const onChangeRef = useRef(onChange)
-  onChangeRef.current = onChange
-  const suggestions = useMemo(() => (open ? searchCatalogPlaces(query).slice(0, 6) : []), [open, query])
+  const catalogRows = useMemo(() => (open ? searchCatalogPlaces(query).slice(0, 6) : []), [open, query])
+  const typed = query.trim() !== (value?.label || '').trim()
+  const remote = useAddressSuggestions(query, { enabled: open && typed })
+  const remoteRows = open && typed ? remote.results : []
+  const suggestions = useMemo(() => mergeSuggestions(catalogRows, remoteRows), [catalogRows, remoteRows])
+  const showsRemote = suggestions.some((row) => row.kind === 'address')
 
   useEffect(() => {
     if (!inputRef.current || document.activeElement === inputRef.current) return
     inputRef.current.value = value?.label || ''
     setQuery(value?.label || '')
   }, [value?.label])
-
-  useEffect(() => {
-    if (!isLoaded || !apiKey || !inputRef.current || acRef.current) return undefined
-    if (!window.google?.maps?.places?.Autocomplete) return undefined
-    const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
-      fields: ['formatted_address', 'geometry', 'name'],
-      componentRestrictions: { country: 'us' },
-    })
-    acRef.current = ac
-    const releaseInput = keepInputUsable(inputRef.current, inputRef.current.getAttribute('placeholder'))
-    const listener = ac.addListener('place_changed', () => {
-      const place = ac.getPlace()
-      const loc = place?.geometry?.location
-      if (!loc) return
-      const lat = loc.lat()
-      const lng = loc.lng()
-      const placeLabel = place.formatted_address || place.name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`
-      onChangeRef.current?.({ label: placeLabel, lat, lng })
-      setQuery(placeLabel)
-      setOpen(false)
-      if (inputRef.current) inputRef.current.value = placeLabel
-    })
-    return () => {
-      if (listener) listener.remove()
-      releaseInput()
-      acRef.current = null
-    }
-  }, [isLoaded, apiKey])
 
   async function useCurrent() {
     setLocateError(null)
@@ -96,7 +68,7 @@ export function AddressSuggest({ label, value, onChange, placeholder }) {
   }
 
   return (
-    <div style={{ marginBottom: 12 }} data-places-loader={MAPS_LOADER_ID} data-places-libraries={MAP_LIBRARIES.join(',')}>
+    <div style={{ marginBottom: 12 }}>
       <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)' }}>
         {label}
         <span style={{ position: 'relative', display: 'block', marginTop: 6 }}>
@@ -165,10 +137,14 @@ export function AddressSuggest({ label, value, onChange, placeholder }) {
               }}
             >
               {stop.label}
+              <span style={{ fontWeight: 600, color: 'var(--ink-tertiary)', marginLeft: 8 }}>
+                {stop.kind === 'address' ? 'Address' : catalogKindLabel(stop.kind)}
+              </span>
             </button>
           ))}
         </div>
       ) : null}
+      {open && showsRemote ? <AddressAttribution provider={remote.provider} /> : null}
     </div>
   )
 }
