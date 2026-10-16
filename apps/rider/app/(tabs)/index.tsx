@@ -645,8 +645,8 @@ export function RiderHome() {
                 accessibilityHint="Requests a ride to this place"
               >
                 <Glyph name={shortcut.glyph} size={22} color={colors.purple} style={styles.shortcutIcon} />
-                <Text style={styles.shortcutLabel}>{shortcut.label}</Text>
-                <Text style={styles.shortcutSub}>{shortcut.sub}</Text>
+                <Text style={styles.shortcutLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1.15}>{shortcut.label}</Text>
+                <Text style={styles.shortcutSub} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1.15}>{shortcut.sub}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -656,7 +656,7 @@ export function RiderHome() {
             <View style={styles.mapHead}>
               <View style={styles.campusCopy}>
                 <Text style={styles.mapTitle}>Campus map</Text>
-                <Text style={styles.busyDays}>Busy days</Text>
+                <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={styles.busyDays}>Busy days</Text>
               </View>
             </View>
             {spotsLoading ? (
@@ -669,9 +669,9 @@ export function RiderHome() {
                   <Pill label={surge ? 'Surge · On' : 'Surge'} active={surge} onPress={() => setSurge((value: boolean) => !value)} />
                 </ScrollView>
                 </TabSwipeRegion>
-                <Text style={styles.caption}>
+                <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={styles.caption}>
                   {caption}
-                  {blended ? <Text style={styles.live}>  Live + typical</Text> : null}
+                  {blended ? <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={styles.live}>  Live + typical</Text> : null}
                   {gameNotice ? `  ${gameNotice.live ? gameNotice.detail : gameNotice.body}` : '  Checking game day…'}
                   {surge ? `  ${overlays.surgeLabel || 'Surge overlay'}` : ''}
                 </Text>
@@ -971,8 +971,8 @@ function makeStyles(colors: Palette) {
       borderColor: colors.border,
     },
     shortcutIcon: { fontSize: 20, marginBottom: 10 },
-    shortcutLabel: { fontWeight: '700' as const, fontSize: 14, letterSpacing: -0.2, color: colors.ink },
-    shortcutSub: { fontSize: 12, color: colors.inkSecondary, marginTop: 3 },
+    shortcutLabel: { fontWeight: '700' as const, fontSize: 14, letterSpacing: -0.2, color: colors.ink, width: '100%' as const },
+    shortcutSub: { fontSize: 12, color: colors.inkSecondary, marginTop: 3, width: '100%' as const },
     keys: { color: colors.danger, fontSize: 12, marginTop: 12, lineHeight: 17 },
     studentCard: {
       marginTop: 18,

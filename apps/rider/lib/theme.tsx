@@ -1,8 +1,8 @@
 import * as Location from 'expo-location'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { useColorScheme } from 'react-native'
+import { Appearance, useColorScheme } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated'
-import { migrateAppearance, resolveScheme, type DisplayMode } from '@/lib/appearance'
+import { migrateAppearance, nativeColorScheme, resolveScheme, type DisplayMode } from '@/lib/appearance'
 import { logCaught } from '@/lib/caught'
 import { authStorage } from '@/lib/storage'
 import { paletteFor, type Palette, type Scheme } from '@/lib/palette'
@@ -90,6 +90,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       return next
     })
   }
+
+  useEffect(() => {
+    Appearance.setColorScheme(nativeColorScheme(prefs.displayMode))
+  }, [prefs.displayMode])
 
   const scheme = resolveScheme(prefs.displayMode, systemScheme)
   const colors = paletteFor(scheme)
