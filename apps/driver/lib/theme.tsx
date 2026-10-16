@@ -5,6 +5,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } 
 import { useReduceMotion } from 'rides-native/shared/reduceMotion.js'
 import { migrateAppearance, resolveScheme, type DisplayMode } from '@/lib/appearance'
 import { authStorage } from '@/lib/storage'
+import { raceWithTimeout, STARTUP_TIMEOUT_MS } from '@/lib/startupGate'
 import { paletteFor, type Palette, type Scheme } from '@/lib/palette'
 import { isNavApp as isKnownNavApp, type NavApp as SharedNavApp } from 'rides-native/mapsLink'
 import { quiet } from '@/lib/softFail'
@@ -147,7 +148,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
 
   useEffect(() => {
-    authStorage.getItem(PREFS_KEY).then((raw) => {
+    let alive = true
+    raceWithTimeout(authStorage.getItem(PREFS_KEY), STARTUP_TIMEOUT_MS).then((result) => {
+      if (!alive || !result.ok) return
+      const raw = result.value
       const next = readPrefs(raw)
       setPrefs(next)
       let already = false
@@ -162,11 +166,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         authStorage.setItem(PREFS_KEY, JSON.stringify(next)).catch(quiet('theme prefs save'))
       }
     }).catch(quiet('theme prefs read'))
+    return () => {
+      alive = false
+    }
   }, [])
 
   useEffect(() => {
     let alive = true
-    Location.getLastKnownPositionAsync().then((pos: { coords: { latitude: number; longitude: number } } | null) => {
+    raceWithTimeout(Location.getLastKnownPositionAsync(), STARTUP_TIMEOUT_MS).then((result) => {
+      const pos = result.ok ? result.value : null
       if (!alive || !pos) return
       setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude })
     }).catch(quiet('theme location'))

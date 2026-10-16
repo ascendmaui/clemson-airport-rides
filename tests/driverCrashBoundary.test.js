@@ -76,7 +76,7 @@ test('Back to my trip queues the remembered trip once; a finished trip is forgot
 test('boundary component: branded, Try again, logs, remounts, survives a missing theme', () => {
   const src = read('apps/driver/components/CrashBoundary.tsx')
   assert.match(src, /getDerivedStateFromError/)
-  assert.match(src, /componentDidCatch[\s\S]*reportCrash\(/)
+  assert.match(src, /componentDidCatch[\s\S]*hideDriverSplash\(\)[\s\S]*reportCrash\(/)
   assert.match(src, /key=\{this\.state\.nonce\}/)
   assert.match(src, /accessibilityLabel=\{copy\.action\}/)
   assert.match(src, /colors\.orange/)
@@ -92,6 +92,9 @@ test('boundary component: branded, Try again, logs, remounts, survives a missing
 test('root layout, trip, offers and home are wrapped', () => {
   const layout = read('apps/driver/app/_layout.tsx')
   assert.match(layout, /<GestureHandlerRootView[^>]*>\s*<CrashBoundary scope="app"[^>]*>\s*<ThemeProvider>/)
+  assert.match(layout, /hideDriverSplash\(\)/)
+  assert.match(read('apps/driver/components/BootScreen.tsx'), /hideDriverSplash\(\)/)
+  assert.match(read('apps/driver/lib/auth.tsx'), /sessionTimeoutMs: STARTUP_TIMEOUT_MS/)
   assert.match(layout, /<CrashBoundary scope="offer-alerts" compact>\s*<OfferBridge \/>/)
   assert.match(read('apps/driver/app/trip.tsx'), /<CrashBoundary scope="trip" title="Your trip" fill>\s*<TripScreenBody \/>/)
   assert.match(read('apps/driver/app/trip.tsx'), /rememberActiveTrip\(trip\.id\)/)
