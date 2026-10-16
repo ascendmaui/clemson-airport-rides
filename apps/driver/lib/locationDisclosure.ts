@@ -14,7 +14,7 @@ export const BACKGROUND_LOCATION_DISCLOSURE = Object.freeze({
     'Used in the background so your rider can see you while you drive with another app open.',
     'Location sharing stops when the trip ends. It is not used for ads.',
   ]),
-  next: 'On the next screen, choose "Allow all the time" (Android) or "Always" (iPhone).',
+  next: 'On the next screen, choose "Always".',
   accept: 'Continue',
   decline: 'Not now',
 })

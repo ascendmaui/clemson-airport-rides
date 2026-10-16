@@ -28,7 +28,7 @@ export async function presentNativeSetupSheet(input: NativeSetupSheetInput): Pro
     return { ok: false, error: 'Apple Pay is available on iPhone. No charge was made.' }
   }
   if (methodId === 'google_pay' && Platform.OS !== 'android') {
-    return { ok: false, error: 'Google Pay is available on Android. No charge was made.' }
+    return { ok: false, error: 'Google Pay is not available on iPhone. No charge was made.' }
   }
 
   const sheet = nativeSetupSheetParams(methodId, { testEnv: googlePayTestEnv(publishableKey) })
