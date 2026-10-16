@@ -21,6 +21,7 @@ import { notifyAcceptedRide, setRideAlertSurface } from '@/lib/push'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { heatRgb } from 'rides-native/demandHeat.js'
 import { HOME_CLUTTER_SPRING, homeClutterTranslateY } from '@/lib/bottomCluster'
 import { driverPresence, goOffline, goOnline, usePresence } from '@/lib/presence'
 import { fetchDriverApplication } from 'rides-native/drivers'
@@ -114,6 +115,7 @@ import { Glyph } from 'rides-native/icons'
 const EDGE = 16
 const GAP = 12
 const TOP_MARGIN = 8
+const HEAT_LEGEND_STOPS = [0.1, 0.4, 0.7, 1]
 
 async function currentFix() {
   try {
@@ -240,7 +242,6 @@ function DriverHomeBody() {
   // While an offer is up, END, the queue, and the earnings pill step aside so the sheet can use that space.
   const dockTop = insets.top + TOP_MARGIN
   const [dockHeight, setDockHeight] = useState(260)
-  const [heatBottom, setHeatBottom] = useState<number | null>(null)
 
   useEffect(() => {
     if (!supabase) {
@@ -610,7 +611,6 @@ function DriverHomeBody() {
         gameDayLabel={gameNotice?.live ? gameNotice.headline : null}
         lockOnCenter={Boolean(online && self)}
         onPinPress={onPinPress}
-        legendTop={heatBottom ?? insets.top + 210}
       />
       <View pointerEvents="box-none" style={styles.overlay}>
         <Reanimated.View
@@ -631,24 +631,19 @@ function DriverHomeBody() {
             </Pressable>
           </View>
           )}
+          <View pointerEvents="box-none" style={[styles.clutterScrollSlot, { marginTop: insets.top }]}>
           <ScrollView
             style={styles.clutterScroll}
             contentContainerStyle={styles.clutterContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-          <View style={[styles.top, { paddingTop: dockTop }]} pointerEvents="box-none">
+          <View style={[styles.top, { paddingTop: TOP_MARGIN }]} pointerEvents="box-none">
             <CircleButton icon="inbox" label="Messages" onPress={() => router.push('/inbox')} />
             <View style={styles.topSpacer} />
             <CircleButton icon="search" label="Search and discover" onPress={() => router.push('/discover')} />
           </View>
-          <View
-            onLayout={(event) => {
-              const next = Math.ceil(event.nativeEvent.layout.y + event.nativeEvent.layout.height + 8)
-              setHeatBottom((current) => (next > 0 && next !== current ? next : current))
-            }}
-            style={[styles.heatPanel, { backgroundColor: colors.card, borderRadius: 16, marginHorizontal: 12, paddingVertical: 8 }]}
-          >
+          <View style={[styles.heatPanel, { backgroundColor: colors.card, borderRadius: 16, marginHorizontal: 12, paddingVertical: 8 }]}>
             <Pressable
               onPress={() => setDemandOpen((value: boolean) => !value)}
               accessibilityRole="button"
@@ -659,6 +654,17 @@ function DriverHomeBody() {
               <Text style={[styles.heatLabel, { color: colors.title }]}>Busy areas, peak, and live demand</Text>
               <Text style={{ color: colors.orange, fontWeight: '800' }}>{demandOpen ? 'Hide' : 'Show'}</Text>
             </Pressable>
+            {showHeat ? (
+              <View style={styles.legendRow} accessibilityLabel="Demand heat map legend, low to high">
+                <Text style={[styles.heatLabel, { color: colors.title }]}>Demand</Text>
+                <View style={styles.legendRamp}>
+                  {HEAT_LEGEND_STOPS.map((stop) => (
+                    <View key={stop} style={[styles.legendSwatch, { backgroundColor: `rgb(${heatRgb(stop, scheme).join(',')})` }]} />
+                  ))}
+                </View>
+                <Text style={[styles.heatLabel, { color: colors.inkSecondary }]}>Low · High</Text>
+              </View>
+            ) : null}
             {demandOpen ? (
               <>
                 <View style={styles.heatRow}>
@@ -781,6 +787,7 @@ function DriverHomeBody() {
             </View>
           ) : null}
           </ScrollView>
+          </View>
         </Reanimated.View>
 
         <View
@@ -1141,6 +1148,7 @@ const styles = StyleSheet.create({
   earningsWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   earningsButton: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center' },
   clutter: { flex: 1 },
+  clutterScrollSlot: { flex: 1, overflow: 'hidden' },
   clutterScroll: { flex: 1 },
   clutterContent: { gap: GAP, paddingBottom: 12 },
   demandToggle: {
@@ -1162,6 +1170,9 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   heatPanel: { marginTop: 8 },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 4 },
+  legendRamp: { flexDirection: 'row', borderRadius: 4, overflow: 'hidden' },
+  legendSwatch: { width: 14, height: 8 },
   heatRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
   heatLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 0.2 },
   heatToggle: { borderRadius: 999, paddingHorizontal: 14, minHeight: 36, justifyContent: 'center' },
