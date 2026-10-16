@@ -9,6 +9,7 @@ import {
 import Constants from 'expo-constants'
 import { useAuth } from '@/lib/auth'
 import { authStorage } from '@/lib/storage'
+import { clickwrapPhaseAfterRace, raceWithTimeout, STARTUP_TIMEOUT_MS } from '@/lib/startupGate'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { BootScreen } from '@/components/BootScreen'
@@ -32,9 +33,9 @@ export function DriverAgreementPrompt({ children, onBack }: { children: ReactNod
     }
     let alive = true
     setPhase('unknown')
-    resolveDriverClickwrap(supabase, authStorage)
-      .then((next) => {
-        if (alive) setPhase(next)
+    raceWithTimeout(resolveDriverClickwrap(supabase, authStorage), STARTUP_TIMEOUT_MS)
+      .then((result) => {
+        if (alive) setPhase(clickwrapPhaseAfterRace(result))
       })
       .catch(() => {
         if (alive) setPhase('required')

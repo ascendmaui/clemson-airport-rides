@@ -167,6 +167,7 @@ export function createAuth({
   onSignOut,
   onPasswordRecovery,
   promoSide = 'rider',
+  sessionTimeoutMs = 0,
 }) {
   const AuthContext = createContext(null)
 
@@ -181,12 +182,23 @@ export function createAuth({
         return undefined
       }
       let alive = true
+      const timeoutMs = Number(sessionTimeoutMs) > 0 ? Number(sessionTimeoutMs) : 0
+      const timer = timeoutMs
+        ? setTimeout(() => {
+            if (alive) setLoading(false)
+          }, timeoutMs)
+        : null
       supabase.auth.getSession().then(({ data }) => {
         if (!alive) return
+        if (timer) clearTimeout(timer)
         setSession(data.session)
         setUser(data.session?.user ?? null)
         setLoading(false)
         if (data.session?.user) ensureProfile(supabase, storage, data.session.user, { promoSide })
+      }).catch(() => {
+        if (!alive) return
+        if (timer) clearTimeout(timer)
+        setLoading(false)
       })
       const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
         setSession(next)
@@ -197,6 +209,7 @@ export function createAuth({
       })
       return () => {
         alive = false
+        if (timer) clearTimeout(timer)
         sub?.subscription?.unsubscribe?.()
       }
     }, [])
