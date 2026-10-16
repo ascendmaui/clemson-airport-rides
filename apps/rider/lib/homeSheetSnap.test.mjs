@@ -3,7 +3,7 @@ import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { readDisplayMode, resolveScheme } from './appearance.ts'
+import { migrateAppearance, readDisplayMode, resolveScheme } from './appearance.ts'
 import {
   HOME_SHEET_BOTTOM_PADDING,
   HOME_SHEET_HANDLE_FALLBACK,
@@ -33,7 +33,7 @@ test('native tabs keep the home sheet above the tab bar and the home indicator',
   assert.equal(homeTabClearance(Number.NaN), 56)
   const home = read('apps/rider/app/(tabs)/index.tsx')
   assert.match(home, /homeTabClearance\(insets\.bottom\)/)
-  assert.match(home, /nativeTabs \? \{ paddingBottom: homeTabClearance\(insets\.bottom\) \}/)
+  assert.match(home, /paddingBottom: homeTabClearance\(insets\.bottom\) \+ 28/)
   assert.match(home, /liveTrip \? liveCardH \+ 12 : 0/)
 })
 
@@ -163,8 +163,18 @@ test('appearance defaults to the system scheme and keeps explicit overrides', ()
   const theme = read('apps/rider/lib/theme.tsx')
   assert.match(theme, /useColorScheme/)
   assert.match(theme, /displayMode: 'auto'/)
-  assert.match(theme, /readDisplayMode\(parsed\.displayMode\)/)
+  assert.match(theme, /migrateAppearance\(parsed\)/)
+  assert.match(theme, /appearanceMigrated: true/)
   assert.doesNotMatch(theme, /it now opens light/)
+})
+
+test('saved Night mode resets to System once', () => {
+  assert.deepEqual(migrateAppearance({ displayMode: 'dark' }), { displayMode: 'auto', appearanceMigrated: true })
+  assert.deepEqual(migrateAppearance({ displayMode: 'light' }), { displayMode: 'auto', appearanceMigrated: true })
+  assert.deepEqual(migrateAppearance({ displayMode: 'dark', appearanceMigrated: true }), { displayMode: 'dark', appearanceMigrated: true })
+  assert.deepEqual(migrateAppearance({ displayMode: 'auto', appearanceMigrated: true }), { displayMode: 'auto', appearanceMigrated: true })
+  assert.deepEqual(migrateAppearance(null), { displayMode: 'auto', appearanceMigrated: true })
+  assert.deepEqual(migrateAppearance(undefined), { displayMode: 'auto', appearanceMigrated: true })
 })
 
 test('xxx large type keeps the home headline inside the scrolling sheet', () => {
@@ -177,4 +187,14 @@ test('xxx large type keeps the home headline inside the scrolling sheet', () => 
   assert.match(home, /numberOfLines=\{2\}/)
   assert.match(home, /height: insets\.top/)
   assert.match(home, /minWidth: 0/)
+  const hintAt = home.indexOf('Drag down to expand the map')
+  assert.ok(hintAt > scrollAt && promptAt > hintAt, 'drag hint sits in the sheet above the headline')
+  assert.match(home, /maxFontSizeMultiplier=\{1\.15\}/)
+  assert.match(home, /adjustsFontSizeToFit/)
+  assert.match(home, /showFleetBadge=\{false\}/)
+  assert.match(home, /SIMULATED_FLEET_BADGE/)
+  assert.match(home, /name \? `Welcome, \$\{name\}` : 'Welcome'/)
+  assert.doesNotMatch(home, /: 'Tiger'/)
+  const map = read('apps/rider/components/CampusMap.native.tsx')
+  assert.match(map, /mapPadding=\{\{ top: insets\.top/)
 })

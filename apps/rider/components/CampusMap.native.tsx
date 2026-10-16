@@ -1,6 +1,7 @@
 import { Glyph } from 'rides-native/icons'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Constants from 'expo-constants'
 import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT, type MapStyleElement } from 'react-native-maps'
 import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
@@ -126,11 +127,13 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
     pins = [],
     fitPins = false,
     showSimulatedFleet = false,
+    showFleetBadge = true,
     route = [],
   },
   ref: any,
 ) {
   const { colors, scheme } = useTheme()
+  const insets = useSafeAreaInsets()
   const mapRef = useRef<MapView>(null)
   const simulatedFleet = useSimulatedFleet(showSimulatedFleet || searchMotion)
   const opened = searchMapRegion(0)
@@ -273,6 +276,7 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
         pitchEnabled={false}
         toolbarEnabled={false}
         showsUserLocation={false}
+        mapPadding={{ top: insets.top, right: 12, bottom: 12, left: 12 }}
       >
         <Marker coordinate={STADIUM} pinColor={colors.orange} title="Memorial Stadium" anchor={{ x: 0.5, y: 1 }} />
         <Marker coordinate={DOWNTOWN} pinColor={colors.purple} title="Downtown Clemson" anchor={{ x: 0.5, y: 1 }} />
@@ -398,9 +402,9 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
           </StillMarker>
         ))}
       </MapView>
-      {showSimulatedFleet && !searchMotion ? (
+      {showSimulatedFleet && showFleetBadge && !searchMotion ? (
         <View pointerEvents="none" style={styles.busyBadge}>
-          <Text style={styles.busyBadgeText}>{SIMULATED_FLEET_BADGE}</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1} style={styles.busyBadgeText}>{SIMULATED_FLEET_BADGE}</Text>
         </View>
       ) : null}
       {gameDay ? (
@@ -466,7 +470,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: color.white,
   },
-  busyBadge: { position: 'absolute', right: 12, bottom: 12 },
+  busyBadge: { position: 'absolute', right: 12, bottom: 12, maxWidth: '70%', alignItems: 'flex-end' },
   busyBadgeText: {
     overflow: 'hidden',
     borderRadius: 999,
