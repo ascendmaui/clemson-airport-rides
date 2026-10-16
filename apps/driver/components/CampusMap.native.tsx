@@ -52,6 +52,7 @@ export function CampusMap({
   showsUserLocation = false,
   demandCells = [],
   peak = false,
+  legendTop = 220,
 }: {
   pins?: MapPin[]
   center?: { latitude: number; longitude: number } | null
@@ -68,6 +69,8 @@ export function CampusMap({
   showsUserLocation?: boolean
   demandCells?: DemandCell[]
   peak?: boolean
+  /** Screen Y just below the busy-areas strip, so the legend is not covered. */
+  legendTop?: number
 }) {
   const mapRef = useRef<MapView>(null)
   const [selected, setSelected] = useState<DemandCell | null>(null)
@@ -270,7 +273,7 @@ export function CampusMap({
         </View>
       ) : null}
       {showHeat ? (
-        <View pointerEvents="none" style={[styles.heatLegend, { backgroundColor: heat.legend }]} accessibilityLabel="Demand heat map legend, low to high">
+        <View pointerEvents="none" style={[styles.heatLegend, { backgroundColor: heat.legend, top: legendTop }]} accessibilityLabel="Demand heat map legend, low to high">
           <Text style={[styles.heatLegendText, { color: heat.title }]}>Demand</Text>
           <View style={styles.heatLegendRamp}>
             {HEAT_LEGEND_STOPS.map((v) => (
