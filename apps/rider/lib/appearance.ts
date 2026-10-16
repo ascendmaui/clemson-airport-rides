@@ -27,6 +27,21 @@ export function migrateAppearance(parsed: { displayMode?: unknown; appearanceMig
   return { displayMode: 'auto', appearanceMigrated: true }
 }
 
+/** Native chrome, including the tab bar, follows this. `auto` clears the override. */
+export function nativeColorScheme(mode: DisplayMode): 'light' | 'dark' | 'unspecified' {
+  switch (mode) {
+    case 'light':
+    case 'dark':
+      return mode
+    case 'auto':
+      return 'unspecified'
+    default: {
+      const unknown: never = mode
+      return unknown
+    }
+  }
+}
+
 /** `auto` uses the iOS/Android color scheme. A null scheme opens light. */
 export function resolveScheme(mode: DisplayMode, systemScheme: 'light' | 'dark' | null | undefined): 'light' | 'dark' {
   switch (mode) {
