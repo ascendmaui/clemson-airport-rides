@@ -1,0 +1,70 @@
+/* Tablet ad creative, tablet player, partner sign-up and ads admin. Orange #F56600, purple #522D80. */
+.adc { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 0; background: #1b1325; color: #fff; display: flex; }
+.adc--preview { aspect-ratio: 16 / 10; height: auto; border-radius: 16px; }
+.adc-media { width: 100%; height: 100%; object-fit: cover; display: block; }
+.adc--built { align-items: center; justify-content: space-between; gap: 4%; padding: 6% 7%; box-sizing: border-box; }
+.adc--purple { background: radial-gradient(120% 120% at 0% 0%, #6b3fa6 0%, #522D80 45%, #2a1844 100%); }
+.adc--orange { background: radial-gradient(120% 120% at 0% 0%, #ff8a33 0%, #F56600 50%, #b84a00 100%); }
+.adc--light { background: #fbf7f2; color: #1b1325; }
+.adc-copy { display: grid; gap: 0.6em; min-width: 0; font-size: clamp(14px, 3.2vmin, 40px); }
+.adc--preview .adc-copy { font-size: clamp(12px, 3.4vw, 22px); }
+.adc-logo { width: 3.2em; height: 3.2em; object-fit: contain; border-radius: 0.6em; background: #fff; padding: 0.3em; }
+.adc-headline { font-size: 2.2em; font-weight: 750; letter-spacing: -0.03em; line-height: 1.02; margin: 0; }
+.adc-deal { font-size: 1.25em; margin: 0; line-height: 1.25; max-width: 24ch; }
+.adc--purple .adc-deal { color: #ffd2b0; }
+.adc-foot { font-size: 0.7em; opacity: 0.8; margin: 0; letter-spacing: 0.04em; text-transform: uppercase; }
+.adc-qr { flex: none; display: grid; justify-items: center; gap: 0.4em; background: #fff; color: #1b1325; border-radius: 0.8em; padding: 0.6em; width: clamp(80px, 22vmin, 220px); font-size: clamp(10px, 1.6vmin, 18px); font-weight: 650; }
+.adc--preview .adc-qr { width: clamp(64px, 18vw, 120px); }
+.adc--media .adc-qr { position: absolute; right: 3%; bottom: 4%; }
+.adc-qr svg { width: 100%; height: auto; display: block; }
+
+.tablet { position: fixed; inset: 0; z-index: 9999; background: #120b1c; color: #fff; display: grid; grid-template-rows: 1fr auto; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+.tablet-stage { position: relative; overflow: hidden; }
+.tablet-stage > .adc { position: absolute; inset: 0; animation: tablet-in 500ms ease both; }
+@keyframes tablet-in { from { opacity: 0; transform: scale(1.02); } to { opacity: 1; transform: none; } }
+.tablet-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px; background: #522D80; font-size: clamp(12px, 1.8vmin, 18px); }
+.tablet-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.tablet-brand img { width: 24px; height: 24px; }
+.tablet-dots { display: flex; gap: 6px; }
+.tablet-dots span { width: 8px; height: 8px; border-radius: 99px; background: rgba(255,255,255,0.35); }
+.tablet-dots span[aria-current="true"] { background: #F56600; }
+.tablet-chip { background: #F56600; border-radius: 99px; padding: 2px 10px; font-weight: 700; }
+.tablet-idle { display: grid; place-items: center; text-align: center; gap: 12px; padding: 8%; background: radial-gradient(120% 120% at 0% 0%, #6b3fa6 0%, #522D80 45%, #2a1844 100%); height: 100%; box-sizing: border-box; }
+.tablet-idle h1 { font-size: clamp(28px, 6vmin, 64px); margin: 0; letter-spacing: -0.03em; }
+.tablet-idle p { margin: 0; opacity: 0.9; font-size: clamp(14px, 2.4vmin, 24px); }
+@media (prefers-reduced-motion: reduce) { .tablet-stage > .adc { animation: none; } }
+
+.ads-panel { display: grid; gap: 16px; }
+.ads-row { display: grid; gap: 10px; padding: 14px; border: 1px solid #e6e0ee; border-radius: 16px; background: #fff; color: #1b1325; }
+.ads-row h4 { margin: 0; }
+.ads-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ads-actions button { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid #d9d3e2; background: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.ads-actions button.primary { background: #F56600; border-color: #F56600; color: #fff; }
+.ads-actions button.purple { background: #522D80; border-color: #522D80; color: #fff; }
+.ads-chip { display: inline-block; border-radius: 99px; padding: 2px 10px; font-size: 13px; font-weight: 650; background: rgba(82,45,128,0.1); color: #522D80; }
+.ads-chip--active { background: rgba(26,127,55,0.12); color: #1a7f37; }
+.ads-chip--pending_payment, .ads-chip--pending_review { background: rgba(245,102,0,0.12); color: #a14400; }
+.ads-grid2 { display: grid; gap: 12px; }
+.ads-token { font-family: ui-monospace, Menlo, monospace; word-break: break-all; background: #fbf7f2; border-radius: 10px; padding: 10px; }
+.ads-preview-wrap { max-width: 480px; }
+.ads-mode { display: flex; gap: 8px; flex-wrap: wrap; }
+.ads-mode button { min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid #d9d3e2; background: #fff; font: inherit; font-weight: 600; cursor: pointer; color: #1b1325; }
+.ads-mode button[aria-pressed="true"] { background: #522D80; border-color: #522D80; color: #fff; }
+@media (min-width: 720px) { .ads-grid2 { grid-template-columns: 1fr 1fr; } }
+
+/* Site cards restyle text and buttons with high specificity; keep the ad template and toggles on brand. */
+html body .site.mkt .adc,
+html body .site.mkt .adc .adc-headline,
+html body .site.mkt .adc .adc-foot { color: #fff !important; }
+html body .site.mkt .adc--purple .adc-deal { color: #ffd2b0 !important; }
+html body .site.mkt .adc--orange .adc-deal { color: #fff !important; }
+html body .site.mkt .adc--light,
+html body .site.mkt .adc--light .adc-headline,
+html body .site.mkt .adc--light .adc-deal,
+html body .site.mkt .adc--light .adc-foot { color: #1b1325 !important; }
+html body .site.mkt .adc .adc-qr,
+html body .site.mkt .adc .adc-qr span { color: #1b1325 !important; }
+html body .site.mkt .adc-headline { font-size: 2.2em !important; font-weight: 750 !important; letter-spacing: -0.03em !important; line-height: 1.02 !important; margin: 0 !important; }
+html body .site.mkt .adc-deal { font-size: 1.25em !important; margin: 0 !important; }
+html body .site.mkt .ads-mode button { background: #fff !important; color: #1b1325 !important; border: 1px solid #d9d3e2 !important; }
+html body .site.mkt .ads-mode button[aria-pressed="true"] { background: #522D80 !important; border-color: #522D80 !important; color: #fff !important; }

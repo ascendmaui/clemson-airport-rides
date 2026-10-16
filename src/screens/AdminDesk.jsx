@@ -8,6 +8,7 @@ import { AdminAccessDenied } from '../components/AdminAccessDenied'
 import { AdminEventsPanel } from '../components/AdminEventsPanel'
 import { AdminInboxPanel } from '../components/AdminInboxPanel'
 import { AdminPayoutApprovals } from '../components/AdminPayoutApprovals'
+import { AdsAdminPanel } from '../components/AdsAdminPanel'
 import { rideOptionLabel } from '../../shared/rideOptions.js'
 import {
   fetchAdminInbox,
@@ -31,6 +32,7 @@ const TABS = [
   ['support', 'Support'],
   ['events', 'Events'],
   ['rentals', 'Rental partners'],
+  ['ads', 'Tablet ads'],
 ]
 
 const TICKET_FILTERS = [
@@ -160,6 +162,7 @@ export function AdminDesk() {
       {tab === 'support' && <SupportPanel />}
       {tab === 'events' && <AdminEventsPanel />}
       {tab === 'rentals' && <AdminRentalPartners />}
+      {tab === 'ads' && <AdsAdminPanel />}
     </div>
   )
 }

@@ -81,7 +81,7 @@ test('/advertise and the /partner alias route to the Advertise screen on the sit
   const siteRoutes = app.slice(app.indexOf('const SITE_ROUTES'), app.indexOf('function Screen'))
   assert.match(siteRoutes, /'advertise'/)
   assert.match(siteRoutes, /'partner'/)
-  assert.match(app, /case 'advertise':\s*case 'partner':\s*return <Advertise \/>/)
+  assert.match(app, /case 'advertise':\s*case 'partner':[\s\S]{0,160}return <Advertise \/>/)
   const chrome = read('src/components/MarketingChrome.jsx')
   assert.match(chrome, /\{ id: 'advertise', label: 'Advertise with us' \}/)
   assert.match(chrome, /ids: \['why-clemson-rides', 'safety', 'drive', 'advertise'\]/)

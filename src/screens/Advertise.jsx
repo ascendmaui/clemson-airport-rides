@@ -239,6 +239,18 @@ export function Advertise() {
 
       <AdPackagesSection />
 
+      <section className="adv-section" aria-labelledby="adv-build-heading">
+        <div className="mkt-card adv-soon">
+          <span className="adv-soon-chip">Self-serve</span>
+          <h2 id="adv-build-heading" className="adv-soon-copy">Ready now? Upload your ad or let us build it.</h2>
+          <p>Pick a package, add your ad and submit it for review. Nothing is charged until your package is confirmed.</p>
+          <div className="dp-hero-actions">
+            <a className="dp-btn dp-btn-primary pressable" href="/advertise/signup">Build my ad</a>
+            <a className="dp-btn dp-btn-ghost pressable" href="/advertise/my">Track my campaign</a>
+          </div>
+        </div>
+      </section>
+
       <section id="adv-interest" className="adv-section" aria-labelledby="adv-form-heading">
         <div className="mkt-section-head">
           <p className="mkt-kicker">Get started</p>
