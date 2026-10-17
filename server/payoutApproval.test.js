@@ -17,7 +17,8 @@ const TEST = { STRIPE_SECRET_KEY: 'sk_test_x' }
 const JOHN = { id: 'admin-1', email: 'johnmatveyev@gmail.com', email_confirmed_at: '2026-01-01T00:00:00Z' }
 
 function fakeDb(seed = {}, rpcHandlers = {}) {
-  const state = { payout_approval_requests: [], payout_approval_events: [], admin_notifications: [], rpcCalls: [], ...structuredClone(seed) }
+  // payouts_enabled: these tests cover the approval gate with payouts on (server/payoutHold.test.js covers the hold).
+  const state = { payout_controls: [{ id: 1, payouts_enabled: true }], payout_approval_requests: [], payout_approval_events: [], admin_notifications: [], rpcCalls: [], ...structuredClone(seed) }
   let n = 0
   function from(table) {
     if (!state[table]) state[table] = []

@@ -10,6 +10,7 @@ import { admin, cors, json, parseBody, stripeClient, userFromAuth } from '../fri
 import { stagingCronBlock } from '../cronGuard.js'
 import { decideApproval, loadApprovalById } from '../payoutApproval.js'
 import { rerunApprovalSource } from '../payoutApprovalExecute.js'
+import { PAYOUT_HOLD_ERROR, payoutsHeld } from '../payoutHold.js'
 import { approvalKindLabel, isPayoutApprover, publicApprovalRow } from '../../shared/payoutApproval.js'
 
 function scopeOf(req) {
@@ -81,6 +82,8 @@ export default async function handlePayoutApprovals(req, res, deps = {}) {
     const id = String(body?.id || '').trim()
     const decision = body?.decision
     if (!id) return json(res, 400, { error: 'id_required' })
+    // Payouts hold: approving would move money. Rejecting is still allowed.
+    if (decision === 'approve' && await payoutsHeld({ sb, env })) return json(res, 409, { error: PAYOUT_HOLD_ERROR })
     const decided = await decideApproval(sb, { id, decision, actor: { id: user.id, email: user.email }, reason: body?.reason })
     if (!decided.ok) return json(res, decided.status || 500, { error: decided.error })
     const stripe = deps.stripe !== undefined ? deps.stripe : stripeClient()

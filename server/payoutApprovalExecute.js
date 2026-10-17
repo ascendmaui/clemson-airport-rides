@@ -39,7 +39,7 @@ export async function rerunApprovalSource({ sb, stripe, request, env = process.e
   const kind = request.kind
   if (kind === 'cashout') {
     if (request.status === 'rejected') return releaseRejectedCashout({ sb, request })
-    return summarize(await completeApprovedCashout({ sb, stripe, request }))
+    return summarize(await completeApprovedCashout({ sb, stripe, request, env }))
   }
   if (kind === 'bonus') {
     const rows = await payBonusLedger(sb, stripe, { ids: [request.source_id], env, limit: 1 })
