@@ -6,7 +6,7 @@ import { useAuth } from '../lib/auth'
 import { buildFieldA11yProps, getFieldErrorProps } from '../lib/formA11y'
 import {
   boostCampaign, fetchAdPackages, fetchMyAds, launchPartnerCampaign, savePartnerCampaign, submitAdSignup,
-  submitFoundingApplication, uploadAdCreative,
+  submitFoundingApplication, uploadAdCreative, copilotSuggest, copilotImage,
 } from '../lib/adsApi'
 import {
   AD_CATEGORIES, PRICING_STATUS_COPY, RIDE_BUNDLES, formatDollars, formatPerRide,
@@ -393,7 +393,62 @@ const BUILD_EMPTY = {
   creativeId: '', destinationUrl: '', radius: 0, routes: ['all'], gameDayBoost: false,
 }
 
-export function CampaignBuilder({ partner, packages = [], creatives = [], api, onSaved }) {
+/** AI co-pilot: only rendered when the server says ADS_AI_COPILOT_ENABLED is on. */
+export function CopilotPanel({ api, copilot, current, onApply }) {
+  const [idea, setIdea] = useState('')
+  const [suggestion, setSuggestion] = useState(null)
+  const [image, setImage] = useState(null)
+  const [busy, setBusy] = useState('')
+  const [msg, setMsg] = useState('')
+  if (!copilot?.enabled) return null
+  async function ask(instruction = '') {
+    setBusy('text'); setMsg('')
+    try {
+      const out = await api.copilotSuggest({ idea, instruction, previous: suggestion ? current : null })
+      setSuggestion(out.suggestion)
+    } catch (err) { setMsg(err?.message || 'The co-pilot could not help right now.') } finally { setBusy('') }
+  }
+  async function makeImage() {
+    setBusy('image'); setMsg('')
+    try {
+      const out = await api.copilotImage({ prompt: idea || current.dealText || current.headline })
+      setImage(out)
+      onApply({ creativeMode: 'upload', storagePath: out.storagePath, contentType: out.contentType })
+      setMsg('Image added. It still needs approval before it can run.')
+    } catch (err) { setMsg(err?.message || 'Images are not available yet.') } finally { setBusy('') }
+  }
+  return (
+    <div className="ads-copilot mkt-card" data-testid="ads-copilot">
+      <h4>Ad co-pilot</h4>
+      <p className="ads-muted">Describe your deal. The co-pilot suggests offers, headlines and colors. Everything still goes to review.</p>
+      <label htmlFor="cp-idea">Your idea</label>
+      <input id="cp-idea" maxLength={200} placeholder="Wings special before kickoff" value={idea} onChange={(e) => setIdea(e.target.value)} />
+      <div className="ads-actions">
+        <button type="button" className="dp-btn dp-btn-primary pressable" disabled={!!busy} onClick={() => ask()}>{busy === 'text' ? 'Thinking…' : 'Suggest'}</button>
+        {suggestion ? <button type="button" className="dp-btn dp-btn-ghost pressable" disabled={!!busy} onClick={() => ask('make it bolder')}>Make it bolder</button> : null}
+        {suggestion ? <button type="button" className="dp-btn dp-btn-ghost pressable" disabled={!!busy} onClick={() => ask('make it shorter')}>Shorter</button> : null}
+        {copilot.image ? <button type="button" className="dp-btn dp-btn-ghost pressable" disabled={!!busy} onClick={makeImage}>{busy === 'image' ? 'Drawing…' : 'Make a 16:9 image'}</button> : null}
+      </div>
+      {suggestion ? (
+        <ul className="ads-copilot-list">
+          {suggestion.headlines.map((h, i) => (
+            <li key={`h${i}`}>
+              <strong>{h}</strong>
+              <button type="button" className="ads-link" onClick={() => onApply({ headline: h, dealText: suggestion.dealText || suggestion.offers[i] || '', theme: suggestion.theme })}>Use</button>
+            </li>
+          ))}
+          {suggestion.offers.map((o, i) => (
+            <li key={`o${i}`}>{o} <button type="button" className="ads-link" onClick={() => onApply({ dealText: o })}>Use as deal</button></li>
+          ))}
+        </ul>
+      ) : null}
+      {image ? <p className="ads-muted">Image saved for review: {image.storagePath}</p> : null}
+      {msg ? <p role="status">{msg}</p> : null}
+    </div>
+  )
+}
+
+export function CampaignBuilder({ partner, packages = [], creatives = [], api, onSaved, copilot = null }) {
   const [v, setV] = useState(() => ({ ...BUILD_EMPTY, headline: partner?.business_name || '' }))
   const [file, setFile] = useState(null)
   const [errors, setErrors] = useState({})
@@ -414,9 +469,12 @@ export function CampaignBuilder({ partner, packages = [], creatives = [], api, o
     try {
       let body = { ...v, targeting: { radius_mi: Number(v.radius), routes: v.routes }, launch }
       if (v.creativeMode === 'upload') {
-        if (!file) throw Object.assign(new Error('Pick an image or video.'), { errors: { storagePath: 'Upload an image or video.' } })
-        const up = await api.uploadAdCreative(file)
-        body = { ...body, storagePath: up.path, contentType: up.contentType }
+        if (file) {
+          const up = await api.uploadAdCreative(file)
+          body = { ...body, storagePath: up.path, contentType: up.contentType }
+        } else if (!v.storagePath) {
+          throw Object.assign(new Error('Pick an image or video.'), { errors: { storagePath: 'Upload an image or video.' } })
+        }
       }
       const out = await api.savePartnerCampaign(body)
       setErrors({})
@@ -444,6 +502,7 @@ export function CampaignBuilder({ partner, packages = [], creatives = [], api, o
           <button type="button" aria-pressed={v.creativeMode === 'upload'} onClick={() => setV((p) => ({ ...p, creativeMode: 'upload' }))}>Upload image or video</button>
           {creatives.length ? <button type="button" aria-pressed={v.creativeMode === 'existing'} onClick={() => setV((p) => ({ ...p, creativeMode: 'existing', creativeId: p.creativeId || creatives[0].id }))}>Reuse an ad</button> : null}
         </div>
+        <CopilotPanel api={api} copilot={copilot} current={v} onApply={(patch) => setV((p) => ({ ...p, ...patch }))} />
         {v.creativeMode === 'build' ? (
           <div className="ads-grid2">
             <div className="adv-form-grid" style={{ gridTemplateColumns: '1fr' }}>
@@ -521,7 +580,7 @@ export function CampaignBuilder({ partner, packages = [], creatives = [], api, o
   )
 }
 
-const DASH_API = { fetchMyAds, fetchAdPackages, savePartnerCampaign, launchPartnerCampaign, boostCampaign, uploadAdCreative }
+const DASH_API = { fetchMyAds, fetchAdPackages, savePartnerCampaign, launchPartnerCampaign, boostCampaign, uploadAdCreative, copilotSuggest, copilotImage }
 
 /** Signed-in partner view. Counters refresh every 15 s (RLS-safe: the API returns only your rows). */
 export function PartnerDashboard(props) {
@@ -560,7 +619,7 @@ export function PartnerDashboardView({ api = DASH_API, data: initial = null, use
   return (
     <div className="ads-panel">
       {data.onboarded ? (
-        <CampaignBuilder partner={partner} packages={packages} creatives={creatives} api={api} onSaved={refresh} />
+        <CampaignBuilder partner={partner} packages={packages} creatives={creatives} api={api} onSaved={refresh} copilot={data.copilot} />
       ) : (
         <div className="mkt-card ads-onboard" data-testid="ads-onboarding">
           <h3>Finish onboarding to build and launch campaigns</h3>

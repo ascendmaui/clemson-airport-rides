@@ -100,3 +100,11 @@ html body .site.mkt .ads-mode button[aria-pressed="true"] { background: #522D80 
 html body .site.mkt .ads-tip-text { color: #fff !important; }
 html body .site.mkt .ads-metric-value { color: #522D80 !important; }
 html body .site.mkt .ads-metric[data-metric="scans"] .ads-metric-value { color: #c45200 !important; }
+
+/* AI co-pilot (flagged off by default) */
+.ads-copilot { margin: 0 0 16px; display: grid; gap: 8px; }
+.ads-copilot input { width: 100%; }
+.ads-copilot-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ads-copilot-list li { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; border-bottom: 1px solid rgba(82, 45, 128, 0.12); padding: 4px 0; }
+.ads-link { background: none; border: 0; color: #522D80; font-weight: 600; cursor: pointer; text-decoration: underline; }
+.ads-muted { color: #5b5470; font-size: 0.92rem; margin: 0; }
