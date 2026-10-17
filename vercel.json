@@ -173,6 +173,10 @@
       "destination": "/api/$1"
     },
     {
+      "source": "/q/:token",
+      "destination": "/api/ads?action=qr&token=:token"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
