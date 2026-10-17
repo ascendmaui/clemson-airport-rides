@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SitePage } from '../components/SitePage'
 import { MarketingPhoto } from '../components/MarketingPhoto'
 import { buildFieldA11yProps, getFieldErrorProps } from '../lib/formA11y'
@@ -174,7 +174,31 @@ export function AdPackagesSection() {
   )
 }
 
+/**
+ * Hero links. The router reads any #hash as a route, so in-page anchors like #adv-how sent people
+ * to the homepage. Use real paths: sign-up with the founding-partner option, and
+ * /advertise?section=how-it-works, which scrolls to the How it works section.
+ */
+export const FOUNDING_SIGNUP_HREF = '/advertise/signup?package=founding-partner'
+export const HOW_IT_WORKS_ID = 'how-it-works'
+export const HOW_IT_WORKS_HREF = `/advertise?section=${HOW_IT_WORKS_ID}`
+
+function scrollToHowItWorks(smooth) {
+  const el = typeof document !== 'undefined' ? document.getElementById(HOW_IT_WORKS_ID) : null
+  if (el) el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' })
+  return Boolean(el)
+}
+
+function jumpToHowItWorks(e) {
+  if (!scrollToHowItWorks(true)) return
+  e.preventDefault()
+  try { window.history.replaceState(window.history.state, '', HOW_IT_WORKS_HREF) } catch { /* ignore */ }
+}
+
 export function Advertise() {
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('section') === HOW_IT_WORKS_ID) scrollToHowItWorks(false)
+  }, [])
   return (
     <SitePage current="advertise">
       <section className="adv-hero mkt-section-head mkt-page-hero" aria-labelledby="adv-hero-heading">
@@ -182,12 +206,12 @@ export function Advertise() {
         <h1 id="adv-hero-heading">Put your business in front of every Clemson Rides rider</h1>
         <p className="adv-lede">A tablet on the back of the front seat in every Clemson Rides car, scrolling local businesses, deals, promos and game-day specials.</p>
         <div className="dp-hero-actions">
-          <a className="dp-btn dp-btn-primary pressable" href="#adv-interest">Become a founding partner</a>
-          <a className="dp-btn dp-btn-ghost pressable" href="#adv-how">How it works</a>
+          <a className="dp-btn dp-btn-primary pressable" href={FOUNDING_SIGNUP_HREF}>Become a founding partner</a>
+          <a className="dp-btn dp-btn-ghost pressable" href={HOW_IT_WORKS_HREF} onClick={jumpToHowItWorks}>How it works</a>
         </div>
       </section>
 
-      <section id="adv-how" className="adv-section" aria-labelledby="adv-how-heading">
+      <section id={HOW_IT_WORKS_ID} className="adv-section" aria-labelledby="adv-how-heading">
         <div className="mkt-section-head">
           <p className="mkt-kicker">In-car tablets</p>
           <h2 id="adv-how-heading">Ads riders actually see</h2>
