@@ -142,7 +142,7 @@ export async function partnerDashboard(sb, user) {
 
 /* ---------------- Partner self-serve ---------------- */
 
-async function ownPartner(sb, user, partnerId) {
+export async function ownPartner(sb, user, partnerId) {
   const partners = must(await sb.from('ad_partners').select('*').eq('profile_id', user.id), 'partners') || []
   const p = partnerId ? partners.find((x) => x.id === partnerId) : (partners.find(partnerOnboarded) || partners[0])
   if (!p) throw fail(403, 'No partner account for this sign-in.')
@@ -150,7 +150,7 @@ async function ownPartner(sb, user, partnerId) {
   return p
 }
 
-async function ownCampaign(sb, user, campaignId) {
+export async function ownCampaign(sb, user, campaignId) {
   const c = must(await sb.from('ad_campaigns').select('*, ad_creatives(*), ad_partners(*)').eq('id', campaignId).maybeSingle(), 'campaign')
   if (!c || c.ad_partners?.profile_id !== user.id) throw fail(404, 'Campaign not found')
   return c
@@ -168,7 +168,7 @@ export function partnerCampaignErrors(b = {}) {
     if (String(b.headline || '').trim().length < 2) e.headline = 'Add a headline.'
     if (String(b.dealText || '').trim().length < 3) e.dealText = 'Add the deal riders should see.'
   }
-  if (mode === 'upload' && !/^pending\/[0-9a-f-]{36}\/[\w.-]{1,120}$/i.test(String(b.storagePath || ''))) e.storagePath = 'Upload an image or video.'
+  if (mode === 'upload' && !/^(pending\/[0-9a-f-]{36}|copilot\/[\w-]{1,40})\/[\w.-]{1,120}$/i.test(String(b.storagePath || ''))) e.storagePath = 'Upload an image or video.'
   return e
 }
 
@@ -183,6 +183,9 @@ export async function partnerSaveCampaign(sb, user, body = {}, { now = new Date(
   const errors = partnerCampaignErrors(body)
   if (Object.keys(errors).length) throw fail(400, 'Fix the highlighted fields.', { errors })
   const partner = await ownPartner(sb, user, body.partnerId)
+  if (String(body.storagePath || '').startsWith('copilot/') && !String(body.storagePath).startsWith(`copilot/${partner.id}/`)) {
+    throw fail(400, 'Upload an image or video.', { errors: { storagePath: 'Upload an image or video.' } })
+  }
   const pkg = must(await sb.from('ad_packages').select('*').eq('id', body.packageId).maybeSingle(), 'package')
   if (!packagePickable(pkg) || pkg.kind === 'addon') throw fail(400, 'Pick an available ride bundle.', { errors: { packageId: 'Pick an available ride bundle.' } })
 
