@@ -23,7 +23,7 @@ import { payoutIsDue, resolveDriverNetCents, summarizeDriverEarnings } from '../
 export function cronAuthorized(req, secretOverride) {
   const secret = (secretOverride !== undefined ? secretOverride : (process.env.CRON_SECRET || '')).trim()
   if (!secret || secret.includes('placeholder')) return false
-  const header = req.headers?.authorization || req.headers?.Authorization || req.headers?.['AUTHORIZATION'] || ''
+  const header = req?.headers?.authorization || req?.headers?.Authorization || req?.headers?.['AUTHORIZATION'] || ''
   const trimmed = String(header).trim()
   const match = trimmed.match(/^Bearer\s+(.+)$/i)
   if (!match) return false

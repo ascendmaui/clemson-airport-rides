@@ -11,6 +11,7 @@ import {
   attemptStandbyBackupPayout,
   attemptSwitchFeePayout,
   attemptCancelFeePayout,
+  buildPayoutRecord,
   loadConnectAccount,
   writePayout,
 } from '../server/payouts.js'
@@ -717,4 +718,217 @@ test('writePayout: updates trip metadata, upserts driver_payouts, and tolerates 
   })
   assert.equal(writeResMissing.error, null)
 })
+
+test('driverPayoutsHandler: returns 405 Method not allowed on non-GET/POST and 503 when sb is missing', async () => {
+  // Method not allowed
+  const reqPut = { method: 'PUT', headers: {} }
+  const resPut = mockRes()
+  await driverPayoutsHandler(reqPut, resPut, {})
+  assert.equal(resPut.statusCode, 405)
+  assert.equal(resPut.headers['allow'], 'GET, POST, OPTIONS')
+  assert.match(resPut.headers['cache-control'], /no-store/)
+  assert.equal(parseJson(resPut).error, 'Method not allowed')
+
+  // Missing Supabase
+  const reqGet = { method: 'GET', headers: {} }
+  const resNoSb = mockRes()
+  await driverPayoutsHandler(reqGet, resNoSb, { sb: null })
+  assert.equal(resNoSb.statusCode, 503)
+  assert.match(resNoSb.headers['cache-control'], /no-store/)
+  assert.equal(parseJson(resNoSb).error, 'SUPABASE_SERVICE_ROLE_KEY not configured')
+})
+
+test('driverPayoutsHandler: signed-in driver GET returns earnings summary for completed trips', async () => {
+  const trip1 = {
+    id: 't_driver_done_1',
+    driver_id: 'd_signed_in',
+    fare_cents: 5000,
+    status: 'completed',
+    metadata: {
+      payout: { status: 'paid', amountCents: 4000 },
+    },
+    completed_at: '2026-10-10T12:00:00.000Z',
+  }
+  const trip2 = {
+    id: 't_driver_done_2',
+    driver_id: 'd_signed_in',
+    fare_cents: 6000,
+    status: 'completed',
+    metadata: {
+      payout: { status: 'pending', amountCents: 4800 },
+    },
+    completed_at: '2026-10-10T14:00:00.000Z',
+  }
+
+  const mockSb = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          eq: () => ({
+            order: () => ({
+              limit: async () => ({ data: [trip1, trip2], error: null }),
+            }),
+          }),
+        }),
+      }),
+    }),
+  }
+
+  const req = { method: 'GET', headers: {} }
+  const res = mockRes()
+  await driverPayoutsHandler(req, res, {
+    sb: mockSb,
+    user: { id: 'd_signed_in' },
+  })
+
+  assert.equal(res.statusCode, 200)
+  assert.match(res.headers['cache-control'], /no-store/)
+  const body = parseJson(res)
+  assert.ok(body)
+  assert.equal(body.paidCents, 4000)
+  assert.equal(body.pendingCents, 4800)
+  assert.equal(body.pending.length, 1)
+})
+
+test('driverPayoutsHandler: signed-in driver POST executes due payouts and returns results plus earnings summary', async () => {
+  const tripDue = {
+    id: 't_driver_due',
+    driver_id: 'd_post_user',
+    fare_cents: 5000,
+    status: 'completed',
+    metadata: {
+      payout: { status: 'failed', attempts: 1, nextRetryAt: Date.now() - 10000, amountCents: 4000 },
+    },
+    completed_at: '2026-10-10T12:00:00.000Z',
+  }
+
+  let attemptCalled = false
+  const mockSb = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          eq: () => ({
+            order: () => ({
+              limit: async () => ({ data: [tripDue], error: null }),
+            }),
+          }),
+        }),
+      }),
+    }),
+  }
+
+  const req = { method: 'POST', headers: {} }
+  const res = mockRes()
+  await driverPayoutsHandler(req, res, {
+    sb: mockSb,
+    user: { id: 'd_post_user' },
+    loadConnectAccount: async () => 'acct_user_connect',
+    attemptDriverPayout: async () => {
+      attemptCalled = true
+      return { ok: true, payout: { status: 'paid', amountCents: 4000 } }
+    },
+    writePayout: async () => ({ error: null }),
+  })
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(attemptCalled, true)
+  const body = parseJson(res)
+  assert.ok(Array.isArray(body.results))
+  assert.equal(body.results[0].status, 'paid')
+  assert.ok(body.summary)
+})
+
+test('cronAuthorized: validates secret requirements, placeholder rejection, and Bearer case-insensitivity', () => {
+  // 1. Missing secret
+  assert.equal(cronAuthorized({ headers: { authorization: 'Bearer abc' } }, ''), false)
+  assert.equal(cronAuthorized({ headers: { authorization: 'Bearer abc' } }, '   '), false)
+
+  // 2. Secret contains 'placeholder'
+  assert.equal(cronAuthorized({ headers: { authorization: 'Bearer my_placeholder_sec' } }, 'my_placeholder_sec'), false)
+
+  // 3. Header casing and spacing
+  assert.equal(cronAuthorized({ headers: { authorization: 'Bearer valid_secret_123' } }, 'valid_secret_123'), true)
+  assert.equal(cronAuthorized({ headers: { Authorization: 'bearer valid_secret_123' } }, 'valid_secret_123'), true)
+  assert.equal(cronAuthorized({ headers: { AUTHORIZATION: 'Bearer   valid_secret_123' } }, 'valid_secret_123'), true)
+
+  // 4. Mismatch
+  assert.equal(cronAuthorized({ headers: { authorization: 'Bearer wrong_secret' } }, 'valid_secret_123'), false)
+  assert.equal(cronAuthorized({ headers: { authorization: 'Basic valid_secret_123' } }, 'valid_secret_123'), false)
+  assert.equal(cronAuthorized({ headers: {} }, 'valid_secret_123'), false)
+  assert.equal(cronAuthorized(null, 'valid_secret_123'), false)
+})
+
+test('buildPayoutRecord: respects boost_included_in_driver_net and promotedFromBackup bonus variations', () => {
+  // 1. boost_included_in_driver_net: true ignores separate boost calculation
+  const tripNetIncluded = {
+    id: 't_boost_incl',
+    driver_id: 'd_1',
+    fare_cents: 5000,
+    metadata: {
+      driver_net_cents: 4500,
+      boost_cents: 1000,
+      boost_included_in_driver_net: true,
+    },
+  }
+  const recordIncluded = buildPayoutRecord(tripNetIncluded)
+  assert.equal(recordIncluded.boostCents, 0)
+  assert.equal(recordIncluded.amountCents, 4500)
+
+  // 2. promotedFromBackup with confirmState !== 'released' adds backup bonus
+  const tripPromoted = {
+    id: 't_backup_promo',
+    driver_id: 'd_promoted',
+    fare_cents: 5000,
+    metadata: {
+      backup_queue: {
+        enabled: true,
+        promotedFromBackup: true,
+        confirmState: 'enroute',
+        bonusCents: 1500,
+      },
+    },
+  }
+  const recordPromoted = buildPayoutRecord(tripPromoted)
+  // Default net = 4000 (80%), bonus = 1500 -> 5500
+  assert.equal(recordPromoted.amountCents, 5500)
+
+  // 3. promotedFromBackup with confirmState: 'released' excludes bonus
+  const tripReleased = {
+    id: 't_backup_rel',
+    driver_id: 'd_promoted_rel',
+    fare_cents: 5000,
+    metadata: {
+      backup_queue: {
+        enabled: true,
+        promotedFromBackup: true,
+        confirmState: 'released',
+        bonusCents: 1500,
+      },
+    },
+  }
+  const recordReleased = buildPayoutRecord(tripReleased)
+  assert.equal(recordReleased.amountCents, 4000)
+})
+
+test('writePayout: returns error when trips table update fails, and merges existing metadata cleanly', async () => {
+  // 1. Trips table update failure returns error
+  const trip = { id: 't_upd_fail', metadata: { key: 'val' } }
+  const sbErr = createMockPayoutDb({ trip, tripsUpdateError: 'Row-level security violation' })
+  const resErr = await writePayout(sbErr, trip, { status: 'paid', amountCents: 1000 })
+  assert.equal(resErr.error, 'Row-level security violation')
+
+  // 2. Merges with existing fresh metadata on trip
+  const tripWithPrior = { id: 't_merge_meta', metadata: { note: 'keep_me', count: 42 } }
+  const sbMerge = createMockPayoutDb({ trip: tripWithPrior })
+  const resMerge = await writePayout(sbMerge, tripWithPrior, {
+    status: 'paid',
+    amountCents: 2000,
+    tripId: 't_merge_meta',
+  })
+  assert.equal(resMerge.error, null)
+  assert.equal(resMerge.metadata.note, 'keep_me')
+  assert.equal(resMerge.metadata.count, 42)
+  assert.equal(resMerge.metadata.payout.amountCents, 2000)
+})
+
 
