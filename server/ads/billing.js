@@ -95,10 +95,38 @@ export async function startCampaignPayment({ stripe, sb, campaignId, mode = 'inv
   return { ok: true, mode, ...patch }
 }
 
+export const ADS_BOOST_KIND = 'ad_boost'
+
+/**
+ * Boost add-on invoice (double the remaining rides at the per-ride rate). Same flag as campaigns:
+ * with ADS_BILLING_ENABLED off the boost simply stays pending_payment for the admin desk.
+ */
+export async function startBoostPayment({ stripe, sb, boostId, env = process.env }) {
+  if (!adsBillingEnabled(env)) return { skipped: true, reason: 'ADS_BILLING_ENABLED is off' }
+  if (!stripe) throw fail(503, 'Stripe is not configured')
+  const { data: boost, error } = await sb.from('ad_campaign_boosts').select('*, ad_campaigns(*, ad_partners(*), ad_packages(*))').eq('id', boostId).maybeSingle()
+  if (error) throw fail(500, error.message)
+  if (!boost) throw fail(404, 'Boost not found')
+  const campaign = boost.ad_campaigns
+  if (campaign?.ad_packages?.placeholder) throw fail(409, 'Placeholder packages cannot be billed. Approve real tiers first.')
+  if (!(boost.price_cents > 0)) throw fail(409, 'Boost has no price')
+  const customer = await ensureCustomer(stripe, sb, campaign.ad_partners)
+  const metadata = { kind: ADS_BOOST_KIND, boost_id: boost.id, campaign_id: campaign.id, partner_id: campaign.partner_id }
+  const description = `Clemson Rides in-car tablet ads: boost +${boost.rides_added} rides`
+  const invoice = await stripe.invoices.create({ customer, collection_method: 'send_invoice', days_until_due: 14, auto_advance: false, metadata, description },
+    { idempotencyKey: `ad-boost-invoice-${boost.id}` })
+  await stripe.invoiceItems.create({ customer, invoice: invoice.id, amount: boost.price_cents, currency: 'usd', description, metadata },
+    { idempotencyKey: `ad-boost-item-${boost.id}` })
+  const finalized = await stripe.invoices.finalizeInvoice(invoice.id, { auto_advance: false })
+  await sb.from('ad_campaign_boosts').update({ stripe_invoice_id: finalized.id, payment_url: finalized.hosted_invoice_url }).eq('id', boost.id)
+  return { ok: true, stripe_invoice_id: finalized.id, payment_url: finalized.hosted_invoice_url }
+}
+
 export function isAdsStripeEvent(event) {
   const t = event?.type
   if (t !== 'invoice.paid' && t !== 'checkout.session.completed' && t !== 'checkout.session.async_payment_succeeded') return false
-  return event?.data?.object?.metadata?.kind === ADS_KIND
+  const kind = event?.data?.object?.metadata?.kind
+  return kind === ADS_KIND || kind === ADS_BOOST_KIND
 }
 
 /** Marks the campaign active once Stripe says it is paid. Idempotent. */
@@ -107,6 +135,14 @@ export async function handleAdsStripeEvent(sb, event, { now = new Date() } = {})
   const obj = event.data.object
   if (event.type.startsWith('checkout.session') && obj.payment_status && obj.payment_status !== 'paid') {
     return { ok: true, skipped: true, reason: 'not_paid' }
+  }
+  if (obj.metadata?.kind === ADS_BOOST_KIND) {
+    const boostId = obj.metadata?.boost_id
+    if (!boostId) return { ok: true, skipped: true, reason: 'no_boost_id' }
+    await sb.from('ad_campaign_boosts').update({ status: 'paid', paid_at: now.toISOString() }).eq('id', boostId).eq('status', 'pending_payment')
+    const { adminBoost } = await import('./tracking.js')
+    const out = await adminBoost(sb, { id: boostId, action: 'apply' }, { now })
+    return { ok: true, boostApplied: boostId, already: Boolean(out.already) }
   }
   const id = obj.metadata?.campaign_id
   if (!id) return { ok: true, skipped: true, reason: 'no_campaign_id' }
