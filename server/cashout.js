@@ -13,6 +13,7 @@ import {
   payoutGate, usableConnectAccount,
 } from './payoutApproval.js'
 import { payoutApprovalRequired } from '../shared/payoutApproval.js'
+import { PAYOUT_HOLD_ERROR, payoutsHeld } from './payoutHold.js'
 
 export function cashoutFeeConfig(env = process.env) {
   const bps = Number(env.CASHOUT_INSTANT_FEE_BPS)
@@ -63,6 +64,9 @@ export async function cashoutQuote({ sb, stripe, driverId, env = process.env, no
   const today = account ? await cashedOutToday(sb, driverId, now) : false
   const fee = cashoutFeeConfig(env)
   const balanceCents = cashoutBalanceCents(trips.data)
+  if (await payoutsHeld({ sb, env })) {
+    return { state: PAYOUT_HOLD_ERROR, balanceCents, grossCents: balanceCents, feeCents: 0, netCents: balanceCents, connectAccountId: account }
+  }
   if (picked.blocked === 'instant_unavailable') {
     return {
       state: 'instant_unavailable',
@@ -88,6 +92,7 @@ const CLAIM_ERRORS = ['already_cashed_out_today', 'zero_balance', 'balance_below
  */
 export async function executeCashout({ sb, stripe, driverId, expectedFeeCents, env = process.env, now = new Date(), method: requestedMethod = null }) {
   if (!cashoutKeyAllowed(env.STRIPE_SECRET_KEY, env)) return { ok: false, status: 403, error: 'live_keys_blocked' }
+  if (await payoutsHeld({ sb, env })) return { ok: false, status: 409, error: PAYOUT_HOLD_ERROR }
   if (sweepWindowBlocked(now)) return { ok: false, status: 409, error: 'sweep_window' }
   const quote = await cashoutQuote({ sb, stripe, driverId, env, now, method: requestedMethod })
   if (quote.state !== 'ready') return { ok: false, status: 409, error: quote.state, quote }
@@ -202,7 +207,8 @@ async function loadCashoutRow(sb, cashoutId) {
 }
 
 /** Run an approved cash-out. Only a still-claimed row moves money. */
-export async function completeApprovedCashout({ sb, stripe, request }) {
+export async function completeApprovedCashout({ sb, stripe, request, env = process.env }) {
+  if (await payoutsHeld({ sb, env })) return { ok: false, status: 409, error: PAYOUT_HOLD_ERROR }
   const row = await loadCashoutRow(sb, request.source_id)
   if (!row) return { ok: false, status: 404, error: 'cashout_not_found' }
   if (row.status !== 'claimed') return { ok: false, status: 409, error: `cashout_${row.status}` }

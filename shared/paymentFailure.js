@@ -7,6 +7,7 @@
  * metadata. This module only reads those values and collects them.
  */
 import { driverNetCents, platformFeeCents } from './platformFee.js'
+import { driverPayoutError, isPayoutHoldError } from './payoutHold.js'
 
 export const PAYMENT_CODES = [
   'card_declined',
@@ -400,7 +401,8 @@ export function summarizeDriverEarnings(trips) {
         amountCents,
         status: 'pending',
         attempts: payout.attempts || 0,
-        lastError: payout.lastError || null,
+        lastError: driverPayoutError(payout.lastError),
+        onHold: isPayoutHoldError(payout.lastError) || undefined,
         nextRetryAt: payout.nextRetryAt || null,
         dropoffLabel: trip.dropoff_label || null,
       })
@@ -418,7 +420,7 @@ export function summarizeDriverEarnings(trips) {
       tipsPendingCents += amountCents
       pending.push({
         tripId: trip.id, amountCents, status: 'pending', kind: 'tip',
-        attempts: tip.attempts || 0, lastError: tip.lastError || null, nextRetryAt: tip.nextRetryAt || null,
+        attempts: tip.attempts || 0, lastError: driverPayoutError(tip.lastError), onHold: isPayoutHoldError(tip.lastError) || undefined, nextRetryAt: tip.nextRetryAt || null,
         dropoffLabel: trip.dropoff_label || null,
       })
     }

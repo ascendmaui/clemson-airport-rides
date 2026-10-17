@@ -4,6 +4,7 @@
  * row id as the Stripe idempotency key so a retry never pays twice.
  */
 import { loadConnectAccount } from './payouts.js'
+import { payoutsHeld } from './payoutHold.js'
 import { payoutApprovalRequired } from '../shared/payoutApproval.js'
 import {
   approvalIdempotencyKey, isDefiniteStripeError, markApprovalFailed, markApprovalSent, payoutGate, usableConnectAccount,
@@ -29,6 +30,8 @@ export async function awardBonuses(sb, driverId, awards) {
 
 /** Pay pending bonus rows. Called from the daily payout sweep. */
 export async function payBonusLedger(sb, stripe, { limit = 100, loadAccount = loadConnectAccount, now = new Date(), env = process.env, ids = null } = {}) {
+  // Payouts hold: bonuses stay pending in driver_bonus_ledger (docs/PAYOUTS_HOLD.md).
+  if (await payoutsHeld({ sb, env })) return []
   let query = sb.from('driver_bonus_ledger').select('*').in('status', ['pending', 'failed'])
   if (Array.isArray(ids) && ids.length) query = query.in('id', ids)
   const listed = await query.order('created_at').limit(limit)

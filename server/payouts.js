@@ -17,6 +17,7 @@ import { payoutApprovalRequired } from '../shared/payoutApproval.js'
 import {
   approvalIdempotencyKey, isDefiniteStripeError, markApprovalFailed, markApprovalSent, payoutGate, usableConnectAccount,
 } from './payoutApproval.js'
+import { PAYOUT_HOLD_ERROR, heldPayoutRecord, payoutsHeld } from './payoutHold.js'
 
 export { tigerHeatPayoutCents }
 
@@ -98,6 +99,10 @@ export async function attemptDriverPayout({
   if (existing.status === 'paid') return { ok: true, payout: existing, idempotent: true }
   if (!payoutIsDue(existing.status === 'pending' || existing.status === 'failed' ? existing : { ...existing, status: 'pending' }, now) && existing.attempts > 0) {
     return { ok: false, payout: existing, skipped: true, reason: 'not_due' }
+  }
+  // Payouts hold (docs/PAYOUTS_HOLD.md): stay pending, no attempt counted, no Stripe call.
+  if (await payoutsHeld({ sb, env })) {
+    return { ok: false, held: true, skipped: true, reason: PAYOUT_HOLD_ERROR, payout: heldPayoutRecord(existing, amountCents) }
   }
   if (!connectAccountId) {
     const payout = applyPayoutAttempt(existing, {
