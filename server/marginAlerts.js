@@ -7,6 +7,7 @@
  */
 import { fareMargin } from '../shared/pricingMargin.js'
 import { pricingSettings } from './pricingConfig.js'
+import { zonedCivilToUtc } from '../shared/rideTime.js'
 
 const QUOTE_DEDUP_MS = 10 * 60 * 1000
 const QUOTE_MAX_PER_HOUR = 200
@@ -81,4 +82,52 @@ export function resetMarginAlertThrottle() {
   recent.clear()
   hourStart = 0
   hourCount = 0
+}
+
+/** [start, end) of the ET calendar day before `now` (handles DST). */
+export function yesterdayEtRange(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+  const [y, m, d] = parts.split('-').map(Number)
+  const prev = new Date(Date.UTC(y, m - 1, d - 1))
+  const start = zonedCivilToUtc(prev.getUTCFullYear(), prev.getUTCMonth() + 1, prev.getUTCDate(), 0, 0, 0, 'America/New_York')
+  const end = zonedCivilToUtc(y, m, d, 0, 0, 0, 'America/New_York')
+  const label = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(start)
+  return { start, end, label }
+}
+
+/**
+ * Daily summary of below-margin rows. Bookings are real rides (trip_id set);
+ * quotes are rider looks that may not have booked. Compare rows are blocked
+ * --apply runs of the competitor script.
+ */
+export function summarizeMarginAlerts(rows = []) {
+  const by = { booking: [], quote: [], compare: [] }
+  for (const r of rows) if (by[r.source]) by[r.source].push(r)
+  const tiers = {}
+  let lossCents = 0
+  let shortfallCents = 0
+  for (const r of by.booking) {
+    const t = (tiers[r.tier || 'unknown'] ||= { rides: 0, fareCents: 0, profitCents: 0, unprofitable: 0, worstMarginBps: null })
+    t.rides += 1
+    t.fareCents += r.fare_cents || 0
+    t.profitCents += r.profit_cents || 0
+    if ((r.profit_cents || 0) < 0) {
+      t.unprofitable += 1
+      lossCents += -(r.profit_cents || 0)
+    }
+    t.worstMarginBps = t.worstMarginBps == null ? r.margin_bps : Math.min(t.worstMarginBps, r.margin_bps)
+    // Profit missing versus the target on this ride.
+    const targetProfit = Math.floor(((r.fare_cents || 0) * (r.target_bps || 0)) / 10000)
+    shortfallCents += Math.max(0, targetProfit - (r.profit_cents || 0))
+  }
+  return {
+    belowTargetRides: by.booking.length,
+    unprofitableRides: by.booking.filter((r) => (r.profit_cents || 0) < 0).length,
+    lossCents,
+    shortfallVsTargetCents: shortfallCents,
+    belowTargetQuotes: by.quote.length,
+    blockedApplyRuns: by.compare.length,
+    tiers,
+    worst: [...by.booking].sort((a, b) => a.margin_bps - b.margin_bps).slice(0, 10).map((r) => ({ tripId: r.trip_id, tier: r.tier, fareCents: r.fare_cents, profitCents: r.profit_cents, marginBps: r.margin_bps, surge: Number(r.surge_multiplier) || 1 })),
+  }
 }

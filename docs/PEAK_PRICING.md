@@ -1,5 +1,11 @@
 # Peak pricing (surge) — design and rollout
 
+> **2026-10-17 update (John's decision):** live pricing is now weekend 1.0x, airport rush 1.0x, and
+> game day 1.25x only near Memorial Stadium on home-game days (kickoff − 4 h to + 3 h). That runs on the
+> default (flag-off) path. See `docs/pricing-competitor-check.md`. The peak flag stays OFF; its
+> defaults were aligned (game day +25%, airport 0%, cap +25%, scheduled rides priced at pickup time),
+> and the engine caps any config at 1.25x. The pool migration below is still **not applied**.
+
 > **Status: behind a feature flag that is OFF by default. John must still approve the pricing
 > changes before the flag is turned on.** The parameter values below are the defaults from the
 > pricing research (`clemson-pricing-recommendation-2026-10-15`), not live prices. Merging this
@@ -157,13 +163,13 @@ Settlement fails closed until then.
 
 Turning the flag off goes straight back to legacy pricing.
 
-## Live pricing today (unchanged by this PR)
+## Live pricing (flag off), from 2026-10-17
 
-With the flag off, production still runs the legacy multipliers:
+Before 2026-10-17 production ran 1.8× game day (plus a fallback on every Aug–Nov Saturday 11:00–23:00),
+1.2× weekend, 1.35× airport rush, 2.5× cap. John replaced these with:
 
-- 1.8× game day, plus a fallback that fires every Aug–Nov Saturday from 11:00 to 23:00 even with no game
-- 1.2× weekend from Fri 17:00 through Sunday
-- 1.35× airport rush
-- 2.5× cap
+- 1.25× game day, home games only, kickoff − 4 h to + 3 h, pickup or dropoff within 2 mi of Memorial Stadium
+- 1.0× weekend, 1.0× airport rush, no fall-Saturday fallback
+- 1.25× cap, never stacked
 
-The research recommends replacing these. That is the decision this flag represents.
+Details: `docs/pricing-competitor-check.md`.

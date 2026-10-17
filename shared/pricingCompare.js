@@ -10,7 +10,7 @@
  *      margin.
  * If a rule blocks the change, nothing is written and alerts explain why.
  */
-import { fareMargin, normalizeMarginSettings } from './pricingMargin.js'
+import { fareMargin, minFareForMargin, normalizeMarginSettings } from './pricingMargin.js'
 
 /**
  * Basket of real Clemson trips. Minutes are drive-time assumptions (Clemson
@@ -181,7 +181,8 @@ export function planCompetitorApply({ cards, competitors, basket = CLEMSON_BASKE
     let candidate = null
     let floorsHit = []
     let blocked = null
-    for (let i = 0; i < 200; i += 1) {
+    // Keep stepping after a floor pins one field: the other fields can still move.
+    for (let i = 0; i < 1000; i += 1) {
       const floored = applyFloors(scaleCard(current, factor), current, cfg)
       candidate = floored.card
       floorsHit = floored.floorsHit
@@ -189,7 +190,6 @@ export function planCompetitorApply({ cards, competitors, basket = CLEMSON_BASKE
       const left = undercutViolations(trial, group.tiers, competitors, basket, cfg)
       if (!left.length) { blocked = null; break }
       blocked = left
-      if (floorsHit.length && left.length) break
       factor -= 0.001
       if (factor <= 0) break
     }
@@ -219,4 +219,52 @@ export function planCompetitorApply({ cards, competitors, basket = CLEMSON_BASKE
   }
   const ok = changes.length > 0 && alerts.length === 0
   return { ok, needed: changes.length > 0 || alerts.some((a) => a.kind === 'floor_blocks_undercut'), changes: ok ? changes : [], proposed: changes, alerts, before: cards, after: ok ? next : cards, rows: finalRows }
+}
+
+/**
+ * Minimum-fare check (profit rule 2): the shortest trips must clear the target
+ * margin at today's driver pay. For each tier it compares the tier's effective
+ * minimum (card minimum x tier scale) with the smallest fare that reaches the
+ * target (minFareForMargin). A raise is proposed only when it still keeps the
+ * shortest basket trip at least undercutBps under the cheaper competitor;
+ * otherwise an alert explains the conflict. Never lowers a minimum fare.
+ */
+export function planMinFare({ cards, competitors = [], basket = CLEMSON_BASKET, settings = {} }) {
+  const cfg = { ...COMPARE_DEFAULTS, ...settings }
+  const margin = normalizeMarginSettings(cfg.margin)
+  const shortest = basket.reduce((a, b) => (b.miles < a.miles ? b : a))
+  const tiers = []
+  const alerts = []
+  let standardCardMin = cards.standard.minFareCents
+  for (const tier of ['standard', 'wait', 'comfort', 'carpool']) {
+    const own = tier === 'comfort' || tier === 'wait' ? cards[tier] : null
+    const cardKey = own ? tier : 'standard'
+    const scale = own ? 10000 : TIER_SCALE_BPS[tier]
+    const effectiveMin = Math.round((cards[cardKey].minFareCents * scale) / 10000)
+    const need = minFareForMargin({ carpool: tier === 'carpool', settings: margin })
+    const comps = compsFor(tier, competitors)
+    const cheapest = comps.length ? Math.min(...comps.map((c) => competitorFareCents(c, shortest))) : null
+    const ceiling = cheapest == null ? null : Math.floor((cheapest * (10000 - cfg.undercutBps)) / 10000)
+    const row = { tier, cardKey, effectiveMinCents: effectiveMin, neededMinCents: need, competitorShortestCents: cheapest, undercutCeilingCents: ceiling, ok: need != null && effectiveMin >= need }
+    tiers.push(row)
+    if (row.ok) continue
+    if (need == null || (ceiling != null && need > ceiling)) {
+      alerts.push({
+        kind: need == null ? 'margin_target_unreachable' : 'min_fare_breaks_undercut',
+        tier,
+        message: need == null
+          ? `${tier}: a ${margin.targetMarginBps / 100}% margin is impossible at any fare with a ${margin.driverShareBps / 100}% driver share and ${margin.stripeFeeBps / 100}% Stripe fee.`
+          : `${tier}: the minimum needs to be ${(need / 100).toFixed(2)} to reach ${margin.targetMarginBps / 100}% margin, but staying ${cfg.undercutBps / 100}% under competitors on the ${shortest.miles} mi trip caps it at ${(ceiling / 100).toFixed(2)} (today ${(effectiveMin / 100).toFixed(2)}).`,
+        trips: [{ tier, trip: shortest.id, currentMinCents: effectiveMin, neededMinCents: need, competitorCents: cheapest, ceilingCents: ceiling }],
+      })
+      continue
+    }
+    const cardNeed = Math.ceil((need * 10000) / scale)
+    if (cardKey === 'standard') standardCardMin = Math.max(standardCardMin, cardNeed)
+  }
+  const changes = []
+  if (!alerts.length && standardCardMin > cards.standard.minFareCents) {
+    changes.push({ tier: 'standard', field: 'minFareCents', before: cards.standard.minFareCents, after: standardCardMin })
+  }
+  return { ok: alerts.length === 0, tiers, changes, alerts }
 }

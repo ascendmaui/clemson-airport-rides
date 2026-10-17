@@ -186,8 +186,9 @@ function quoteAirportCheckoutWith({
   durationS = null,
   tigerPassBps = 0,
   tier = 'standard',
-  // Real trip endpoints, only for the game-day stadium radius. Airport checkout
-  // without coordinates never gets game-day pricing.
+  // Trip endpoints, only for the game-day stadium radius. Campus airport
+  // rides start at CAMPUS_PICKUP (the stadium pin), so quote, checkout, and
+  // recorded-trip pricing all agree when no coordinates are passed.
   pickup = null,
   dropoff = null,
 } = {}, mode = { kind: 'legacy' }) {
@@ -195,7 +196,13 @@ function quoteAirportCheckoutWith({
   const fb = AIRPORT_ROUTE_FALLBACK[code]
   const when = at instanceof Date && !Number.isNaN(at.getTime()) ? at : new Date()
   const hasRoute = distanceM != null || durationS != null
-  const surge = surgeForMode(mode, { at: when, airport: true, gameDayMultiplier, pickup, dropoff })
+  const surge = surgeForMode(mode, {
+    at: when,
+    airport: true,
+    gameDayMultiplier,
+    pickup: pickup ?? CAMPUS_PICKUP,
+    dropoff: dropoff ?? AIRPORT_DROPOFFS[code],
+  })
   const quote = quoteFare({
     distanceM: hasRoute ? distanceM : undefined,
     durationS: hasRoute ? durationS : undefined,
