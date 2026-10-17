@@ -68,3 +68,35 @@ html body .site.mkt .adc-headline { font-size: 2.2em !important; font-weight: 75
 html body .site.mkt .adc-deal { font-size: 1.25em !important; margin: 0 !important; }
 html body .site.mkt .ads-mode button { background: #fff !important; color: #1b1325 !important; border: 1px solid #d9d3e2 !important; }
 html body .site.mkt .ads-mode button[aria-pressed="true"] { background: #522D80 !important; border-color: #522D80 !important; color: #fff !important; }
+
+/* Partner analytics and self-serve builder. */
+.ads-row-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.ads-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 720px) { .ads-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.ads-metric { display: grid; gap: 2px; padding: 12px; border-radius: 14px; background: #fbf7f2; }
+.ads-metric[data-metric="scans"] { background: rgba(245, 102, 0, 0.1); }
+.ads-metric-value { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; color: #522D80; }
+.ads-metric[data-metric="scans"] .ads-metric-value { color: #c45200; }
+.ads-metric-label { position: relative; display: flex; align-items: center; gap: 6px; font-weight: 650; }
+.ads-metric-hint { font-size: 13px; opacity: 0.75; }
+.ads-tip { width: 20px; height: 20px; border-radius: 99px; border: 1px solid #c9bfd8; background: #fff; font-size: 12px; font-weight: 800; line-height: 1; cursor: help; padding: 0; color: #522D80; }
+.ads-tip-text { position: absolute; left: 0; top: calc(100% + 6px); z-index: 5; width: min(260px, 70vw); padding: 8px 10px; border-radius: 10px; background: #1b1325; color: #fff; font-size: 13px; font-weight: 500; line-height: 1.35; opacity: 0; pointer-events: none; transform: translateY(-2px); transition: opacity 120ms ease; }
+.ads-metric-label:hover .ads-tip-text, .ads-tip:focus + .ads-tip-text { opacity: 1; }
+.ads-progress { height: 10px; border-radius: 99px; background: #eee7f4; overflow: hidden; }
+.ads-progress span { display: block; height: 100%; background: linear-gradient(90deg, #522D80, #F56600); }
+.ads-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ads-table caption { text-align: left; font-weight: 700; padding-bottom: 6px; }
+.ads-table th, .ads-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee7f4; }
+.ads-chip--live { background: rgba(26,127,55,0.12); color: #1a7f37; }
+.ads-chip--completed { background: rgba(27,19,37,0.08); color: #3d3448; }
+.ads-chip--paused { background: rgba(82,45,128,0.12); color: #522D80; }
+.ads-builder { display: grid; gap: 18px; }
+.ads-step { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid #eee7f4; }
+.ads-step h4 { margin: 0; color: #522D80; }
+.ads-routes { display: flex; flex-wrap: wrap; gap: 8px 16px; border: 0; padding: 0; margin: 0; }
+.ads-routes legend { font-weight: 650; margin-bottom: 6px; }
+.ads-check, .ads-routes label { display: flex; align-items: center; gap: 8px; }
+.ads-boost { display: grid; gap: 8px; padding: 12px; border-radius: 12px; background: #fbf7f2; }
+html body .site.mkt .ads-tip-text { color: #fff !important; }
+html body .site.mkt .ads-metric-value { color: #522D80 !important; }
+html body .site.mkt .ads-metric[data-metric="scans"] .ads-metric-value { color: #c45200 !important; }

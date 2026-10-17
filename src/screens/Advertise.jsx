@@ -6,13 +6,21 @@ import { supportEmail } from '../../shared/productLinks.js'
 import { AD_LEAD_HONEYPOT, adLeadErrors, normalizeAdLead } from '../../shared/adLeads.js'
 import {
   AD_CATEGORIES,
-  ADS_PACKAGES_APPROVED,
-  COMING_SOON_COPY,
   FOUNDING_PARTNER_TIER,
+  GAME_DAY_ADDON,
+  PRICING_STATUS_COPY,
+  formatDollars,
+  formatPerRide,
   publicAdPackages,
   tierChoices,
 } from '../content/adPackages.js'
+import { APPLY_COPY } from '../../shared/ads/application.js'
+import { METRIC_DEFINITIONS } from '../../shared/ads/metrics.js'
+import { approvedSamples } from '../content/sampleAds.js'
+import { HERO_DEMO_APPROVED, HOW_IT_WORKS_VIDEO } from '../content/advertiseMedia.js'
+import { AdCreative } from '../components/AdCreative'
 import '../styles/advertise.css'
+import '../styles/ads.css'
 
 const HOW_IT_WORKS = [
   {
@@ -24,9 +32,19 @@ const HOW_IT_WORKS = [
     body: 'The screen scrolls local businesses, deals, promos and game-day specials while the ride is underway.',
   },
   {
-    title: 'A deal they can scan',
-    body: 'Each spot can carry a QR code, so a rider can save your offer before they reach College Avenue.',
+    title: 'A scan is a customer',
+    body: 'Every ad carries its own tracking QR code. Each scan is logged with the ride and time, then sends the rider straight to your deal: proof of foot traffic, not just views.',
   },
+  {
+    title: 'Pay per ride, see every ride',
+    body: 'You pay only for rides your ad is shown in, spread across drivers with tablets. Your analytics page lists every ride, its time and the QR scans it produced.',
+  },
+]
+
+const VALUE_PROPS = [
+  { title: 'QR scans first', body: METRIC_DEFINITIONS.scans },
+  { title: 'Pay per ride delivered', body: 'Buy a bundle of rides. A ride counts once, only when your ad played during that ride.' },
+  { title: 'Your own analytics page', body: 'Every ride your ad ran on, with timestamp and QR scans, plus ad runs and impressions. Download it as CSV.' },
 ]
 
 const AUDIENCE = [
@@ -102,7 +120,7 @@ export function AdInterestForm({ submit = submitAdLead }) {
 
   return (
     <form className="adv-form mkt-card" onSubmit={onSubmit} noValidate aria-labelledby="adv-form-heading">
-      <h3 id="adv-form-heading">Get founding-partner rates</h3>
+      <h3 id="adv-form-heading">Ask us about advertising</h3>
       <div className="adv-form-grid">
         <Field id="adv-business" label="Business name" error={errors.businessName} required>
           <input {...a11y('adv-business', 'businessName')} name="businessName" autoComplete="organization" value={values.businessName} onChange={set('businessName')} />
@@ -144,42 +162,104 @@ export function AdInterestForm({ submit = submitAdLead }) {
   )
 }
 
-export function AdPackagesSection() {
-  const tiers = publicAdPackages()
+/** Rotating sample-ad demo in a tablet frame. Renders nothing until John approves the samples. */
+export function HeroTabletDemo({ samples = approvedSamples(), enabled = HERO_DEMO_APPROVED }) {
+  const [i, setI] = useState(0)
+  useEffect(() => {
+    if (!enabled || samples.length < 2) return undefined
+    const t = window.setInterval(() => setI((n) => n + 1), 6000)
+    return () => window.clearInterval(t)
+  }, [enabled, samples.length])
+  if (!enabled || !samples.length) return null
+  const s = samples[i % samples.length]
   return (
-    <section className="adv-section" aria-labelledby="adv-packages-heading">
-      <div className="mkt-section-head">
-        <p className="mkt-kicker">Packages</p>
-        <h2 id="adv-packages-heading">Packages and pricing</h2>
+    <div className="adv-hero-demo" aria-label="Sample ads as riders see them on the tablet" data-testid="adv-hero-demo">
+      <div className="adv-tablet adv-tablet--live">
+        {s.video ? (
+          <video className="adc-media" src={s.video} poster={s.image} autoPlay muted playsInline loop />
+        ) : (
+          <AdCreative key={s.id} creative={{ kind: s.image ? 'image' : 'built', mediaUrl: s.image, headline: s.headline, dealText: s.dealText, theme: s.theme, qrUrl: 'https://clemsonrides.com/advertise' }} preview />
+        )}
       </div>
-      {ADS_PACKAGES_APPROVED && tiers.length ? (
-        <div className="adv-tiers site-card-grid">
-          {tiers.map((tier) => (
-            <article key={tier.id} className={tier.highlight ? 'mkt-card adv-tier adv-tier--highlight' : 'mkt-card adv-tier'}>
-              <h3>{tier.name}</h3>
-              <p className="adv-price">{tier.priceLabel}</p>
-              <p>{tier.summary}</p>
-              <ul>{tier.features.map((f) => <li key={f}>{f}</li>)}</ul>
-            </article>
-          ))}
-        </div>
-      ) : (
-        <div className="mkt-card adv-soon" data-testid="adv-coming-soon">
-          <span className="adv-soon-chip">Founding partners</span>
-          <p className="adv-soon-copy">{COMING_SOON_COPY}</p>
-          <a className="dp-btn dp-btn-primary pressable" href="#adv-interest">Contact us</a>
-        </div>
-      )}
+    </div>
+  )
+}
+
+/** "Run an ad similar to this" gallery. Renders nothing until John approves the samples. */
+export function SampleAdsGallery({ samples = approvedSamples() }) {
+  if (!samples.length) return null
+  return (
+    <section className="adv-section" aria-labelledby="adv-samples-heading" data-testid="adv-samples">
+      <div className="mkt-section-head">
+        <p className="mkt-kicker">Sample ads</p>
+        <h2 id="adv-samples-heading">What your ad could look like</h2>
+      </div>
+      <div className="site-card-grid adv-samples">
+        {samples.map((s) => (
+          <a key={s.id} className="mkt-card adv-sample pressable" href={`/advertise/signup?template=${encodeURIComponent(s.id)}`}>
+            {s.image ? <img src={s.image} alt={`${s.headline}: ${s.dealText}`} loading="lazy" /> : <AdCreative creative={{ kind: 'built', headline: s.headline, dealText: s.dealText, theme: s.theme }} preview />}
+            <span className="adv-sample-cta">Run an ad similar to this</span>
+          </a>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/** How it Works video slot. Renders nothing until John approves the video. */
+export function HowItWorksVideo({ video = HOW_IT_WORKS_VIDEO }) {
+  if (!video?.src) return null
+  return (
+    <video className="adv-video" src={video.src} poster={video.poster} controls muted playsInline preload="metadata" data-testid="adv-how-video">
+      {video.captions ? <track kind="captions" src={video.captions} srcLang="en" label="English" default /> : null}
+    </video>
+  )
+}
+
+export function AdPackagesSection() {
+  const bundles = publicAdPackages()
+  return (
+    <section id="pricing" className="adv-section" aria-labelledby="adv-packages-heading">
+      <div className="mkt-section-head">
+        <p className="mkt-kicker">Pricing</p>
+        <h2 id="adv-packages-heading">Pay only for rides your ad is shown in</h2>
+        <p>Ads are spread across drivers with tablets. Every ride is listed on your analytics page with its time and QR scans.</p>
+      </div>
+      <div className="adv-values">
+        {VALUE_PROPS.map((v) => (
+          <article key={v.title} className="mkt-card adv-value">
+            <h3>{v.title}</h3>
+            <p>{v.body}</p>
+          </article>
+        ))}
+      </div>
+      <div className="adv-tiers site-card-grid" data-testid="adv-bundles">
+        {bundles.map((b) => (
+          <article key={b.id} className={b.highlight ? 'mkt-card adv-tier adv-tier--highlight' : 'mkt-card adv-tier'}>
+            <h3>{b.name}</h3>
+            <p className="adv-price">{formatDollars(b.priceCents)}</p>
+            <p className="adv-per-ride">{formatPerRide(b)}</p>
+            <p>{b.summary}</p>
+            <a className="dp-btn dp-btn-primary pressable" href={`/advertise/signup?package=${b.id}`}>Choose {b.name}</a>
+          </article>
+        ))}
+        <article className="mkt-card adv-tier adv-tier--addon">
+          <h3>{GAME_DAY_ADDON.name}</h3>
+          <p className="adv-price">Add-on</p>
+          <p>{GAME_DAY_ADDON.summary}</p>
+        </article>
+      </div>
+      <p className="adv-fine" data-testid="adv-pricing-status">{PRICING_STATUS_COPY}</p>
     </section>
   )
 }
 
 /**
  * Hero links. The router reads any #hash as a route, so in-page anchors like #adv-how sent people
- * to the homepage. Use real paths: sign-up with the founding-partner option, and
+ * to the homepage. Use real paths: the founding-partner application, and
  * /advertise?section=how-it-works, which scrolls to the How it works section.
  */
-export const FOUNDING_SIGNUP_HREF = '/advertise/signup?package=founding-partner'
+export const FOUNDING_APPLY_HREF = '/advertise/apply'
 export const HOW_IT_WORKS_ID = 'how-it-works'
 export const HOW_IT_WORKS_HREF = `/advertise?section=${HOW_IT_WORKS_ID}`
 
@@ -202,11 +282,12 @@ export function Advertise() {
   return (
     <SitePage current="advertise">
       <section className="adv-hero mkt-section-head mkt-page-hero" aria-labelledby="adv-hero-heading">
+        <HeroTabletDemo />
         <p className="mkt-kicker">Advertise with us</p>
-        <h1 id="adv-hero-heading">Put your business in front of every Clemson Rides rider</h1>
-        <p className="adv-lede">A tablet on the back of the front seat in every Clemson Rides car, scrolling local businesses, deals, promos and game-day specials.</p>
+        <h1 id="adv-hero-heading">Riders scan your deal. You see every scan.</h1>
+        <p className="adv-lede">Your ad plays on the tablet on the back of the front seat in Clemson Rides cars, between local deals, promos and game-day specials. Each ad has its own tracking QR code, so a scan is proof a rider is headed your way. You pay only for the rides your ad is shown in.</p>
         <div className="dp-hero-actions">
-          <a className="dp-btn dp-btn-primary pressable" href={FOUNDING_SIGNUP_HREF}>Become a founding partner</a>
+          <a className="dp-btn dp-btn-primary pressable" href={FOUNDING_APPLY_HREF}>{APPLY_COPY}</a>
           <a className="dp-btn dp-btn-ghost pressable" href={HOW_IT_WORKS_HREF} onClick={jumpToHowItWorks}>How it works</a>
         </div>
       </section>
@@ -216,6 +297,7 @@ export function Advertise() {
           <p className="mkt-kicker">In-car tablets</p>
           <h2 id="adv-how-heading">Ads riders actually see</h2>
         </div>
+        <HowItWorksVideo />
         <div className="site-card-grid adv-how">
           <article className="mkt-card site-photo-card adv-tablet-card">
             <div className="adv-tablet" aria-label="Example in-car tablet screen">
@@ -261,13 +343,15 @@ export function Advertise() {
         </div>
       </section>
 
+      <SampleAdsGallery />
+
       <AdPackagesSection />
 
       <section className="adv-section" aria-labelledby="adv-build-heading">
         <div className="mkt-card adv-soon">
           <span className="adv-soon-chip">Self-serve</span>
           <h2 id="adv-build-heading" className="adv-soon-copy">Ready now? Upload your ad or let us build it.</h2>
-          <p>Pick a package, add your ad and submit it for review. Nothing is charged until your package is confirmed.</p>
+          <p>Pick a ride bundle, add your ad and submit it for review. Nothing is charged until your campaign is approved.</p>
           <div className="dp-hero-actions">
             <a className="dp-btn dp-btn-primary pressable" href="/advertise/signup">Build my ad</a>
             <a className="dp-btn dp-btn-ghost pressable" href="/advertise/my">Track my campaign</a>
@@ -279,7 +363,7 @@ export function Advertise() {
         <div className="mkt-section-head">
           <p className="mkt-kicker">Get started</p>
           <h2>Tell us about your business</h2>
-          <p>Founding partners lock in launch rates. We reply within two business days.</p>
+          <p>Not ready to apply? Send us a question and we reply within two business days.</p>
         </div>
         <AdInterestForm />
       </section>
