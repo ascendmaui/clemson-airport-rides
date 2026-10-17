@@ -24,15 +24,19 @@ import { CLEMSON_HOME_FOOTBALL } from './data/clemsonHomeFootball.js'
 // Times are UTC; Clemson is EDT (UTC-4) in October.
 const CSU_KICKOFF = new Date('2026-10-17T16:00:00Z') // Sat Oct 17, 12:00 ET
 const THURSDAY_NOON = new Date('2026-10-15T16:00:00Z')
-const ALL_REASONS_ON = { reasonBps: { game_day: 5000, airport_rush: 1000, weekend_night: 1000 } }
+const ALL_REASONS_ON = { reasonBps: { game_day: 5000, airport_rush: 1000, weekend_night: 1000 }, maxSurchargeBps: 7500 }
+// The original 2026-10-15 research parameters, kept to test the flagged mechanics.
+const RESEARCH = { reasonBps: { game_day: 5000, airport_rush: 1000, weekend_night: 0 }, maxSurchargeBps: 7500, surgeScheduled: false, gameDayBeforeMin: 180, gameDayAfterMin: 380 }
 
-test('defaults follow the research recommendation', () => {
+test('defaults follow John\'s 2026-10-17 decision (game day +25% only, scheduled priced at pickup time)', () => {
   const c = normalizePeakConfig(null)
-  assert.equal(c.reasonBps.game_day, 5000)
-  assert.equal(c.reasonBps.airport_rush, 1000)
+  assert.equal(c.reasonBps.game_day, 2500)
+  assert.equal(c.reasonBps.airport_rush, 0)
   assert.equal(c.reasonBps.weekend_night, 0)
-  assert.equal(c.maxSurchargeBps, 7500)
-  assert.equal(c.surgeScheduled, false)
+  assert.equal(c.maxSurchargeBps, 2500)
+  assert.equal(c.surgeScheduled, true)
+  assert.equal(c.gameDayBeforeMin, 240)
+  assert.equal(c.gameDayAfterMin, 180)
   assert.equal(c.driverPayBasis, 'pre_discount')
   assert.equal(c.baseShareBps, 8000)
 })
@@ -48,8 +52,8 @@ test('config overrides are clamped to safe values', () => {
 test('game day comes from the schedule file, not every fall Saturday', () => {
   assert.equal(scheduledGameAt(CSU_KICKOFF)?.opponent, 'Charleston Southern')
   const w = gameDayWindow({ date: '2026-10-17', kickoffEt: '12:00' })
-  assert.equal(new Date(w.startMs).toISOString(), '2026-10-17T13:00:00.000Z') // 09:00 ET
-  assert.equal(new Date(w.endMs).toISOString(), '2026-10-17T22:20:00.000Z') // 18:20 ET
+  assert.equal(new Date(w.startMs).toISOString(), '2026-10-17T12:00:00.000Z') // 08:00 ET (kickoff - 4h)
+  assert.equal(new Date(w.endMs).toISOString(), '2026-10-17T19:00:00.000Z') // 15:00 ET (kickoff + 3h)
   // Open date Saturday Oct 10: no game, no game-day surge (the legacy fallback would fire).
   assert.equal(detectPeak({ at: new Date('2026-10-10T18:00:00Z') }).active, false)
   // TBA kickoff uses 10:00-24:00 ET.
@@ -57,7 +61,7 @@ test('game day comes from the schedule file, not every fall Saturday', () => {
   assert.equal(scheduledGameAt(new Date('2026-11-14T13:00:00Z')), null)
   // A live game_day_events row also counts.
   assert.equal(detectPeak({ at: THURSDAY_NOON, gameDayEventActive: true }).primary.id, 'game_day')
-  assert.equal(CLEMSON_HOME_FOOTBALL.length, 7)
+  assert.equal(CLEMSON_HOME_FOOTBALL.length, 4, 'remaining 2026 home games only')
 })
 
 test('weekend nights wrap past midnight and are 0% by default', () => {
@@ -75,8 +79,9 @@ test('airport rush only on on-demand airport trips', () => {
   const rush = new Date('2026-10-15T20:00:00Z') // Thu 16:00 ET
   assert.equal(isAirportRush(rush, 'GSP', PEAK_DEFAULTS), true)
   assert.equal(isAirportRush(rush, false, PEAK_DEFAULTS), false)
-  assert.equal(detectPeak({ at: rush, airport: 'GSP' }).primary.id, 'airport_rush')
-  const scheduled = detectPeak({ at: rush, airport: 'GSP', scheduled: true })
+  assert.equal(detectPeak({ at: rush, airport: 'GSP' }).active, false, 'airport rush is 0% by default')
+  assert.equal(detectPeak({ at: rush, airport: 'GSP', config: RESEARCH }).primary.id, 'airport_rush')
+  const scheduled = detectPeak({ at: rush, airport: 'GSP', scheduled: true, config: RESEARCH })
   assert.equal(scheduled.active, false)
   assert.equal(scheduled.scheduledExempt, true)
 })
@@ -84,14 +89,15 @@ test('airport rush only on on-demand airport trips', () => {
 test('surcharge percent: highest reason wins, no stacking, capped', () => {
   const both = detectPeak({ at: new Date('2026-10-17T15:00:00Z'), airport: 'GSP', config: { ...ALL_REASONS_ON, airportRush: [{ startMin: 0, endMin: 1440 }] } })
   assert.deepEqual(both.reasons.map((r) => r.id), ['game_day', 'airport_rush'])
-  assert.equal(surchargeBpsFor(both), 5000)
-  assert.equal(surchargeBpsFor({ active: true, reasons: [{ bps: 9999 }] }), 7500)
+  assert.equal(surchargeBpsFor(both, ALL_REASONS_ON), 5000)
+  assert.equal(surchargeBpsFor({ active: true, reasons: [{ bps: 9999 }] }, ALL_REASONS_ON), 7500)
+  assert.equal(surchargeBpsFor({ active: true, reasons: [{ bps: 9999 }] }), 2500, 'default cap is +25%')
   assert.equal(surchargeBpsFor({ active: false, reasons: [] }), 0)
 })
 
 test('surcharge cents: percent then a $25 dollar cap', () => {
-  assert.deepEqual(surchargeForFare(590, 5000), { baseFareCents: 590, requestedBps: 5000, surchargeCents: 295, effectiveBps: 5000, dollarCapped: false })
-  const gsp = surchargeForFare(6973, 5000)
+  assert.deepEqual(surchargeForFare(590, 5000, RESEARCH), { baseFareCents: 590, requestedBps: 5000, surchargeCents: 295, effectiveBps: 5000, dollarCapped: false })
+  const gsp = surchargeForFare(6973, 5000, RESEARCH)
   assert.equal(gsp.surchargeCents, 2500)
   assert.equal(gsp.dollarCapped, true)
   assert.equal(gsp.effectiveBps, 3585)
@@ -149,7 +155,7 @@ test('worked example: Grand Marc to GSP, $69.73 Standard, airport rush', () => {
 })
 
 test('worked example: Grand Marc to GSP on game day hits the $25 cap', () => {
-  const s = surchargeForFare(6973, 5000)
+  const s = surchargeForFare(6973, 5000, RESEARCH)
   const plan = planPeakTrip({ baseFareCents: 6973, riderFareCents: 6973 + s.surchargeCents, poolBalanceCents: 50_000 })
   assert.equal(plan.riderFareCents, 9473)
   assert.equal(plan.peakCutPayCents, 7828)
@@ -160,7 +166,7 @@ test('worked example: Grand Marc to GSP on game day hits the $25 cap', () => {
 })
 
 test('worked example: $5.90 campus trip on game day', () => {
-  const s = surchargeForFare(590, 5000)
+  const s = surchargeForFare(590, 5000, RESEARCH)
   const plan = planPeakTrip({ baseFareCents: 590, riderFareCents: 590 + s.surchargeCents, poolBalanceCents: 50_000 })
   assert.equal(plan.riderFareCents, 885)
   assert.equal(plan.driverTotalCents, 708)

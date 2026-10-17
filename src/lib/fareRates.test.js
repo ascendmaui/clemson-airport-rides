@@ -56,29 +56,31 @@ test('10 miles / 15 min uses base + booking + per mile + per minute', () => {
 
 test('surge applies after the metered fare and before discounts', () => {
   const base = quoteFare({ miles: 10, minutes: 15, surgeMultiplier: 1 })
-  const surged = quoteFare({ miles: 10, minutes: 15, surgeMultiplier: 1.35 })
-  assert.equal(surged.fareBeforeDiscountsCents, Math.round(base.fareBeforeDiscountsCents * 1.35))
+  const surged = quoteFare({ miles: 10, minutes: 15, surgeMultiplier: 1.25 })
+  assert.equal(surged.fareBeforeDiscountsCents, Math.round(base.fareBeforeDiscountsCents * 1.25))
   assert.ok(surged.fareCents > base.fareCents)
 })
 
-test('surge cap is 2.5 and rules do not multiply together', () => {
-  const at = new Date('2026-09-26T20:00:00Z') // Saturday 16:00 EDT, rush + football window
-  const surge = resolveSurge({ at, airport: true, gameDayMultiplier: 3 })
-  assert.equal(surge.multiplier, 2.5)
+test('surge cap is 1.25 and rules do not multiply together', () => {
+  // Oct 17 2026, 13:00 EDT: home game (kickoff noon), airport-rush clock, Saturday.
+  const at = new Date('2026-10-17T17:00:00Z')
+  const stadium = { lat: 34.6788, lng: -82.8432 }
+  const surge = resolveSurge({ at, airport: true, gameDayMultiplier: 3, pickup: stadium })
+  assert.equal(surge.multiplier, 1.25)
   assert.equal(surge.rule.id, 'game_day')
-  assert.ok(surge.matched.some((m) => m.id === 'weekend'))
-  assert.ok(surge.matched.some((m) => m.id === 'airport_rush'))
+  assert.equal(surge.matched.length, 1, 'weekend and airport rush are off, nothing stacks')
+  assert.equal(quoteFare({ miles: 3, minutes: 9, surgeMultiplier: 2.5 }).breakdown.surge_multiplier, 1.25)
 })
 
-test('weekday airport rush and quiet midday', () => {
+test('airport rush and weekend are 1.0x; quiet midday is 1.0x', () => {
   const rush = resolveSurge({ at: new Date('2026-09-23T20:00:00Z'), airport: true })
-  assert.equal(rush.multiplier, 1.35)
-  assert.equal(rush.rule.id, 'airport_rush')
+  assert.equal(rush.multiplier, 1)
+  assert.equal(rush.rule, null)
   const quiet = resolveSurge({ at: new Date('2026-09-22T16:00:00Z'), airport: false })
   assert.equal(quiet.multiplier, 1)
   const friday = resolveSurge({ at: new Date('2026-09-25T22:00:00Z'), airport: false })
-  assert.equal(friday.multiplier, 1.2)
-  assert.equal(friday.rule.id, 'weekend')
+  assert.equal(friday.multiplier, 1)
+  assert.equal(friday.rule, null)
 })
 
 test('student discount lowers the fare and new quotes have no upfront deposit', () => {

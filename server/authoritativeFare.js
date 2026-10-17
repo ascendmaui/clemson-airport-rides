@@ -94,8 +94,10 @@ function finiteCents(value) {
  *   peak:   peak pricing is on. The surcharge percent becomes the multiplier, in the same
  *           stacking slot as legacy surge (after the tier scale, before discounts).
  */
-function surgeForMode(mode, { at, airport, gameDayMultiplier }) {
-  if (!mode || mode.kind === 'legacy') return resolveSurge({ at, airport, gameDayMultiplier })
+function surgeForMode(mode, { at, airport, gameDayMultiplier, pickup = null, dropoff = null }) {
+  // Default path (PEAK_PRICING_ENABLED off): weekend 1.0x, game-day 1.25x near
+  // Memorial Stadium on home-game windows, cap 1.25x (src/lib/fareRates.js).
+  if (!mode || mode.kind === 'legacy') return resolveSurge({ at, airport, gameDayMultiplier, pickup, dropoff })
   if (mode.kind !== 'peak' || !(mode.effectiveBps > 0)) {
     return { multiplier: 1, rule: null, matched: [], at: at.toISOString() }
   }
@@ -184,12 +186,16 @@ function quoteAirportCheckoutWith({
   durationS = null,
   tigerPassBps = 0,
   tier = 'standard',
+  // Real trip endpoints, only for the game-day stadium radius. Airport checkout
+  // without coordinates never gets game-day pricing.
+  pickup = null,
+  dropoff = null,
 } = {}, mode = { kind: 'legacy' }) {
   const code = String(airport || 'GSP').toUpperCase() === 'CLT' ? 'CLT' : 'GSP'
   const fb = AIRPORT_ROUTE_FALLBACK[code]
   const when = at instanceof Date && !Number.isNaN(at.getTime()) ? at : new Date()
   const hasRoute = distanceM != null || durationS != null
-  const surge = surgeForMode(mode, { at: when, airport: true, gameDayMultiplier })
+  const surge = surgeForMode(mode, { at: when, airport: true, gameDayMultiplier, pickup, dropoff })
   const quote = quoteFare({
     distanceM: hasRoute ? distanceM : undefined,
     durationS: hasRoute ? durationS : undefined,
@@ -248,8 +254,13 @@ function priceScheduledRequestWith({
   now = new Date(),
   tigerPassBps = 0,
   seatCount = 1,
+  surgePlaces = null,
 } = {}, mode = { kind: 'legacy' }) {
   const code = requestAirportCode(pickup, dropoff, airport)
+  // Places used for the game-day radius: the real endpoints when the caller
+  // swapped in canonical pins for pricing (priceRecordedTrip).
+  const radiusPickup = surgePlaces ? surgePlaces.pickup ?? null : pickup
+  const radiusDropoff = surgePlaces ? surgePlaces.dropoff ?? null : dropoff
   const tierId = resolveOfferedTier(tier)
   const student = Boolean(isStudent) && tierId === 'standard'
   const when = at instanceof Date && !Number.isNaN(at.getTime()) ? at : new Date()
@@ -264,6 +275,8 @@ function priceScheduledRequestWith({
       durationS,
       tigerPassBps,
       tier: tierId,
+      pickup: radiusPickup,
+      dropoff: radiusDropoff,
     }, mode)
     return applyCarpoolSeats(applyScheduleAheadDiscount(
       { ...priced, tier: tierId },
@@ -279,7 +292,7 @@ function priceScheduledRequestWith({
     miles = Math.max(0, (Number(meters) || 0) / METERS_PER_MILE)
     minutes = Math.max(8, Math.round(miles * 2.2))
   }
-  const surge = surgeForMode(mode, { at: when, airport: false, gameDayMultiplier })
+  const surge = surgeForMode(mode, { at: when, airport: false, gameDayMultiplier, pickup: radiusPickup, dropoff: radiusDropoff })
   const quote = quoteFare({
     miles,
     minutes,
@@ -378,6 +391,10 @@ export function priceCheckoutBody({
         durationS,
         tigerPassBps,
         tier,
+        // Same campus pin the quote uses (placesForServerFare), so the
+        // checkout total matches the quoted game-day total.
+        pickup: CAMPUS_PICKUP,
+        dropoff: AIRPORT_DROPOFFS[String(body.airport || 'GSP').toUpperCase() === 'CLT' ? 'CLT' : 'GSP'],
       }, mode),
       tier,
     },
@@ -692,6 +709,7 @@ export function priceRecordedTrip(trip, {
       gameDayMultiplier,
       scheduleAhead,
       tigerPassBps,
+      surgePlaces: { pickup, dropoff },
     }),
   }
 }

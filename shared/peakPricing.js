@@ -39,12 +39,15 @@ export const PEAK_DEFAULTS = Object.freeze({
    * game day 1.5x on real home games only, airport rush 1.10x on-demand only,
    * no weekend surcharge (weekend nights are still detected, at 0%).
    */
-  reasonBps: Object.freeze({ game_day: 5000, airport_rush: 1000, weekend_night: 0 }),
+  // 2026-10-17 decision: game day +25% only, no airport rush, no weekend.
+  // NOTE: the decided policy is live in the default (flag-off) path in
+  // src/lib/fareRates.js with the Memorial Stadium radius; keep PEAK_PRICING_ENABLED off.
+  reasonBps: Object.freeze({ game_day: 2500, airport_rush: 0, weekend_night: 0 }),
   /** Hard caps on the rider surcharge: 1.75x (research SURGE_MAX) and $25 per trip. */
-  maxSurchargeBps: 7500,
+  maxSurchargeBps: 2500,
   maxSurchargeCents: 2500,
-  /** Scheduled rides never surge (research). Their fare is locked when booked. */
-  surgeScheduled: false,
+  /** Scheduled rides are priced at their scheduled pickup time (2026-10-17 decision). */
+  surgeScheduled: true,
   /** Driver pay is figured on the pre-discount fare, so promos never cut driver pay. */
   driverPayBasis: 'pre_discount',
   /** Driver keeps this share of every surcharge dollar. The rest covers card fees on the extra charge. */
@@ -71,8 +74,8 @@ export const PEAK_DEFAULTS = Object.freeze({
     Object.freeze({ startMin: 15 * 60, endMin: 19 * 60 }),
   ]),
   /** Game day window around kickoff (arrivals through late exits). */
-  gameDayBeforeMin: 180,
-  gameDayAfterMin: 380,
+  gameDayBeforeMin: 240,
+  gameDayAfterMin: 180,
   /** TBA kickoff: 10:00 to 24:00 ET on game day. */
   gameDayTbaStartMin: 10 * 60,
   gameDayTbaEndMin: 24 * 60,

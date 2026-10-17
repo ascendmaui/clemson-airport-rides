@@ -12,6 +12,10 @@ export type PeakQuote = {
 
 export function parsePeakQuote(raw: unknown): PeakQuote | null
 
+export type GameDayPricing = { label: string; explainer: string | null; multiplier: number | null }
+
+export function parseGameDayPricing(raw: unknown): GameDayPricing | null
+
 export type AirportQuote = {
   fareCents: number
   cashCents: number
@@ -20,6 +24,7 @@ export type AirportQuote = {
   surgeMultiplier: number
   surgeLabel: string | null
   peak?: PeakQuote | null
+  gameDayPricing?: GameDayPricing | null
   routeSource: string | null
   source?: string
   tigerPassApplied?: boolean

@@ -26,7 +26,9 @@ import {
 } from './gameDayExperience.js'
 
 const WEDNESDAY = new Date('2026-10-14T16:00:00.000Z')
-const SATURDAY = new Date('2026-10-10T16:00:00.000Z')
+const SATURDAY = new Date('2026-10-10T16:00:00.000Z') // open date (no home game)
+const HOME_GAME = new Date('2026-10-17T17:00:00.000Z') // Charleston Southern, kickoff 12:00 ET
+const STADIUM = { lat: 34.6788, lng: -82.8432 }
 
 function game(overrides = {}) {
   return {
@@ -45,24 +47,25 @@ test('brand colors and the fare cap stay published', () => {
   assert.equal(GAME_DAY_ORANGE, '#F56600')
   assert.equal(GAME_DAY_PURPLE, '#522D80')
   assert.equal(SURGE_CAP, SURGE_MAX)
-  assert.equal(clampSurge(9), 2.5)
+  assert.equal(clampSurge(9), 1.25)
   assert.equal(clampSurge(0), 1)
 })
 
-test('Saturday game-day window matches the fare engine', () => {
-  assert.equal(saturdayGameDay(SATURDAY), true)
+test('home-game window matches the fare engine (not every fall Saturday)', () => {
+  assert.equal(saturdayGameDay(HOME_GAME), true)
+  assert.equal(saturdayGameDay(SATURDAY), false)
   assert.equal(saturdayGameDay(WEDNESDAY), false)
-  assert.equal(saturdayGameDay(new Date('2026-10-10T14:00:00.000Z')), false)
+  assert.equal(saturdayGameDay(new Date('2026-10-31T18:00:00.000Z')), false) // away at FSU
   assert.equal(saturdayGameDay(new Date('2026-12-12T16:00:00.000Z')), false)
-  for (const at of [WEDNESDAY, SATURDAY, new Date('2026-10-10T20:30:00.000Z'), new Date('2026-11-07T16:00:00.000Z')]) {
-    const matched = resolveSurge({ at, gameDayMultiplier: null }).matched.find((rule) => rule.id === 'game_day')
+  for (const at of [WEDNESDAY, SATURDAY, HOME_GAME, new Date('2026-10-17T19:30:00.000Z'), new Date('2026-11-07T16:00:00.000Z')]) {
+    const matched = resolveSurge({ at, gameDayMultiplier: null, pickup: STADIUM }).matched.find((rule) => rule.id === 'game_day')
     const fromRules = matched ? matched.multiplier : 1
     const fromBoard = clampSurge(rawGameDayMultiplier(null, at))
     assert.equal(fromBoard, fromRules, at.toISOString())
   }
 })
 
-test('a live scheduled game uses the higher of the event rate and Saturday', () => {
+test('a live scheduled game uses the higher of the event rate and the home-game rate, capped', () => {
   const liveSaturday = game({
     starts_at: '2026-10-10T15:00:00.000Z',
     ends_at: '2026-10-10T22:00:00.000Z',
@@ -71,14 +74,16 @@ test('a live scheduled game uses the higher of the event rate and Saturday', () 
   assert.equal(clampSurge(rawGameDayMultiplier(liveSaturday, SATURDAY)), resolveSurge({
     at: SATURDAY,
     gameDayMultiplier: 2.1,
+    pickup: STADIUM,
   }).multiplier)
 
-  const quieter = { ...liveSaturday, surge_multiplier: 1.5 }
-  const quiet = surgeTransparency({ event: quieter, now: SATURDAY, phase: 'live' })
-  assert.equal(quiet.multiplier, 1.8)
+  const homeEvent = game({ starts_at: '2026-10-17T12:00:00.000Z', ends_at: '2026-10-17T19:00:00.000Z', surge_multiplier: 1.1 })
+  const quiet = surgeTransparency({ event: homeEvent, now: HOME_GAME, phase: 'live' })
+  assert.equal(quiet.multiplier, 1.25)
   assert.equal(quiet.source, 'saturday')
   assert.match(quiet.reasons.join(' '), /higher rate is charged/)
 
+  const quieter = { ...liveSaturday, surge_multiplier: 1.5 }
   const capped = surgeTransparency({
     event: { ...quieter, surge_multiplier: 4 },
     now: WEDNESDAY,
@@ -86,7 +91,7 @@ test('a live scheduled game uses the higher of the event rate and Saturday', () 
   })
   const wednesdayLive = { ...quieter, starts_at: '2026-10-14T15:00:00.000Z', ends_at: '2026-10-14T22:00:00.000Z', surge_multiplier: 4 }
   const cappedLive = surgeTransparency({ event: wednesdayLive, now: WEDNESDAY, phase: 'live' })
-  assert.equal(cappedLive.multiplier, 2.5)
+  assert.equal(cappedLive.multiplier, 1.25)
   assert.equal(cappedLive.capped, true)
   assert.match(capped.reasons.join(' ') + cappedLive.reasons.join(' '), /published cap/)
 })
@@ -97,7 +102,7 @@ test('countdown names kickoff and the rate that starts then', () => {
   assert.equal(model.banner.countdownCaption, 'Until kickoff')
   assert.equal(model.banner.countdownLabel, '2h 0m')
   assert.equal(model.surge.multiplier, 1)
-  assert.equal(model.surge.upcomingLabel, '2.1×')
+  assert.equal(model.surge.upcomingLabel, '1.25×')
   assert.match(model.surge.driverLine, /Before you go online/)
   assert.match(model.surge.riderLine, /until kickoff/)
   assert.equal(model.queue.status, 'closed')
@@ -172,7 +177,7 @@ test('driver prep, hot times, and the zone bonus stay off the rider fare', () =>
   })
   assert.equal(model.prep.done, 2)
   assert.equal(model.prep.total, DEFAULT_PREP.length)
-  assert.equal(model.surge.multiplier, 2)
+  assert.equal(model.surge.multiplier, 1.25)
   assert.match(model.surge.driverBonusLabel, /\$3 per completed stadium trip/)
   assert.match(model.surge.calendarBonusLabel, /\$5 per completed trip/)
   assert.match(model.surge.reasons.join(' '), /favored for matching/)

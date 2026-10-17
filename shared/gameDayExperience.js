@@ -4,14 +4,17 @@
  * driver_perk_config.game_day_surge (driver zone bonus) and clemson_events
  * (campus calendar kickoff and driver bonus). Neither feed changes the
  * charged fare on its own. The charged rate matches resolveSurge in
- * src/lib/fareRates.js: the higher of a live game_day_events multiplier
- * and the Saturday game-day window, capped at 2.5.
+ * src/lib/fareRates.js: 1.25x during a Clemson home-game window
+ * (public.clemson_home_games, kickoff-4h..kickoff+3h) on trips to or from
+ * the stadium area (~2 mi of the stadium pin), never stacked, capped at 1.25x.
  */
+import { SURGE_CAP as PRICING_SURGE_CAP, activeHomeGame } from './gameDaySurge.js'
 
 export const GAME_DAY_ORANGE = '#F56600'
 export const GAME_DAY_PURPLE = '#522D80'
-export const SURGE_CAP = 2.5
-export const SATURDAY_GAME_DAY_MULTIPLIER = 1.8
+export const SURGE_CAP = PRICING_SURGE_CAP
+/** Game-day rate (name kept for callers): 1.25x, John's 2026-10-17 decision. */
+export const SATURDAY_GAME_DAY_MULTIPLIER = 1.25
 export const EXPERIENCE_LEAD_MS = 7 * 24 * 3600 * 1000
 export const POST_GAME_MS = 6 * 3600 * 1000
 export const QUEUE_FRESH_MS = 6 * 3600 * 1000
@@ -177,13 +180,11 @@ export function zonedParts(date, timeZone = SURGE_TIME_ZONE) {
 }
 
 /** Saturday 11:00–23:00 ET in Aug–Nov. Same window as the fare engine. */
+/** True inside a Clemson home-game pricing window (name kept for callers; not every fall Saturday). */
 export function saturdayGameDay(at = new Date()) {
   const when = at instanceof Date ? at : new Date(at)
   if (Number.isNaN(when.getTime())) return false
-  const parts = zonedParts(when)
-  if (parts.weekday !== 6) return false
-  if (![8, 9, 10, 11].includes(parts.month)) return false
-  return parts.minutes >= 11 * 60 && parts.minutes < 23 * 60
+  return Boolean(activeHomeGame(when))
 }
 
 function parseTime(value) {
@@ -469,7 +470,7 @@ function eventLiveAt(event, atMs) {
   return start <= atMs && atMs <= end
 }
 
-/** Charged game-day multiplier at `at`, before the 2.5 cap. */
+/** Charged game-day multiplier at `at`, before the 1.25 cap. */
 export function rawGameDayMultiplier(event, at = new Date()) {
   const when = at instanceof Date ? at : new Date(at)
   const eventMul = eventLiveAt(event, when.getTime()) ? Number(event.surge_multiplier) : 1
@@ -500,9 +501,9 @@ export function surgeTransparency({ event, now = new Date(), driverBonus = null,
     reasons.push(`This game sets the fare at ${formatMultiplier(event.surge_multiplier)} from kickoff through the scheduled window.`)
   }
   if (source === 'saturday' && eventOn) {
-    reasons.push(`The scheduled game is ${formatMultiplier(event.surge_multiplier)}. Saturday hours are ${formatMultiplier(SATURDAY_GAME_DAY_MULTIPLIER)}. The higher rate is charged.`)
+    reasons.push(`The scheduled game is ${formatMultiplier(event.surge_multiplier)}. The home-game window is ${formatMultiplier(SATURDAY_GAME_DAY_MULTIPLIER)}. The higher rate is charged, up to ${formatMultiplier(SURGE_CAP)}.`)
   } else if (source === 'saturday') {
-    reasons.push(`Saturday game-day hours use the published ${formatMultiplier(SATURDAY_GAME_DAY_MULTIPLIER)} rate.`)
+    reasons.push(`Clemson home-game window: trips to or from the stadium area use the published ${formatMultiplier(SATURDAY_GAME_DAY_MULTIPLIER)} game-day rate, 4 hours before kickoff to 3 hours after.`)
   }
   if (source === 'none' && !upcomingDiffers) {
     reasons.push('No game-day multiplier is on. The fare is the standard rate.')
@@ -522,13 +523,13 @@ export function surgeTransparency({ event, now = new Date(), driverBonus = null,
   else if (upcomingDiffers) headline = 'Standard fare until kickoff'
 
   const riderLine = charged > 1
-    ? `You pay ${multiplierLabel} the usual fare while this window is on. Drivers see this same rate before they go online.`
+    ? `Game-day pricing: ${multiplierLabel} the usual fare on trips to or from the stadium area while this window is on. Drivers see this same rate before they go online.`
     : upcomingDiffers
       ? `You pay the standard fare until kickoff, then ${formatMultiplier(upcoming)}.`
       : 'You pay the standard fare. A game-day rate shows here before you request a ride.'
 
   const driverLine = charged > 1
-    ? `Before you go online: riders pay ${multiplierLabel}. Your share stays 80% of that fare.`
+    ? `Before you go online: riders near the stadium pay ${multiplierLabel}. Your share stays 80% of that fare.`
     : upcomingDiffers
       ? `Before you go online: riders pay the standard fare until kickoff, then ${formatMultiplier(upcoming)}.`
       : 'Before you go online: no game-day multiplier. Riders pay the standard fare.'

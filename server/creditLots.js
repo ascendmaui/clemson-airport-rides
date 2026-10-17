@@ -3,6 +3,7 @@
  * Purchase is a liability (platform fee 0). Redemption takes 20% of the
  * discounted value the credits paid and leaves 80% as driver earnings.
  */
+import { refreshPricingConfig } from './pricingConfig.js'
 import {
   findCreditPack,
   splitPlatformFee,
@@ -266,6 +267,13 @@ export async function grantCreditPack(sb, {
 }
 
 export async function loadGameDayMultiplier(sb, at = new Date()) {
+  // Every server pricing path awaits this before it prices, so the DB pricing
+  // config (rate cards, settings, home-game schedule) refreshes here on a 60s cache.
+  try {
+    await refreshPricingConfig(sb)
+  } catch {
+    // keep the last good config
+  }
   const iso = (at instanceof Date ? at : new Date(at)).toISOString()
   const { data, error } = await sb
     .from('game_day_events')

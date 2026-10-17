@@ -261,6 +261,17 @@ export function parsePeakQuote(raw) {
   }
 }
 
+/** Game-day block from /api/quote-fare: label + explainer shown with the upfront total. */
+export function parseGameDayPricing(raw) {
+  if (!raw || typeof raw !== 'object' || raw.active !== true) return null
+  const multiplier = Number(raw.multiplier)
+  return {
+    label: typeof raw.label === 'string' && raw.label ? raw.label : 'Game-day pricing',
+    explainer: typeof raw.explainer === 'string' ? raw.explainer : null,
+    multiplier: Number.isFinite(multiplier) && multiplier > 1 ? multiplier : null,
+  }
+}
+
 export function parseQuoteResponse(data) {
   const quote = data?.quote && typeof data.quote === 'object' ? data.quote : {}
   const breakdown = quote.breakdown && typeof quote.breakdown === 'object' ? quote.breakdown : {}
@@ -270,12 +281,14 @@ export function parseQuoteResponse(data) {
   const rule = surge?.rule && typeof surge.rule === 'object' ? surge.rule : null
   const tiers = Array.isArray(data?.tiers) ? data.tiers : []
   const peak = parsePeakQuote(data?.peak)
+  const gameDayPricing = parseGameDayPricing(data?.gameDayPricing)
   return {
     ...recomputeDeposit({ fareCents, cashCents }),
     studentDiscountCents: num(breakdown.student_discount_cents),
     surgeMultiplier: num(surge?.multiplier) || 1,
     surgeLabel: rule?.label || null,
     ...(peak ? { peak } : {}),
+    ...(gameDayPricing ? { gameDayPricing } : {}),
     routeSource: data?.routeSource || null,
     tigerPassApplied: Boolean(data?.tigerPassApplied),
     tigerPassName: data?.tigerPassName || null,

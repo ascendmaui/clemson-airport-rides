@@ -6,6 +6,7 @@
  * A manual-capture card hold covers the estimated fare plus a buffer.
  * Schedule does not take that hold and does not take a deposit.
  */
+import { logMarginAlert, marginForPriced } from '../marginAlerts.js'
 import { parsePrepaidTipCents } from '../../shared/prepaidTip.js'
 import {
   admin, cors, json, parseBody, userFromAuth, computeRoutes,
@@ -376,6 +377,13 @@ export default async function handler(req, res, deps = {}) {
     if (tigerHeat) await releaseTigerHeatReservation({ sb, trip: { metadata: { tiger_heat: tigerHeat } } })
     return json(res, 500, { error: inserted.error?.message || 'Could not request trip' })
   }
+  // Profit check at booking (never blocks the ride): log below-target margin with the trip id.
+  void logMarginAlert(sb, {
+    source: 'booking',
+    tripId: inserted.data.id,
+    margin: marginForPriced(priced, { tier, driverPayout: split.driverEarningsCents }),
+    details: { kind: 'on_demand', airport: priced.airport || null, surge_rule: priced.surge?.rule?.id || null, share_bps: ladderShare },
+  }).catch(() => null)
   let authorization = null
   try {
     authorization = await authorizeRideRequest({

@@ -185,6 +185,19 @@ export default function RideTiers() {
           </Text>
         </Pressable>
       ) : null}
+      {quote?.gameDayPricing ? (
+        <View
+          accessibilityRole="text"
+          accessibilityLabel={`${quote.gameDayPricing.label}. ${quote.gameDayPricing.explainer || ''}`}
+          style={styles.passLine}
+        >
+          <Text style={styles.promoDetail}>
+            {quote.gameDayPricing.label}
+            {quote.gameDayPricing.multiplier ? ` · ${quote.gameDayPricing.multiplier}×` : ''}
+            {quote.gameDayPricing.explainer ? ` — ${quote.gameDayPricing.explainer}` : ''}
+          </Text>
+        </View>
+      ) : null}
       {quote?.peak?.riderLine ? (
         <View accessibilityRole="text" accessibilityLabel={quote.peak.riderLine} style={styles.passLine}>
           <Text style={styles.promoDetail}>{quote.peak.riderLine}</Text>

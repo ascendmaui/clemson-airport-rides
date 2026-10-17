@@ -64,9 +64,11 @@ export async function quoteWithSurge({
   isCarpool = false,
   tier = 'standard',
   vehicleMultiplier = 1,
+  pickup = null,
+  dropoff = null,
 } = {}) {
   const { multiplier: gameDayMultiplier, event } = await getGameDayMultiplier(at)
-  const surge = resolveSurge({ at, airport, gameDayMultiplier })
+  const surge = resolveSurge({ at, airport, gameDayMultiplier, pickup, dropoff })
   const quote = quoteFare({
     miles,
     minutes,
@@ -94,6 +96,7 @@ export async function priceAirportRide({
   at = new Date(),
   distanceM,
   durationS,
+  pickup = null,
 }) {
   const fallback = AIRPORT_ROUTE_FALLBACK[airport]
   if (!fallback) throw new Error('Unknown airport')
@@ -106,6 +109,7 @@ export async function priceAirportRide({
     minutes: durationS == null ? fallback.minutes : undefined,
     isStudent,
     tier,
+    pickup,
   })
   const fareCents = priced.quote.fareBeforeCreditsCents
   return {
