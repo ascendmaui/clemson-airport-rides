@@ -412,10 +412,12 @@ test('surge banner visibility follows the multiplier and ignores cents', () => {
   const gameDay = SURGE_RULES.find((rule) => rule.id === 'game_day')
   const weekend = SURGE_RULES.find((rule) => rule.id === 'weekend')
   const airport = SURGE_RULES.find((rule) => rule.id === 'airport_rush')
-  assert.equal(gameDay.multiplier, 1.8)
-  assert.equal(weekend.multiplier, 1.2)
-  assert.equal(airport.multiplier, 1.35)
-  assert.equal(SURGE_MAX, 2.5)
+  // 2026-10-17 decision: game day 1.25x near the stadium, weekend and airport rush off, cap 1.25x.
+  assert.equal(gameDay.multiplier, 1.25)
+  assert.equal(gameDay.fallbackWindow.enabled, false)
+  assert.equal(weekend.multiplier, 1)
+  assert.equal(airport.multiplier, 1)
+  assert.equal(SURGE_MAX, 1.25)
 })
 
 test('schedule copy maps the pickup zone and surge banner without fare fields', () => {
@@ -561,7 +563,7 @@ test('pickup option labels name the meeting spot and surge windows skip prices',
   assert.match(live.surgeWindowText, /event start to the event end/)
   assert.doesNotMatch(live.surgeWindowText, /6400|\$|cents|1\.8/)
   assert.equal(surgeWindowMessage({ multiplier: 1.8, rule: { id: 'game_day' } }, null),
-    'Campus event surge window. A listed campus event uses the event start and end. With no listed event, fall Saturdays run from 11:00 AM until 11:00 PM Eastern.')
+    'Game-day pricing window. On Clemson home football days, trips to or from the Memorial Stadium area (about 2 miles) use game-day pricing from 4 hours before kickoff until 3 hours after, Eastern.')
 
   const weekend = gameDayScheduleCopy({
     event: null,
@@ -580,8 +582,8 @@ test('pickup option labels name the meeting spot and surge windows skip prices',
   assert.equal(surgeWindowMessage({ multiplier: 1, fareCents: 99999 }), null)
 
   const off = gameDayScheduleCopy({ purpose: 'game_day' })
-  assert.match(off.surgeWindowText, /No campus event surge window is on/)
-  assert.match(off.surgeWindowText, /11:00 AM until 11:00 PM Eastern/)
+  assert.match(off.surgeWindowText, /No game-day pricing at this pickup time/)
+  assert.match(off.surgeWindowText, /4 hours before kickoff until 3 hours after, Eastern/)
   assert.doesNotMatch(off.surgeWindowText, /\$|cents/)
   assert.equal(gameDayScheduleCopy({ purpose: 'planned' }).surgeWindowText, null)
 })

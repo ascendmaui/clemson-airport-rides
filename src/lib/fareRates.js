@@ -47,21 +47,35 @@
  * is recognized when a ride redeems credits, so driver earnings stay 80% of
  * the discounted fare and the purchase is not taxed twice.
  *
- * Surge rules (America/New_York), highest match wins — multipliers do not stack:
- *   airport rush 1.35×  — airport trips, 05:00–08:00 and 15:00–19:00
- *   weekend      1.20×  — Friday 17:00 through Sunday 23:59
- *   game day     1.80×  — active game_day_events row, else fall Saturday
- *                         11:00–23:00 when fallbackWindow.enabled (default on
- *                         because the events table may be empty). An event
- *                         surge_multiplier above 1 is included in the max.
- * Cap SURGE_MAX (2.5).
+ * Surge rules (America/New_York), highest match wins — multipliers do not stack.
+ * John's 2026-10-17 decision (see docs/PEAK_PRICING.md):
+ *   weekend      1.00×  — off (a 1.2× weekend made Standard pricier than UberX)
+ *   airport rush 1.00×  — off (Clemson Rides must stay under UberX/Lyft)
+ *   game day     1.25×  — Clemson home football days only, kickoff-4h to
+ *                         kickoff+3h (TBA: stored window), and only when the
+ *                         pickup OR dropoff is within ~2 mi of Memorial Stadium
+ *                         (shared/gameDaySurge.js). A live game_day_events row
+ *                         also opens the window; the radius still applies and
+ *                         its surge_multiplier can never exceed the cap.
+ * Cap SURGE_MAX (1.25). Scheduled rides use the scheduled pickup time.
+ *
+ * Rate inputs (base, booking, per-mile, per-minute, minimum) are DB-backed:
+ * public.pricing_rate_cards, loaded by server/pricingConfig.js on a short
+ * cache and installed with setFareCards(). FARE_CARD is the seed/fallback.
  */
+
+import {
+  GAME_DAY_LABEL,
+  SURGE_CAP,
+  gameDayConfig,
+  gameDaySurge,
+} from '../../shared/gameDaySurge.js'
 
 export const FARE_RATES_VERSION = '2026-09-23'
 
 export const METERS_PER_MILE = 1609.344
 
-export const FARE_CARD = {
+export const FARE_CARD = Object.freeze({
   version: FARE_RATES_VERSION,
   currency: 'usd',
   baseCents: 119,
@@ -69,6 +83,66 @@ export const FARE_CARD = {
   perMileCents: 114,
   perMinuteCents: 18,
   minFareCents: 590,
+})
+
+/** Sanity bounds for a DB-loaded card. A row outside them is ignored (seed stays). */
+const CARD_BOUNDS = {
+  baseCents: [0, 1000],
+  bookingFeeCents: [0, 1000],
+  perMileCents: [25, 500],
+  perMinuteCents: [0, 200],
+  minFareCents: [200, 5000],
+}
+
+export function validFareCard(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const pick = (a, b) => Number(raw[a] ?? raw[b])
+  const card = {
+    baseCents: pick('baseCents', 'base_cents'),
+    bookingFeeCents: pick('bookingFeeCents', 'booking_fee_cents'),
+    perMileCents: pick('perMileCents', 'per_mile_cents'),
+    perMinuteCents: pick('perMinuteCents', 'per_minute_cents'),
+    minFareCents: pick('minFareCents', 'min_fare_cents'),
+  }
+  for (const [key, [lo, hi]] of Object.entries(CARD_BOUNDS)) {
+    const v = card[key]
+    if (!Number.isInteger(v) || v < lo || v > hi) return null
+  }
+  return card
+}
+
+let activeCards = { standard: { ...FARE_CARD } }
+
+/** Active card for a tier. Only Comfort/Wait may carry their own; Carpool is always 50% of Standard. */
+export function fareCardFor(tier = 'standard') {
+  const id = String(tier ?? 'standard').trim().toLowerCase()
+  if (id !== 'standard' && id !== 'carpool' && activeCards[id]) return { card: activeCards[id], own: true }
+  return { card: activeCards.standard, own: false }
+}
+
+export function activeFareCards() {
+  return activeCards
+}
+
+/**
+ * Install DB rate cards ({ standard: {...}, comfort?: {...}, wait?: {...} }).
+ * Invalid rows are skipped; without a valid standard row the seed card stays.
+ */
+export function setFareCards(cards) {
+  const next = { standard: { ...FARE_CARD } }
+  for (const [tier, raw] of Object.entries(cards || {})) {
+    const card = validFareCard(raw)
+    if (!card) continue
+    const id = String(tier).trim().toLowerCase()
+    if (id === 'carpool') continue
+    next[id] = { ...FARE_CARD, ...card }
+  }
+  activeCards = next
+  return activeCards
+}
+
+export function resetFareCards() {
+  activeCards = { standard: { ...FARE_CARD } }
 }
 
 /** 20% of the rider's final price. Driver keeps the rest. */
@@ -193,7 +267,7 @@ export const WAIT_CANCEL = {
   feeCents: 500,
 }
 
-export const SURGE_MAX = 2.5
+export const SURGE_MAX = SURGE_CAP
 export const SURGE_MIN = 1
 export const SURGE_TIME_ZONE = 'America/New_York'
 
@@ -201,7 +275,7 @@ export const SURGE_RULES = [
   {
     id: 'airport_rush',
     label: 'Airport rush',
-    multiplier: 1.35,
+    multiplier: 1,
     requiresAirport: true,
     windows: [
       { startMin: 5 * 60, endMin: 8 * 60 },
@@ -211,15 +285,17 @@ export const SURGE_RULES = [
   {
     id: 'weekend',
     label: 'Weekend',
-    multiplier: 1.2,
+    multiplier: 1,
     weekendFrom: { weekday: 5, startMin: 17 * 60 },
   },
   {
     id: 'game_day',
-    label: 'Game day',
-    multiplier: 1.8,
+    label: GAME_DAY_LABEL,
+    multiplier: 1.25,
+    radiusMiles: 2,
+    // Every-fall-Saturday fallback is retired: game days come from clemson_home_games.
     fallbackWindow: {
-      enabled: true,
+      enabled: false,
       months: [8, 9, 10, 11],
       weekday: 6,
       startMin: 11 * 60,
@@ -256,7 +332,7 @@ export function zonedParts(date, timeZone = SURGE_TIME_ZONE) {
 export function clampSurge(multiplier) {
   const m = Number(multiplier)
   if (!Number.isFinite(m) || m <= 0) return 1
-  return Math.min(SURGE_MAX, Math.max(SURGE_MIN, m))
+  return Math.min(gameDayConfig().surgeCap, SURGE_MAX, Math.max(SURGE_MIN, m))
 }
 
 function inWindow(minutes, window) {
@@ -278,47 +354,60 @@ function fallbackGameDay(parts, window) {
 }
 
 /**
- * Highest matching surge rule. Pass gameDayMultiplier from game_day_events
- * when a row overlaps `at` (use null when none).
+ * Highest matching surge rule (never stacked, capped at SURGE_MAX = 1.25).
+ * gameDayMultiplier: what loadGameDayMultiplier returned for `at` (a live
+ * game_day_events row; null when none). pickup/dropoff ({ lat, lng }) decide
+ * the Memorial Stadium radius; without them game-day pricing cannot apply.
  */
 export function resolveSurge({
   at = new Date(),
   airport = false,
   gameDayMultiplier = null,
+  pickup = null,
+  dropoff = null,
   timeZone = SURGE_TIME_ZONE,
 } = {}) {
   const when = at instanceof Date ? at : new Date(at)
   const parts = zonedParts(when, timeZone)
+  const cfg = gameDayConfig()
   const matched = []
 
   for (const rule of SURGE_RULES) {
     if (rule.id === 'airport_rush') {
-      if (airport && rule.windows.some((w) => inWindow(parts.minutes, w))) {
+      if (airport && rule.multiplier > 1 && rule.windows.some((w) => inWindow(parts.minutes, w))) {
         matched.push({ id: rule.id, label: rule.label, multiplier: clampSurge(rule.multiplier) })
       }
     } else if (rule.id === 'weekend') {
-      if (isWeekend(parts, rule)) {
-        matched.push({ id: rule.id, label: rule.label, multiplier: clampSurge(rule.multiplier) })
+      const weekendMul = Math.max(rule.multiplier, cfg.weekendMultiplier)
+      if (weekendMul > 1 && isWeekend(parts, rule)) {
+        matched.push({ id: rule.id, label: rule.label, multiplier: clampSurge(weekendMul) })
       }
     } else if (rule.id === 'game_day') {
       const eventMul = Number(gameDayMultiplier)
-      const eventOn = Number.isFinite(eventMul) && eventMul > 1
+      const eventOn = gameDayMultiplier != null && Number.isFinite(eventMul)
       const windowOn = fallbackGameDay(parts, rule.fallbackWindow)
-      if (eventOn || windowOn) {
-        const chosen = Math.max(eventOn ? eventMul : 1, windowOn ? rule.multiplier : 1)
-        matched.push({ id: rule.id, label: rule.label, multiplier: clampSurge(chosen) })
+      const game = gameDaySurge({ at: when, pickup, dropoff, eventActive: eventOn || windowOn })
+      if (game.applies) {
+        matched.push({
+          id: rule.id,
+          label: rule.label,
+          multiplier: clampSurge(game.multiplier),
+          reason: game.reason,
+          game: game.game ? { date: game.game.date, opponent: game.game.opponent, tba: game.game.tba } : null,
+        })
       }
     }
   }
 
-  if (!matched.length) {
+  const live = matched.filter((m) => m.multiplier > 1)
+  if (!live.length) {
     return { multiplier: 1, rule: null, matched: [], at: when.toISOString() }
   }
-  matched.sort((a, b) => b.multiplier - a.multiplier)
+  live.sort((a, b) => b.multiplier - a.multiplier)
   return {
-    multiplier: matched[0].multiplier,
-    rule: matched[0],
-    matched,
+    multiplier: live[0].multiplier,
+    rule: live[0],
+    matched: live,
     at: when.toISOString(),
   }
 }
@@ -446,18 +535,25 @@ export function quoteFare({
     ? Math.max(0, Number(minutes) || 0)
     : Math.max(0, Number(durationS) || 0) / 60
 
-  const distanceCents = Math.round(milesN * FARE_CARD.perMileCents)
-  const timeCents = Math.round(minutesN * FARE_CARD.perMinuteCents)
-  const meteredCents = FARE_CARD.baseCents + FARE_CARD.bookingFeeCents + distanceCents + timeCents
-  const minFareApplied = meteredCents < FARE_CARD.minFareCents
-  const rawCents = Math.max(FARE_CARD.minFareCents, meteredCents)
   const tierId = String(tier ?? 'standard').trim().toLowerCase() || 'standard'
-  const scaleBps = tierScaleBps(tierId, { waitDiscountBps })
+  // A tier with its own DB card is priced on it directly (no Standard scale).
+  // Wait & Save with an explicit waitDiscountBps keeps the Standard path.
+  const picked = waitDiscountBps != null && waitDiscountBps !== '' ? { card: activeCards.standard, own: false } : fareCardFor(tierId)
+  const card = picked.card
+  const distanceCents = Math.round(milesN * card.perMileCents)
+  const timeCents = Math.round(minutesN * card.perMinuteCents)
+  const meteredCents = card.baseCents + card.bookingFeeCents + distanceCents + timeCents
+  const minFareApplied = meteredCents < card.minFareCents
+  const rawCents = Math.max(card.minFareCents, meteredCents)
+  const scaleBps = picked.own ? 10000 : tierScaleBps(tierId, { waitDiscountBps })
   const callerMul = Math.max(0, Number(vehicleMultiplier) || 1)
   const vehicleMul = Math.round(callerMul * scaleBps) / 10000
   const classedCents = Math.round(Math.round(rawCents * callerMul) * scaleBps / 10000)
   const surgeMul = clampSurge(surgeMultiplier)
-  const surgedCents = Math.round(classedCents * surgeMul)
+  // Carpool seat = 50% of the (surged) Standard fare: surge the base first, then halve.
+  const surgedCents = tierId === 'carpool' && !picked.own
+    ? Math.round(Math.round(Math.round(rawCents * callerMul) * surgeMul) * scaleBps / 10000)
+    : Math.round(classedCents * surgeMul)
 
   // Friend rides with 2+ people keep CARPOOL_DISCOUNT_BPS on the group fare.
   // The Carpool ride option is the seat fraction above, not a second discount.
@@ -492,12 +588,14 @@ export function quoteFare({
     ...settled,
     breakdown: {
       version: FARE_RATES_VERSION,
-      base_cents: FARE_CARD.baseCents,
-      booking_fee_cents: FARE_CARD.bookingFeeCents,
+      base_cents: card.baseCents,
+      booking_fee_cents: card.bookingFeeCents,
       distance_cents: distanceCents,
       time_cents: timeCents,
       metered_cents: meteredCents,
-      min_fare_cents: FARE_CARD.minFareCents,
+      min_fare_cents: card.minFareCents,
+      per_mile_cents: card.perMileCents,
+      per_minute_cents: card.perMinuteCents,
       min_fare_applied: minFareApplied,
       subtotal_cents: classedCents,
       vehicle_multiplier: vehicleMul,

@@ -38,19 +38,22 @@ test('airport quotes stay unsurged and have no upfront deposit', () => {
   assert.equal(student.fareCents, 6161)
 })
 
-test('fall Saturday afternoon is game day and Friday evening is weekend surge', () => {
-  const game = campusOverlays(new Date('2026-09-26T18:00:00-04:00'))
+test('home-game window is game-day pricing; weekends alone show no surge', () => {
+  // Oct 17 2026 home game, kickoff 12:00 ET: window 08:00-15:00 ET.
+  const game = campusOverlays(new Date('2026-10-17T13:00:00-04:00'))
   assert.equal(game.gameDay, true)
-  assert.equal(game.surgeLabel, 'Game day surge')
+  assert.equal(game.surgeLabel, 'Game-day pricing')
+
+  const after = campusOverlays(new Date('2026-10-17T15:30:00-04:00'))
+  assert.equal(after.gameDay, false)
+  assert.equal(after.surge, false)
 
   const friday = campusOverlays(new Date('2026-09-25T18:30:00-04:00'))
-  assert.equal(friday.gameDay, false)
-  assert.equal(friday.surge, true)
-  assert.equal(friday.surgeLabel, 'Weekend surge')
+  assert.equal(friday.surge, false)
+  assert.equal(friday.surgeLabel, null)
 
-  const thursday = campusOverlays(new Date('2026-09-24T12:00:00-04:00'))
-  assert.equal(thursday.surge, false)
-  assert.equal(thursday.gameDay, false)
+  const awaySaturday = campusOverlays(new Date('2026-10-31T14:00:00-04:00'))
+  assert.equal(awaySaturday.gameDay, false)
 })
 
 test('choose-driver loader stays inside 2–4 seconds', () => {

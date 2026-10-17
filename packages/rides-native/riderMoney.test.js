@@ -66,6 +66,17 @@ test('new quotes have no upfront deposit', () => {
   assert.equal(afterCredits.cashCents, 4000)
 })
 
+test('quote parser reads the game-day pricing block', () => {
+  const parsed = parseQuoteResponse({
+    quote: { fareCents: 829, cashCents: 829, breakdown: {} },
+    surge: { multiplier: 1.25, rule: { id: 'game_day', label: 'Game-day pricing' } },
+    gameDayPricing: { active: true, label: 'Game-day pricing', multiplier: 1.25, explainer: 'Clemson home game today.' },
+  })
+  assert.equal(parsed.surgeLabel, 'Game-day pricing')
+  assert.deepEqual(parsed.gameDayPricing, { label: 'Game-day pricing', explainer: 'Clemson home game today.', multiplier: 1.25 })
+  assert.equal(parseQuoteResponse({ quote: { fareCents: 663 } }).gameDayPricing, undefined)
+})
+
 test('quote parser drops a stale deposit and uses the new cash remainder', () => {
   const first = parseQuoteResponse({
     fareCents: 8000,
@@ -282,8 +293,9 @@ test('fallback fare keeps airport, surge, and student prices with no upfront dep
   assert.ok(clt.fareCents > gsp.fareCents)
   assert.ok(student.studentDiscountCents > 0)
   assert.ok(student.fareCents < gsp.fareCents)
-  assert.ok(rush.fareCents > gsp.fareCents)
-  assert.equal(rush.surgeLabel, 'Airport rush')
+  // Airport rush is off (2026-10-17): the rush-hour fallback equals the quiet fare.
+  assert.equal(rush.fareCents, gsp.fareCents)
+  assert.equal(rush.surgeLabel, null)
   assert.equal(paymentRouteMissing({ status: 400, message: 'Unknown payment method action' }), true)
   assert.equal(paymentRouteMissing({ status: 404, message: 'NOT_FOUND' }), true)
   assert.equal(paymentRouteMissing({ status: 503, message: 'SUPABASE_SERVICE_ROLE_KEY not configured' }), true)

@@ -531,8 +531,8 @@ describe('scheduleTrip endpoint handler', () => {
     })
   })
 
-  describe('Friday 23:59 -> Saturday rollover and weekend surge', () => {
-    test('applies weekend surge on Friday at 23:59:00 EDT', async () => {
+  describe('Friday 23:59 -> Saturday rollover (weekend surge is off, 1.0x)', () => {
+    test('no weekend surge on Friday at 23:59:00 EDT', async () => {
       const { sb, tripsInserted } = createFakeSb()
       // 2026-10-02 is a Friday. 23:59 EDT is 2026-10-03T03:59:00Z.
       const fridayNightIso = '2026-10-03T03:59:00.000Z'
@@ -554,13 +554,13 @@ describe('scheduleTrip endpoint handler', () => {
       )
       assert.equal(res.status, 200)
       assert.equal(tripsInserted.length, 1)
-      // Weekend surge rule provides multiplier 1.2
-      assert.equal(tripsInserted[0].surge_multiplier, 1.2)
+      // Weekend surge is 1.0x (2026-10-17 decision)
+      assert.equal(tripsInserted[0].surge_multiplier, 1)
       assert.equal(tripsInserted[0].metadata.party, 'weekend')
       assert.equal(tripsInserted[0].metadata.purpose, 'party_weekend')
     })
 
-    test('preserves weekend surge after Friday rollover to Saturday 00:05:00 EDT', async () => {
+    test('still no weekend surge after Friday rollover to Saturday 00:05:00 EDT', async () => {
       const { sb, tripsInserted } = createFakeSb()
       // Saturday 00:05 EDT is 2026-10-03T04:05:00Z.
       const saturdayNightIso = '2026-10-03T04:05:00.000Z'
@@ -582,7 +582,7 @@ describe('scheduleTrip endpoint handler', () => {
       )
       assert.equal(res.status, 200)
       assert.equal(tripsInserted.length, 1)
-      assert.equal(tripsInserted[0].surge_multiplier, 1.2)
+      assert.equal(tripsInserted[0].surge_multiplier, 1)
       assert.equal(tripsInserted[0].metadata.party, 'weekend')
     })
   })
@@ -620,8 +620,8 @@ describe('scheduleTrip endpoint handler', () => {
 
       assert.equal(res.status, 200)
       assert.equal(tripsInserted.length, 1)
-      // Game-day multiplier 2.1 overrides weekend surge 1.2
-      assert.equal(tripsInserted[0].surge_multiplier, 2.1)
+      // A live game-day event on a stadium-area trip is game-day pricing, capped at 1.25x
+      assert.equal(tripsInserted[0].surge_multiplier, 1.25)
       assert.ok(tripsInserted[0].fare_cents > 0)
     })
 
@@ -652,14 +652,14 @@ describe('scheduleTrip endpoint handler', () => {
         if (table === 'game_day_events') throw new Error('relation does not exist')
         return realFrom(table)
       }
-      // Saturday 2 PM EDT in October: the built-in game-day fallback window (1.8) applies.
+      // Oct 3 is not in the remaining home-game schedule and the fall-Saturday fallback is retired.
       const res = await callHandler(
         scheduleTripHandler,
         { method: 'POST', body: { ...defaultPlaces, pickupAt: '2026-10-03T18:00:00.000Z' } },
         { user: mockStandardUser, sb, ensureProfile: async () => ({ ok: true }) },
       )
       assert.equal(res.status, 200)
-      assert.equal(tripsInserted[0].surge_multiplier, 1.8)
+      assert.equal(tripsInserted[0].surge_multiplier, 1)
     })
 
     test('falls back to standard or weekend surge when no game-day event is active', async () => {
@@ -1043,9 +1043,9 @@ describe('scheduleTrip endpoint handler', () => {
       assert.equal(tripsInserted.length, 2)
       assert.equal(tripsInserted[0].pickup_at, '2026-11-01T05:30:00.000Z')
       assert.equal(tripsInserted[1].pickup_at, '2026-11-01T06:30:00.000Z')
-      // Both occur during Sunday early morning (weekend surge applies)
-      assert.equal(tripsInserted[0].surge_multiplier, 1.2)
-      assert.equal(tripsInserted[1].surge_multiplier, 1.2)
+      // Both occur during Sunday early morning (no weekend surge: 1.0x)
+      assert.equal(tripsInserted[0].surge_multiplier, 1) // weekend surge is off
+      assert.equal(tripsInserted[1].surge_multiplier, 1)
     })
   })
 

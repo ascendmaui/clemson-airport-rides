@@ -1,3 +1,4 @@
+import { GAME_DAY_LABEL, activeHomeGame } from '../../shared/gameDaySurge.js'
 /** Pure rider-shell helpers. No React, no Supabase. */
 
 export const PASSWORD_RESET_REDIRECT = 'clemsonrides://set-password'
@@ -129,15 +130,13 @@ export function zonedParts(date, timeZone = 'America/New_York') {
   }
 }
 
-/** Game day matches the fall Saturday window. Weekend surge is Fri 17:00 through Sunday. */
+/**
+ * Game day = a Clemson home-game pricing window (shared/gameDaySurge.js).
+ * There is no weekend surge (2026-10-17 decision), so weekends alone show nothing.
+ */
 export function campusOverlays(date = new Date()) {
-  const { weekday, minutes, month } = zonedParts(date)
-  const weekend = (weekday === 5 && minutes >= 17 * 60) || weekday === 6 || weekday === 0
-  const gameDay = weekday === 6 && month >= 8 && month <= 11 && minutes >= 11 * 60 && minutes < 23 * 60
-  let surgeLabel = null
-  if (gameDay) surgeLabel = 'Game day surge'
-  else if (weekend) surgeLabel = 'Weekend surge'
-  return { gameDay, surge: weekend || gameDay, surgeLabel }
+  const gameDay = Boolean(activeHomeGame(date))
+  return { gameDay, surge: gameDay, surgeLabel: gameDay ? GAME_DAY_LABEL : null }
 }
 
 export function nextPickupDate({ date, time, weekdays, now = new Date() }) {

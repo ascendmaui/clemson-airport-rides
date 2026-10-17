@@ -3,6 +3,7 @@
  * Records a campus or airport trip at the server fare. Client fare_cents,
  * amount, total, and isStudent are ignored.
  */
+import { logMarginAlert, marginForPriced } from '../marginAlerts.js'
 import { isE2ETestUser } from '../../shared/e2eTestAccounts.js'
 import {
   admin, cors, json, parseBody, userFromAuth, computeRoutes,
@@ -283,6 +284,16 @@ export default async function handler(req, res, deps = {}) {
   if (inserted.error || !inserted.data) {
     return json(res, 500, { error: inserted.error?.message || 'Could not schedule ride' })
   }
+  // Profit check at booking (never blocks the ride): log below-target margin with the trip id.
+  void logMarginAlert(sb, {
+    source: 'booking',
+    tripId: inserted.data.id,
+    margin: marginForPriced(priced, {
+      tier,
+      driverPayout: row.driver_earnings_cents != null ? row.driver_earnings_cents : null,
+    }),
+    details: { kind: scheduledFor ? 'scheduled' : 'near_term', airport: priced.airport || null, surge_rule: priced.surge?.rule?.id || null },
+  }).catch(() => null)
   const { error: eventError } = await insertTripEvent(sb, {
     trip_id: inserted.data.id,
     kind: 'scheduled',

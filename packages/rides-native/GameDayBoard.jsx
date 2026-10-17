@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
+import { peakSurgeView } from './peakStatus.js'
 
 const ORANGE = '#F56600'
 const PURPLE = '#522D80'
@@ -50,10 +51,14 @@ export function GameDayBanner({ model, onPress }) {
   )
 }
 
-export function GameDaySurgeLine({ model, online = false, onPress, colors = null }) {
-  if (!model) return null
-  const line = online ? model.surge.headline : model.surge.driverLine
-  const label = `${line}. ${model.surge.multiplierLabel}.`
+export function GameDaySurgeLine({ model, online = false, onPress, peak = null, colors = null }) {
+  const peakView = peakSurgeView(peak, online)
+  if (!model && !peakView) return null
+  const surge = peakView
+    ? { multiplierLabel: peakView.multiplierLabel, headline: peakView.headline, driverLine: peakView.line }
+    : model.surge
+  const line = online ? surge.headline : surge.driverLine
+  const label = `${line}. ${surge.multiplierLabel}.`
   const plate = colors?.card || TICKET
   const kicker = colors?.link || PURPLE
   const amount = colors?.orange || ORANGE
@@ -65,8 +70,10 @@ export function GameDaySurgeLine({ model, online = false, onPress, colors = null
       <Text style={{ color: kicker, fontSize: 11, fontWeight: '800', letterSpacing: 1.2 }}>
         {online ? 'RIDER FARE' : 'BEFORE YOU GO ONLINE'}
       </Text>
-      <Text style={{ color: amount, fontSize: 28, fontWeight: '700', letterSpacing: -0.6 }}>{model.surge.multiplierLabel}</Text>
-      <Text style={{ color: ink, fontSize: 13, fontWeight: '700', lineHeight: 18 }}>{model.surge.headline}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+        <Text style={{ color: amount, fontSize: 28, fontWeight: '700', letterSpacing: -0.6 }}>{surge.multiplierLabel}</Text>
+        <Text style={{ color: ink, fontSize: 13, fontWeight: '700', flex: 1 }}>{surge.headline}</Text>
+      </View>
       <Text style={{ color: muted, fontSize: 13, lineHeight: 18 }}>{line}</Text>
     </View>
   )

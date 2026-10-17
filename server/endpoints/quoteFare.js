@@ -19,6 +19,22 @@ import {
 import { carpoolSeatCount, resolveOfferedTier } from '../../shared/rideOptions.js'
 import { tigerPassQuoteFields } from '../../shared/tigerPass.js'
 import { loadRiderMatchPreferences } from '../riderPass.js'
+import { peakQuoteFields } from '../peakPricing.js'
+import { logMarginAlert, marginForPriced } from '../marginAlerts.js'
+import { GAME_DAY_EXPLAINER, GAME_DAY_LABEL } from '../../shared/gameDaySurge.js'
+
+/** Rider-facing game-day block: shown with the upfront total when the 1.25x applies. */
+export function gameDayPricingFields(priced) {
+  const rule = priced?.surge?.rule
+  if (!rule || rule.id !== 'game_day' || !(Number(priced?.surge?.multiplier) > 1)) return null
+  return {
+    active: true,
+    label: GAME_DAY_LABEL,
+    multiplier: Number(priced.surge.multiplier),
+    explainer: GAME_DAY_EXPLAINER,
+    game: rule.game || null,
+  }
+}
 
 const CLIENT_MONEY_KEYS = [
   'fareCents',
@@ -122,11 +138,24 @@ export default async function handler(req, res, deps = {}) {
   })
   const split = splitPlatformFee(priced.fareCents)
   const breakdown = priced.breakdown || priced.quote?.breakdown || {}
+  // Profit check: below-target fares still quote; they are logged for the daily alert.
+  const margin = marginForPriced(priced, { tier: priced.tier })
+  if (margin.belowTarget && sb) {
+    const write = logMarginAlert(sb, {
+      source: 'quote',
+      margin,
+      details: { airport: priced.airport || null, scheduled, route_source: priced.routeSource || null, surge_rule: priced.surge?.rule?.id || null },
+    })
+    if (deps.awaitMarginAlert) await write
+  }
 
   return json(res, 200, {
     version: FARE_RATES_VERSION,
     routeSource: priced.routeSource,
     surge: priced.surge,
+    // Peak pricing (flag PEAK_PRICING_ENABLED): shown to the rider before they confirm.
+    peak: peakQuoteFields(priced),
+    gameDayPricing: gameDayPricingFields(priced),
     gameDay: gameDayEvent
       ? {
           id: gameDayEvent.id ?? null,
