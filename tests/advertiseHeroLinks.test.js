@@ -29,7 +29,7 @@ async function loadAdvertise() {
     entryPoints: ['src/screens/Advertise.jsx'],
     bundle: true, format: 'esm', platform: 'node', jsx: 'automatic', write: false,
     loader: { '.css': 'empty' },
-    external: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+    external: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'qrcode'],
   })
   const dir = mkdtempSync(join(fileURLToPath(root), '.advertise-links-'))
   const file = join(dir, 'advertise.mjs')
@@ -41,18 +41,18 @@ async function loadAdvertise() {
   }
 }
 
-test('hero links go to sign-up and the How it works section, not the homepage', async () => {
+test('hero links go to the founding-partner application and the How it works section, not the homepage', async () => {
   const mod = await loadAdvertise()
   const html = renderToStaticMarkup(createElement(mod.Advertise))
-  const founding = html.match(/<a[^>]*href="([^"]+)"[^>]*>Become a founding partner<\/a>/)
+  const founding = html.match(/<a[^>]*href="([^"]+)"[^>]*>Apply to become a Founding Partner — limited spots<\/a>/)
   const how = html.match(/<a[^>]*href="([^"]+)"[^>]*>How it works<\/a>/)
   assert.ok(founding && how, 'both hero links render')
-  assert.equal(founding[1], '/advertise/signup?package=founding-partner')
+  assert.equal(founding[1], '/advertise/apply')
   assert.equal(how[1], '/advertise?section=how-it-works')
   assert.match(html, /<section id="how-it-works"/, 'the How it works section carries the anchor id')
 
-  const signup = routeFor(founding[1])
-  assert.deepEqual([signup.path, signup.params.sub], ['advertise', 'signup'])
+  const apply = routeFor(founding[1])
+  assert.deepEqual([apply.path, apply.params.sub], ['advertise', 'apply'])
   const section = routeFor(how[1])
   assert.deepEqual([section.path, section.params.section], ['advertise', 'how-it-works'])
   // The old bug: a bare #hash is read as a route and falls through to the homepage.
