@@ -162,7 +162,7 @@ function Screen({ path, params }) {
       return <DriveWithUs />
     case 'advertise':
     case 'partner':
-      if (params.sub === 'signup' || params.sub === 'my') return <AdsSignup sub={params.sub} />
+      if (params.sub === 'signup' || params.sub === 'my' || params.sub === 'apply') return <AdsSignup sub={params.sub} params={params} />
       return <Advertise />
     case 'tablet':
       return <TabletPlayer params={params} />

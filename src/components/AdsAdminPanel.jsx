@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AdCreative } from './AdCreative'
 import { adsAdmin, fetchAdsAdmin } from '../lib/adsApi'
+import { describeTargeting } from '../../shared/ads/targeting.js'
+import { formatEt } from '../../shared/ads/metrics.js'
 import '../styles/ads.css'
 
 const money = (c) => (c ? `$${(c / 100).toFixed(2)}` : '—')
@@ -58,7 +60,15 @@ export function AdsAdminPanel() {
           <div key={c.id} className="ads-row">
             <strong>{c.name}</strong>
             <span>{partner(c.partner_id)?.email} · {partner(c.partner_id)?.phone}</span>
-            <span><span className={`ads-chip ads-chip--${c.status}`}>{c.status}</span> · {money(c.price_cents)} · impressions {c.stats.impressions} · {Math.round(c.stats.seconds / 60)} min · rides {c.rides_served}{c.rides_purchased ? `/${c.rides_purchased}` : ''}</span>
+            <span><span className={`ads-chip ads-chip--${c.status}`}>{c.status}</span> · {money(c.price_cents)} · QR scans {c.metrics?.scans ?? 0} ({c.metrics?.scanRate ?? 0}% of rides) · rides {c.metrics?.rides ?? c.rides_served}{c.rides_purchased ? `/${c.rides_purchased}` : ''} · impressions {c.metrics?.impressions ?? 0} · ad runs {c.metrics?.runs ?? c.stats.impressions}</span>
+            <span>Targeting: {describeTargeting(c.targeting)}{c.game_day_boost ? ' · game-day boost' : ''}{c.destination_url ? ` · QR lands on ${c.destination_url}` : ''}</span>
+            {(c.boosts || []).map((b) => (
+              <span key={b.id} className="ads-actions" style={{ alignItems: 'center' }}>
+                Boost +{b.rides_added} rides · {money(b.price_cents)} · {b.status}
+                {b.status === 'pending_payment' || b.status === 'paid' ? <button type="button" className="primary" onClick={() => run(() => adsAdmin('boost', { id: b.id, action: 'apply' }))}>Apply boost</button> : null}
+                {b.status === 'pending_payment' ? <button type="button" onClick={() => run(() => adsAdmin('boost', { id: b.id, action: 'cancel' }))}>Cancel</button> : null}
+              </span>
+            ))}
             <span>{c.starts_at ? `Runs ${new Date(c.starts_at).toLocaleDateString()} – ${c.ends_at ? new Date(c.ends_at).toLocaleDateString() : 'open'}` : 'Not started'}</span>
             {c.payment_url ? <a href={c.payment_url} target="_blank" rel="noreferrer">Payment link</a> : null}
             <div className="ads-actions">
@@ -88,6 +98,50 @@ export function AdsAdminPanel() {
             ))}
           </div>
         ))}
+      </section>
+
+      <section className="ads-row">
+        <h4>Founding-partner applications ({(data.applications || []).filter((a) => a.status === 'pending').length} pending)</h4>
+        {(data.applications || []).map((a) => (
+          <div key={a.id} className="ads-row">
+            <strong>{a.business_name} <span className={`ads-chip ads-chip--${a.status === 'pending' ? 'pending_review' : a.status === 'approved' ? 'live' : 'completed'}`}>{a.status}</span></strong>
+            <span>{a.category} · {a.address} · {a.contact_name} · {a.email}{a.phone ? ` · ${a.phone}` : ''}{a.website ? ` · ${a.website}` : ''}</span>
+            <span>Promote: {a.promote}</span>
+            {a.offer ? <span>Offer: {a.offer}</span> : null}
+            <span className="adv-fine">Applied {formatEt(a.created_at)}</span>
+            {a.status === 'pending' ? (
+              <div className="ads-actions">
+                <button type="button" className="primary" onClick={() => run(() => adsAdmin('application', { id: a.id, decision: 'approved' }))}>Approve: unlock founding rates</button>
+                <button type="button" onClick={() => run(() => adsAdmin('application', { id: a.id, decision: 'declined', note: window.prompt('Note (internal)?') || '' }))}>Decline</button>
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </section>
+
+      <section className="ads-row">
+        <h4>Partners ({data.partners.length})</h4>
+        {data.partners.map((p) => (
+          <div key={p.id} className="ads-actions" style={{ alignItems: 'center' }}>
+            <span>{p.business_name} · {p.email} · <span className={`ads-chip ads-chip--${p.status === 'active' ? 'live' : 'pending_review'}`}>{p.status === 'active' ? 'onboarded' : p.status}</span>{p.founding_approved ? ' · founding rates' : ''}{p.lat != null ? ' · map pin set' : ' · no map pin (radius not enforced)'}</span>
+            {p.status !== 'active' ? <button type="button" className="primary" onClick={() => run(() => adsAdmin('partner', { id: p.id, status: 'active' }))}>Onboard</button> : <button type="button" onClick={() => run(() => adsAdmin('partner', { id: p.id, status: 'suspended' }))}>Suspend</button>}
+            <label className="ads-check"><input type="checkbox" checked={Boolean(p.auto_approve_creatives)} onChange={(e) => run(() => adsAdmin('partner', { id: p.id, auto_approve_creatives: e.target.checked }))} /> Auto-approve creatives</label>
+            <button type="button" onClick={() => {
+              const pin = window.prompt('Business map pin as "lat, lng" (for radius targeting)', p.lat != null ? `${p.lat}, ${p.lng}` : '')
+              if (!pin) return
+              const [lat, lng] = pin.split(',').map((x) => Number(x.trim()))
+              run(() => adsAdmin('partner', { id: p.id, lat, lng }))
+            }}>Set map pin</button>
+          </div>
+        ))}
+      </section>
+
+      <section className="ads-row">
+        <h4>Best-converting ads (QR scans per ride, all partners)</h4>
+        <table className="ads-table">
+          <thead><tr><th>Ad</th><th>Rides</th><th>QR scans</th><th>Scan rate</th></tr></thead>
+          <tbody>{(data.creativeRanking || []).slice(0, 25).map((r) => <tr key={r.creativeId}><td>{r.headline}</td><td>{r.rides}</td><td>{r.scans}</td><td>{r.scanRate}%</td></tr>)}</tbody>
+        </table>
       </section>
 
       <section className="ads-row">

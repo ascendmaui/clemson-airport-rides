@@ -248,6 +248,11 @@ function isApiPath(pathname) {
   return pathname === '/api' || pathname.startsWith('/api/')
 }
 
+/** Short tracking links (/q/<token>) are rewritten to an API handler, unlike other page paths. */
+export function isShortLinkPath(pathname) {
+  return /^\/q\/[A-Za-z0-9_-]{8,40}$/.test(pathname)
+}
+
 function normalizePath(pathname) {
   if (pathname.length > 1 && pathname.endsWith('/')) return pathname.slice(0, -1)
   return pathname
@@ -563,7 +568,7 @@ async function dispatch(req, res, { routes, rewrites, distDir, downloadsDir }) {
     search = rewritten.search
   } else {
     const rewritten = applyRewrites(pathname, search, rewrites)
-    if (!isApiPath(rewritten.pathname)) {
+    if (!isApiPath(rewritten.pathname) || isShortLinkPath(originalPath)) {
       pathname = rewritten.pathname
       search = rewritten.search
     }

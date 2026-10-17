@@ -23,6 +23,7 @@ export function TabletPlayer({ params = {} }) {
   const [index, setIndex] = useState(0)
   const [src, setSrc] = useState(null)
   const startedRef = useRef(Date.now())
+  const hiddenRef = useRef(false)
   const feedRef = useRef(feed)
   feedRef.current = feed
 
@@ -49,6 +50,13 @@ export function TabletPlayer({ params = {} }) {
     return () => { alive = false; window.clearInterval(t); window.clearInterval(f) }
   }, [demo, token, params.gameday])
 
+  // A play only counts as shown when the screen stayed on and the kiosk stayed in front for the slot.
+  useEffect(() => {
+    const onVis = () => { if (document.visibilityState !== 'visible') hiddenRef.current = true }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [])
+
   useEffect(() => {
     let lock = null
     navigator.wakeLock?.request?.('screen').then((l) => { lock = l }).catch(() => {})
@@ -69,8 +77,10 @@ export function TabletPlayer({ params = {} }) {
   useEffect(() => {
     if (!slot) return undefined
     startedRef.current = Date.now()
+    hiddenRef.current = document.visibilityState !== 'visible'
     const timer = window.setTimeout(() => {
-      if (!demo) queueImpression(impressionFor(slot, { startedAt: startedRef.current, inTrip: Boolean(feedRef.current?.trip) }))
+      const visible = !hiddenRef.current && document.visibilityState === 'visible'
+      if (!demo) queueImpression(impressionFor(slot, { startedAt: startedRef.current, inTrip: Boolean(feedRef.current?.trip), visible }))
       setIndex((i) => i + 1)
     }, slot.seconds * 1000)
     return () => window.clearTimeout(timer)

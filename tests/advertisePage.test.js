@@ -9,7 +9,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { PGlite } from '@electric-sql/pglite'
 import { getHashRoute } from '../src/lib/navigation.js'
 import {
-  AD_PACKAGES, ADS_PACKAGES_APPROVED, COMING_SOON_COPY, FOUNDING_PARTNER_TIER, publicAdPackages, tierChoices,
+  ADS_PACKAGES_APPROVED, FOUNDING_PARTNER_TIER, PRICING_STATUS_COPY, RIDE_BUNDLES, bundlePackageRows, formatPerRide, perRideCents, publicAdPackages, tierChoices,
 } from '../src/content/adPackages.js'
 import { AD_LEAD_HONEYPOT, adLeadErrors, adLeadRow, isAdLeadBot } from '../shared/adLeads.js'
 import { createAdLeadsHandler } from '../api/ad-leads.js'
@@ -38,7 +38,7 @@ async function renderScreen(exportName) {
     entryPoints: ['src/screens/Advertise.jsx'],
     bundle: true, format: 'esm', platform: 'node', jsx: 'automatic', write: false,
     loader: { '.css': 'empty' },
-    external: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+    external: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'qrcode'],
   })
   const dir = mkdtempSync(join(fileURLToPath(root), '.advertise-render-'))
   const file = join(dir, 'advertise.mjs')
@@ -87,12 +87,21 @@ test('/advertise and the /partner alias route to the Advertise screen on the sit
   assert.match(chrome, /ids: \['why-clemson-rides', 'safety', 'drive', 'advertise'\]/)
 })
 
-test('page renders the tablet pitch, coming-soon packages and the interest form', async () => {
+test('page renders the QR-first, pay-per-ride pitch, draft ride bundles and the interest form', async () => {
   const html = await renderScreen('Advertise')
   assert.match(html, /Advertise with us/)
   assert.match(html, /back of the front seat/)
   assert.match(html, /game-day specials/)
-  assert.match(html, /Packages and pricing coming soon, contact us for founding-partner rates\./)
+  assert.match(html, /<h1[^>]*>Riders scan your deal\. You see every scan\.<\/h1>/)
+  assert.match(html, /pay only for the rides your ad is shown in/i)
+  for (const [rides, price] of [['100 rides', '\\$12'], ['250 rides', '\\$25'], ['1,000 rides', '\\$89'], ['5,000 rides', '\\$299']]) {
+    assert.match(html, new RegExp(`<h3>${rides}</h3><p class="adv-price">${price}</p>`))
+  }
+  assert.match(html, /Game-day weekend boost/)
+  assert.match(html, /Draft launch pricing, pending approval/)
+  assert.match(html, /every ride your ad ran on, with timestamp and QR scans/i)
+  assert.doesNotMatch(html, /\b\d[\d,]* (cars|drivers|rides (a|per) (week|month|day))\b/i, 'no fleet size or ride volume claims')
+  assert.doesNotMatch(html, /data-testid="adv-(samples|hero-demo|how-video)"/, 'media slots stay empty until John approves the assets')
   for (const name of ['businessName', 'contactName', 'email', 'phone', 'category', 'tier', 'message', AD_LEAD_HONEYPOT]) {
     assert.match(html, new RegExp(`name="${name}"`))
   }
@@ -103,20 +112,18 @@ test('page renders the tablet pitch, coming-soon packages and the interest form'
   assert.match(read('src/styles/advertise.css'), /#522D80/)
 })
 
-test('package config: placeholders are marked and hidden behind the approval flag', () => {
+test('pricing config: draft ride bundles, per-ride rates, and billing still pending approval', () => {
   assert.equal(ADS_PACKAGES_APPROVED, false)
-  assert.ok(AD_PACKAGES.length > 0)
-  for (const tier of AD_PACKAGES) {
-    assert.equal(tier.placeholder, true)
-    assert.match(tier.name, /^PLACEHOLDER/)
-  }
-  assert.deepEqual(publicAdPackages(), [])
-  assert.deepEqual(publicAdPackages(AD_PACKAGES, true), [], 'placeholder tiers stay hidden even if the flag flips early')
-  const real = [{ id: 'local', name: 'Local', priceLabel: '$1', summary: 's', features: [] }]
-  assert.deepEqual(publicAdPackages(real, true).map((t) => t.id), ['local'])
-  assert.deepEqual(tierChoices(real, true).map((t) => t.id), ['founding-partner', 'local', 'not-sure'])
-  assert.deepEqual(tierChoices().map((t) => t.id), ['founding-partner', 'not-sure'])
-  assert.match(COMING_SOON_COPY, /founding-partner rates/)
+  assert.deepEqual(RIDE_BUNDLES.map((b) => [b.rides, b.priceCents]), [[100, 1200], [250, 2500], [1000, 8900], [5000, 29900]])
+  assert.deepEqual(RIDE_BUNDLES.map(perRideCents), [12, 10, 8.9, 5.98])
+  assert.equal(formatPerRide(RIDE_BUNDLES[2]), '8.9¢ per ride')
+  assert.deepEqual(publicAdPackages().map((b) => b.id), ['rides-100', 'rides-250', 'rides-1000', 'rides-5000'])
+  assert.deepEqual(tierChoices().map((t) => t.id), ['founding-partner', 'rides-100', 'rides-250', 'rides-1000', 'rides-5000', 'not-sure'])
+  const rows = bundlePackageRows()
+  assert.ok(rows.every((r) => r.placeholder === true && r.active === false), 'draft rows stay out of billing until approved')
+  assert.ok(rows.filter((r) => r.kind === 'bundle').every((r) => r.rides_included > 0 && r.price_cents > 0))
+  assert.ok(bundlePackageRows(true).filter((r) => r.kind === 'bundle').every((r) => r.active && !r.placeholder))
+  assert.match(PRICING_STATUS_COPY, /pending approval/)
 })
 
 test('form validation flags each required field and accepts a good lead', () => {
@@ -193,7 +200,7 @@ test('client submit posts JSON to /api/ad-leads and surfaces field errors', asyn
   const built = await esbuild.build({
     absWorkingDir: fileURLToPath(root), entryPoints: ['src/screens/Advertise.jsx'], bundle: true, format: 'esm',
     platform: 'node', jsx: 'automatic', write: false, loader: { '.css': 'empty' },
-    external: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+    external: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'qrcode'],
   })
   const dir = mkdtempSync(join(fileURLToPath(root), '.advertise-client-'))
   try {

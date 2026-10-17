@@ -3,11 +3,14 @@
  *   GET  packages                         public: buyable packages (empty until real tiers are approved)
  *   POST upload-url                       public, rate limited: signed upload URL for a creative (ad-creatives bucket)
  *   POST signup                           public, rate limited, honeypot: partner + campaign (pending_payment) + creative (pending_review)
- *   GET  mine                             signed-in partner: own campaigns and impression counts
+ *   GET  mine                             signed-in partner: own campaigns with live counters (runs, impressions, rides, QR scans)
+ *   GET  qr&token=                        public (/q/<token>): log a QR scan, then 302 to the partner's deal URL
+ *   POST apply                            public, rate limited, honeypot: founding-partner application (pending)
+ *   POST partner-campaign|partner-launch|partner-boost   signed-in, onboarded partner: build / create / launch / boost
  *   GET  tablet-feed                      device token (X-Device-Token): rotation loop + creatives + trip state
  *   POST tablet-impressions               device token: impression batch; counts a ride per campaign per in-progress trip
  *   GET  admin-overview                   owner only
- *   POST admin-creative|admin-campaign|admin-device|admin-package|admin-bill   owner only
+ *   POST admin-creative|admin-campaign|admin-device|admin-package|admin-bill|admin-partner|admin-application|admin-boost   owner only
  *   GET/POST cron                         Bearer CRON_SECRET: reminders / pause unpaid / ending notices / monthly report (flags off = plan only)
  */
 import { cors, json, parseBody, rateLimit } from '../server/agentHttp.js'
@@ -21,15 +24,23 @@ import { WEB_ORIGIN, supportEmail } from '../shared/productLinks.js'
 import { signupErrors, uploadErrors } from '../shared/ads/signup.js'
 import {
   adminCampaign, adminCreative, adminDevice, adminOverview, adminPackage, createUploadUrl, deviceFromToken,
-  impressionStats, listPackages, partnerCampaigns, recordImpressions, signupPartner, tabletFeed,
+  impressionStats, listPackages, recordImpressions, signupPartner, tabletFeed,
 } from '../server/ads/service.js'
-import { startCampaignPayment } from '../server/ads/billing.js'
+import { adsBillingEnabled, startBoostPayment, startCampaignPayment } from '../server/ads/billing.js'
+import {
+  adminApplication, adminBoost, adminPartner, adminTracking, clientIp, partnerBoost, partnerDashboard,
+  partnerLaunchCampaign, partnerSaveCampaign, recordQrScan, submitApplication,
+} from '../server/ads/tracking.js'
+import { APPLICATION_HONEYPOT, applicationErrors } from '../shared/ads/application.js'
 import { runAdsAutomation } from '../server/ads/automation.js'
 
 export const ADS_ACTIONS = new Set([
   'packages', 'upload-url', 'signup', 'mine', 'tablet-feed', 'tablet-impressions',
   'admin-overview', 'admin-creative', 'admin-campaign', 'admin-device', 'admin-package', 'admin-bill', 'cron',
+  'qr', 'apply', 'partner-campaign', 'partner-launch', 'partner-boost', 'admin-partner', 'admin-application', 'admin-boost',
 ])
+
+const QR_RATE = { limit: 30, windowMs: 10 * 60_000 }
 
 /** Ads admin is the owner account only (johnmatveyev@gmail.com via KNOWN_OWNER_EMAILS). */
 export function isAdsOwner(user) {
@@ -46,7 +57,7 @@ function deviceToken(req, url) {
 export function createAdsHandler(deps = {}) {
   const db = deps.db || (() => admin())
   const auth = deps.auth || userFromAuth
-  const limit = deps.limit || ((req, bucket) => rateLimit(req, { bucket, ...PUBLIC_RATE }))
+  const limit = deps.limit || ((req, bucket) => rateLimit(req, { bucket, ...(bucket === 'ad-qr' ? QR_RATE : PUBLIC_RATE) }))
   const send = deps.send || sendApplicantNotice
   const recipients = deps.recipients || (() => adminNotifyRecipients())
   const stripe = deps.stripe || (() => stripeClient())
@@ -94,10 +105,46 @@ export function createAdsHandler(deps = {}) {
           } catch (err) { console.error('[ads] notify', err?.message || err) }
           return json(res, 200, { ok: true, campaignId: out.campaign.id, status: out.campaign.status, creativeStatus: out.creative.approval_status })
         }
+        case 'qr': {
+          const out = await recordQrScan(sb, url.searchParams.get('token'), {
+            userAgent: req.headers?.['user-agent'] || '', ip: clientIp(req), now, allowLog: limit(req, 'ad-qr'),
+          })
+          res.statusCode = 302
+          res.setHeader('Location', out.location)
+          res.setHeader('Cache-Control', 'no-store')
+          res.setHeader('Referrer-Policy', 'no-referrer')
+          return res.end()
+        }
+        case 'apply': {
+          if (!post) return json(res, 405, { error: 'Use POST' })
+          if (String(body[APPLICATION_HONEYPOT] || '').trim()) return json(res, 200, { ok: true })
+          if (!limit(req, 'ad-apply')) return json(res, 429, { error: 'Too many applications. Try again in a few minutes.' })
+          const errors = applicationErrors(body)
+          if (Object.keys(errors).length) return json(res, 400, { error: 'Fix the highlighted fields.', errors })
+          const app = await submitApplication(sb, body)
+          try {
+            for (const to of recipients() || []) {
+              await send({ to, subject: `Founding partner application: ${app.business_name}`, text: `${app.business_name} applied to become a founding partner. Review it at ${WEB_ORIGIN}/admin?tab=ads.` })
+            }
+          } catch (err) { console.error('[ads] notify', err?.message || err) }
+          return json(res, 200, { ok: true, status: app.status })
+        }
         case 'mine': {
           const user = await auth(req)
           if (!user) return json(res, 401, { error: 'Sign in required' })
-          return json(res, 200, await partnerCampaigns(sb, user))
+          return json(res, 200, await partnerDashboard(sb, user))
+        }
+        case 'partner-campaign':
+        case 'partner-launch':
+        case 'partner-boost': {
+          if (!post) return json(res, 405, { error: 'Use POST' })
+          const user = await auth(req)
+          if (!user) return json(res, 401, { error: 'Sign in required' })
+          if (action === 'partner-campaign') return json(res, 200, await partnerSaveCampaign(sb, user, body, { now }))
+          if (action === 'partner-launch') return json(res, 200, await partnerLaunchCampaign(sb, user, body, { now }))
+          const out = await partnerBoost(sb, user, body, { now })
+          if (out.boost) out.billing = await startBoostPayment({ stripe: adsBillingEnabled(env) ? stripe() : null, sb, boostId: out.boost.id, env })
+          return json(res, 200, out)
         }
         case 'tablet-feed':
         case 'tablet-impressions': {
@@ -121,12 +168,18 @@ export function createAdsHandler(deps = {}) {
           const user = await auth(req)
           if (!user) return json(res, 401, { error: 'Sign in required' })
           if (!isAdsOwner(user)) return json(res, 403, { error: 'Ads admin is limited to the owner account.' })
-          if (action === 'admin-overview') return json(res, 200, await adminOverview(sb))
+          if (action === 'admin-overview') {
+            const overview = await adminOverview(sb)
+            return json(res, 200, { ...overview, ...(await adminTracking(sb, overview.campaigns)) })
+          }
           if (!post) return json(res, 405, { error: 'Use POST' })
           if (action === 'admin-creative') return json(res, 200, { creative: await adminCreative(sb, body, { now }) })
           if (action === 'admin-campaign') return json(res, 200, { campaign: await adminCampaign(sb, body, { now }) })
           if (action === 'admin-device') return json(res, 200, await adminDevice(sb, body))
           if (action === 'admin-package') return json(res, 200, { package: await adminPackage(sb, body, { now }) })
+          if (action === 'admin-partner') return json(res, 200, { partner: await adminPartner(sb, body, { now }) })
+          if (action === 'admin-application') return json(res, 200, await adminApplication(sb, body, { now }))
+          if (action === 'admin-boost') return json(res, 200, await adminBoost(sb, body, { now }))
           return json(res, 200, await startCampaignPayment({ stripe: stripe(), sb, campaignId: body.campaignId, mode: body.mode, origin: WEB_ORIGIN, env }))
         }
       }

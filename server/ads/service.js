@@ -5,6 +5,9 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { buildLoop, campaignsToEnd, isGameDay } from '../../shared/ads/rotation.js'
 import { FOUNDING_PACKAGE, UPLOAD_TYPES, normalizeSignup, uploadPathFor } from '../../shared/ads/signup.js'
+import { tripMatchesTargeting } from '../../shared/ads/targeting.js'
+import { MIN_VISIBLE_SECONDS } from '../../shared/ads/metrics.js'
+import { WEB_ORIGIN } from '../../shared/productLinks.js'
 
 export const AD_BUCKET = 'ad-creatives'
 const DAY = 86_400_000
@@ -30,10 +33,16 @@ export function publicUrl(sb, path) {
   return out?.data?.publicUrl || null
 }
 
-/** Packages a partner may buy: active and not placeholder. Founding partner is always offered. */
+/** A package a partner may pick: approved and active, or a ride bundle / add-on still in draft pricing. */
+export const packagePickable = (p) => Boolean(p) && ((p.active && !p.placeholder) || p.kind === 'bundle' || p.kind === 'addon')
+
+/**
+ * Packages a partner may pick. Ride bundles show while their prices are a draft (draft: true);
+ * billing refuses placeholder rows, so picking a draft bundle never charges anything.
+ */
 export async function listPackages(sb) {
-  const rows = must(await sb.from('ad_packages').select('*').eq('active', true).eq('placeholder', false).order('sort'), 'packages')
-  return rows || []
+  const rows = must(await sb.from('ad_packages').select('*').order('sort'), 'packages') || []
+  return rows.filter(packagePickable).map((p) => ({ ...p, draft: Boolean(p.placeholder || !p.active) }))
 }
 
 export async function createUploadUrl(sb, { filename, contentType }) {
@@ -48,7 +57,7 @@ export async function signupPartner(sb, body, { user = null, now = new Date() } 
   let pkg = null
   if (v.packageId !== FOUNDING_PACKAGE) {
     pkg = must(await sb.from('ad_packages').select('*').eq('id', v.packageId).maybeSingle(), 'package')
-    if (!pkg || !pkg.active || pkg.placeholder) throw fail(400, 'That package is not available yet.', { errors: { packageId: 'Pick an available package.' } })
+    if (!packagePickable(pkg) || pkg.kind === 'addon') throw fail(400, 'That package is not available yet.', { errors: { packageId: 'Pick an available package.' } })
   }
   const partner = must(await sb.from('ad_partners').insert({
     profile_id: user?.id || null,
@@ -209,7 +218,7 @@ export async function deviceFromToken(sb, token, { now = new Date() } = {}) {
 /** The paired driver's trip that is in progress right now (rider on board), if any. */
 export async function currentTrip(sb, device) {
   if (!device?.driver_id) return null
-  const { data } = await sb.from('trips').select('id, status').eq('driver_id', device.driver_id).eq('status', 'in_progress')
+  const { data } = await sb.from('trips').select('id, status, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, pickup_at, flight').eq('driver_id', device.driver_id).eq('status', 'in_progress')
     .order('pickup_at', { ascending: false, nullsFirst: false }).limit(1).maybeSingle()
   return data || null
 }
@@ -223,15 +232,28 @@ export async function sweepEndedCampaigns(sb, campaigns, now = new Date()) {
   return ending
 }
 
-export async function tabletFeed(sb, device, { now = new Date(), gameDayOverride = null } = {}) {
-  const rows = must(await sb.from('ad_campaigns').select('*, ad_packages(*), ad_creatives(*)').eq('status', 'active'), 'feed') || []
+/** Where a creative's QR should send riders: campaign deal URL, else the creative's own link. */
+export const destinationFor = (campaign, creative) => campaign?.destination_url || creative?.qr_url || creative?.qrUrl || null
+
+/** Short tracking token for one device + creative + ride. Deterministic so a 20 s refresh reuses it. */
+export function qrTokenFor(deviceId, creativeId, tripId) {
+  return createHash('sha256').update(`ad-qr:${deviceId}:${creativeId}:${tripId || 'idle'}`).digest('base64url').slice(0, 12)
+}
+
+export const qrUrlFor = (token, origin = WEB_ORIGIN) => `${origin}/q/${token}`
+
+export async function tabletFeed(sb, device, { now = new Date(), gameDayOverride = null, origin = WEB_ORIGIN } = {}) {
+  const rows = must(await sb.from('ad_campaigns').select('*, ad_packages(*), ad_creatives(*), ad_partners(id, lat, lng)').eq('status', 'active'), 'feed') || []
   const ended = new Set((await sweepEndedCampaigns(sb, rows, now)).map((e) => e.id))
   const gameDay = isGameDay(now, gameDayOverride)
+  const trip = await currentTrip(sb, device)
   const items = []
   for (const c of rows) {
     if (ended.has(c.id)) continue
-    const pkg = c.ad_packages || { placement: 'standard', frequency: 1, slot_seconds: 10, game_day_boost: 1 }
-    const { ad_packages: _p, ad_creatives: creatives, ...campaign } = c
+    const { ad_packages: pkgRow, ad_creatives: creatives, ad_partners: partner, ...campaign } = c
+    if (!tripMatchesTargeting(trip, campaign.targeting, { partner, now, gameDay })) continue
+    const base = pkgRow || { placement: 'standard', frequency: 1, slot_seconds: 10, game_day_boost: 1 }
+    const pkg = campaign.game_day_boost ? { ...base, game_day_boost: Math.max(2, Number(base.game_day_boost) || 1) } : base
     for (const cr of creatives || []) {
       if (cr.approval_status !== 'approved') continue
       items.push({ id: cr.id, campaign, pkg, creative: cr })
@@ -244,14 +266,22 @@ export async function tabletFeed(sb, device, { now = new Date(), gameDayOverride
     placement: s.pkg.placement || 'standard',
   }))
   const creatives = {}
+  const tokens = []
   for (const it of items) {
     const cr = it.creative
+    const dest = destinationFor(it.campaign, cr)
+    let qrUrl = null
+    if (dest) {
+      const token = qrTokenFor(device.id, cr.id, trip?.id)
+      tokens.push({ token, campaign_id: it.campaign.id, creative_id: cr.id, partner_id: it.campaign.partner_id || null, device_id: device.id, trip_id: trip?.id || null, destination_url: dest })
+      qrUrl = qrUrlFor(token, origin)
+    }
     creatives[cr.id] = {
       id: cr.id, campaignId: it.campaign.id, kind: cr.kind, mediaUrl: cr.media_url, headline: cr.headline,
-      dealText: cr.deal_text, qrUrl: cr.qr_url, logoUrl: cr.logo_url, theme: cr.theme,
+      dealText: cr.deal_text, qrUrl, logoUrl: cr.logo_url, theme: cr.theme,
     }
   }
-  const trip = await currentTrip(sb, device)
+  if (tokens.length) must(await sb.from('ad_qr_tokens').upsert(tokens, { onConflict: 'token', ignoreDuplicates: true }), 'qr tokens')
   return {
     device: { id: device.id, label: device.label, demo: Boolean(device.demo) },
     gameDay,
@@ -271,21 +301,27 @@ export async function recordImpressions(sb, device, batch = [], { now = new Date
   if (!list.length) return { stored: 0, ridesCounted: 0 }
   const trip = await currentTrip(sb, device)
   const campaignIds = [...new Set(list.map((i) => i.campaignId).filter(Boolean))]
-  const live = must(await sb.from('ad_campaigns').select('id, status').in('id', campaignIds), 'campaigns') || []
+  const live = must(await sb.from('ad_campaigns').select('id, status, partner_id').in('id', campaignIds), 'campaigns') || []
   const known = new Set(live.map((c) => c.id))
+  const partnerOf = new Map(live.map((c) => [c.id, c.partner_id || null]))
   const rows = list
     .filter((i) => known.has(i.campaignId))
     .map((i) => {
       const shown = Date.parse(i.shownAt)
+      const tripId = i.inTrip && trip ? trip.id : null
+      const seconds = Math.max(0, Math.min(600, Number(i.seconds) || 0))
       return {
         campaign_id: i.campaignId,
         creative_id: i.creativeId || null,
         device_id: device.id,
         driver_id: device.driver_id || null,
         vehicle_id: device.vehicle_id || null,
-        trip_id: i.inTrip && trip ? trip.id : null,
+        partner_id: partnerOf.get(i.campaignId),
+        trip_id: tripId,
+        visible: i.visible === true && seconds >= MIN_VISIBLE_SECONDS,
+        qr_token: i.creativeId ? qrTokenFor(device.id, i.creativeId, tripId) : null,
         shown_at: Number.isFinite(shown) && shown <= now.getTime() + 60_000 ? new Date(shown).toISOString() : now.toISOString(),
-        seconds_shown: Math.max(0, Math.min(600, Number(i.seconds) || 0)),
+        seconds_shown: seconds,
         client_id: String(i.clientId || '').slice(0, 64) || null,
       }
     })
