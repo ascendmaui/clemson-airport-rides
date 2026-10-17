@@ -566,3 +566,238 @@ test('syncBoostAuthorization: handles no hold, existing coverage, increment, and
   assert.equal(sbReauth._trips[0].metadata.fare_authorization.paymentIntentId, 'pi_new_reauth')
 })
 
+test('settleFareHold: returns succeeded immediately if paymentIntent was already succeeded on retrieval', async () => {
+  const trip = {
+    id: 't_already_succeeded',
+    rider_id: 'rider_retry',
+    metadata: {
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_already_succeeded',
+        authorizationCents: 3000,
+      },
+    },
+  }
+  const stripe = {
+    paymentIntents: {
+      retrieve: async (id) => ({
+        id,
+        status: 'succeeded',
+        amount: 3000,
+        amount_received: 3000,
+      }),
+    },
+  }
+  const sb = createMemoryDb([trip])
+  const result = await settleFareHold({
+    sb,
+    stripe,
+    trip,
+    finalFareCents: 3000,
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.method, 'card')
+  assert.equal(result.amountCents, 3000)
+  assert.equal(result.paymentIntentId, 'pi_already_succeeded')
+  assert.equal(result.status, 'succeeded')
+  assert.equal(sb._trips[0].metadata.fare_authorization.status, 'captured')
+  assert.equal(sb._trips[0].metadata.fare_authorization.capturedCents, 3000)
+})
+
+test('settleFareHold: cancels hold quietly and returns zero_due when final fare is zero or waived when below minimum', async () => {
+  let canceledId = null
+  const stripe = {
+    paymentIntents: {
+      retrieve: async (id) => ({ id, status: 'requires_capture' }),
+      cancel: async (id) => {
+        canceledId = id
+        return { id, status: 'canceled' }
+      },
+    },
+  }
+
+  // 1. Zero due
+  const zeroTrip = {
+    id: 't_zero_fare',
+    rider_id: 'rider_retry',
+    metadata: {
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_cancel_zero',
+        authorizationCents: 2000,
+      },
+    },
+  }
+  const sbZero = createMemoryDb([zeroTrip])
+  const zeroRes = await settleFareHold({
+    sb: sbZero,
+    stripe,
+    trip: zeroTrip,
+    finalFareCents: 0,
+  })
+  assert.equal(zeroRes.ok, true)
+  assert.equal(zeroRes.method, 'none')
+  assert.equal(zeroRes.reason, 'zero_due')
+  assert.equal(zeroRes.amountCents, 0)
+  assert.equal(canceledId, 'pi_cancel_zero')
+  assert.equal(sbZero._trips[0].metadata.fare_authorization.status, 'canceled')
+
+  // 2. Waived below minimum (< 50 cents)
+  const waiveTrip = {
+    id: 't_waive_fare',
+    rider_id: 'rider_retry',
+    metadata: {
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_waive_min',
+        authorizationCents: 2000,
+      },
+    },
+  }
+  const sbWaive = createMemoryDb([waiveTrip])
+  const waiveRes = await settleFareHold({
+    sb: sbWaive,
+    stripe,
+    trip: waiveTrip,
+    finalFareCents: 35, // 35 cents is < MIN_CARD_CHARGE_CENTS (50)
+  })
+  assert.equal(waiveRes.ok, true)
+  assert.equal(waiveRes.method, 'none')
+  assert.equal(waiveRes.reason, 'below_minimum')
+  assert.equal(waiveRes.amountCents, 0)
+  assert.equal(canceledId, 'pi_waive_min')
+  assert.equal(sbWaive._trips[0].metadata.fare_authorization.status, 'waived')
+})
+
+test('settleFareHold: increments authorization when final fare exceeds hold and captures incremented amount', async () => {
+  const trip = {
+    id: 't_increment_hold',
+    rider_id: 'rider_retry',
+    metadata: {
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_inc_hold',
+        authorizationCents: 3000,
+      },
+    },
+  }
+  let incrementedAmt = 0
+  let capturedAmt = 0
+  const stripe = {
+    paymentIntents: {
+      retrieve: async (id) => ({ id, status: 'requires_capture', amount: 3000 }),
+      incrementAuthorization: async (id, params) => {
+        incrementedAmt = params.amount
+        return { id, status: 'requires_capture', amount: params.amount }
+      },
+      capture: async (id, params) => {
+        capturedAmt = params.amount_to_capture
+        return { id, status: 'succeeded', amount_received: params.amount_to_capture }
+      },
+    },
+    paymentMethods: { list: async () => ({ data: [] }) },
+  }
+  const sb = createMemoryDb([trip])
+  const result = await settleFareHold({
+    sb,
+    stripe,
+    trip,
+    finalFareCents: 4200,
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.method, 'card')
+  assert.equal(result.amountCents, 4200)
+  assert.equal(incrementedAmt, 4200)
+  assert.equal(capturedAmt, 4200)
+  assert.equal(sb._trips[0].metadata.fare_authorization.status, 'captured')
+  assert.equal(sb._trips[0].metadata.fare_authorization.capturedCents, 4200)
+})
+
+test('settleFareHold: handles overage when final fare exceeds captured hold, covering both successful and failed overage charges', async () => {
+  // Case A: Successful overage charge
+  const tripOk = {
+    id: 't_overage_ok',
+    rider_id: 'rider_retry',
+    metadata: {
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_main_ok',
+        authorizationCents: 3000,
+      },
+    },
+  }
+  let overageCreated = null
+  const stripeOkClient = {
+    paymentIntents: {
+      retrieve: async (id) => ({ id, status: 'requires_capture', amount: 3000 }),
+      capture: async (id, params) => ({
+        id,
+        status: 'succeeded',
+        amount_received: 3000, // Captured only 3000
+      }),
+      create: async (params) => {
+        overageCreated = params
+        return { id: 'pi_overage_extra', status: 'succeeded', amount: params.amount }
+      },
+    },
+    paymentMethods: { list: async () => ({ data: [] }) },
+  }
+  const sbOk = createMemoryDb([tripOk])
+  const resOk = await settleFareHold({
+    sb: sbOk,
+    stripe: stripeOkClient,
+    trip: tripOk,
+    finalFareCents: 4000, // 4000 > 3000 -> 1000 overage
+  })
+  assert.equal(resOk.ok, true)
+  assert.equal(resOk.amountCents, 4000)
+  assert.equal(resOk.paymentIntentId, 'pi_main_ok')
+  assert.equal(resOk.overagePaymentIntentId, 'pi_overage_extra')
+  assert.equal(overageCreated.amount, 1000)
+  assert.equal(sbOk._trips[0].metadata.fare_authorization.overagePaymentIntentId, 'pi_overage_extra')
+
+  // Case B: Failed overage charge parks outstanding balance and marks partial capture
+  const tripFail = {
+    id: 't_overage_fail',
+    rider_id: 'rider_retry',
+    metadata: {
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_main_fail',
+        authorizationCents: 3000,
+      },
+    },
+  }
+  const stripeFailClient = {
+    paymentIntents: {
+      retrieve: async (id) => ({ id, status: 'requires_capture', amount: 3000 }),
+      capture: async (id, params) => ({
+        id,
+        status: 'succeeded',
+        amount_received: 3000,
+      }),
+      create: async () => {
+        const err = new Error('Insufficient funds')
+        err.code = 'card_declined'
+        throw err
+      },
+    },
+    paymentMethods: { list: async () => ({ data: [] }) },
+  }
+  const sbFail = createMemoryDb([tripFail])
+  const resFail = await settleFareHold({
+    sb: sbFail,
+    stripe: stripeFailClient,
+    trip: tripFail,
+    finalFareCents: 4500, // 4500 > 3000 -> 1500 overage
+  })
+  assert.equal(resFail.ok, false)
+  assert.equal(resFail.parked, true)
+  assert.equal(resFail.capturedCents, 3000)
+  assert.equal(resFail.outstanding.amountCents, 1500)
+  assert.equal(resFail.outstanding.reason, 'overage_failed')
+  assert.equal(sbFail._trips[0].metadata.fare_authorization.status, 'partial')
+  assert.equal(sbFail._trips[0].metadata.outstanding_balance.amountCents, 1500)
+})
+
+
