@@ -42,3 +42,8 @@ export async function uploadAdCreative(file, o = {}) {
   if (error) throw new Error(error.message || 'Upload failed')
   return { path: meta.path, contentType: file.type, kind: meta.kind }
 }
+
+export const submitFoundingApplication = (body, o) => adsRequest('apply', { method: 'POST', body, auth: false, ...o })
+export const savePartnerCampaign = (body, o) => adsRequest('partner-campaign', { method: 'POST', body, ...o })
+export const launchPartnerCampaign = (id, o) => adsRequest('partner-launch', { method: 'POST', body: { id }, ...o })
+export const boostCampaign = (campaignId, confirm, o) => adsRequest('partner-boost', { method: 'POST', body: { campaignId, confirm }, ...o })
