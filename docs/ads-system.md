@@ -13,7 +13,9 @@ iOS (iPad Safari) and web only.
 | Admin (owner account only) | Admin desk, tab **Tablet ads** (`/admin?tab=ads`), `src/components/AdsAdminPanel.jsx` |
 | Tablet kiosk | `/tablet?device=<token>`, demo `/tablet?demo=1`, `src/screens/TabletPlayer.jsx` |
 | API | `api/ads.js` (`?action=`), logic in `server/ads/*.js`, rules in `shared/ads/*.js` |
-| Data | `supabase/migrations/20261016200000_ad_system.sql` |
+| Founding-partner application | `/advertise/apply` (`ad_partner_applications`, John approves in the admin desk) |
+| QR tracking links | `/q/<token>` → `api/ads.js?action=qr` (logs the scan, 302 to the partner's deal) |
+| Data | `supabase/migrations/20261016200000_ad_system.sql`, `20261017100000_ad_tracking_selfserve.sql` |
 
 ## Tables
 
@@ -71,11 +73,74 @@ Tablets pick it up on the next 20 s refresh.
 Flags (all default off): `ADS_BILLING_ENABLED`, `ADS_AUTOMATION_ENABLED`, `ADS_PARTNER_EMAILS_ENABLED`.
 Nothing creates live Stripe objects or emails a business until those are turned on.
 
-## When John approves real tiers
+## Pricing model: pay per ride
 
-1. Edit `src/content/adPackages.js`: replace `AD_PACKAGES`, remove `placeholder: true`, set `ADS_PACKAGES_APPROVED = true`.
-2. In Supabase, update `public.ad_packages` to the same tiers with `active = true, placeholder = false`
-   (or add rows; leave the PLACEHOLDER rows inactive).
+Tablets are already in the cars. A business buys a bundle of rides and pays only for rides its ad is
+displayed in; ads are spread across the drivers who have a paired tablet. DRAFT bundles (pending John's
+approval, adjustable in `src/content/adPackages.js`): 100 rides $12, 250 $25, 1,000 $89, 5,000 $299, plus an
+optional game-day weekend add-on. The `ad_packages` rows `rides-100 … rides-5000` and `game-day-weekend` are
+seeded with `placeholder = true`, so billing refuses them until they are approved.
+
+## Metrics (partner analytics at `/advertise/my`, admin desk for everyone)
+
+Definitions live in `shared/ads/metrics.js` and show as tooltips on the page.
+
+| Counter | Meaning |
+| --- | --- |
+| **QR scans** (headline) | Unique scans of the ad's tracking QR code: proof of foot traffic. Repeat scans from the same phone within 30 minutes count once. Scan rate = QR scans / rides. |
+| **Rides** | Distinct rides the ad ran in. Each counts once against the bundle (`ad_ride_counts`). |
+| **Impressions** | Plays shown to riders: during an in-progress ride, with the tablet screen on and the page visible for the whole slot, at least 3 seconds. |
+| **Ad runs** | Every play (each loop slot), in or out of a ride. |
+
+Every play is an `ad_impressions` row with trip id, timestamp, campaign, creative, device, partner, seconds on
+screen, `visible` and the QR token on screen. The page also ranks each creative by QR scans per ride
+("which ad converts best") and exports the ride list (ride ref, time ET, QR scans) as CSV.
+Counters refresh every 15 seconds through `/api/ads?action=mine`, which only returns the signed-in
+partner's rows (RLS also limits direct reads to the partner's own campaigns).
+
+## QR scan tracking
+
+The tablet never sees a partner's URL. The feed gives each creative a QR for
+`https://clemsonrides.com/q/<token>`, one token per tablet + creative + ride (`ad_qr_tokens`).
+A scan logs `ad_qr_scans` (time, token, campaign, creative, partner, device, ride, truncated user agent,
+a salted daily visitor hash for de-duplication; no IP or other personal data) and answers
+`302` to the campaign's deal link. Link previewers and bots are redirected but not counted; more than 30
+scans per IP in 10 minutes are redirected but not logged. Unknown tokens go to `/advertise`.
+
+## Self-serve (onboarded partners)
+
+`/advertise/my` shows **Build My Ad** (builder, upload, or reuse an ad; sample templates once approved),
+**Create My Campaign** (ride bundle, ad, deal link, radius 1/3/5 mi or anywhere, ride types: campus loop,
+stadium runs on game days, late night 9 PM–3 AM, airport runs, all rides; optional game-day boost) and
+**Launch My Campaign** (draft → pending payment; billing is off, so it stays there). Creatives still need
+John's approval unless he turns on **Auto-approve creatives** for that partner (default off).
+Only partners with status `active` (onboarded) see these sections. Status chips: Draft, Pending review,
+Pending payment, Live, Paused, Completed.
+
+Targeting is checked on the server against the paired driver's in-progress ride (pickup, drop-off, time,
+flight). Radius needs the partner's map pin (admin desk → Set map pin); without one, radius is not enforced.
+
+**Boost** doubles the remaining rides at the campaign's per-ride rate, after a confirmation that shows the
+price. It is stored as a `pending_payment` add-on (`ad_campaign_boosts`); with billing on it gets its own
+invoice (`metadata.kind = ad_boost`), and the webhook applies it when paid. The admin can apply or cancel it.
+
+## Founding partners
+
+"Apply to become a Founding Partner — limited spots" opens `/advertise/apply` (business, category, address,
+contact, website, what they'd promote, why/offer). Applications are `pending` until John approves or
+declines; approval creates or updates the partner as onboarded with `founding_approved = true`.
+
+## Media slots (not live until approved)
+
+`src/content/advertiseMedia.js` (How it Works video, hero rotating demo) and `src/content/sampleAds.js`
+(sample gallery, builder templates, `?template=` prefill) render nothing until their flags are set.
+Approved files go in `public/ads/` so they are served by the site.
+
+## When John approves real prices
+
+1. Edit `src/content/adPackages.js` (bundle rides and prices) and set `ADS_PACKAGES_APPROVED = true`.
+2. In Supabase, update `public.ad_packages` rows `rides-*` (and `game-day-weekend`) to the same numbers
+   with `active = true, placeholder = false`.
 3. Dry run, then create Stripe products/prices:
    `node scripts/ads/sync-stripe-packages.mjs` then `ADS_BILLING_ENABLED=true node scripts/ads/sync-stripe-packages.mjs --apply`
 4. Set `ADS_BILLING_ENABLED=true` in the prod env. Optionally `ADS_AUTOMATION_ENABLED=true` and `ADS_PARTNER_EMAILS_ENABLED=true`.

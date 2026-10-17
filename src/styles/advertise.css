@@ -2,7 +2,7 @@
 .adv-hero { display: grid; gap: 14px; padding: 40px 0 24px; }
 .adv-hero h1 { max-width: 18ch; }
 .adv-lede { max-width: 52ch; font-size: 17px; line-height: 1.5; margin: 0; }
-.adv-section { display: grid; gap: 18px; margin-top: 40px; scroll-margin-top: 96px; }
+.adv-section { display: grid; gap: 18px; margin-top: 40px; scroll-margin-top: 120px; }
 
 .adv-tablet {
   border-radius: 22px;
@@ -119,3 +119,22 @@ html body .site.mkt .adv-tablet-screen span { color: #fff !important; }
 html body .site.mkt .adv-stat strong { color: #522D80 !important; }
 html body .site.mkt .adv-soon-copy { font-size: 19px !important; font-weight: 600 !important; color: #1b1325 !important; }
 html body .site.mkt .adv-price { color: #F56600 !important; }
+
+/* Pricing: pay per ride, QR scans first. */
+.adv-values { display: grid; gap: 12px; }
+.adv-value h3 { margin: 0 0 6px; color: #522D80; }
+.adv-value p { margin: 0; }
+.adv-per-ride { margin: 0; font-weight: 650; color: #a14400; }
+.adv-tier .dp-btn { margin-top: auto; }
+.adv-tier--addon { border: 1px dashed rgba(82, 45, 128, 0.4); }
+@media (min-width: 720px) { .adv-values { grid-template-columns: repeat(3, 1fr); } }
+
+/* Media slots (empty until approved). */
+.adv-hero-demo { max-width: 560px; }
+.adv-tablet--live { padding: 10px; }
+.adv-tablet--live .adc, .adv-tablet--live video { border-radius: 12px; width: 100%; height: 100%; object-fit: cover; }
+.adv-video { width: 100%; max-width: 960px; aspect-ratio: 16 / 9; border-radius: 16px; background: #1b1325; }
+.adv-samples { align-items: stretch; }
+.adv-sample { display: grid; gap: 10px; text-decoration: none; }
+.adv-sample img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 12px; }
+.adv-sample-cta { font-weight: 700; color: #F56600; }

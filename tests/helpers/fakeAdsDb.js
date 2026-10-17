@@ -7,16 +7,29 @@ const RELATIONS = {
     ad_packages: { table: 'ad_packages', match: (row, o) => o.id === row.package_id },
     ad_partners: { table: 'ad_partners', match: (row, o) => o.id === row.partner_id },
   },
+  ad_creatives: {
+    ad_campaigns: { table: 'ad_campaigns', match: (row, o) => o.id === row.campaign_id },
+  },
+  ad_campaign_boosts: {
+    ad_campaigns: { table: 'ad_campaigns', match: (row, o) => o.id === row.campaign_id, nested: true },
+  },
 }
 const DEFAULTS = {
   ad_campaigns: () => ({ rides_served: 0, status: 'draft', starts_at: null, ends_at: null, rides_purchased: null, paid_at: null }),
   ad_creatives: () => ({ approval_status: 'pending_review', theme: 'purple' }),
   ad_partners: () => ({ status: 'pending', profile_id: null, stripe_customer_id: null }),
   ad_devices: () => ({ active: true, demo: false }),
+  ad_partner_applications: () => ({ status: 'pending', partner_id: null }),
+  ad_campaign_boosts: () => ({ status: 'pending_payment' }),
+  ad_qr_scans: () => ({ duplicate: false }),
 }
 
 export function fakeAdsDb(seed = {}) {
-  const tables = { ad_partners: [], ad_packages: [], ad_campaigns: [], ad_creatives: [], ad_devices: [], ad_impressions: [], ad_ride_counts: [], trips: [], ad_partner_leads: [], ...structuredClone(seed) }
+  const tables = {
+    ad_partners: [], ad_packages: [], ad_campaigns: [], ad_creatives: [], ad_devices: [], ad_impressions: [], ad_ride_counts: [], trips: [], ad_partner_leads: [],
+    ad_qr_tokens: [], ad_qr_scans: [], ad_campaign_boosts: [], ad_partner_applications: [],
+    ...structuredClone(seed),
+  }
   const calls = []
 
   function expand(table, row, select) {
@@ -25,7 +38,7 @@ export function fakeAdsDb(seed = {}) {
     for (const name of Object.keys(rel)) {
       if (!String(select || '').includes(`${name}(`)) continue
       const r = rel[name]
-      const hits = tables[r.table].filter((o) => r.match(row, o)).map((o) => ({ ...o }))
+      const hits = tables[r.table].filter((o) => r.match(row, o)).map((o) => (r.nested ? expand(r.table, o, select) : { ...o }))
       out[name] = r.many ? hits : hits[0] || null
     }
     return out
@@ -71,6 +84,7 @@ export function fakeAdsDb(seed = {}) {
       eq(k, v) { state.filters.push((r) => r[k] === v); return api },
       in(k, vs) { state.filters.push((r) => vs.includes(r[k])); return api },
       is(k, v) { state.filters.push((r) => (r[k] ?? null) === v); return api },
+      gte(k, v) { state.filters.push((r) => r[k] != null && String(r[k]) >= String(v)); return api },
       order() { return api },
       limit(n) { state.limit = n; return api },
       async single() { const d = run(); return d.length === 1 ? { data: d[0], error: null } : { data: null, error: { message: `expected 1 row, got ${d.length}` } } },
