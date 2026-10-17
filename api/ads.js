@@ -33,11 +33,13 @@ import {
 } from '../server/ads/tracking.js'
 import { APPLICATION_HONEYPOT, applicationErrors } from '../shared/ads/application.js'
 import { runAdsAutomation } from '../server/ads/automation.js'
+import { copilotImage, copilotSave, copilotSuggest, copilotVideo, providerStatus } from '../server/ads/copilot.js'
 
 export const ADS_ACTIONS = new Set([
   'packages', 'upload-url', 'signup', 'mine', 'tablet-feed', 'tablet-impressions',
   'admin-overview', 'admin-creative', 'admin-campaign', 'admin-device', 'admin-package', 'admin-bill', 'cron',
   'qr', 'apply', 'partner-campaign', 'partner-launch', 'partner-boost', 'admin-partner', 'admin-application', 'admin-boost',
+  'copilot-suggest', 'copilot-image', 'copilot-video', 'copilot-save',
 ])
 
 const QR_RATE = { limit: 30, windowMs: 10 * 60_000 }
@@ -132,7 +134,18 @@ export function createAdsHandler(deps = {}) {
         case 'mine': {
           const user = await auth(req)
           if (!user) return json(res, 401, { error: 'Sign in required' })
-          return json(res, 200, await partnerDashboard(sb, user))
+          const { enabled, text, image } = providerStatus(env)
+          return json(res, 200, { ...(await partnerDashboard(sb, user)), copilot: { enabled, text: enabled ? text : null, image: enabled && !!image } })
+        }
+        case 'copilot-suggest':
+        case 'copilot-image':
+        case 'copilot-video':
+        case 'copilot-save': {
+          if (!post) return json(res, 405, { error: 'Use POST' })
+          const user = await auth(req)
+          if (!user) return json(res, 401, { error: 'Sign in required' })
+          const run = { 'copilot-suggest': copilotSuggest, 'copilot-image': copilotImage, 'copilot-video': copilotVideo, 'copilot-save': copilotSave }[action]
+          return json(res, 200, await run(sb, user, body, { env, now, ...(deps.copilot || {}) }))
         }
         case 'partner-campaign':
         case 'partner-launch':
@@ -186,7 +199,7 @@ export function createAdsHandler(deps = {}) {
     } catch (err) {
       const status = Number(err?.status) || 500
       if (status >= 500) console.error('[ads]', action, err?.message || err)
-      return json(res, status, { error: status >= 500 ? 'Something went wrong. Try again.' : err.message, ...(err.errors ? { errors: err.errors } : {}) })
+      return json(res, status, { error: status >= 500 ? 'Something went wrong. Try again.' : err.message, ...(err.errors ? { errors: err.errors } : {}), ...(err.issues ? { issues: err.issues } : {}), ...(err.needs ? { needs: err.needs } : {}) })
     }
   }
 }
