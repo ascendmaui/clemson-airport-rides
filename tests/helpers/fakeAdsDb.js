@@ -27,7 +27,7 @@ const DEFAULTS = {
 export function fakeAdsDb(seed = {}) {
   const tables = {
     ad_partners: [], ad_packages: [], ad_campaigns: [], ad_creatives: [], ad_devices: [], ad_impressions: [], ad_ride_counts: [], trips: [], ad_partner_leads: [],
-    ad_qr_tokens: [], ad_qr_scans: [], ad_campaign_boosts: [], ad_partner_applications: [],
+    ad_qr_tokens: [], ad_qr_scans: [], ad_campaign_boosts: [], ad_partner_applications: [], ad_ai_usage: [],
     ...structuredClone(seed),
   }
   const calls = []
@@ -112,6 +112,7 @@ export function fakeAdsDb(seed = {}) {
     },
     storage: {
       from: () => ({
+        upload: async (p) => { calls.push({ upload: p }); return { data: { path: p }, error: null } },
         getPublicUrl: (p) => ({ data: { publicUrl: `https://cdn.test/ad-creatives/${p}` } }),
         createSignedUploadUrl: async (p) => ({ data: { token: 'tok', signedUrl: `https://cdn.test/upload/${p}?token=tok`, path: p }, error: null }),
       }),

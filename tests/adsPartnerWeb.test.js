@@ -128,3 +128,19 @@ test('new ads sources keep the product locks', () => {
     assert.equal(BANNED.test(read(p)), false, p)
   }
 })
+
+test('AI co-pilot panel renders nothing while the server flag is off, and only offers images when configured', async () => {
+  const mod = await load('src/screens/AdsSignup.jsx')
+  const api = { ...noopApi, copilotSuggest: async () => ({}), copilotImage: async () => ({}) }
+  const current = { headline: '', dealText: '', theme: 'purple' }
+  assert.equal(renderToStaticMarkup(createElement(mod.CopilotPanel, { api, copilot: null, current, onApply() {} })), '')
+  assert.equal(renderToStaticMarkup(createElement(mod.CopilotPanel, { api, copilot: { enabled: false }, current, onApply() {} })), '')
+  const on = renderToStaticMarkup(createElement(mod.CopilotPanel, { api, copilot: { enabled: true, text: 'templates', image: false }, current, onApply() {} }))
+  assert.match(on, /data-testid="ads-copilot"/)
+  assert.match(on, />Suggest</)
+  assert.doesNotMatch(on, /16:9 image/)
+  const withImg = renderToStaticMarkup(createElement(mod.CopilotPanel, { api, copilot: { enabled: true, image: true }, current, onApply() {} }))
+  assert.match(withImg, /Make a 16:9 image/)
+  const builder = renderToStaticMarkup(createElement(mod.CampaignBuilder, { partner: { business_name: 'TEST' }, api, packages: [] }))
+  assert.doesNotMatch(builder, /ads-copilot/)
+})
