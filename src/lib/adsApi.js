@@ -47,3 +47,7 @@ export const submitFoundingApplication = (body, o) => adsRequest('apply', { meth
 export const savePartnerCampaign = (body, o) => adsRequest('partner-campaign', { method: 'POST', body, ...o })
 export const launchPartnerCampaign = (id, o) => adsRequest('partner-launch', { method: 'POST', body: { id }, ...o })
 export const boostCampaign = (campaignId, confirm, o) => adsRequest('partner-boost', { method: 'POST', body: { campaignId, confirm }, ...o })
+
+/** AI co-pilot (server flag ADS_AI_COPILOT_ENABLED; off by default). */
+export const copilotSuggest = (body, o) => adsRequest('copilot-suggest', { method: 'POST', body, ...o })
+export const copilotImage = (body, o) => adsRequest('copilot-image', { method: 'POST', body, ...o })
