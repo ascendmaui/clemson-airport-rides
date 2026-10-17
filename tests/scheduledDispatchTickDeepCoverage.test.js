@@ -705,4 +705,96 @@ test('runScheduledDispatchTick: triggers departDue transition to enroute when le
   assert.equal(updated.metadata.backup_queue.movementDetectedAt, now.toISOString())
 })
 
+test('runScheduledDispatchTick: records summary.raced when CAS update fails due to concurrent modification', async () => {
+  const pickupAt = '2026-10-10T15:30:00.000Z'
+  const now = new Date('2026-10-10T15:12:00.000Z') // Inside window [15:10, 15:15]
+  const trip = {
+    id: 'trip_cas_race',
+    status: 'scheduled',
+    rider_id: 'rider_race',
+    pickup_at: pickupAt,
+    pickup_lat: 34.6784,
+    pickup_lng: -82.8397,
+    metadata: {
+      backup_queue: {
+        ...backupBookingMetadata(1000, now),
+        primaryDriverId: 'driver_p_race',
+        backupDriverId: 'driver_b_race',
+        confirmState: null,
+        generation: 1,
+        events: [],
+      },
+    },
+  }
+
+  // Simulate CAS failure: another transaction mutates metadata concurrently
+  const sb = createMatchingSupabase({
+    trips: [trip],
+    trip_events: [],
+    driver_status: [{ driver_id: 'driver_p_race', online: true }],
+  })
+  const originalFrom = sb.from.bind(sb)
+  sb.from = (table) => {
+    const res = originalFrom(table)
+    if (table === 'trips') {
+      const origUpdate = res.update.bind(res)
+      res.update = (patch) => {
+        // Mutate the row metadata in the store so unchangedOfferQuery CAS check fails
+        sb._tables.trips[0].metadata = { concurrent: 'another_transaction_won' }
+        return origUpdate(patch)
+      }
+    }
+    return res
+  }
+
+  const summary = await runScheduledDispatchTick(sb, { now })
+  assert.equal(summary.scanned, 1)
+  assert.equal(summary.raced, 1)
+  assert.equal(summary.opened, 0)
+})
+
+test('scheduledDispatchTickHandler: enforces HTTP methods, service role availability, and cron authentication', async () => {
+  // 1. Method not allowed (e.g. DELETE or PATCH)
+  const reqDelete = { method: 'DELETE', headers: {} }
+  const resDelete = mockRes()
+  await scheduledDispatchTickHandler(reqDelete, resDelete, {})
+  assert.equal(resDelete.statusCode, 405)
+  assert.equal(resDelete.headers['allow'], 'GET, POST, OPTIONS')
+  assert.equal(resDelete.headers['cache-control'], 'no-store')
+  assert.equal(parseJson(resDelete).error, 'Method not allowed')
+
+  // 2. Missing Supabase client -> 503
+  const reqPost = { method: 'POST', headers: {} }
+  const resNoSb = mockRes()
+  await scheduledDispatchTickHandler(reqPost, resNoSb, { sb: null })
+  assert.equal(resNoSb.statusCode, 503)
+  assert.equal(parseJson(resNoSb).error, 'SUPABASE_SERVICE_ROLE_KEY not configured')
+
+  // 3. Unauthorized cron (missing or incorrect bearer) -> 401
+  const resUnauth = mockRes()
+  await scheduledDispatchTickHandler(
+    { method: 'POST', headers: { authorization: 'Bearer wrong_key' } },
+    resUnauth,
+    { sb: {}, cronSecret: 'correct_cron_secret', env: {} },
+  )
+  assert.equal(resUnauth.statusCode, 401)
+  assert.equal(parseJson(resUnauth).error, 'Cron authorization required')
+
+  // 4. Staging cron block without dry-run -> 403
+  const resBlocked = mockRes()
+  await scheduledDispatchTickHandler(
+    { method: 'POST', headers: { authorization: 'Bearer staging_sec' } },
+    resBlocked,
+    {
+      sb: {},
+      cronSecret: 'staging_sec',
+      env: { DISABLE_CRON_ENDPOINTS: '1' },
+      dryRun: false,
+    },
+  )
+  assert.equal(resBlocked.statusCode, 403)
+  assert.match(parseJson(resBlocked).error, /Cron endpoints are disabled on this host/)
+})
+
+
 
