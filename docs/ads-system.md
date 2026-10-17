@@ -150,3 +150,22 @@ Approved files go in `public/ads/` so they are served by the site.
 `POST /api/ads?action=cron` with `Authorization: Bearer $CRON_SECRET` (daily, `vercel.json`).
 Plans invoice reminders every 3 days, pauses campaigns unpaid for 14 days, sends an ending notice 3 days out
 and a monthly impression report on the 1st. With the flags off it returns the plan and changes nothing.
+
+## AI ad co-pilot (flag `ADS_AI_COPILOT_ENABLED`, default off)
+
+Shown inside **Build My Ad** on `/advertise/my` only when the server flag is on. Partners describe their
+deal; the co-pilot suggests offers, headlines, deal copy, layout and colors, and can iterate
+("Make it bolder", "Shorter"). Code: `server/ads/copilot.js`, rules `shared/ads/copilotSafety.js`,
+actions `copilot-suggest | copilot-image | copilot-video | copilot-save` on `/api/ads`.
+
+- **Providers (server only, no new keys):** text uses the model already configured for Help and Support
+  (`AI_GATEWAY_API_KEY` or `OPENAI_API_KEY` via `server/llm.js`); without one it uses built-in templates at
+  no cost. 16:9 images need `ADS_AI_IMAGE_MODEL` on top of one of those keys; video has no provider yet.
+  The `mine` response tells the page only `enabled`, the text source and whether images are available.
+- **Caps:** `ADS_AI_PARTNER_DAILY_CAP` requests per partner per 24 h (default 20) and
+  `ADS_AI_DAILY_COST_CAP_CENTS` estimated spend for everyone per 24 h (default 300), logged in `ad_ai_usage`.
+- **Safety:** drink specials must say 21+ (added automatically) and can never target anyone under 21; no
+  Clemson University names, logos, slogans or Tiger Paw; no car brands or driverless-car claims. Unsafe model
+  lines are dropped; unsafe partner copy is refused.
+- **Approval:** co-pilot output is saved as a creative with `pending_review` and goes through the normal
+  admin review (or the partner's auto-approve setting at launch).
