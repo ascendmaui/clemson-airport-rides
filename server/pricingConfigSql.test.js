@@ -7,12 +7,15 @@ import { CLEMSON_HOME_FOOTBALL } from '../shared/data/clemsonHomeFootball.js'
 import { FARE_CARD } from '../src/lib/fareRates.js'
 
 const migration = readFileSync(new URL('../supabase/migrations/20261017120000_pricing_config_gameday.sql', import.meta.url), 'utf8')
+const auditFix = readFileSync(new URL('../supabase/migrations/20261017121000_pricing_config_audit_after.sql', import.meta.url), 'utf8')
 
 async function fixture(t) {
   const db = new PGlite()
   t.after(() => db.close())
   await db.exec(migration)
+  await db.exec(auditFix)
   await db.exec(migration) // re-runnable
+  await db.exec(auditFix)
   return db
 }
 
@@ -48,7 +51,9 @@ test('seeds match the in-repo seeds and re-running adds nothing', async (t) => {
 test('every config change is audited with before/after; no-op updates are not', async (t) => {
   const db = await fixture(t)
   const before = Number((await db.query('SELECT count(*) AS n FROM pricing_config_audit')).rows[0].n)
-  assert.equal(before, 1 + 1 + 4 + 4, 'seed inserts audited once')
+  assert.equal(before, 0, 'seeds run before the triggers; a re-run that skips rows writes no audit')
+  await db.query("INSERT INTO competitor_rate_cards (competitor, tier, our_tier, base_cents, booking_fee_cents, per_mile_cents, per_minute_cents, min_fare_cents, source_url, fetched_at) VALUES ('uber', 'uberx', 'standard', 1, 1, 1, 1, 1, 'u', now()) ON CONFLICT DO NOTHING")
+  assert.equal(Number((await db.query('SELECT count(*) AS n FROM pricing_config_audit')).rows[0].n), 0)
   await db.query("UPDATE pricing_rate_cards SET per_mile_cents = 109, updated_by = 'test', change_reason = 'undercut' WHERE tier = 'standard'")
   await db.query("UPDATE pricing_rate_cards SET per_mile_cents = 109 WHERE tier = 'standard'")
   const rows = (await db.query("SELECT * FROM pricing_config_audit WHERE action = 'UPDATE'")).rows
@@ -59,6 +64,13 @@ test('every config change is audited with before/after; no-op updates are not', 
   assert.equal(rows[0].new_row.per_mile_cents, 109)
   assert.equal(rows[0].changed_by, 'test')
   assert.equal(rows[0].change_reason, 'undercut')
+  const card = (await db.query("SELECT updated_at > created_at AS moved FROM pricing_rate_cards WHERE tier = 'standard'")).rows[0]
+  assert.equal(card.moved, true)
+  await db.query("DELETE FROM clemson_home_games WHERE game_date = '2026-11-28'")
+  const del = (await db.query("SELECT * FROM pricing_config_audit WHERE action = 'DELETE'")).rows
+  assert.equal(del.length, 1)
+  assert.equal(del[0].row_key, '2026-11-28')
+  assert.equal(del[0].old_row.opponent, 'South Carolina')
 })
 
 test('guard rails: no carpool card, no surge over 1.25x, one settings row', async (t) => {
