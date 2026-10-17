@@ -53,7 +53,12 @@ export async function flushImpressions(send, s) {
 }
 
 let counter = 0
-export function impressionFor(slot, { startedAt, endedAt = Date.now(), inTrip = false } = {}) {
+/**
+ * One play of one ad. `visible` is true only when the page stayed visible (screen on, kiosk in
+ * front) for the whole slot; the server also requires an in-progress ride and 3+ seconds before it
+ * counts the play as an impression shown to riders.
+ */
+export function impressionFor(slot, { startedAt, endedAt = Date.now(), inTrip = false, visible = false } = {}) {
   counter += 1
   return {
     clientId: `${startedAt.toString(36)}-${counter.toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
@@ -62,6 +67,7 @@ export function impressionFor(slot, { startedAt, endedAt = Date.now(), inTrip = 
     shownAt: new Date(startedAt).toISOString(),
     seconds: Math.max(0, Math.round((endedAt - startedAt) / 100) / 10),
     inTrip: Boolean(inTrip),
+    visible: visible === true,
   }
 }
 
