@@ -8,15 +8,13 @@ import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, ORANGE, PURPLE, STADIUM } from 'rides-native/places.js'
 import { color, shadowStyle } from 'rides-native/shared/theme.js'
 import type { BusySpot } from '@/lib/busySpots'
-import { describeCell, heatRgb, type DemandCell } from 'rides-native/demandHeat.js'
+import { describeCell, type DemandCell } from 'rides-native/demandHeat.js'
 import { DemandHeatLayer } from './DemandHeatLayer'
 import { StillMarker } from './StillMarker'
 import { markerLookKey } from '@/lib/markerRedraw'
 import { GLYPHS, Glyph, ION_ALIASES } from 'rides-native/icons'
 import type { MapPin } from './CampusMap'
 import { mapHeatColors, mapUnavailableColors } from '@/lib/palette'
-
-const HEAT_LEGEND_STOPS = [0.1, 0.4, 0.7, 1]
 
 const FALLBACK_MARKERS: MapPin[] = [
   { id: 'stadium', latitude: STADIUM.latitude, longitude: STADIUM.longitude, title: 'Memorial Stadium', pinColor: ORANGE },
@@ -269,17 +267,6 @@ export function CampusMap({
           <Text style={styles.peakText}>Peak mode · 30 min window</Text>
         </View>
       ) : null}
-      {showHeat ? (
-        <View pointerEvents="none" style={[styles.heatLegend, { backgroundColor: heat.legend }]} accessibilityLabel="Demand heat map legend, low to high">
-          <Text style={[styles.heatLegendText, { color: heat.title }]}>Demand</Text>
-          <View style={styles.heatLegendRamp}>
-            {HEAT_LEGEND_STOPS.map((v) => (
-              <View key={v} style={[styles.heatLegendSwatch, { backgroundColor: `rgb(${heatRgb(v, colorScheme).join(',')})` }]} />
-            ))}
-          </View>
-          <Text style={[styles.heatLegendText, { color: heat.title }]}>Low · High</Text>
-        </View>
-      ) : null}
       {info ? (
         <Animated.View
           style={[
@@ -320,10 +307,6 @@ export function CampusMap({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  heatLegend: { position: 'absolute', left: 12, top: 160, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, alignItems: 'center', gap: 4 },
-  heatLegendRamp: { flexDirection: 'row', borderRadius: 4, overflow: 'hidden' },
-  heatLegendSwatch: { width: 14, height: 8 },
-  heatLegendText: { fontSize: 12, fontWeight: '700' },
   carMarker: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   carStripe: { position: 'absolute', width: 6, height: 40, transform: [{ rotate: '35deg' }], opacity: 0.6 },
   peakBadge: {

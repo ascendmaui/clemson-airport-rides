@@ -281,7 +281,7 @@ export function AccountScreen() {
                 accessibilityLabel={link.mailSubject ? `${link.label}, ${supportEmail()}` : link.label}
               >
                 <View style={styles.settingLine}>
-                  <Glyph name={link.icon} size={22} color={link.icon === 'chat' || link.icon === 'mail' ? colors.link : colors.purple} scheme={scheme} />
+                  <Glyph name={link.icon} size={22} color={accountIconColor(link.icon, colors)} scheme={scheme} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.rowTitle}>{link.label}</Text>
                     {link.badge ? (
@@ -357,10 +357,12 @@ export function AccountScreen() {
           <Text style={styles.rowTitle}>Terms of service</Text>
           <Text style={styles.copy}>Fares, wait fees, and driver duties.</Text>
         </Pressable>
-        <Pressable onPress={() => router.push('/delete-account')} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
-          <Text style={styles.rowTitle}>Delete account</Text>
-          <Text style={styles.copy}>Files a confirmed support request. The account stays until that request is processed.</Text>
-        </Pressable>
+        {user ? (
+          <Pressable onPress={() => router.push('/delete-account')} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
+            <Text style={styles.rowTitle}>Delete account</Text>
+            <Text style={styles.copy}>Deletes this account immediately. Open rides are canceled.</Text>
+          </Pressable>
+        ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {note ? <Text style={styles.note}>{note}</Text> : null}
         {user ? (
@@ -371,6 +373,21 @@ export function AccountScreen() {
       </ScrollView>
     </View>
   )
+}
+
+function accountIconColor(icon: string, colors: Palette): string {
+  switch (icon) {
+    case 'chat':
+    case 'mail':
+    case 'help':
+    case 'lostFound':
+    case 'money':
+    case 'bell':
+    case 'student':
+      return colors.link
+    default:
+      return colors.purple
+  }
 }
 
 const APPEARANCE_CHOICES: { mode: DisplayMode; label: string }[] = [

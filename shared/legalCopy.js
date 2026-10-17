@@ -1,7 +1,7 @@
 /** One privacy policy and terms set for the website and the rider app. */
 import { supportEmail } from './productLinks.js'
 
-export const LEGAL_UPDATED = 'October 13, 2026'
+export const LEGAL_UPDATED = 'October 16, 2026'
 
 const SUPPORT = supportEmail()
 
@@ -108,6 +108,14 @@ export const PRIVACY_SECTIONS = [
     heading: 'Article 12. Contact',
     paragraphs: [
       `Privacy questions and privacy-rights requests may be sent to ${SUPPORT}, from Account → Support, or by mail to Clemson Rides, 101 North Main Street, Greenville, SC 29601. A mailed notice is effective when we receive it.`,
+    ],
+  },
+  {
+    heading: 'Article 13. Device Location, Notifications, and Cards',
+    paragraphs: [
+      'The Rider app uses precise device location while the app is in use to set your pickup.',
+      'The Driver app uses precise device location while you are online, and in the background during an active trip only. Background location stops when the trip ends.',
+      'The apps store a push notification token so Clemson Rides can send trip alerts to this phone. Payment cards are processed by Stripe.',
     ],
   },
 ]

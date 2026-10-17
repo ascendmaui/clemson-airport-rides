@@ -185,7 +185,7 @@ export default function SettingsSection() {
               {push?.detail || 'Checking notification permission…'}
             </Text>
             <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-              While you are online with the app open, a new request plays in the app with sound and vibration. Asleep, locked, or signed out, the same request is a system notification. That lock-screen path needs an Expo access token on the server plus APNs for iPhone and FCM for Android on the Expo project. Those keys are not in the app, so a saved push token does not by itself prove a locked phone will toast.
+              While you are online with the app open, a new request plays in the app with sound and vibration. When the phone is asleep, locked, or you are signed out, the same request arrives as a notification. Turn notifications on for Clemson Rides in iPhone Settings if a locked phone should alert you.
             </Text>
           </Card>
         ) : null}

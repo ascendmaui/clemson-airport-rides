@@ -21,6 +21,7 @@ import { notifyAcceptedRide, setRideAlertSurface } from '@/lib/push'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { heatRgb } from 'rides-native/demandHeat.js'
 import { HOME_CLUTTER_SPRING, homeClutterTranslateY } from '@/lib/bottomCluster'
 import { driverPresence, goOffline, goOnline, usePresence } from '@/lib/presence'
 import { fetchDriverApplication } from 'rides-native/drivers'
@@ -104,6 +105,7 @@ import { fetchOfferPreview, riderInitials } from 'rides-native/offerPreviewClien
 import { OfferGauge } from '@/components/OfferGauge'
 import { CrashBoundary } from '@/components/CrashBoundary'
 import { failureToast, quiet, quietly, withRetry } from '@/lib/softFail'
+import { DRIVER_STATUS_TIMEOUT_COPY, STARTUP_TIMEOUT_MS } from '@/lib/startupGate'
 import { useSecondClock } from '@/lib/useSecondClock'
 import { tipBoostOfferLine } from '../../../../shared/prepaidTip.js'
 import { ACTIVE_TRIP_RECONCILE_MS, reconcileActiveTrip } from 'rides-native/activeTripReconcile'
@@ -116,6 +118,7 @@ import { Glyph } from 'rides-native/icons'
 const EDGE = 16
 const GAP = 12
 const TOP_MARGIN = 8
+const HEAT_LEGEND_STOPS = [0.1, 0.4, 0.7, 1]
 
 async function currentFix() {
   try {
@@ -254,9 +257,10 @@ function DriverHomeBody() {
     transform: [{ translateY: clutterY.value }],
   }))
   const tabClearance = offerSheetBottomInset(insets.bottom)
-  // The dock sits between the status bar and the tab bar, including the home-indicator inset.
+  // The dock is only as tall as the fare card and GO button, sitting above the tab bar.
   // While an offer is up, END, the queue, and the earnings pill step aside so the sheet can use that space.
   const dockTop = insets.top + TOP_MARGIN
+  const [dockHeight, setDockHeight] = useState(260)
 
   useEffect(() => {
     if (!supabase) {
@@ -355,7 +359,24 @@ function DriverHomeBody() {
   }, [desk?.active?.id, desk?.active?.status, desk?.active?.riderId, user])
 
   useEffect(() => {
-    refresh().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not load driver home'))
+    let alive = true
+    const timer = setTimeout(() => {
+      if (alive) setError(DRIVER_STATUS_TIMEOUT_COPY)
+    }, STARTUP_TIMEOUT_MS)
+    refresh()
+      .then(() => {
+        if (!alive) return
+        setError((current) => (current === DRIVER_STATUS_TIMEOUT_COPY ? null : current))
+      })
+      .catch((err: unknown) => {
+        if (!alive) return
+        setError(err instanceof Error ? err.message : 'Could not load driver home')
+      })
+      .finally(() => clearTimeout(timer))
+    return () => {
+      alive = false
+      clearTimeout(timer)
+    }
   }, [refresh])
 
   useEffect(() => {
@@ -630,13 +651,8 @@ function DriverHomeBody() {
       <View pointerEvents="box-none" style={styles.overlay}>
         <Reanimated.View
           pointerEvents={clutterInteractive && !liveCard ? 'box-none' : 'none'}
-          style={[styles.clutter, clutterStyle]}
+          style={[styles.clutter, clutterStyle, { paddingBottom: dockHeight + tabClearance }]}
         >
-          <View style={[styles.top, { paddingTop: dockTop }]} pointerEvents="box-none">
-            <CircleButton icon="inbox" label="Messages" onPress={() => router.push('/inbox')} />
-            <View style={styles.topSpacer} />
-            <CircleButton icon="search" label="Search and discover" onPress={() => router.push('/discover')} />
-          </View>
           {offerOwnsBottom ? null : (
           <View pointerEvents="box-none" style={[styles.earningsWrap, { top: dockTop }]}>
             <Pressable
@@ -651,7 +667,18 @@ function DriverHomeBody() {
             </Pressable>
           </View>
           )}
-
+          <View pointerEvents="box-none" style={[styles.clutterScrollSlot, { marginTop: insets.top }]}>
+          <ScrollView
+            style={styles.clutterScroll}
+            contentContainerStyle={styles.clutterContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+          <View style={[styles.top, { paddingTop: TOP_MARGIN }]} pointerEvents="box-none">
+            <CircleButton icon="inbox" label="Messages" onPress={() => router.push('/inbox')} />
+            <View style={styles.topSpacer} />
+            <CircleButton icon="search" label="Search and discover" onPress={() => router.push('/discover')} />
+          </View>
           <View style={[styles.heatPanel, { backgroundColor: colors.card, borderRadius: 16, marginHorizontal: 12, paddingVertical: 8 }]}>
             <Pressable
               onPress={() => setDemandOpen((value: boolean) => !value)}
@@ -663,6 +690,17 @@ function DriverHomeBody() {
               <Text style={[styles.heatLabel, { color: colors.title }]}>Busy areas, peak, and live demand</Text>
               <Text style={{ color: colors.orange, fontWeight: '800' }}>{demandOpen ? 'Hide' : 'Show'}</Text>
             </Pressable>
+            {showHeat ? (
+              <View style={styles.legendRow} accessibilityLabel="Demand heat map legend, low to high">
+                <Text style={[styles.heatLabel, { color: colors.title }]}>Demand</Text>
+                <View style={styles.legendRamp}>
+                  {HEAT_LEGEND_STOPS.map((stop) => (
+                    <View key={stop} style={[styles.legendSwatch, { backgroundColor: `rgb(${heatRgb(stop, scheme).join(',')})` }]} />
+                  ))}
+                </View>
+                <Text style={[styles.heatLabel, { color: colors.inkSecondary }]}>Low · High</Text>
+              </View>
+            ) : null}
             {demandOpen ? (
               <>
                 <View style={styles.heatRow}>
@@ -792,9 +830,18 @@ function DriverHomeBody() {
               />
             </View>
           ) : null}
+          </ScrollView>
+          </View>
         </Reanimated.View>
 
-        <View pointerEvents="box-none" style={[styles.dock, styles.offerDock, { top: dockTop, bottom: tabClearance }]}>
+        <View
+          pointerEvents="box-none"
+          onLayout={(event) => {
+            const next = Math.ceil(event.nativeEvent.layout.height)
+            setDockHeight((current) => (next > 0 && Math.abs(next - current) > 1 ? next : current))
+          }}
+          style={[styles.dock, styles.offerDock, { bottom: tabClearance }]}
+        >
           {!configured ? <ErrorText>Add EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable, then rebuild.</ErrorText> : null}
           {locationTracking.error ? (
             <View>
@@ -1145,7 +1192,10 @@ const styles = StyleSheet.create({
   topSpacer: { flex: 1 },
   earningsWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   earningsButton: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center' },
-  clutter: { gap: GAP },
+  clutter: { flex: 1 },
+  clutterScrollSlot: { flex: 1, overflow: 'hidden' },
+  clutterScroll: { flex: 1 },
+  clutterContent: { gap: GAP, paddingBottom: 12 },
   demandToggle: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, minHeight: 44,
@@ -1165,6 +1215,9 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   heatPanel: { marginTop: 8 },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 4 },
+  legendRamp: { flexDirection: 'row', borderRadius: 4, overflow: 'hidden' },
+  legendSwatch: { width: 14, height: 8 },
   heatRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
   heatLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 0.2 },
   heatToggle: { borderRadius: 999, paddingHorizontal: 14, minHeight: 36, justifyContent: 'center' },
@@ -1227,6 +1280,6 @@ const styles = StyleSheet.create({
   docGateSections: { fontWeight: '700', fontSize: 13, lineHeight: 18 },
   docGateLink: { fontWeight: '800', fontSize: 14 },
   docGateReason: { fontWeight: '600', fontSize: 13, lineHeight: 18 },
-  statusWrap: { flexShrink: 1, maxHeight: 400 },
+  statusWrap: { flexShrink: 1 },
   statusScrollBody: { flexGrow: 1 },
 })

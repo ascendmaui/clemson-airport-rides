@@ -1,5 +1,6 @@
 import { useAuth } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
+import { driverSignInTarget } from '../lib/webDriverConsole'
 
 export function RequireAuth({ children }) {
   const { session, loading, configured } = useAuth()
@@ -25,7 +26,14 @@ export function RequireAuth({ children }) {
 
   function goSignIn() {
     const { path, params } = getHashRoute()
-    if (path === 'sign-in' || path === 'sign-up') return
+    if (path === 'sign-in' || path === 'sign-up' || path === 'driver-sign-in') return
+    // Drivers sign in with the account they use in the Driver app (email,
+    // Google, or Apple when enabled), then land back on the console.
+    const driverTarget = driverSignInTarget(path)
+    if (driverTarget) {
+      navigate(driverTarget, { ...params, next: path })
+      return
+    }
     if (path === 'account' || path === 'admin' || path === 'driver') {
       navigate('sign-in', {
         next: path,

@@ -65,6 +65,9 @@ const PromosPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ d
 const RideTypesPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.RideTypesPage })))
 const SafetyPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.SafetyPage })))
 const SupportPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.SupportPage })))
+const Advertise = lazy(() => import('./screens/Advertise').then((m) => ({ default: m.Advertise })))
+const AdsSignup = lazy(() => import('./screens/AdsSignup').then((m) => ({ default: m.AdsSignup })))
+const TabletPlayer = lazy(() => import('./screens/TabletPlayer').then((m) => ({ default: m.TabletPlayer })))
 const TigerPassPage = lazy(() => import('./screens/MarketingInfo').then((m) => ({ default: m.TigerPassPage })))
 /** Rider booking, account and legal screens also load on demand so the marketing home paints fast. */
 const PartnerJoin = lazy(() => import('./screens/RentalPartners').then((m) => ({ default: m.PartnerJoin })))
@@ -79,6 +82,7 @@ const AccountScreen = lazy(() => import('./screens/FriendsAccount').then((m) => 
 const SignInScreen = lazy(() => import('./screens/AuthScreens').then((m) => ({ default: m.SignInScreen })))
 const SignUpScreen = lazy(() => import('./screens/AuthScreens').then((m) => ({ default: m.SignUpScreen })))
 const DriverSignup = lazy(() => import('./screens/DriverSignup').then((m) => ({ default: m.DriverSignup })))
+const DriverSignIn = lazy(() => import('./screens/DriverSignIn').then((m) => ({ default: m.DriverSignIn })))
 const PickDriver = lazy(() => import('./screens/PickDriver').then((m) => ({ default: m.PickDriver })))
 const Requested = lazy(() => import('./screens/Requested').then((m) => ({ default: m.Requested })))
 const LegalPrivacy = lazy(() => import('./screens/LegalPages').then((m) => ({ default: m.LegalPrivacy })))
@@ -131,6 +135,8 @@ const SITE_ROUTES = new Set([
   'driver-download',
   'affiliate',
   'affiliates',
+  'advertise',
+  'partner',
 ])
 
 function Screen({ path, params }) {
@@ -142,6 +148,8 @@ function Screen({ path, params }) {
       return <SignInScreen />
     case 'sign-up':
       return <SignUpScreen />
+    case 'driver-sign-in':
+      return <DriverSignIn />
     case 'privacy':
       return <LegalPrivacy />
     case 'terms':
@@ -152,6 +160,12 @@ function Screen({ path, params }) {
       return <WhyClemsonRides />
     case 'drive':
       return <DriveWithUs />
+    case 'advertise':
+    case 'partner':
+      if (params.sub === 'signup' || params.sub === 'my') return <AdsSignup sub={params.sub} />
+      return <Advertise />
+    case 'tablet':
+      return <TabletPlayer params={params} />
     case 'how-it-works':
       return <HowItWorks />
     case 'ride-types':

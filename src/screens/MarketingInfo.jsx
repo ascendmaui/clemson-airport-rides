@@ -286,7 +286,7 @@ export function SupportPage() {
       </article>
       <article className="mkt-card mkt-feature">
         <h2>Delete your account</h2>
-        <p>Rider app: Account → Delete account → File deletion request. Driver app: Menu → Delete account → File deletion request. Each files a support request; the account remains until the request is processed.</p>
+        <p>Rider app: Account → Delete account, then type DELETE and confirm. Driver app: Menu → Delete account, then type DELETE and confirm. Deletion is immediate. A driver with a trip in progress cannot delete until that trip ends.</p>
       </article>
       <article className="mkt-card mkt-feature">
         <h2>Payments</h2>

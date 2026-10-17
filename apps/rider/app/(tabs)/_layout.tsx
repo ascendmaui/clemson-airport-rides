@@ -9,7 +9,6 @@ import { setAuthNext } from '@/lib/authNext'
 import { RIDER_MAIN_TABS, normalizeTabPath, tabRequiresAuth } from '@/lib/tabSwipe'
 import { useReduceMotion } from '@/lib/useReduceMotion'
 import { useTheme } from '@/lib/theme'
-import { color } from 'rides-native/shared/theme.js'
 import { nativeGlassAvailable } from 'rides-native/glass'
 import { AccountScreen } from './account'
 import { CarpoolHubScreen } from './friends'
@@ -39,8 +38,19 @@ function ScheduleAuthGuard() {
 }
 
 function RiderNativeTabs() {
+  const { colors, scheme } = useTheme()
   return (
-    <NativeTabs minimizeBehavior="never" tintColor={color.orange}>
+    <NativeTabs
+      minimizeBehavior="never"
+      tintColor={colors.orange}
+      backgroundColor={colors.tabBar}
+      iconColor={{ default: colors.tabInactive, selected: colors.orange }}
+      blurEffect={scheme === 'dark' ? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'}
+      labelStyle={{
+        default: { color: colors.tabInactive },
+        selected: { color: colors.orange },
+      }}
+    >
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Rides</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="car.fill" md="directions_car" />

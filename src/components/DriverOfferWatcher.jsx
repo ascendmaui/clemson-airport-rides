@@ -1,7 +1,8 @@
 import { uniqueChannelTopic } from '../../packages/rides-native/realtimeChannel.js'
 /**
  * On-screen offer alerts for an approved driver, including after they leave Driver Home.
- * Uses the existing toast sender. Does not send email or a closed-app push.
+ * Uses the existing toast sender, plus a browser notification when the tab is
+ * hidden and the driver allowed it. Does not send email or a closed-app push.
  */
 import { useEffect, useRef } from 'react'
 import { useAuth } from '../lib/auth'
@@ -11,6 +12,7 @@ import { isDueNow, isUnpaidAirportDepositTrip } from '../../packages/rides-nativ
 import { offerVisibleToDriver, visibleOfferQuery } from '../../shared/driverOrder.js'
 import { isStaleLiveOffer } from '../../shared/staleLiveOffer.js'
 import { scheduledBoardCopy } from '../../shared/nearTermSlots.js'
+import { showBrowserOfferNotice } from '../lib/webDriverConsole'
 
 export function DriverOfferWatcher() {
   const { user } = useAuth()
@@ -91,6 +93,12 @@ export function DriverOfferWatcher() {
           kind: 'ride_requested',
           title: 'New ride offer',
           body: `${row.pickup_label || 'Pickup'} → ${row.dropoff_label || 'Drop-off'}`,
+        })
+        // Tab in the background (web-only driver): also raise a system notification.
+        showBrowserOfferNotice({
+          title: 'New ride offer',
+          body: `${row.pickup_label || 'Pickup'} → ${row.dropoff_label || 'Drop-off'}`,
+          tag: `offer-${row.id}`,
         })
       })
     }
