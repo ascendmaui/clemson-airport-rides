@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { loadPublicDriverCards } from './driverCards.js'
+import { loadPublicDriverCards, publicAvatarUrl } from './driverCards.js'
 import handleDriverCards from './endpoints/driverCards.js'
 
 const DEMO = '0d2c7fa5-a098-4f2d-9ef4-35f70ea79218'
@@ -24,6 +24,7 @@ function cardsSb({ approved = true } = {}) {
                 data: [{
                   id: DEMO,
                   full_name: 'Demo Driver',
+                  avatar_url: 'https://example.supabase.co/storage/v1/object/public/avatars/demo/avatar.png',
                   last_name: 'Driver',
                   phone: '8645550199',
                   rating_avg: 0,
@@ -97,6 +98,7 @@ test('loadPublicDriverCards returns the driver name and vehicle without billing 
   assert.equal(loaded.drivers[0].plate, 'DEMO03')
   assert.equal(loaded.drivers[0].color, 'gray')
   assert.equal(loaded.drivers[0].dispatchRank, 2)
+  assert.equal(loaded.drivers[0].avatar_url, 'https://example.supabase.co/storage/v1/object/public/avatars/demo/avatar.png')
   const encoded = JSON.stringify(loaded.drivers)
   assert.equal(encoded.includes('pm_secret'), false)
   assert.equal(encoded.includes('acct_secret'), false)
@@ -126,4 +128,11 @@ test('driver cards endpoint returns the safe card payload', async () => {
   assert.equal(JSON.stringify(body).includes('8645550199'), false)
   assert.equal(body.drivers[0].plate, 'DEMO03')
   assert.equal(JSON.stringify(body).includes('pm_secret'), false)
+})
+
+test('publicAvatarUrl passes only an https photo URL', () => {
+  assert.equal(publicAvatarUrl('https://x.supabase.co/a.png'), 'https://x.supabase.co/a.png')
+  assert.equal(publicAvatarUrl('javascript:alert(1)'), null)
+  assert.equal(publicAvatarUrl('http://x/a.png'), null)
+  assert.equal(publicAvatarUrl(null), null)
 })
