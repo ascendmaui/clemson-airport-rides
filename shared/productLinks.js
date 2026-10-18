@@ -88,8 +88,9 @@ export function publishedStoreUrl(url) {
 }
 
 /**
- * Release tooling only. The website never links to or mentions TestFlight;
- * web pages show 'Coming soon to the App Store' until a store URL is published.
+ * Release tooling only. The one public web TestFlight link is the rider iPhone beta
+ * in src/content/riderBeta.js; store buttons still read 'Coming soon to the App Store'
+ * until a store URL is published.
  */
 /** Accept only a public TestFlight join link on Apple's HTTPS host. */
 export function publicTestFlightUrl(url) {

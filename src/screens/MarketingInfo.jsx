@@ -3,6 +3,7 @@ import { getHashRoute, navigate } from '../lib/navigation'
 import { MarketingChrome } from '../components/MarketingChrome'
 import { MarketingPhoto } from '../components/MarketingPhoto'
 import { QrMark } from '../components/QrMark'
+import { RiderBetaInstall } from '../components/RiderBetaInstall'
 import { FeatureBlock } from '../components/FeatureBlock'
 import { messagingGuide } from '../../shared/copy/messaging.js'
 import { HERO_COLLAGE, NIGHT_VENUES } from '../content/images.js'
@@ -303,9 +304,17 @@ export function SupportPage() {
 }
 
 export function GetTheAppPage() {
+  useEffect(() => {
+    if (getHashRoute().params.section !== 'iphone-beta') return undefined
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('iphone-beta')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [])
   return (
     <MarketingChrome current="get-the-app">
       <PageHead kicker="Get the App" title="Rider and driver" lede={APP_STORE_NOTE} />
+      <RiderBetaInstall />
       {APP_DOWNLOADS.map((app) => (
         <article key={app.id} className="mkt-card mkt-feature" id={app.id === 'rider' ? 'get-the-app' : undefined}>
           <img
