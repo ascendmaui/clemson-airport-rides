@@ -822,6 +822,7 @@ test('fetchOnlineDrivers shows the driver name and vehicle when profile rows are
       plate: 'DEMO03',
       tier: 'standard',
       service_class: false,
+      years_experience: 7,
     }],
   })
   const res = await fetchOnlineDrivers(supabase)
@@ -832,6 +833,9 @@ test('fetchOnlineDrivers shows the driver name and vehicle when profile rows are
   assert.equal(res.drivers[0].plate, 'DEMO03')
   const lines = describeDriver(res.drivers[0])
   assert.equal(lines.ratingLabel, 'New driver')
+  assert.equal(res.drivers[0].yearsExperience, 7)
+  assert.equal(lines.experienceLabel, '7 yrs experience')
+  assert.equal(describeDriver({ online: true }).experienceLabel, null)
 })
 
 test('loadPickerDriverRecord keeps the pick-a-driver car, plate, and first name', async () => {

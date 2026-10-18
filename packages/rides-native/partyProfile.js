@@ -5,6 +5,7 @@
  */
 import { normalizePromoCode } from './authErrors.js'
 import { loadPickerDriverRecord, pickerVehicleLine } from './drivers.js'
+import { normalizeYearsExperience, yearsExperienceLabel } from '../../shared/driverExperience.js'
 import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 
 export const SIGNUP_PROFILE_DRAFT_KEY = 'clemson_signup_profile_draft'
@@ -253,6 +254,8 @@ export function toCounterpartView(profile, { viewerIsRider = false } = {}) {
     rideStyle: String(profile.ride_style || '').trim(),
     spots: asSpotList(profile.favorite_spots),
     student: Boolean(profile.student_verified_at),
+    yearsExperience: normalizeYearsExperience(profile.years_experience),
+    experienceLine: yearsExperienceLabel(profile.years_experience),
     vehicle,
     plate,
     vehicleLine: pickerVehicleLine(vehicle, plate),
@@ -377,6 +380,7 @@ export async function loadMatchedDriverCard(supabase, driverId) {
     ...(profile || { id: driverId }),
     full_name: profile?.first_name || profile?.full_name || record?.first_name || record?.full_name || '',
     avatar_url: profile?.avatar_url || record?.avatar_url || null,
+    years_experience: profile?.years_experience ?? record?.years_experience ?? null,
     phone: null,
     vehicle,
   }, { viewerIsRider: true })

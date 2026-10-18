@@ -4,6 +4,7 @@ import { getHashRoute } from '../lib/navigation'
 import { fetchFullProfile } from '../lib/profiles'
 import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
 import { SiteIcon, StarRow } from '../components/SiteIcon.jsx'
+import { yearsExperienceLabel } from '../../shared/driverExperience.js'
 
 export function ProfileView() {
   const { user } = useAuth()
@@ -49,6 +50,7 @@ export function ProfileView() {
   const gallery = (profile.gallery || []).filter((g) => g.public_url)
   const ownProfile = Boolean(user?.id && profile.id === user.id)
   const fallback = profile.role === 'driver' || profile.role === 'both' ? 'Driver' : 'Rider'
+  const experience = yearsExperienceLabel(profile.years_experience)
   const peerName = ownProfile
     ? (String(profile.full_name || '').trim() || fallback)
     : riderDriverFirstName(profile.full_name, fallback)
@@ -115,6 +117,9 @@ export function ProfileView() {
               {profile.role || 'rider'}
               {profile.student_verified_at ? ' · verified student' : ''}
             </div>
+            {experience && (
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-secondary)', marginTop: 2 }}>{experience}</div>
+            )}
             <div style={{ marginTop: 4, fontWeight: 700 }}>
               <SiteIcon name="star" size={14} /> {avg}{' '}
               <span style={{ fontWeight: 500, color: 'var(--ink-tertiary)' }}>({count})</span>

@@ -30,6 +30,7 @@ function cardsSb({ approved = true } = {}) {
                   rating_avg: 0,
                   rating_count: 0,
                   standing: 'good',
+                  years_experience: 7,
                   email: 'hidden@example.com',
                   stripe_default_pm_id: 'pm_secret',
                 }],
@@ -98,6 +99,8 @@ test('loadPublicDriverCards returns the driver name and vehicle without billing 
   assert.equal(loaded.drivers[0].plate, 'DEMO03')
   assert.equal(loaded.drivers[0].color, 'gray')
   assert.equal(loaded.drivers[0].dispatchRank, 2)
+  assert.equal(loaded.drivers[0].years_experience, 7)
+  assert.equal(loaded.drivers[0].rating_count, 0)
   assert.equal(loaded.drivers[0].avatar_url, 'https://example.supabase.co/storage/v1/object/public/avatars/demo/avatar.png')
   const encoded = JSON.stringify(loaded.drivers)
   assert.equal(encoded.includes('pm_secret'), false)
@@ -127,6 +130,7 @@ test('driver cards endpoint returns the safe card payload', async () => {
   assert.equal(body.drivers[0].first_name, 'Demo')
   assert.equal(JSON.stringify(body).includes('8645550199'), false)
   assert.equal(body.drivers[0].plate, 'DEMO03')
+  assert.equal(body.drivers[0].years_experience, 7)
   assert.equal(JSON.stringify(body).includes('pm_secret'), false)
 })
 

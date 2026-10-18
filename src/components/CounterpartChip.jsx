@@ -79,6 +79,7 @@ export function CounterpartChip({ profileId, noun = 'rider', eta = null, onOpen,
         <div>
           <div style={{ fontWeight: 800, color: '#522D80' }}>{title}</div>
           <div style={{ fontSize: 13, color: '#0B1220', fontWeight: 700 }}>{rating}</div>
+          {noun === 'driver' && person?.experienceLine ? <div style={{ fontSize: 12, color: '#5C6570', fontWeight: 600 }}>{person.experienceLine}</div> : null}
           {carLine ? <div style={{ fontSize: 13, color: '#5C6570' }}>{carLine}</div> : null}
           {eta ? <div style={{ fontSize: 13, color: '#F56600', fontWeight: 800, marginTop: 2 }}>{eta}</div> : null}
         </div>

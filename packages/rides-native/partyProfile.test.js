@@ -161,6 +161,7 @@ test('profile aggregates format the stored average', () => {
     student_verified_at: '2026-01-01',
     vehicle: { color: 'White', make: 'Honda', model: 'Accord', plate: 'TGR1' },
     avatar_url: 'https://cdn.example/sam.jpg',
+    years_experience: 7,
   }, { viewerIsRider: true })
   assert.equal(view.name, 'Sam')
   assert.equal(view.ratingLine, '4.9 · 8 ratings')
@@ -170,6 +171,9 @@ test('profile aggregates format the stored average', () => {
   assert.equal(view.photoUrl, 'https://cdn.example/sam.jpg')
   assert.equal(view.roleLabel, 'Your driver')
   assert.equal(view.student, true)
+  assert.equal(view.yearsExperience, 7)
+  assert.equal(view.experienceLine, '7 yrs experience')
+  assert.equal(toCounterpartView({ id: 'x', full_name: 'Al' }).experienceLine, null)
   assert.equal('phone' in view, false)
 })
 

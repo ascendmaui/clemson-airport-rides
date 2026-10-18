@@ -12,6 +12,7 @@ import { favoriteIdsForMatching } from '../../shared/riderFavorites.js'
 import { approvalGateMessage } from './syntheticOffers.js'
 import { rideRequestNote } from './driverNote.js'
 import { paymentMethodRequiredError } from '../../shared/ridePaymentReady.js'
+import { normalizeYearsExperience, yearsExperienceLabel } from '../../shared/driverExperience.js'
 
 /** Straight-line campus pace. A stored road polyline can scale this; live traffic still needs a billed Routes call. */
 export const CAMPUS_MPH = 18
@@ -117,6 +118,7 @@ export function describeDriver(driver, pickup, now = new Date()) {
     ratingLabel: ratingCount > 0 && ratingAvg != null
       ? `${ratingAvg.toFixed(1)} · ${ratingCount} ratings`
       : 'New driver',
+    experienceLabel: yearsExperienceLabel(driver?.yearsExperience),
   }
 }
 
@@ -251,6 +253,7 @@ function partsFromCardRows(rows) {
       rating_avg: row.rating_avg,
       rating_count: row.rating_count,
       standing: row.standing || null,
+      years_experience: normalizeYearsExperience(row.years_experience),
       dispatchRank: Number.isInteger(row.dispatchRank) ? row.dispatchRank : undefined,
     })
     if (row.make || row.model || row.color || row.plate) {
@@ -287,15 +290,19 @@ async function overlayDispatchRanks(supabase, parts) {
     const rows = Array.isArray(data?.drivers) ? data.drivers : []
     const rankById = {}
     const avatarById = {}
+    const yearsById = {}
     for (const row of rows) {
       if (row?.id && Number.isInteger(row.dispatchRank)) rankById[row.id] = row.dispatchRank
       if (row?.id && typeof row.avatar_url === 'string' && row.avatar_url) avatarById[row.id] = row.avatar_url
+      const years = normalizeYearsExperience(row?.years_experience)
+      if (row?.id && years != null) yearsById[row.id] = years
     }
     // The card RPCs carry no photo, so the server card fills avatar_url for the picker.
     return {
       ...parts,
       profiles: parts.profiles.map((profile) => {
-        const next = rankById[profile.id] == null ? profile : { ...profile, dispatchRank: rankById[profile.id] }
+        let next = rankById[profile.id] == null ? profile : { ...profile, dispatchRank: rankById[profile.id] }
+        if (next.years_experience == null && yearsById[profile.id] != null) next = { ...next, years_experience: yearsById[profile.id] }
         return !next.avatar_url && avatarById[profile.id] ? { ...next, avatar_url: avatarById[profile.id] } : next
       }),
     }
@@ -355,6 +362,7 @@ export async function loadPickerDriverRecord(supabase, driverId) {
     first_name: first,
     full_name: first,
     avatar_url: profile?.avatar_url || null,
+    years_experience: profile?.years_experience ?? null,
     vehicle: vehicle || null,
   }
 }
@@ -392,6 +400,7 @@ function mapDrivers(statuses, profiles, vehicles) {
       ratingAvg: profile.rating_avg != null ? Number(profile.rating_avg) : null,
       ratingCount: Number(profile.rating_count) || 0,
       standing,
+      yearsExperience: normalizeYearsExperience(profile.years_experience),
       avatarUrl: profile.avatar_url || null,
       online: Boolean(status.online),
       priorityMode: Boolean(status.priority_mode),
