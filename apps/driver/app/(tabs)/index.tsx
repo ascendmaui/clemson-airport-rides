@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Location from 'expo-location'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AccessibilityInfo, Animated, AppState, Easing, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
@@ -9,6 +9,7 @@ import { FarePanel } from '@/components/FarePanel'
 import { DriverEndTripSheet } from '@/components/DriverEndTripSheet'
 import { Card, ErrorText, Primary, Tag, useCardShadow } from '@/components/chrome'
 import { CircleButton, GoButton } from '@/components/shell'
+import { NotificationInboxButton } from '@/components/NotificationInboxButton'
 import { OfferRouteMap } from '@/components/OfferRouteMap'
 import { DriverStatusCard } from '@/components/DriverStatusCard'
 import { CommunityMatchChips } from 'rides-native/CommunityMatchChips'
@@ -18,6 +19,7 @@ import { ForecastCard } from '@/components/ForecastCard'
 import { useAuth } from '@/lib/auth'
 import { useFeedback } from '@/lib/feedback'
 import { notifyAcceptedRide, setRideAlertSurface } from '@/lib/push'
+import { useUnreadNotificationCount } from '@/lib/driverNotifications'
 import { shownCents } from '@/lib/shown'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
@@ -155,6 +157,8 @@ export default function DriverHome() {
 
 function DriverHomeBody() {
   const router = useRouter()
+  const offerParam = useLocalSearchParams<{ offer?: string | string[] }>().offer
+  const unreadNotifications = useUnreadNotificationCount()
   const insets = useSafeAreaInsets()
   const { colors, scheme, earningsPrivate, autoAccept, setAutoAccept } = useTheme()
   const shadow = useCardShadow()
@@ -185,6 +189,10 @@ function DriverHomeBody() {
   const [riderLine, setRiderLine] = useState<string | null>(null)
   const [hiddenOffers, setHiddenOffers] = useState<string[]>([])
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null)
+  const requestedOfferId = Array.isArray(offerParam) ? offerParam[0] : offerParam
+  useEffect(() => {
+    if (requestedOfferId) setSelectedOfferId(requestedOfferId)
+  }, [requestedOfferId])
   const [gameNotice, setGameNotice] = useState<GameDayNotice | null>(null)
   const gameDayExperience = useGameDayExperience(supabase, { driverId: user?.id || null })
   // Peak pricing status from the server (disabled while PEAK_PRICING_ENABLED is off).
@@ -677,7 +685,10 @@ function DriverHomeBody() {
           <View style={[styles.top, { paddingTop: TOP_MARGIN }]} pointerEvents="box-none">
             <CircleButton icon="inbox" label="Messages" onPress={() => router.push('/inbox')} />
             <View style={styles.topSpacer} />
-            <CircleButton icon="search" label="Search and discover" onPress={() => router.push('/discover')} />
+            <View style={styles.topRight}>
+              <CircleButton icon="search" label="Search and discover" onPress={() => router.push('/discover')} />
+              <NotificationInboxButton count={unreadNotifications} onPress={() => router.push('/notifications')} />
+            </View>
           </View>
           <View style={[styles.heatPanel, { backgroundColor: colors.card, borderRadius: 16, marginHorizontal: 12, paddingVertical: 8 }]}>
             <Pressable
@@ -1190,6 +1201,7 @@ const styles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFill },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: EDGE },
   topSpacer: { flex: 1 },
+  topRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   earningsWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   earningsButton: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center' },
   clutter: { flex: 1 },

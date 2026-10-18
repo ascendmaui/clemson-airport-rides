@@ -4,6 +4,7 @@
  */
 import { readDriverPushToken } from './driverPushToken.js'
 import { sendExpoPush } from './expoPush.js'
+import { insertDriverNotification } from './driverNotifications.js'
 import { noteExpoPushResult } from './expoPushReceipts.js'
 import { sendApplicantNotice } from './applicantMail.js'
 import { lostItemNoticeBody } from '../shared/copy/messaging.js'
@@ -121,14 +122,26 @@ export async function notifyTripCounterpart(input, deps = {}) {
   const sendPush = deps.sendPush || sendExpoPush
   const sendEmail = deps.sendEmail || ((payload) => sendApplicantNotice(payload))
   const token = await pushTokenForUser(sb, recipientId)
+  const recipientRole = recipientId === trip.driver_id ? 'driver' : 'rider'
+  const noticeKind = kind === 'lost-item' ? 'trip_lost_item' : 'trip_message'
+  const noticeData = { tripId, kind: noticeKind }
+  if (recipientRole === 'driver') {
+    const recorded = await insertDriverNotification(sb, {
+      userId: recipientId,
+      type: noticeKind,
+      title: copy.title,
+      body: copy.body,
+      data: noticeData,
+    })
+    if (recorded.id) noticeData.notificationId = recorded.id
+  }
   const push = await sendPush(sanitizeRiderNotice({
     to: token,
     title: copy.title,
     body: copy.body,
-    data: { tripId, kind: kind === 'lost-item' ? 'trip_lost_item' : 'trip_message' },
+    data: noticeData,
     channelId: 'ride-requests',
   }))
-  const recipientRole = recipientId === trip.driver_id ? 'driver' : 'rider'
   await noteExpoPushResult(sb, { push, token, ownerId: recipientId, ownerRole: recipientRole })
 
   let email = { emailed: false, reason: 'not_requested' }
