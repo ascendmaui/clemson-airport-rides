@@ -1,5 +1,7 @@
 export const LOCATION_PUBLISH_MIN_INTERVAL_MS: number
 export const TRIP_LOCATION_HEARTBEAT_MS: number
+export const ONLINE_LOCATION_INTERVAL_MS: number
+export const ONLINE_LOCATION_DISTANCE_M: number
 export function createTripLocationHeartbeat(options?: {
   publish?: (fix: { lat: number; lng: number; heading?: number | null; speed?: number | null }) => Promise<unknown> | unknown
   active?: () => Promise<boolean> | boolean

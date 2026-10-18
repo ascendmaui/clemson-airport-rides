@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const expo = JSON.parse(readFileSync(path.join(root, 'apps/driver/app.json'), 'utf8')).expo
 
 const ACTIVE_TRIP =
-  'Clemson Rides uses your location during an active trip, including while you use Maps or the phone is locked, so your rider can see your car and knows when you arrive. Location sharing stops when the trip ends.'
+  'Clemson Rides uses your location while you are online and during trips, including while you use Maps or the phone is locked, so nearby ride requests can reach you and your rider can see your car. Location sharing stops when you go offline.'
 
 function pluginEntry(name) {
   const entry = expo.plugins.find((item) => item === name || (Array.isArray(item) && item[0] === name))

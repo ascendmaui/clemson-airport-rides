@@ -18,8 +18,9 @@ function harness({ storage = new Map(), started = false } = {}) {
     status: 'accepted', session: { user: { id: 'driver-1' } }, owner: 'driver-1',
     foreground: 'granted', background: 'granted', now: 10000, started,
     starts: [], stops: [], writes: [], permissions: [], readError: null,
+    onlineStarted: false, serverOnline: true, statusReadError: null,
   }
-  let task
+  const tasks = {}
   const client = {
     auth: { async getSession() { return { data: { session: state.session }, error: null } } },
     from(table) {
@@ -27,7 +28,14 @@ function harness({ storage = new Map(), started = false } = {}) {
       const query = {
         select() { return query },
         eq(key, value) { filters[key] = value; return query },
+        in() { filters.in = true; return query },
+        order() { return query },
+        limit() { return query },
         async maybeSingle() {
+          if (filters.in) return { data: null, error: null } // no active trip by driver lookup
+          if (table === 'driver_status') {
+            return { data: state.statusReadError ? null : { online: state.serverOnline }, error: state.statusReadError }
+          }
           return {
             data: state.status && filters.driver_id === state.owner ? { id: filters.id, status: state.status } : null,
             error: state.readError,
@@ -42,13 +50,22 @@ function harness({ storage = new Map(), started = false } = {}) {
     Accuracy: { High: 4 }, ActivityType: { AutomotiveNavigation: 1 },
     async requestForegroundPermissionsAsync() { state.permissions.push('foreground'); return { status: state.foreground } },
     async requestBackgroundPermissionsAsync() { state.permissions.push('background'); return { status: state.background } },
-    async hasStartedLocationUpdatesAsync() { return state.started },
-    async startLocationUpdatesAsync(name, options) { state.started = true; state.starts.push({ name, options }) },
-    async stopLocationUpdatesAsync(name) { state.started = false; state.stops.push(name) },
+    async getBackgroundPermissionsAsync() { state.permissions.push('background-check'); return { status: state.background } },
+    async hasStartedLocationUpdatesAsync(name) { return name === 'driver-online-location' ? state.onlineStarted : state.started },
+    async startLocationUpdatesAsync(name, options) {
+      if (name === 'driver-online-location') state.onlineStarted = true
+      else state.started = true
+      state.starts.push({ name, options })
+    },
+    async stopLocationUpdatesAsync(name) {
+      if (name === 'driver-online-location') state.onlineStarted = false
+      else state.started = false
+      state.stops.push(name)
+    },
   }
   const mocks = {
     'expo-location': location,
-    'expo-task-manager': { defineTask(name, callback) { task = callback } },
+    'expo-task-manager': { defineTask(name, callback) { tasks[name] = callback } },
     'react-native': { Platform: { OS: 'ios' } },
     'rides-native/backgroundLocation': logic,
     'rides-native/driverDesk': { publishDriverLocation },
@@ -66,7 +83,8 @@ function harness({ storage = new Map(), started = false } = {}) {
   const module = { exports: {} }
   const run = new vm.Script(`(function(require, module, exports) { ${compiled}\n})`).runInContext(context)
   run((name) => { assert.ok(name in mocks, name); return mocks[name] }, module, module.exports)
-  return { api: module.exports, state, storage, client, location, deliver: (locations) => task({ data: { locations }, error: null }) }
+  return { api: module.exports, state, storage, client, location, deliver: (locations) => tasks['driver-trip-location']({ data: { locations }, error: null }),
+    deliverOnline: (locations) => tasks['driver-online-location']({ data: { locations }, error: null }) }
 }
 
 test('native service is idempotent and foreground/background throttle survives JS restart', async () => {
@@ -177,4 +195,72 @@ test('temporary server failure preserves tracking for retry; stale screen stops 
   h.state.session = null
   await h.deliver([fix(15000)])
   assert.equal(h.state.started, false)
+})
+
+test('online with no trip keeps publishing location-only fixes from the background', async () => {
+  const h = harness()
+  h.state.status = null // no active trip
+  assert.equal(await h.api.startOnlineBackgroundLocation('driver-1'), 'started')
+  assert.equal(await h.api.startOnlineBackgroundLocation('driver-1'), 'started')
+  // Never prompts: it only checks the existing "Always" grant.
+  assert.deepEqual(h.state.permissions, ['background-check', 'background-check'])
+  assert.equal(h.state.starts.length, 1)
+  const { name, options } = h.state.starts[0]
+  assert.equal(name, 'driver-online-location')
+  assert.equal(options.pausesUpdatesAutomatically, false)
+  assert.equal(options.showsBackgroundLocationIndicator, true)
+  assert.equal(options.deferredUpdatesInterval, logic.ONLINE_LOCATION_INTERVAL_MS)
+  assert.equal(options.distanceInterval, logic.ONLINE_LOCATION_DISTANCE_M)
+  await h.deliverOnline([fix(10000, 34.69)])
+  const statusWrites = h.state.writes.filter((w) => w.table === 'driver_status')
+  assert.equal(statusWrites.length, 1)
+  assert.equal(statusWrites[0].row.lat, 34.69)
+  assert.equal(statusWrites[0].row.driver_id, 'driver-1')
+  assert.ok(statusWrites[0].row.location_updated_at)
+  // Location-only: a background fix can never set online (so it cannot undo END).
+  assert.equal('online' in statusWrites[0].row, false)
+  assert.equal('online_source' in statusWrites[0].row, false)
+  // Throttle still applies; a later fix publishes again.
+  h.state.now = 12000
+  await h.deliverOnline([fix(12000, 34.7)])
+  assert.equal(h.state.writes.filter((w) => w.table === 'driver_status').length, 1)
+  h.state.now = 14500
+  await h.deliverOnline([fix(14500, 34.71)])
+  assert.equal(h.state.writes.filter((w) => w.table === 'driver_status').length, 2)
+})
+
+test('online background location stops on END, sign-out, another session, or server offline', async () => {
+  for (const invalidate of [
+    async (h) => { await h.api.stopOnlineBackgroundLocation() },
+    async (h) => { await h.api.stopAllBackgroundLocation() },
+    async (h) => { h.state.session = null },
+    async (h) => { h.state.session = { user: { id: 'another-driver' } } },
+    async (h) => { h.state.serverOnline = false },
+  ]) {
+    const h = harness()
+    h.state.status = null
+    await h.api.startOnlineBackgroundLocation('driver-1')
+    await invalidate(h)
+    await h.deliverOnline([fix(10000)])
+    assert.equal(h.state.onlineStarted, false)
+    assert.equal(h.storage.has('driver.online-location'), false)
+    assert.equal(h.state.writes.length, 0)
+  }
+  // A temporary status read failure is not proof of offline.
+  const flaky = harness()
+  flaky.state.status = null
+  await flaky.api.startOnlineBackgroundLocation('driver-1')
+  flaky.state.statusReadError = { message: 'network' }
+  await flaky.deliverOnline([fix(10000)])
+  assert.equal(flaky.state.onlineStarted, true)
+  assert.equal(flaky.state.writes.filter((w) => w.table === 'driver_status').length, 1)
+})
+
+test('online background location never starts without an existing Always grant', async () => {
+  const h = harness()
+  h.state.background = 'denied'
+  assert.equal(await h.api.startOnlineBackgroundLocation('driver-1'), 'background-denied')
+  assert.equal(h.state.starts.length, 0)
+  assert.equal(h.state.permissions.includes('background'), false)
+  assert.equal(h.storage.has('driver.online-location'), false)
 })

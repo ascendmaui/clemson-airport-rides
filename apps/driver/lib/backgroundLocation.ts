@@ -1,17 +1,20 @@
 import * as Location from 'expo-location'
 import * as TaskManager from 'expo-task-manager'
 import { Platform } from 'react-native'
-import { createTripLocationHeartbeat, isActiveTripLocationStatus, newestTripLocation, shouldPublishTripLocation, TRIP_LOCATION_HEARTBEAT_MS } from 'rides-native/backgroundLocation'
+import { createTripLocationHeartbeat, isActiveTripLocationStatus, newestTripLocation, ONLINE_LOCATION_DISTANCE_M, ONLINE_LOCATION_INTERVAL_MS, shouldPublishTripLocation, TRIP_LOCATION_HEARTBEAT_MS } from 'rides-native/backgroundLocation'
 import { publishDriverLocation as writeDriverLocation } from 'rides-native/driverDesk'
 import { authStorage } from './storage'
 import { supabase } from './supabase'
 
 export const DRIVER_TRIP_LOCATION_TASK = 'driver-trip-location'
+export const DRIVER_ONLINE_LOCATION_TASK = 'driver-online-location'
 const ACTIVE_TRIP_KEY = 'driver.active-trip-location'
+const ONLINE_DRIVER_KEY = 'driver.online-location'
 const LAST_PUBLISH_KEY = 'driver.last-location-publish'
 const native = Platform.OS === 'ios' || Platform.OS === 'android'
 
 export type BackgroundLocationStatus = 'started' | 'foreground-denied' | 'background-denied' | 'inactive' | 'unsupported'
+export type OnlineBackgroundLocationStatus = 'started' | 'background-denied' | 'unsupported'
 type DriverLocationInput = Parameters<typeof writeDriverLocation>[2]
 
 // Foreground callbacks, task deliveries, permission prompts and stops share one
@@ -198,6 +201,85 @@ export function drainLocationWrites(): Promise<void> {
 
 export function stopTripBackgroundLocation(expectedTripId?: string): Promise<void> {
   return serial(() => stopUpdates(expectedTripId))
+}
+
+async function stopOnlineUpdates(): Promise<void> {
+  // Invalidate task uploads even if stopping the OS service fails.
+  await authStorage.removeItem(ONLINE_DRIVER_KEY)
+  if (native && await Location.hasStartedLocationUpdatesAsync(DRIVER_ONLINE_LOCATION_TASK)) {
+    await Location.stopLocationUpdatesAsync(DRIVER_ONLINE_LOCATION_TASK)
+  }
+}
+
+/**
+ * While online with no trip, iOS suspends the JS presence heartbeat as soon as the app
+ * leaves the foreground, so the driver's pin froze until they reopened the app.
+ * This OS location service keeps publishing location-only writes (never online=true,
+ * so it cannot undo END) until the driver goes offline, signs out, or the server says offline.
+ */
+TaskManager.defineTask<{ locations: Location.LocationObject[] }>(DRIVER_ONLINE_LOCATION_TASK, async ({ data, error }) => {
+  if (error) { console.warn('[online location]', error.message); return }
+  try {
+    await serial(async () => {
+      const driverId = await authStorage.getItem(ONLINE_DRIVER_KEY)
+      if (!driverId || !supabase) { await stopOnlineUpdates(); return }
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
+      if (sessionData.session?.user.id !== driverId) { await stopOnlineUpdates(); return }
+      const status = await supabase.from('driver_status').select('online').eq('driver_id', driverId).maybeSingle()
+      // A temporary read failure is not proof the driver went offline.
+      if (!status.error && status.data && status.data.online === false) { await stopOnlineUpdates(); return }
+      const location = newestTripLocation(data?.locations)
+      if (!location) return
+      await publish(supabase, driverId, {
+        lat: location.coords.latitude,
+        lng: location.coords.longitude,
+        heading: location.coords.heading,
+        speed: location.coords.speed,
+      })
+    })
+  } catch (failure) {
+    console.warn('[online location]', failure instanceof Error ? failure.message : 'Location upload failed')
+  }
+})
+
+/**
+ * Keep the online pin moving while the app is in the background. Never prompts: it starts
+ * only when "Always" was already granted (the trip screen asks, after its disclosure).
+ */
+export function startOnlineBackgroundLocation(driverId: string): Promise<OnlineBackgroundLocationStatus> {
+  return serial<OnlineBackgroundLocationStatus>(async () => {
+    if (!native) return 'unsupported'
+    const background = await Location.getBackgroundPermissionsAsync()
+    if (background.status !== 'granted') { await stopOnlineUpdates(); return 'background-denied' }
+    await authStorage.setItem(ONLINE_DRIVER_KEY, driverId)
+    if (!await Location.hasStartedLocationUpdatesAsync(DRIVER_ONLINE_LOCATION_TASK)) {
+      await Location.startLocationUpdatesAsync(DRIVER_ONLINE_LOCATION_TASK, {
+        accuracy: Location.Accuracy.High,
+        activityType: Location.ActivityType.AutomotiveNavigation,
+        timeInterval: ONLINE_LOCATION_INTERVAL_MS,
+        distanceInterval: ONLINE_LOCATION_DISTANCE_M,
+        deferredUpdatesInterval: ONLINE_LOCATION_INTERVAL_MS,
+        pausesUpdatesAutomatically: false,
+        showsBackgroundLocationIndicator: true,
+        foregroundService: {
+          notificationTitle: 'Clemson Rides: you are online',
+          notificationBody: 'Sharing your location so nearby ride requests can reach you. Go offline to stop.',
+        },
+      })
+    }
+    return 'started'
+  })
+}
+
+export function stopOnlineBackgroundLocation(): Promise<void> {
+  return serial(() => stopOnlineUpdates())
+}
+
+/** Sign-out stops both services. */
+export async function stopAllBackgroundLocation(): Promise<void> {
+  await stopOnlineBackgroundLocation()
+  await stopTripBackgroundLocation()
 }
 
 /** Called on launch/resume even when the driver has not reopened the trip screen. */

@@ -114,7 +114,7 @@ export const PRIVACY_SECTIONS = [
     heading: 'Article 13. Device Location, Notifications, and Cards',
     paragraphs: [
       'The Rider app uses precise device location while the app is in use to set your pickup.',
-      'The Driver app uses precise device location while you are online, and in the background during an active trip only. Background location stops when the trip ends.',
+      'The Driver app uses precise device location while you are online or on a trip, including in the background. Location sharing stops when you go offline.',
       'The apps store a push notification token so Clemson Rides can send trip alerts to this phone. Payment cards are processed by Stripe.',
     ],
   },

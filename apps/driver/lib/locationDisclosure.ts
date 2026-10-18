@@ -7,12 +7,13 @@ export const BACKGROUND_LOCATION_DISCLOSURE = Object.freeze({
   title: 'Share your location during trips',
   body:
     'Clemson Rides Driver collects your location data to show your car to your rider, '
+    + 'match you with nearby ride requests while you are online, '
     + 'track trip progress and time your pickup and drop-off, even when the app is closed '
     + 'or not in use, such as while you navigate in Maps or your phone is locked.',
   points: Object.freeze([
-    'Collected: your precise location, only while you have an active trip.',
+    'Collected: your precise location, only while you are online or have an active trip.',
     'Used in the background so your rider can see you while you drive with another app open.',
-    'Location sharing stops when the trip ends. It is not used for ads.',
+    'Location sharing stops when you go offline. It is not used for ads.',
   ]),
   next: 'On the next screen, choose "Always".',
   accept: 'Continue',
