@@ -7,7 +7,7 @@ const read = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf
 test('native driver config declares active-trip background location on both platforms', () => {
   const { expo } = JSON.parse(read('apps/driver/app.json'))
   const [, location] = expo.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-location')
-  const always = 'Clemson Rides uses your location during an active trip, including while you use Maps or the phone is locked, so your rider can see your car and knows when you arrive. Location sharing stops when the trip ends.'
+  const always = 'Clemson Rides uses your location while you are online and during trips, including while you use Maps or the phone is locked, so nearby ride requests can reach you and your rider can see your car. Location sharing stops when you go offline.'
   assert.equal(location.locationAlwaysAndWhenInUsePermission, always)
   assert.equal(location.locationAlwaysPermission, always)
   assert.equal(location.locationWhenInUsePermission, 'Clemson Rides uses your location while you are online so riders can see your car on the map.')
@@ -42,7 +42,7 @@ test('trip screen starts active tracking, stops all terminal trips, and offers S
   assert.match(trip, /Set location to Always so your rider can still see you while you use Maps\./)
   assert.match(trip, /Linking\.openSettings\(\)/)
   assert.match(trip, /useDriverLocation\(/)
-  assert.match(read('apps/driver/lib/auth.tsx'), /onSignOut: stopTripBackgroundLocation/)
+  assert.match(read('apps/driver/lib/auth.tsx'), /onSignOut: stopAllBackgroundLocation/)
 })
 
 test('foreground and background reuse the dual-table publisher and persisted throttle', () => {

@@ -87,8 +87,8 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Clemson Rides uses your location while you are online so riders can see your car on the map.",
-          "locationAlwaysAndWhenInUsePermission": "Clemson Rides uses your location during an active trip, including while you use Maps or the phone is locked, so your rider can see your car and knows when you arrive. Location sharing stops when the trip ends.",
-          "locationAlwaysPermission": "Clemson Rides uses your location during an active trip, including while you use Maps or the phone is locked, so your rider can see your car and knows when you arrive. Location sharing stops when the trip ends.",
+          "locationAlwaysAndWhenInUsePermission": "Clemson Rides uses your location while you are online and during trips, including while you use Maps or the phone is locked, so nearby ride requests can reach you and your rider can see your car. Location sharing stops when you go offline.",
+          "locationAlwaysPermission": "Clemson Rides uses your location while you are online and during trips, including while you use Maps or the phone is locked, so nearby ride requests can reach you and your rider can see your car. Location sharing stops when you go offline.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true,

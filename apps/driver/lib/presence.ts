@@ -4,7 +4,7 @@ import { AppState } from 'react-native'
 import { createPresenceHeartbeat, type PresenceFix, type PresenceSnapshot } from 'rides-native/presenceHeartbeat'
 import { setDriverOnline } from 'rides-native/drivers'
 import { startLocationPublisher } from 'rides-native/tracking'
-import { drainLocationWrites, publishDriverLocation } from './backgroundLocation'
+import { drainLocationWrites, publishDriverLocation, startOnlineBackgroundLocation, stopOnlineBackgroundLocation } from './backgroundLocation'
 import { supabase } from './supabase'
 import { quiet } from '@/lib/softFail'
 
@@ -47,6 +47,18 @@ export const driverPresence = createPresenceHeartbeat({
     return () => { alive = false; stop?.(); setPublisherError(null) }
   },
   write: (driverId, fix, guards) => publishDriverLocation(supabase, driverId, fix, guards),
+})
+
+// Online (GO, or adopted from the server at launch) keeps an OS location service running so
+// the pin keeps moving while the app is in the background. END/sign-out/driver change stop it
+// synchronously into the location queue, ahead of drainLocationWrites and the offline write.
+let onlineBackgroundFor: string | null = null
+driverPresence.subscribe((snap) => {
+  const want = snap.intent === 'online' && snap.driverId ? snap.driverId : null
+  if (want === onlineBackgroundFor) return
+  onlineBackgroundFor = want
+  if (want) void startOnlineBackgroundLocation(want).catch(quiet('start online background location'))
+  else void stopOnlineBackgroundLocation().catch(quiet('stop online background location'))
 })
 
 // Coming back to the foreground restarts the publisher (iOS may have paused timers).

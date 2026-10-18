@@ -5,6 +5,10 @@ export const LOCATION_PUBLISH_MIN_INTERVAL_MS = 4000
 /** Republish the last fix on a clock during an active trip, even when the car is still. */
 export const TRIP_LOCATION_HEARTBEAT_MS = 12000
 
+/** Online with no trip: background pin updates, lighter than a trip but never frozen. */
+export const ONLINE_LOCATION_INTERVAL_MS = 15000
+export const ONLINE_LOCATION_DISTANCE_M = 20
+
 export function createTripLocationHeartbeat({
   publish,
   active,
