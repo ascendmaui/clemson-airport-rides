@@ -59,7 +59,7 @@ export const GALLERY_KINDS = [
 ]
 
 const PROFILE_COLS =
-  'id, role, is_admin, full_name, email, bio, avatar_url, student_verified_at, rating_avg, rating_count, phone, favorite_spots, music_taste, ride_style, profile_privacy, stripe_customer_id, stripe_default_pm_id, notification_prefs, billing_activated_at, stripe_card_brand, stripe_card_last4, gender_identity, women_only_matching'
+  'id, role, is_admin, full_name, email, bio, avatar_url, student_verified_at, rating_avg, rating_count, phone, favorite_spots, music_taste, ride_style, profile_privacy, stripe_customer_id, stripe_default_pm_id, notification_prefs, billing_activated_at, stripe_card_brand, stripe_card_last4, gender_identity, women_only_matching, years_experience'
 
 function withoutComfortFields(profile) {
   if (!profile) return profile
@@ -106,7 +106,7 @@ export function filterProfileByPrivacy(profile, { isOwner = false, isMatched = f
   return withoutComfortFields({ ...profile, _access: privacy === 'public' ? 'public' : 'matched' })
 }
 
-const OTHER_PROFILE_COLS = 'id, role, full_name, bio, avatar_url, student_verified_at, rating_avg, rating_count, favorite_spots, music_taste, ride_style, profile_privacy'
+const OTHER_PROFILE_COLS = 'id, role, full_name, bio, avatar_url, student_verified_at, rating_avg, rating_count, favorite_spots, music_taste, ride_style, profile_privacy, years_experience'
 const OTHER_PROFILE_FALLBACK = 'id, role, full_name, avatar_url, bio, rating_avg, rating_count'
 
 export async function fetchFullProfile(userId, { viewerId = null, assumeMatched = false } = {}) {

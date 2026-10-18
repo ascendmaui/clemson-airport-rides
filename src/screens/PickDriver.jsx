@@ -383,6 +383,9 @@ export function PickDriver({
                       {d.standing === 'watch' && (
                         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--orange)', marginTop: 2 }}>Low rating</div>
                       )}
+                      {lines.experienceLabel && (
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-secondary)', marginTop: 2 }}>{lines.experienceLabel}</div>
+                      )}
                       <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4 }}>
                         {d.vehicleLabel}{d.plate ? ` · ${d.plate}` : ''}
                       </div>
