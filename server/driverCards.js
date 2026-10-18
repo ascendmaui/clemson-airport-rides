@@ -1,6 +1,6 @@
 /**
  * Rider-facing driver cards. Service role reads past profile and vehicle RLS.
- * The response is an allowlist: first name, rating, and vehicle. No last name, email, phone, or Stripe ids.
+ * The response is an allowlist: first name, profile photo URL, rating, and vehicle. No last name, email, phone, or Stripe ids.
  */
 
 import { defaultDriverRank } from '../shared/driverOrder.js'
@@ -9,7 +9,7 @@ import { riderDriverFirstName } from '../shared/riderDriverPrivacy.js'
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const CARD_CAP = 40
 
-const PROFILE_CARD_COLUMNS = 'id, full_name, rating_avg, rating_count, standing'
+const PROFILE_CARD_COLUMNS = 'id, full_name, avatar_url, rating_avg, rating_count, standing'
 const VEHICLE_CARD_COLUMNS = 'driver_id, color, make, model, plate, tier, service_class'
 
 export function normalizeDriverCardIds(ids) {
@@ -25,10 +25,17 @@ export function normalizeDriverCardIds(ids) {
   return out
 }
 
+/** Only an https image URL is passed through; anything else falls back to initials. */
+export function publicAvatarUrl(raw) {
+  const url = typeof raw === 'string' ? raw.trim() : ''
+  return /^https:\/\/\S+$/i.test(url) ? url : null
+}
+
 function cardFrom(profile, vehicle, dispatchRank) {
   return {
     id: profile.id,
     first_name: riderDriverFirstName(profile.full_name, '') || null,
+    avatar_url: publicAvatarUrl(profile.avatar_url),
     rating_avg: profile.rating_avg ?? null,
     rating_count: profile.rating_count ?? 0,
     standing: profile.standing || null,

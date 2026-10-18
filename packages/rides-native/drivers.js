@@ -286,14 +286,18 @@ async function overlayDispatchRanks(supabase, parts) {
     })
     const rows = Array.isArray(data?.drivers) ? data.drivers : []
     const rankById = {}
+    const avatarById = {}
     for (const row of rows) {
       if (row?.id && Number.isInteger(row.dispatchRank)) rankById[row.id] = row.dispatchRank
+      if (row?.id && typeof row.avatar_url === 'string' && row.avatar_url) avatarById[row.id] = row.avatar_url
     }
+    // The card RPCs carry no photo, so the server card fills avatar_url for the picker.
     return {
       ...parts,
-      profiles: parts.profiles.map((profile) => (
-        rankById[profile.id] == null ? profile : { ...profile, dispatchRank: rankById[profile.id] }
-      )),
+      profiles: parts.profiles.map((profile) => {
+        const next = rankById[profile.id] == null ? profile : { ...profile, dispatchRank: rankById[profile.id] }
+        return !next.avatar_url && avatarById[profile.id] ? { ...next, avatar_url: avatarById[profile.id] } : next
+      }),
     }
   } catch {
     return parts
