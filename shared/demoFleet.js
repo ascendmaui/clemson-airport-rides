@@ -1,7 +1,7 @@
 /**
  * Demo map cars. Client markers only. They are not driver profiles, they are
  * not stored, and they never count toward availability, matching, ETA, or price.
- * Brooke is the only wedge-shaped demo car.
+ * Brooke is a Toyota Camry and uses the shared non-truck silhouette.
  */
 export const DEMO_HIDE_NEAR_METERS = 200
 
@@ -163,14 +163,14 @@ export const DEMO_FLEET = [
   {
     id: 'demo-brooke',
     firstName: 'Brooke',
-    make: 'Tesla',
-    model: 'Cybertruck',
-    vehicle: 'Tesla Cybertruck',
+    make: 'Toyota',
+    model: 'Camry',
+    vehicle: 'Toyota Camry',
     year: 2025,
-    body: 'wedge',
-    livery: 'wedge',
-    colorName: 'Silver',
-    label: 'Cybertruck',
+    body: 'suv',
+    livery: 'tiger',
+    colorName: 'Orange & Purple',
+    label: 'Orange & Purple Toyota Camry',
     photo: '/demo-drivers/12-brooke.webp',
     photoSmall: '/demo-drivers/12-brooke@128.webp',
   },

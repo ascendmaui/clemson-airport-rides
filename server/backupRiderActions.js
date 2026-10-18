@@ -7,6 +7,7 @@ import { readDriverPushToken } from './driverPushToken.js'
 import { unchangedOfferQuery } from '../shared/driverOrder.js'
 import { insertTripEvent } from './tripEvents.js'
 import { sendExpoPush } from './expoPush.js'
+import { insertDriverNotification } from './driverNotifications.js'
 import { settleFareHold } from './fareAuthorization.js'
 import { attemptCancelFeePayout } from './payouts.js'
 import { publicDriverCard } from './backupDriverDispatch.js'
@@ -45,11 +46,20 @@ async function pushToDriver(sb, driverId, { title, body, tripId, kind }) {
   if (!driverId) return
   const { token } = await readDriverPushToken(sb, driverId)
   if (!token) return
+  const data = { tripId, kind }
+  const recorded = await insertDriverNotification(sb, {
+    userId: driverId,
+    type: kind || 'trip_update',
+    title,
+    body,
+    data,
+  })
+  if (recorded.id) data.notificationId = recorded.id
   await sendExpoPush({
     to: token,
     title,
     body,
-    data: { tripId, kind },
+    data,
     channelId: 'ride-requests',
   })
 }
