@@ -1,6 +1,4 @@
 import { SiteIcon } from '../components/SiteIcon.jsx'
-import { useDemoBusyRoster } from '../lib/useDemoBusyRoster.js'
-import { busyRosterFor } from '../../packages/rides-native/busyRoster.js'
 import { useEffect, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { SkeletonDriverCard } from '../components/LoadingSkeleton'
@@ -15,7 +13,6 @@ import { STUDENT_DISCOUNT_LABEL } from '../../packages/rides-native/riderMoney.j
 import { pickupPoint } from '../../packages/rides-native/places.js'
 import {
   describeDriver,
-  fetchDriversByIds,
   canFavoriteDriver,
   fetchOnlineDrivers,
   filterDriversForFleet,
@@ -25,7 +22,6 @@ import {
   FAVORITE_PERSIST_ERROR,
   loadFavoriteDriverIds,
   OPEN_POOL_COPY,
-  PREFERRED_OFFLINE_COPY,
   saveFavoriteDriverIds,
   scheduleRedirectForRequestError,
   sortPreferredDrivers,
@@ -37,6 +33,10 @@ import { PREPAID_TIP_PRESETS_CENTS, formatTipDollars, parsePrepaidTipDollars } f
 import { paymentMethodRequiredError, riderPaymentMethodReady } from '../../shared/ridePaymentReady.js'
 import { saveRideRequestDraft } from '../lib/rideRequestDraft.js'
 import { webApplePaySetUp } from '../lib/applePayReady.js'
+
+/** Matching never offers riders their own car. Shown when the viewer is the online driver. */
+export const SELF_DRIVER_COPY =
+  'Riders can book you, but this account cannot book itself. To test a booking, sign in here with a different rider account while your driver app stays online.'
 
 const browserStorage = {
   async getItem(key) {
@@ -72,9 +72,10 @@ export function PickDriver({
   const { user } = useAuth()
   const student = useStudentStatus()
   const { runOrPrompt } = useRequireAuthForAction()
-  const demoBusyRoster = useDemoBusyRoster()
-  const busy = busyRosterFor({ enabled: demoBusyRoster })
   const [drivers, setDrivers] = useState([])
+  // True when the signed-in account is itself online as a driver. Matching never
+  // offers a rider their own car, so the list would otherwise look empty for no reason.
+  const [selfOnline, setSelfOnline] = useState(false)
   const [favoriteIds, setFavoriteIds] = useState([])
   const [favNote, setFavNote] = useState(null)
   const [error, setError] = useState(null)
@@ -105,12 +106,11 @@ export function PickDriver({
         ? loadFavoriteDriverIds(supabase, browserStorage, user.id)
         : Promise.resolve({ ids: [], note: null }),
     ])
-    const extraIds = fav.ids.filter((id) => !online.some((driver) => driver.id === id))
-    const extra = extraIds.length
-      ? await fetchDriversByIds(supabase, extraIds)
-      : { drivers: [], error: null }
+    // Only real, approved, online drivers are listed. Offline saved drivers and
+    // preview/demo cars are never shown as pickable cards.
+    setSelfOnline(Boolean(user?.id) && online.some((row) => row.id === user.id && row.online))
     const merged = sortPreferredDrivers(
-      filterDriversForFleet([...online, ...extra.drivers], tier, user?.id),
+      filterDriversForFleet(online.filter((row) => row.online && !row.isDemo), tier, user?.id),
       fav.ids,
       approachPickup,
     )
@@ -118,7 +118,7 @@ export function PickDriver({
     setSelected((current) => merged.find((row) => row.id === current?.id) || merged.find((row) => row.id === driver) || null)
     setFavoriteIds(fav.ids)
     setFavNote(fav.note)
-    setError(extra.error || err)
+    setError(err)
     setLoading(false)
   }
 
@@ -309,15 +309,22 @@ export function PickDriver({
         {loading && <SkeletonDriverCard count={3} />}
         {error && <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ margin: '8px 0' }} />}
         {!loading && !anyOnline && (
-          <div className="sheet" style={{ padding: 24, borderRadius: 20, textAlign: 'center', boxShadow: 'var(--shadow-pill)', marginBottom: 12 }}>
+          <div className="sheet" role="status" style={{ padding: 24, borderRadius: 20, textAlign: 'center', boxShadow: 'var(--shadow-pill)', marginBottom: 12 }}>
             <p style={{ fontWeight: 700, marginBottom: 8 }}>
-              {drivers.length ? 'Preferred drivers are offline' : 'No drivers available'}
+              {!user?.id ? 'Sign in to see drivers' : selfOnline ? 'You are online as a driver on this account' : 'No drivers online right now'}
             </p>
             <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
-              {drivers.length
-                ? PREFERRED_OFFLINE_COPY
-                : 'When a driver goes online in Driver mode, they show up here. A campus request stays in the open pool until someone accepts.'}
+              {!user?.id
+                ? 'Drivers near your pickup show here once you sign in.'
+                : selfOnline
+                  ? SELF_DRIVER_COPY
+                  : 'When a driver goes online, they show up here. You can also schedule a ride ahead.'}
             </p>
+            {user?.id && !selfOnline ? (
+              <button type="button" className="pressable" onClick={() => navigate('schedule')} style={{ marginTop: 10, fontWeight: 800, color: '#F56600', minHeight: 44 }}>
+                Schedule ahead
+              </button>
+            ) : null}
           </div>
         )}
 
@@ -421,29 +428,6 @@ export function PickDriver({
             })}
           </div>
         ))}
-        {/* Busy roster: display only; kept outside real driver sections. */}
-        {busy.length > 0 && (
-          <section aria-label="Busy now">
-            <h2 style={{ fontSize: 12, fontWeight: 800, color: 'var(--ink-secondary)', margin: '8px 4px' }}>BUSY NOW</h2>
-            {busy.map((driver) => {
-              const portrait = resolveDriverPortrait(driver)
-              return (
-                <div key={driver.id} aria-disabled="true" style={{ opacity: 0.55, border: '1.5px solid #aaa', borderRadius: 16, padding: 16, marginBottom: 10, background: 'var(--surface)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: portrait.color, color: '#fff', fontWeight: 800 }}>{portrait.initials}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700 }}>{driver.name}</div>
-                      <div style={{ fontSize: 12, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><SiteIcon name="star" size={12} /> {driver.rating} · {driver.tripCount.toLocaleString('en-US')} trips</div>
-                      <div style={{ fontSize: 13, marginTop: 4, color: 'var(--ink-secondary)' }}>{driver.vehicleLabel}</div>
-                    </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '5px 8px', background: driver.status === 'on_trip' ? '#f4dfcc' : '#e5e5e5', color: driver.status === 'on_trip' ? '#855023' : '#555' }}>{driver.statusLabel}</span>
-                  </div>
-                </div>
-              )
-            })}
-          </section>
-        )}
-        {/* End busy roster. */}
       </div>
 
       <div style={{ padding: '12px 20px calc(20px + var(--safe-bottom))' }}>

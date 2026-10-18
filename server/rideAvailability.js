@@ -51,9 +51,12 @@ function indexByDriver(rows) {
 
 /**
  * @param {object} sb
- * @param {{ scheduledFor?: string | Date | null, now?: Date, riderIsE2E?: boolean }} [options]
+ * @param {{ scheduledFor?: string | Date | null, now?: Date, riderIsE2E?: boolean, viewerId?: string | null }} [options]
+ * viewerId: the signed-in rider. Matching never offers a rider their own car
+ * (autoAssign and the picker drop it), so availability leaves it out too and
+ * reports viewerOnlineDriver instead of advertising a ride nobody can take.
  */
-export async function loadRideAvailability(sb, { scheduledFor = null, now = new Date(), riderIsE2E = false } = {}) {
+export async function loadRideAvailability(sb, { scheduledFor = null, now = new Date(), riderIsE2E = false, viewerId = null } = {}) {
   const clock = now instanceof Date ? now : new Date(now)
   const when = scheduledFor ? new Date(scheduledFor) : null
   const scheduled = Boolean(when && !Number.isNaN(when.getTime()) && when.getTime() > clock.getTime())
@@ -140,7 +143,9 @@ export async function loadRideAvailability(sb, { scheduledFor = null, now = new 
     }
   }
 
-  const drivers = approvedIds.map((id) => ({
+  const viewer = viewerId ? String(viewerId) : null
+  const viewerOnlineDriver = Boolean(viewer && approvedIds.includes(viewer) && online.has(viewer) && !busy.has(viewer))
+  const drivers = approvedIds.filter((id) => id !== viewer).map((id) => ({
     id,
     approved: true,
     suspended: false,
@@ -154,10 +159,11 @@ export async function loadRideAvailability(sb, { scheduledFor = null, now = new 
     mode: scheduled ? 'scheduled' : 'now',
     scheduledFor: scheduled ? when.toISOString() : null,
     tierIds,
+    viewerOnlineDriver,
   })
 }
 
-export function availabilityPayload({ mode, scheduledFor, tierIds, error = null }) {
+export function availabilityPayload({ mode, scheduledFor, tierIds, error = null, viewerOnlineDriver = false }) {
   const ids = (tierIds || []).filter((id) => isOfferedRideTier(id))
   const empty = ids.length === 0
   return {
@@ -182,6 +188,7 @@ export function availabilityPayload({ mode, scheduledFor, tierIds, error = null 
     schedulePath: 'schedule',
     pollSeconds: RIDE_OPTIONS_POLL_MS / 1000,
     scheduleDiscountPct: SCHEDULE_AHEAD_DISCOUNT_PCT,
+    viewerOnlineDriver: viewerOnlineDriver === true,
     error,
   }
 }

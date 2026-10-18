@@ -140,3 +140,21 @@ test('missing service class column does not treat tier comfort as Extra Comfort'
   const snapshot = await loadRideAvailability(sb, { now: NOW })
   assert.deepEqual(snapshot.availableTierIds, ['standard', 'wait', 'carpool'])
 })
+
+test('the signed-in rider is never counted as their own driver', async () => {
+  const sb = client({
+    applications: [{ profile_id: 'me', onboarding_status: 'approved' }],
+    vehicles: [{ driver_id: 'me', service_class: 'comfort', tier: 'comfort' }],
+    status: [{ driver_id: 'me', online: true }],
+    trips: [],
+  })
+  const self = await loadRideAvailability(sb, { now: NOW, viewerId: 'me' })
+  assert.deepEqual(self.availableTierIds, [])
+  assert.equal(self.viewerOnlineDriver, true)
+  const other = await loadRideAvailability(sb, { now: NOW, viewerId: 'rider' })
+  assert.deepEqual(other.availableTierIds, ['standard', 'wait', 'comfort', 'carpool'])
+  assert.equal(other.viewerOnlineDriver, false)
+  const guest = await loadRideAvailability(sb, { now: NOW })
+  assert.equal(guest.availableTierIds.length, 4)
+  assert.equal(guest.viewerOnlineDriver, false)
+})

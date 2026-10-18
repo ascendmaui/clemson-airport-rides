@@ -39,7 +39,7 @@ export default async function handler(req, res, deps = {}) {
     }
   }
   const when = scheduledForFrom(body, now)
-  const snapshot = await loadRideAvailability(sb, { scheduledFor: when, now, riderIsE2E: isE2ETestUser(user) })
+  const snapshot = await loadRideAvailability(sb, { scheduledFor: when, now, riderIsE2E: isE2ETestUser(user), viewerId: user?.id || null })
   if (snapshot.error && !snapshot.availableTierIds.length) {
     return json(res, 200, snapshot)
   }

@@ -156,8 +156,17 @@ test('listAssignableDrivers excludes busy ids even with online presence and pres
   assert.deepEqual(result.drivers.map((d) => d.id), [real])
 })
 
-test('both picker sources render busy cards separately without controls or participation in booking', () => {
-  for (const file of ['src/screens/PickDriver.jsx', 'apps/rider/app/pick-driver.tsx']) {
+test('the web picker never renders the demo busy roster or any preview driver card', () => {
+  const source = readFileSync(new URL('../src/screens/PickDriver.jsx', import.meta.url), 'utf8')
+  assert.doesNotMatch(source, /busyRoster|useDemoBusyRoster|BUSY NOW|Busy roster/)
+  assert.doesNotMatch(source, /fetchDriversByIds/)
+  assert.match(source, /online\.filter\(\(row\) => row\.online && !row\.isDemo\)/)
+  assert.match(source, /const anyOnline = drivers\.some/)
+  assert.match(source, /groupDriversForPicker\(/)
+})
+
+test('the native picker renders busy cards separately without controls or participation in booking', () => {
+  for (const file of ['apps/rider/app/pick-driver.tsx']) {
     const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
     const block = source.match(/\{\/\* Busy roster:[\s\S]*?\{\/\* End busy roster\. \*\/\}/)?.[0]
     assert.ok(block, file)
