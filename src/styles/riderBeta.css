@@ -1,0 +1,124 @@
+/*
+ * Clemson Rides iPhone beta card (Get the App and /download).
+ * The doubled .rb-card class outranks the shared marketing card, text, and button rules.
+ */
+html body .mkt .rb-card.rb-card {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 20px !important;
+  align-items: center;
+  justify-items: stretch !important;
+  border-top: 4px solid #F56600 !important;
+  border-radius: 20px !important;
+  background: #fff !important;
+  color: #141414 !important;
+  box-shadow: 0 8px 24px rgba(20, 20, 20, 0.08), 0 1px 3px rgba(20, 20, 20, 0.06) !important;
+  scroll-margin-top: 96px;
+}
+
+html body .mkt .rb-card.rb-card .rb-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+html body .mkt .rb-card.rb-card .rb-kicker {
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #522D80 !important;
+  color: #fff !important;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+html body .mkt .rb-card.rb-card h2 {
+  margin: 0;
+  color: #141414 !important;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.4px;
+}
+
+html body .mkt .rb-card.rb-card .rb-body {
+  margin: 0;
+  color: #3a3a3a !important;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+html body .mkt .rb-card.rb-card .rb-join {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 52px;
+  padding: 14px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  border-radius: 16px !important;
+  background: linear-gradient(135deg, #F56600 0%, #ff7a1a 100%) !important;
+  color: #fff !important;
+  font-size: 17px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(245, 102, 0, 0.32) !important;
+}
+
+html body .mkt .rb-card.rb-card .rb-join:focus-visible,
+html body .mkt .rb-card.rb-card .rb-testflight:focus-visible {
+  outline: 3px solid #522D80;
+  outline-offset: 3px;
+}
+
+html body .mkt .rb-card.rb-card .rb-testflight {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: #522D80 !important;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+html body .mkt .rb-card.rb-card .rb-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-self: center;
+  gap: 8px;
+  margin: 0;
+}
+
+html body .mkt .rb-card.rb-card .rb-qr img {
+  display: block;
+  width: 180px;
+  height: 180px;
+  border: 1px solid #e6e6e6;
+  border-radius: 12px;
+  background: #fff;
+}
+
+html body .mkt .rb-card.rb-card .rb-qr figcaption {
+  color: #555 !important;
+  font-size: 13px;
+}
+
+@media (min-width: 800px) {
+  html body .mkt .rb-card.rb-card {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 32px !important;
+  }
+
+  html body .mkt .rb-card.rb-card .rb-join {
+    width: auto;
+  }
+
+  html body .mkt .rb-card.rb-card .rb-qr img {
+    width: 220px;
+    height: 220px;
+  }
+}

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { MarketingChrome } from '../components/MarketingChrome'
 import { QrMark } from '../components/QrMark'
+import { RiderBetaInstall } from '../components/RiderBetaInstall'
 import {
   CLEMSON_ORANGE,
   CLEMSON_PURPLE,
@@ -72,13 +73,17 @@ export function AppDownloadPage({ appId }) {
         </p>
       </article>
       <div className="dl-grid">
-        <PlatformCode
-          href={offer.iosHref}
-          label="iPhone"
-          color={CLEMSON_PURPLE}
-          action={offer.iosHref ? 'Download on the App Store' : 'Coming soon'}
-          note={iosNote}
-        />
+        {appId === 'rider' && !offer.iosHref ? (
+          <RiderBetaInstall className="dl-card" />
+        ) : (
+          <PlatformCode
+            href={offer.iosHref}
+            label="iPhone"
+            color={CLEMSON_PURPLE}
+            action={offer.iosHref ? 'Download on the App Store' : 'Coming soon'}
+            note={iosNote}
+          />
+        )}
         <PlatformCode
           href={offer.androidHref}
           label="Android"
