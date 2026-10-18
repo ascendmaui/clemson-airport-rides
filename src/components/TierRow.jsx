@@ -1,77 +1,42 @@
 import { A11yBadge } from './A11yBadge.jsx'
 import { SiteIcon, rideTypeSiteIcon } from './SiteIcon.jsx'
 
+/**
+ * One ride type card. Clean card, upfront price on the right, obvious selected
+ * state (Clemson orange ring + check), purple accents for ETA and badges.
+ */
 export function TierRow({ tier, selected, onSelect }) {
+  const priced = Number.isFinite(tier.price)
   return (
     <button
       type="button"
-      className={`pressable tier-row-glass ${selected ? 'selected' : ''}`}
+      className={`pressable tier-card ${selected ? 'selected' : ''}`}
+      aria-pressed={Boolean(selected)}
       onClick={() => onSelect(tier)}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 14,
-        width: '100%',
-        padding: '14px 12px',
-        borderRadius: 14,
-        background: selected
-          ? 'linear-gradient(135deg, rgba(245,102,0,0.12), rgba(255,255,255,0.55))'
-          : 'transparent',
-        border: selected ? '1.5px solid rgba(245,102,0,0.28)' : '1.5px solid transparent',
-        textAlign: 'left',
-        boxShadow: selected ? 'var(--shadow-pill)' : 'none',
-      }}
     >
-      <div
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: 12,
-          background: 'rgba(255,255,255,0.55)',
-          border: '1px solid rgba(255,255,255,0.45)',
-          display: 'grid',
-          placeItems: 'center',
-          fontSize: 24,
-          boxShadow: selected ? 'var(--shadow-pill)' : 'none',
-          transition: 'box-shadow 200ms var(--ease-soft), transform 200ms var(--ease-spring)',
-          transform: selected ? 'scale(1.04)' : 'scale(1)',
-        }}
-      >
-        <SiteIcon name={rideTypeSiteIcon(tier.id)} size={24} />
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontWeight: 600, fontSize: 16 }}>{tier.name}</span>
+      <span className="tier-card__icon" aria-hidden="true">
+        <SiteIcon name={rideTypeSiteIcon(tier.id)} size={26} />
+      </span>
+      <span className="tier-card__body">
+        <span className="tier-card__title">
+          <span className="tier-card__name">{tier.name}</span>
           {tier.badge && (
             <A11yBadge variant="purple">
               {tier.badge}
             </A11yBadge>
           )}
-        </div>
-        <div style={{ color: 'var(--ink-secondary)', fontSize: 13, marginTop: 2 }}>
-          {`${tier.eta} · ${tier.meta}`}
-        </div>
-      </div>
-      <div data-testid={`tier-price-${tier.id}`} style={{ fontWeight: 600, fontSize: 17, fontVariantNumeric: 'tabular-nums' }}>
-        {Number.isFinite(tier.price) ? `$${tier.price.toFixed(2)}` : '—'}
-      </div>
-      {selected && (
-        <div
-          style={{
-            width: 22,
-            height: 22,
-            borderRadius: '50%',
-            background: 'var(--orange)',
-            color: '#fff',
-            display: 'grid',
-            placeItems: 'center',
-            fontSize: 12,
-            fontWeight: 700,
-          }}
-        >
-          <SiteIcon name="check" size={14} />
-        </div>
-      )}
+        </span>
+        <span className="tier-card__meta">
+          <span className="tier-card__eta">{tier.eta}</span>
+          {tier.meta ? <span> · {tier.meta}</span> : null}
+        </span>
+      </span>
+      <span className="tier-card__price" data-testid={`tier-price-${tier.id}`}>
+        {priced ? `$${tier.price.toFixed(2)}` : '—'}
+      </span>
+      <span className="tier-card__check" aria-hidden="true">
+        {selected ? <SiteIcon name="check" size={14} /> : null}
+      </span>
     </button>
   )
 }
