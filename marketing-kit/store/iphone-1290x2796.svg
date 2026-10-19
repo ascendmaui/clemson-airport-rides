@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  App Store screenshot template, 1290×2796.
+  UI labels are product copy. No sample rider, fare quote, rating, or testimonial.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1290" height="2796" viewBox="0 0 1290 2796">
+  <rect width="1290" height="2796" fill="#F7F4F0"/>
+  <circle cx="80" cy="40" r="280" fill="#F56600" opacity="0.12"/>
+  <circle cx="1240" cy="200" r="220" fill="#522D80" opacity="0.08"/>
+  <svg x="72" y="80" width="112" height="112" viewBox="0 0 1024 1024">
+    <defs>
+      <clipPath id="tile">
+        <rect width="1024" height="1024" rx="226"/>
+      </clipPath>
+    </defs>
+    <g clip-path="url(#tile)">
+      <rect width="1024" height="1024" fill="#F56600"/>
+      <circle cx="1040" cy="1080" r="560" fill="#522D80" opacity="0.48"/>
+      <circle cx="160" cy="20" r="380" fill="#FFFFFF" opacity="0.16"/>
+      <g transform="translate(512 560) scale(0.9) translate(-512 -520)">
+        <path fill="#FFFFFF" fill-rule="evenodd" d="M 342.00 593.86 A 224.00 224.00 0 1 1 682.00 593.86 L 534.14 766.20 Q 512.00 800.00 489.86 766.20 Z M 432.00 440.00 A 80.00 80.00 0 1 1 592.00 440.02 A 80.00 80.00 0 1 1 432.00 440.00 Z"/>
+      </g>
+    </g>
+  </svg>
+  <text x="204" y="148" fill="#522D80" font-family="Inter, sans-serif" font-size="36" font-weight="700">Clemson RIDES</text>
+  <text x="72" y="292" fill="#0B1220" font-family="Inter, sans-serif" font-size="68" font-weight="700" letter-spacing="-1.2">Four ways to ride</text>
+  <text x="72" y="356" fill="#5C6570" font-family="Inter, sans-serif" font-size="28" font-weight="500">The quote on the booking screen is the price before you confirm.</text>
+
+  <rect x="96" y="430" width="1098" height="2260" rx="72" fill="#1A1033"/>
+  <rect x="116" y="450" width="1058" height="2220" rx="56" fill="#FFFFFF"/>
+  <text x="164" y="524" fill="#0B1220" font-family="Inter, sans-serif" font-size="22" font-weight="700">9:41</text>
+  <text x="164" y="604" fill="#522D80" font-family="Inter, sans-serif" font-size="40" font-weight="700">Book a ride</text>
+
+  <rect x="164" y="660" width="962" height="196" rx="22" fill="#F7F4F0"/>
+  <rect x="164" y="660" width="10" height="196" rx="5" fill="#F56600"/>
+  <text x="204" y="736" fill="#0B1220" font-family="Inter, sans-serif" font-size="32" font-weight="700">Standard</text>
+  <text x="204" y="788" fill="#5C6570" font-family="Inter, sans-serif" font-size="24" font-weight="500">The base ride. The fare on screen is the price before you confirm.</text>
+
+  <rect x="164" y="876" width="962" height="196" rx="22" fill="#F7F4F0"/>
+  <rect x="164" y="876" width="10" height="196" rx="5" fill="#F56600"/>
+  <text x="204" y="952" fill="#0B1220" font-family="Inter, sans-serif" font-size="32" font-weight="700">Wait &amp; Save</text>
+  <text x="204" y="1004" fill="#5C6570" font-family="Inter, sans-serif" font-size="24" font-weight="500">Shown when a driver can serve it. The student discount does not apply.</text>
+
+  <rect x="164" y="1092" width="962" height="196" rx="22" fill="#F7F4F0"/>
+  <rect x="164" y="1092" width="10" height="196" rx="5" fill="#522D80"/>
+  <text x="204" y="1168" fill="#0B1220" font-family="Inter, sans-serif" font-size="32" font-weight="700">Extra Comfort</text>
+  <text x="204" y="1220" fill="#5C6570" font-family="Inter, sans-serif" font-size="24" font-weight="500">Nicer cars. Only a comfort service class vehicle can take this ride.</text>
+
+  <rect x="164" y="1308" width="962" height="220" rx="22" fill="#F7F4F0"/>
+  <rect x="164" y="1308" width="10" height="220" rx="5" fill="#522D80"/>
+  <text x="204" y="1384" fill="#0B1220" font-family="Inter, sans-serif" font-size="32" font-weight="700">Carpool</text>
+  <text x="204" y="1436" fill="#5C6570" font-family="Inter, sans-serif" font-size="24" font-weight="500">50% of the Standard fare per seat when 3 or 4 riders split the trip.</text>
+
+  <rect x="164" y="1572" width="962" height="92" rx="46" fill="#F56600"/>
+  <text x="645" y="1630" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="28" font-weight="700" text-anchor="middle">Book a ride</text>
+
+  <text x="164" y="1736" fill="#5C6570" font-family="Inter, sans-serif" font-size="22" font-weight="500">10% off Standard with a confirmed @clemson.edu or @g.clemson.edu email.</text>
+  <text x="164" y="1840" fill="#BA4700" font-family="Inter, sans-serif" font-size="18" font-weight="700" letter-spacing="1.4">SCHEDULED AIRPORTS</text>
+  <text x="164" y="1896" fill="#0B1220" font-family="Inter, sans-serif" font-size="26" font-weight="600">Greenville-Spartanburg (GSP) · $75 flat</text>
+  <text x="164" y="1944" fill="#0B1220" font-family="Inter, sans-serif" font-size="26" font-weight="600">Charlotte Douglas (CLT) · $175 flat</text>
+  <text x="164" y="2004" fill="#5C6570" font-family="Inter, sans-serif" font-size="22" font-weight="500">Scheduling does not charge the card.</text>
+  <text x="164" y="2088" fill="#522D80" font-family="Inter, sans-serif" font-size="22" font-weight="600">clemsonrides.com</text>
+</svg>
