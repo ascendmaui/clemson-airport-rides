@@ -55,10 +55,10 @@ test('store listings stay unpublished until real URLs exist', () => {
   assert.equal(APP_DOWNLOADS[1].testflightHref, undefined)
   for (const app of APP_DOWNLOADS) {
     assert.equal(app.iosNote, 'iPhone: coming soon to the App Store.')
-    assert.match(app.androidNote, /not live yet/)
+    assert.equal(app.androidNote, undefined)
     assert.match(app.blurb, /iPhone: coming soon to the App Store\./)
-    assert.doesNotMatch(`${app.blurb} ${app.iosNote} ${app.androidNote}`, /testflight|beta/i)
-    assert.match(app.blurb, /Play Store listing is not live yet/)
+    assert.match(app.blurb, /clemsonrides\.com/)
+    assert.doesNotMatch(`${app.blurb} ${app.iosNote}`, /testflight|beta|android|play store|google play|\bapk\b/i)
     const targets = `${app.href} ${app.iosHref} ${app.androidHref}`
     assert.doesNotMatch(targets, /testflight/i)
     assert.doesNotMatch(targets, EXPO_LINK)

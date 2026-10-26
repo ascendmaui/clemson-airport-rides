@@ -1,7 +1,7 @@
 /**
  * Demo map cars. Client markers only. They are not driver profiles, they are
  * not stored, and they never count toward availability, matching, ETA, or price.
- * Brooke is the only wedge-shaped demo car.
+ * Brooke drives a 2022 Honda CR-V.
  */
 export const DEMO_HIDE_NEAR_METERS = 200
 
@@ -163,14 +163,14 @@ export const DEMO_FLEET = [
   {
     id: 'demo-brooke',
     firstName: 'Brooke',
-    make: 'Tesla',
-    model: 'Cybertruck',
-    vehicle: 'Tesla Cybertruck',
-    year: 2025,
-    body: 'wedge',
-    livery: 'wedge',
-    colorName: 'Silver',
-    label: 'Cybertruck',
+    make: 'Honda',
+    model: 'CR-V',
+    vehicle: '2022 Honda CR-V',
+    year: 2022,
+    body: 'suv',
+    livery: 'tiger',
+    colorName: 'Orange & Purple',
+    label: '2022 Honda CR-V',
     photo: '/demo-drivers/12-brooke.webp',
     photoSmall: '/demo-drivers/12-brooke@128.webp',
   },

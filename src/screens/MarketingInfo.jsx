@@ -327,7 +327,6 @@ export function GetTheAppPage() {
           <h2>{app.product}</h2>
           <p>{app.blurb}</p>
           <p>{app.iosNote}</p>
-          <p>{app.androidNote}</p>
           <QrMark value={installOffer(app.id).pageUrl} label={`QR code for the ${app.product} install page`} />
           <a className="mkt-text pressable" href={installOffer(app.id).pagePath}>
             Phone install page

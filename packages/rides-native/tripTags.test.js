@@ -139,7 +139,7 @@ test('status advances one step and deposits summarize from payment rows', () => 
   assert.equal(summary.depositOpenCents, 0)
   assert.equal(summary.driverNetCents, 3200)
   assert.equal(summary.todayNetCents, 3200)
-  assert.match(summary.lines[0].line, /Deposit \$10\.00 paid/)
+  assert.match(summary.lines[0].line, /Already paid \$10\.00/)
 })
 
 test('carpool shares replace the listed fare and keep the 25 percent deposit', () => {
