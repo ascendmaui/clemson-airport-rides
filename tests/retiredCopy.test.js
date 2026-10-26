@@ -21,11 +21,7 @@ const NEEDLE = new RegExp(
   ].join('|'),
   'i',
 )
-const CONTENT_ALLOW = new Set([
-  'shared/demoFleet.js',
-  'docs/demo-drivers.md',
-  'public/demo-drivers/manifest.json',
-])
+const CONTENT_ALLOW = new Set()
 const NAME_ALLOW = new Set([
   'supabase/migrations/20261004220000_' + 'te' + 'sla_' + 'model' + '_3_fleet.sql',
 ])

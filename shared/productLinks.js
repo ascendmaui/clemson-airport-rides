@@ -118,10 +118,7 @@ export const APP_DOWNLOADS = [
     iosNote: publishedStoreUrl(RIDER_IOS_STORE_URL)
       ? 'App Store'
       : 'iPhone: coming soon to the App Store.',
-    androidNote: publishedStoreUrl(RIDER_ANDROID_STORE_URL)
-      ? 'Google Play'
-      : 'The Play Store listing is not live yet. This opens booking on clemsonrides.com.',
-    blurb: 'iPhone: coming soon to the App Store. Android: book on clemsonrides.com while the Play Store listing is not live yet.',
+    blurb: 'iPhone: coming soon to the App Store. Until then, book on clemsonrides.com.',
   },
   {
     id: 'driver',
@@ -133,10 +130,7 @@ export const APP_DOWNLOADS = [
     iosNote: publishedStoreUrl(DRIVER_IOS_STORE_URL)
       ? 'App Store'
       : 'iPhone: coming soon to the App Store.',
-    androidNote: publishedStoreUrl(DRIVER_ANDROID_STORE_URL)
-      ? 'Google Play'
-      : 'The Play Store listing is not live yet. This opens the driver web app on clemsonrides.com.',
-    blurb: 'iPhone: coming soon to the App Store. Android: open the driver desk on clemsonrides.com while the Play Store listing is not live yet.',
+    blurb: 'iPhone: coming soon to the App Store. Until then, open the driver desk on clemsonrides.com.',
   },
 ]
 
