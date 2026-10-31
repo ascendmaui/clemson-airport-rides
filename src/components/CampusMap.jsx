@@ -573,9 +573,9 @@ export function CampusMap({
           tigerZones={showHeat ? tigerZones : []}
           message={MAP_UNAVAILABLE}
         />
-        <PreviewFleetMotion enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
-        <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
-        {showSimulatedFleet ? <FleetBadge /> : null}
+        
+        
+        
       </div>
     )
   }
@@ -591,9 +591,9 @@ export function CampusMap({
     return (
       <div style={fallbackWrap}>
         <FallbackMap wrapStyle={wrapStyle} badge={gameDayLabel} route={route} tigerZones={showHeat ? tigerZones : []} message="Loading map…" />
-        <PreviewFleetMotion enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
-        <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
-        {showSimulatedFleet ? <FleetBadge /> : null}
+        
+        
+        
       </div>
     )
   }
@@ -739,9 +739,9 @@ export function CampusMap({
           </OverlayView>
         ))}
       </GoogleMap>
-      <GoogleFleetMotion map={mapReady} enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
-      <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
-      {showSimulatedFleet ? <FleetBadge /> : null}
+      
+      
+      
       {gameDayLabel ? (
         <div style={{
           position: 'absolute',
