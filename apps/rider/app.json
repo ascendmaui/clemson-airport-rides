@@ -16,7 +16,7 @@
         "tinted": "./assets/images/ios-icon-tinted.png"
       },
       "usesAppleSignIn": true,
-      "buildNumber": "19",
+      "buildNumber": "50",
       "bundleIdentifier": "com.ascendmaui.clemsonrides.rider",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,

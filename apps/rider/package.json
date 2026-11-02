@@ -56,5 +56,14 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "postinstall": "patch-package"
+  },
+  "expo": {
+    "autolinking": {
+      "ios": {
+        "exclude": [
+          "@expo/ui"
+        ]
+      }
+    }
   }
 }
