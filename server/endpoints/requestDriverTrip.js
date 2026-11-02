@@ -60,6 +60,7 @@ export default async function handler(req, res, deps = {}) {
   const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
   const runEnsureProfile = deps.ensureProfile || ensureProfile
+  const now = deps.now instanceof Date ? deps.now : new Date()
 
   const { body, error: pe } = parseBody(req)
   if (pe) return json(res, 400, { error: pe })
@@ -106,7 +107,7 @@ export default async function handler(req, res, deps = {}) {
 
   let offerDriverId = driverId
   let assignQueue = null
-  const prefs = await loadRiderMatchPreferences(sb, user.id)
+  const prefs = await loadRiderMatchPreferences(sb, user.id, now)
   if (autoAssign) {
     const ordered = await listAssignableDrivers(sb, {
       tier,
@@ -156,7 +157,7 @@ export default async function handler(req, res, deps = {}) {
     }
   }
 
-  const when = new Date()
+  const when = now
   let gameDayMultiplier = null
   try {
     const game = await loadGameDayMultiplier(sb, when)
