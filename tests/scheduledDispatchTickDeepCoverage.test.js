@@ -8,6 +8,7 @@ import {
   publicDriverCard,
   runScheduledDispatchTick,
 } from '../server/backupDriverDispatch.js'
+import { cancelBackupRide, switchBackupDriver } from '../server/backupRiderActions.js'
 import scheduledDispatchTickHandler from '../server/endpoints/scheduledDispatchTick.js'
 import { releaseScheduledRides } from '../server/releaseScheduledRides.js'
 import { backupBookingMetadata } from '../shared/backupDriverQueue.js'
@@ -794,6 +795,266 @@ test('scheduledDispatchTickHandler: enforces HTTP methods, service role availabi
   )
   assert.equal(resBlocked.statusCode, 403)
   assert.match(parseJson(resBlocked).error, /Cron endpoints are disabled on this host/)
+})
+
+test('runScheduledDispatchTick & scheduledDispatchTickHandler: dry-run mode, limit clamping, and database error handling', async () => {
+  const pickupAt = '2026-10-10T15:30:00.000Z'
+  const now = new Date('2026-10-10T15:12:00.000Z')
+  const trip = {
+    id: 'trip_tick_dry',
+    status: 'scheduled',
+    rider_id: 'rider_dry',
+    pickup_at: pickupAt,
+    pickup_lat: 34.6784,
+    pickup_lng: -82.8397,
+    metadata: {
+      backup_queue: {
+        ...backupBookingMetadata(1000, now),
+        primaryDriverId: 'driver_p_dry',
+        confirmState: null,
+        generation: 1,
+        events: [],
+      },
+    },
+  }
+
+  // 1. dryRun = true: scans but skips mutations
+  const sbDry = createMatchingSupabase({
+    trips: [trip],
+    driver_status: [{ driver_id: 'driver_p_dry', online: true }],
+  })
+  const summaryDry = await runScheduledDispatchTick(sbDry, { now, dryRun: true })
+  assert.equal(summaryDry.scanned, 1)
+  assert.equal(summaryDry.skipped, 1)
+  assert.equal(summaryDry.opened, 0)
+  assert.equal(sbDry._tables.trips[0].metadata.backup_queue.confirmState, null)
+
+  // 2. scheduledDispatchTickHandler with ?dry_run=1 returns dryRun summary
+  const reqDry = {
+    method: 'POST',
+    url: '/api/scheduled-dispatch-tick?dry_run=1',
+    headers: { authorization: 'Bearer test_cron_sec' },
+  }
+  const resDry = mockRes()
+  await scheduledDispatchTickHandler(reqDry, resDry, {
+    sb: sbDry,
+    cronSecret: 'test_cron_sec',
+    env: { CRON_SECRET: 'test_cron_sec' },
+    now,
+  })
+  assert.equal(resDry.statusCode, 200)
+  const jsonDry = parseJson(resDry)
+  assert.equal(jsonDry.ok, true)
+  assert.equal(jsonDry.dryRun, true)
+  assert.equal(jsonDry.scanned, 1)
+  assert.equal(jsonDry.skipped, 1)
+
+  // 3. Database select failure in runScheduledDispatchTick throws and handler returns 500
+  const sbErr = {
+    from: () => ({
+      select: () => ({
+        in: () => ({
+          not: () => ({
+            limit: async () => ({ data: null, error: { message: 'Database connection failed' } }),
+          }),
+        }),
+      }),
+    }),
+  }
+  const reqPost = {
+    method: 'POST',
+    url: '/api/scheduled-dispatch-tick',
+    headers: { authorization: 'Bearer test_cron_sec' },
+  }
+  const resErr = mockRes()
+  await scheduledDispatchTickHandler(reqPost, resErr, {
+    sb: sbErr,
+    cronSecret: 'test_cron_sec',
+    env: { CRON_SECRET: 'test_cron_sec' },
+    now,
+  })
+  assert.equal(resErr.statusCode, 500)
+  assert.equal(parseJson(resErr).error, 'Database connection failed')
+})
+
+test('runScheduledDispatchTick: detects backup driver offline presence during window_open and updates queue metadata', async () => {
+  const now = new Date('2026-10-10T15:12:00.000Z')
+  const trip = {
+    id: 'trip_offline_backup',
+    status: 'scheduled',
+    rider_id: 'rider_off',
+    pickup_at: '2026-10-10T15:30:00.000Z',
+    pickup_lat: 34.6784,
+    pickup_lng: -82.8397,
+    metadata: {
+      backup_queue: {
+        ...backupBookingMetadata(1000, now),
+        primaryDriverId: 'driver_prim',
+        backupDriverId: 'driver_sec_offline',
+        confirmState: 'window_open',
+        windowOpensAt: '2026-10-10T15:10:00.000Z',
+        windowClosesAt: '2026-10-10T15:20:00.000Z',
+        generation: 1,
+        events: [],
+      },
+    },
+  }
+
+  const sb = createMatchingSupabase({
+    trips: [trip],
+    driver_status: [
+      { driver_id: 'driver_prim', online: true },
+      { driver_id: 'driver_sec_offline', online: false },
+    ],
+  })
+
+  const summary = await runScheduledDispatchTick(sb, { now })
+  assert.equal(summary.scanned, 1)
+
+  const updatedQueue = sb._tables.trips[0].metadata.backup_queue
+  assert.equal(updatedQueue.backupOfflineDuringWindow, true)
+  assert.equal(updatedQueue.backupStoodBy, false)
+})
+
+test('cancelBackupRide: validates authorization, status restrictions, failure on fee capture, and zero-fee hold release', async () => {
+  const now = new Date('2026-10-10T15:00:00.000Z')
+  const baseTrip = {
+    id: 'trip_cancel_bounds',
+    rider_id: 'rider_owner',
+    status: 'scheduled',
+    fare_cents: 8000,
+    metadata: {
+      kind: 'scheduled',
+      backup_queue: {
+        ...backupBookingMetadata(1000, now),
+        primaryDriverId: 'driver_p1',
+        backupDriverId: 'driver_b1',
+        bonusCents: 1000,
+        generation: 2,
+        events: [],
+      },
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_hold_cancel',
+        authorizationCents: 9600,
+      },
+    },
+  }
+
+  // 1. Trip not found -> 404
+  const sbEmpty = createMatchingSupabase({ trips: [] })
+  const resNotFound = await cancelBackupRide(sbEmpty, { tripId: 'trip_missing', riderId: 'rider_owner', now })
+  assert.equal(resNotFound.ok, false)
+  assert.equal(resNotFound.status, 404)
+  assert.equal(resNotFound.error, 'Scheduled ride not found')
+
+  // 2. Cross-tenant isolation: different riderId -> 403
+  const sbOwner = createMatchingSupabase({ trips: [baseTrip] })
+  const resForbidden = await cancelBackupRide(sbOwner, { tripId: 'trip_cancel_bounds', riderId: 'rider_stranger', now })
+  assert.equal(resForbidden.ok, false)
+  assert.equal(resForbidden.status, 403)
+  assert.equal(resForbidden.error, 'This ride is on another account')
+
+  // 3. Status not cancelable (e.g. 'completed') -> 409
+  const completedTrip = { ...baseTrip, id: 'trip_completed', status: 'completed' }
+  const sbComp = createMatchingSupabase({ trips: [completedTrip] })
+  const resComp = await cancelBackupRide(sbComp, { tripId: 'trip_completed', riderId: 'rider_owner', now })
+  assert.equal(resComp.ok, false)
+  assert.equal(resComp.status, 409)
+  assert.equal(resComp.error, 'This ride can no longer be canceled')
+
+  // 4. Failure when capturing cancel fee (e.g. card declined) -> returns 402 capture_failed and leaves ride scheduled
+  const settleDeclined = async () => ({ ok: false, error: 'Card declined' })
+  const sbFail = createMatchingSupabase({ trips: [baseTrip] })
+  const resFail = await cancelBackupRide(sbFail, {
+    tripId: 'trip_cancel_bounds',
+    riderId: 'rider_owner',
+    now,
+    settle: settleDeclined,
+  })
+  assert.equal(resFail.ok, false)
+  assert.equal(resFail.status, 402)
+  assert.equal(resFail.code, 'capture_failed')
+  assert.match(resFail.error, /Could not capture the cancellation fee/)
+  assert.equal(sbFail._tables.trips[0].status, 'scheduled')
+
+  // 5. Zero-fee hold release: when plan.cents === 0 and fare_authorization requires capture, calls settle with finalFareCents: 0
+  let settledFinalFare = null
+  const settleZero = async ({ finalFareCents }) => {
+    settledFinalFare = finalFareCents
+    return { ok: true, amountCents: 0, method: 'none' }
+  }
+  const unacceptedTrip = {
+    ...baseTrip,
+    id: 'trip_unaccepted',
+    metadata: {
+      ...baseTrip.metadata,
+      backup_queue: {
+        ...backupBookingMetadata(1000, now),
+        primaryDriverId: null,
+        backupDriverId: null,
+      },
+    },
+  }
+  const sbZero = createMatchingSupabase({ trips: [unacceptedTrip] })
+  const resZero = await cancelBackupRide(sbZero, {
+    tripId: 'trip_unaccepted',
+    riderId: 'rider_owner',
+    now,
+    settle: settleZero,
+  })
+  assert.equal(resZero.ok, true)
+  assert.equal(resZero.action, 'cancel')
+  assert.equal(settledFinalFare, 0)
+  assert.equal(sbZero._tables.trips[0].status, 'canceled')
+})
+
+test('switchBackupDriver: validates rider ownership, open statuses, and unassigned backup guards', async () => {
+  const now = new Date('2026-10-10T15:00:00.000Z')
+  const baseTrip = {
+    id: 'trip_switch_guards',
+    rider_id: 'rider_switch_owner',
+    status: 'scheduled',
+    fare_cents: 5000,
+    metadata: {
+      backup_queue: {
+        ...backupBookingMetadata(1000, now),
+        primaryDriverId: 'driver_p1',
+        backupDriverId: null,
+        generation: 1,
+        events: [],
+      },
+    },
+  }
+
+  // 1. Trip not found -> 404
+  const sbEmpty = createMatchingSupabase({ trips: [] })
+  const resNotFound = await switchBackupDriver(sbEmpty, { tripId: 'trip_missing', riderId: 'rider_switch_owner', now })
+  assert.equal(resNotFound.ok, false)
+  assert.equal(resNotFound.status, 404)
+
+  // 2. Cross-tenant isolation -> 403
+  const sbOwner = createMatchingSupabase({ trips: [baseTrip] })
+  const resForbidden = await switchBackupDriver(sbOwner, { tripId: 'trip_switch_guards', riderId: 'rider_alien', now })
+  assert.equal(resForbidden.ok, false)
+  assert.equal(resForbidden.status, 403)
+  assert.equal(resForbidden.error, 'This ride is on another account')
+
+  // 3. Non-open status (e.g. 'completed') -> 409
+  const completedTrip = { ...baseTrip, id: 'trip_switch_comp', status: 'completed' }
+  const sbComp = createMatchingSupabase({ trips: [completedTrip] })
+  const resComp = await switchBackupDriver(sbComp, { tripId: 'trip_switch_comp', riderId: 'rider_switch_owner', now })
+  assert.equal(resComp.ok, false)
+  assert.equal(resComp.status, 409)
+  assert.equal(resComp.error, 'This ride can no longer be switched')
+
+  // 4. Backup not filled yet -> 409 with code 'backup_not_filled'
+  const sbNoBackup = createMatchingSupabase({ trips: [baseTrip] })
+  const resNoBackup = await switchBackupDriver(sbNoBackup, { tripId: 'trip_switch_guards', riderId: 'rider_switch_owner', now })
+  assert.equal(resNoBackup.ok, false)
+  assert.equal(resNoBackup.status, 409)
+  assert.equal(resNoBackup.code, 'backup_not_filled')
+  assert.equal(resNoBackup.error, 'A backup driver has not accepted yet.')
 })
 
 
