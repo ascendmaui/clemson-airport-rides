@@ -420,6 +420,10 @@ async function chargeOverage(stripe, {
   tripId,
   riderId,
 }) {
+  const chargeAmount = Math.max(0, Math.round(Number(amountCents) || 0))
+  if (chargeAmount <= 0) {
+    return { ok: true, amountCents: 0, zero: true, paymentIntent: null }
+  }
   const methods = [paymentMethodId, ...(backupPaymentMethodIds || [])].filter(Boolean)
   const seen = []
   let last = null
@@ -430,7 +434,7 @@ async function chargeOverage(stripe, {
     for (const suffix of suffixes) {
       try {
         const pi = await stripe.paymentIntents.create({
-          amount: amountCents,
+          amount: chargeAmount,
           currency: 'usd',
           customer: customerId,
           payment_method: pmId,

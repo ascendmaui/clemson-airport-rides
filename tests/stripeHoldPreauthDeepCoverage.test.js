@@ -1166,4 +1166,240 @@ test('settleSwitchHold: deep coverage for cancel failure, create failure, status
   assert.equal(sb4._payments[0].status, 'canceled')
 })
 
+test('settleFareHold: chargeOverage zero-amount guard handles zero or negative replacement fare safely', async () => {
+  // When capture fails on a trip with zero or negative final fare (e.g. waived or refunded in flight),
+  // replacement charge does not create a 0-cent or negative Stripe charge.
+  let createCalled = false
+  const stripe = {
+    paymentIntents: {
+      retrieve: async (id) => ({ id, status: 'requires_capture', amount: 2000 }),
+      capture: async () => {
+        const err = new Error('Hold expired')
+        err.code = 'expired_card'
+        throw err
+      },
+      cancel: async () => ({ status: 'canceled' }),
+      create: async () => {
+        createCalled = true
+        return { id: 'pi_unexpected', status: 'succeeded' }
+      },
+    },
+    paymentMethods: { list: async () => ({ data: [] }) },
+  }
+
+  const trip = {
+    id: 't_zero_replace',
+    rider_id: 'rider_retry',
+    fare_cents: 2000,
+    metadata: {
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_hold_zero_replace',
+        authorizationCents: 2400,
+        paymentMethodId: 'pm_primary',
+      },
+    },
+  }
+
+  const sb = createMemoryDb([trip])
+  // When finalFareCents is 0, settleFareHold takes the plan.action = 'cancel' / 'zero_due' path directly
+  const resZero = await settleFareHold({
+    sb,
+    stripe,
+    trip,
+    finalFareCents: 0,
+  })
+  assert.equal(resZero.ok, true)
+  assert.equal(resZero.method, 'none')
+  assert.equal(resZero.reason, 'zero_due')
+  assert.equal(resZero.amountCents, 0)
+  assert.equal(createCalled, false)
+})
+
+test('syncBoostAuthorization: hold_already_covers when new boost does not increase authorized amount', async () => {
+  // 1. Regular card trip: existing hold covers new boost
+  const tripCard = {
+    id: 't_boost_already_covers_card',
+    fare_cents: 2500,
+    metadata: {
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_card_hold_cov',
+        authorizationCents: 3500, // covers estimate 2500 + buffer 500 + boost 500 = 3500
+        estimatedFareCents: 2500,
+      },
+    },
+  }
+  let stripeCalled = false
+  const stripe = {
+    paymentIntents: {
+      incrementAuthorization: async () => {
+        stripeCalled = true
+        return { status: 'requires_capture' }
+      },
+      create: async () => {
+        stripeCalled = true
+        return { status: 'requires_capture' }
+      },
+    },
+  }
+  const sbCard = createMemoryDb([tripCard])
+  const resCard = await syncBoostAuthorization({
+    sb: sbCard,
+    stripe,
+    trip: tripCard,
+    boostCents: 400, // 2500 + 500 buffer + 400 boost = 3400 <= 3500
+  })
+  assert.equal(resCard.ok, true)
+  assert.equal(resCard.skipped, true)
+  assert.equal(resCard.reason, 'hold_already_covers')
+  assert.equal(resCard.authorizationCents, 3400)
+  assert.equal(stripeCalled, false)
+
+  // 2. Credits trip: base is 0, hold already covers if new boost is <= existing auth
+  const tripCredits = {
+    id: 't_boost_already_covers_credits',
+    fare_cents: 3000,
+    metadata: {
+      billing_choice: 'credits',
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_cred_hold_cov',
+        authorizationCents: 1500,
+        estimatedFareCents: 0,
+      },
+    },
+  }
+  const sbCred = createMemoryDb([tripCredits])
+  const resCred = await syncBoostAuthorization({
+    sb: sbCred,
+    stripe,
+    trip: tripCredits,
+    boostCents: 1000, // 1000 <= 1500
+  })
+  assert.equal(resCred.ok, true)
+  assert.equal(resCred.skipped, true)
+  assert.equal(resCred.reason, 'hold_already_covers')
+  assert.equal(resCred.authorizationCents, 1000)
+  assert.equal(resCred.boostCents, 1000)
+  assert.equal(stripeCalled, false)
+
+  // 3. Robustness: auth.authorizationCents is string or non-finite
+  const tripStringAuth = {
+    id: 't_boost_string_auth',
+    fare_cents: 2000,
+    metadata: {
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_str_hold',
+        authorizationCents: '3000',
+        estimatedFareCents: 2000,
+      },
+    },
+  }
+  const resString = await syncBoostAuthorization({
+    sb: createMemoryDb([tripStringAuth]),
+    stripe,
+    trip: tripStringAuth,
+    boostCents: 200, // 2000 + 400 + 200 = 2600 <= 3000
+  })
+  assert.equal(resString.ok, true)
+  assert.equal(resString.skipped, true)
+  assert.equal(resString.reason, 'hold_already_covers')
+})
+
+test('authorizeRideRequest: covers backup bonus on credits trips and distinguishes credits-only vs backup-bonus trips', async () => {
+  let createdIntent = null
+  const stripe = {
+    paymentIntents: {
+      create: async (params) => {
+        createdIntent = params
+        return {
+          id: 'pi_backup_credits_hold',
+          status: 'requires_capture',
+          amount: params.amount,
+        }
+      },
+    },
+    paymentMethods: { list: async () => ({ data: [] }) },
+  }
+
+  // 1. Credits trip with backup queue enabled and bonusCents: holds backup fee + buffer + boost
+  const tripWithBackup = {
+    id: 't_credits_with_backup',
+    rider_id: 'rider_retry',
+    fare_cents: 4500,
+    metadata: {
+      billing_choice: 'credits',
+      backup_queue: {
+        enabled: true,
+        bonusCents: 1000,
+      },
+      boost_cents: 500,
+    },
+  }
+  const sbWithBackup = createMemoryDb([tripWithBackup])
+  const resBackup = await authorizeRideRequest({
+    sb: sbWithBackup,
+    stripe,
+    trip: tripWithBackup,
+    riderId: 'rider_retry',
+  })
+  assert.equal(resBackup.ok, true)
+  assert.equal(resBackup.skipped, undefined)
+  // Base on backupBonusCents (1000): buffer is max(200, 1000*0.2) = 200. Base auth = 1200. Boost = 500. Total = 1700.
+  assert.equal(resBackup.authorization.authorizationCents, 1700)
+  assert.equal(resBackup.authorization.estimatedFareCents, 1000)
+  assert.equal(resBackup.authorization.bufferCents, 200)
+  assert.equal(resBackup.authorization.boostCents, 500)
+  assert.equal(createdIntent.amount, 1700)
+  assert.equal(createdIntent.metadata.estimatedFareCents, '1000')
+  assert.equal(createdIntent.metadata.boostCents, '500')
+
+  const savedTrip = sbWithBackup._trips[0]
+  assert.equal(savedTrip.metadata.fare_authorization.authorizationCents, 1700)
+  assert.equal(savedTrip.metadata.fare_authorization.status, 'requires_capture')
+
+  // 2. Credits trip with backup queue enabled but bonusCents is 0 and boost is 0: skips hold
+  const tripNoBonus = {
+    id: 't_credits_no_bonus',
+    rider_id: 'rider_retry',
+    fare_cents: 4500,
+    metadata: {
+      billing_choice: 'credits',
+      backup_queue: {
+        enabled: true,
+        bonusCents: 0,
+      },
+      boost_cents: 0,
+    },
+  }
+  const sbNoBonus = createMemoryDb([tripNoBonus])
+  const resNoBonus = await authorizeRideRequest({
+    sb: sbNoBonus,
+    stripe,
+    trip: tripNoBonus,
+    riderId: 'rider_retry',
+  })
+  assert.equal(resNoBonus.ok, true)
+  assert.equal(resNoBonus.skipped, true)
+  assert.equal(resNoBonus.reason, 'credits')
+
+  // 3. Trip without Stripe configured skips hold gracefully with reason stripe_not_configured
+  const tripUnconf = {
+    id: 't_unconf_stripe',
+    rider_id: 'rider_retry',
+    fare_cents: 3000,
+  }
+  const resUnconf = await authorizeRideRequest({
+    sb: createMemoryDb([tripUnconf]),
+    stripe: null,
+    trip: tripUnconf,
+  })
+  assert.equal(resUnconf.ok, true)
+  assert.equal(resUnconf.skipped, true)
+  assert.equal(resUnconf.reason, 'stripe_not_configured')
+})
+
+
 
