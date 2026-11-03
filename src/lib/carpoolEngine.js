@@ -759,6 +759,7 @@ export function surgeDelta({ pickup, dropoff, at = new Date(), quote = null, sel
 
 /** Pitch card: this rider alone vs a full car of the same hop. */
 export function pitchQuote({ pickup, dropoff, at = new Date(), gameDay = false, displayName = 'You' } = {}) {
+  if (pickup?.lat == null || dropoff?.lat == null) return null
   const seed = {
     id: 'you',
     displayName,

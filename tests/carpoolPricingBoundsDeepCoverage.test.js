@@ -11,6 +11,21 @@ import {
   BONUS_CENTS_PER_EXTRA_RIDER,
   BONUS_CENTS_PER_MILE,
   PLATFORM_FEE_RATE,
+  pitchQuote,
+  surgeDelta,
+  chargePlan,
+  driverTakeCents,
+  driverOfferCopy,
+  firstRideOfferCopy,
+  confirmChargeLabel,
+  confirmChargeNote,
+  otherFirstRideLabels,
+  makeAmbassadorCode,
+  matchCarpoolRequests,
+  firstRideWindowOpen,
+  firstRideEligible,
+  haversineMeters,
+  encodeGeohash,
 } from '../src/lib/carpoolEngine.js'
 import {
   resolveOfferedTier,
@@ -319,4 +334,233 @@ test('src/lib/fareRates: carpool tier applies 15% discount and excludes student 
   assert.equal(standardStackedQuote.breakdown.platform_fee_cents, 288)
   assert.equal(standardStackedQuote.breakdown.driver_earnings_cents, 1153)
   assert.equal(standardStackedQuote.breakdown.platform_fee_bps, 2000)
+})
+
+test('pitchQuote & surgeDelta: coordinate validation, quote calculations, and peak hour deltas', () => {
+  const grandMarc = { lat: 34.685, lng: -82.8165, label: 'Grand Marc' }
+  const collegeAve = { lat: 34.6839, lng: -82.8366, label: 'College Ave' }
+
+  // 1. Missing coords in pitchQuote
+  assert.equal(pitchQuote({ pickup: null, dropoff: collegeAve }), null)
+  assert.equal(pitchQuote({ pickup: grandMarc, dropoff: null }), null)
+  assert.equal(pitchQuote({ pickup: { lat: null, lng: -82.8 }, dropoff: collegeAve }), null)
+
+  // 2. Valid pitchQuote calculations
+  const gameDayPitch = pitchQuote({
+    pickup: grandMarc,
+    dropoff: collegeAve,
+    gameDay: true,
+    displayName: 'Avery',
+  })
+  assert.equal(gameDayPitch.window, 'game_day')
+  assert.ok(gameDayPitch.soloCents >= 3000 && gameDayPitch.soloCents <= 4000)
+  assert.ok(gameDayPitch.fullShareCents < gameDayPitch.soloCents)
+  assert.equal(gameDayPitch.savingsCents, gameDayPitch.soloCents - gameDayPitch.fullShareCents)
+  assert.equal(gameDayPitch.full.riderCount, 4)
+  assert.equal(gameDayPitch.solo.riderCount, 1)
+
+  // 3. Missing coords in surgeDelta
+  assert.equal(surgeDelta({ pickup: null, dropoff: collegeAve }), null)
+  assert.equal(surgeDelta({ pickup: grandMarc, dropoff: null }), null)
+
+  // 4. surgeDelta with live quote and matched selfId
+  const liveQuote = quoteCarpool({
+    riders: [
+      buildRider('me', 1609.344, 600, { window: 'peak_night' }),
+      buildRider('friend', 1609.344, 600, { window: 'peak_night' }),
+    ],
+    firstRideFreeIds: ['me'],
+  })
+  const deltaMatched = surgeDelta({
+    pickup: grandMarc,
+    dropoff: collegeAve,
+    quote: liveQuote,
+    selfId: 'me',
+  })
+  assert.equal(deltaMatched.currentFirstRideFree, true)
+  assert.equal(deltaMatched.currentShareCents, 0)
+  assert.equal(deltaMatched.currentRiderCount, 2)
+  assert.ok(deltaMatched.savingsCents >= 0)
+  assert.ok(deltaMatched.driverBeatsSolo)
+
+  // 5. surgeDelta with empty quote
+  const deltaEmpty = surgeDelta({
+    pickup: grandMarc,
+    dropoff: collegeAve,
+    quote: null,
+  })
+  assert.equal(deltaEmpty.currentFirstRideFree, false)
+  assert.equal(deltaEmpty.currentShareCents, null)
+})
+
+test('chargePlan, driverTakeCents, and driverOfferCopy: quote mappings and presentation copy', () => {
+  // 1. chargePlan handles null or empty quotes
+  assert.deepEqual(chargePlan(null), { lines: [], chargedCents: 0, driverPayoutCents: 0, platformFeeCents: 0, subsidyCents: 0 })
+  assert.deepEqual(chargePlan({}), { lines: [], chargedCents: 0, driverPayoutCents: 0, platformFeeCents: 0, subsidyCents: 0 })
+
+  // 2. chargePlan maps shares and first ride free reasons
+  const quote = {
+    shares: [
+      { id: 'u1', shareCents: 1250, firstRideFree: false },
+      { id: 'u2', shareCents: 0, firstRideFree: true },
+    ],
+    driver: { payoutCents: 2000 },
+    platformFeeCents: 250,
+    subsidyCents: 1000,
+  }
+  const plan = chargePlan(quote)
+  assert.equal(plan.chargedCents, 1250)
+  assert.equal(plan.driverPayoutCents, 2000)
+  assert.equal(plan.platformFeeCents, 250)
+  assert.equal(plan.subsidyCents, 1000)
+  assert.deepEqual(plan.lines, [
+    { id: 'u1', amountCents: 1250, firstRideFree: false },
+    { id: 'u2', amountCents: 0, firstRideFree: true },
+  ])
+
+  // 3. driverTakeCents priority waterfall
+  // Priority 1: metadata.driver_payout_cents
+  assert.equal(driverTakeCents({
+    fare_cents: 5000,
+    metadata: {
+      driver_payout_cents: 4500,
+      carpool: { driver: { payoutCents: 4200 } },
+    },
+  }), 4500)
+
+  // Priority 2: metadata.carpool.driver.payoutCents
+  assert.equal(driverTakeCents({
+    fare_cents: 5000,
+    metadata: {
+      carpool: { driver: { payoutCents: 4200 } },
+    },
+  }), 4200)
+
+  // Priority 3: fare_cents fallback
+  assert.equal(driverTakeCents({ fare_cents: 4000, metadata: {} }), 4000)
+  assert.equal(driverTakeCents(null), 0)
+
+  // 4. driverOfferCopy formatting
+  assert.equal(driverOfferCopy(null), null)
+  assert.equal(driverOfferCopy({}), null)
+
+  const copyWithBonus = driverOfferCopy({
+    riderCount: 4,
+    grossCents: 4500,
+    anchorSoloCents: 3750,
+    driver: { payoutCents: 3600, carpoolBonusCents: 600 },
+  })
+  assert.equal(copyWithBonus.headline, '$36.00')
+  assert.equal(copyWithBonus.sub, '$6.00 more than a solo trip')
+  assert.match(copyWithBonus.detail, /Riders pay \$45\.00 together/)
+  assert.equal(copyWithBonus.incentiveId, 'driver_carpool_bonus')
+
+  const copyNoBonus = driverOfferCopy({
+    riderCount: 2,
+    grossCents: 2500,
+    anchorSoloCents: 2500,
+    driver: { payoutCents: 2000, carpoolBonusCents: 0 },
+  })
+  assert.equal(copyNoBonus.headline, '$20.00')
+  assert.equal(copyNoBonus.sub, 'Same as a solo trip')
+})
+
+test('firstRideOfferCopy, confirmChargeLabel, and confirmChargeNote: UX copy edge cases', () => {
+  // 1. firstRideOfferCopy closed window or errors
+  assert.equal(firstRideOfferCopy({ windowOpen: false }), null)
+  assert.equal(firstRideOfferCopy({ windowOpen: true, schemaMissing: true }), null)
+  assert.equal(firstRideOfferCopy({ windowOpen: true, lookupFailed: true }), null)
+
+  // 2. Unsigned in user receives sign-in prompt
+  const guestCopy = firstRideOfferCopy({ windowOpen: true, signedIn: false })
+  assert.equal(guestCopy.eligible, false)
+  assert.equal(guestCopy.title, 'First ride free this window')
+  assert.match(guestCopy.body, /Sign in to check this account/)
+
+  // 3. Signed in eligible user
+  const eligibleCopy = firstRideOfferCopy({ windowOpen: true, signedIn: true, completedTrips: 0, alreadyUsed: false })
+  assert.equal(eligibleCopy.eligible, true)
+  assert.equal(eligibleCopy.title, 'First ride free')
+
+  // 4. Ineligible due to prior completed trips
+  const tripsCopy = firstRideOfferCopy({ windowOpen: true, signedIn: true, completedTrips: 1 })
+  assert.equal(tripsCopy.eligible, false)
+  assert.match(tripsCopy.body, /A completed trip is already on this account/)
+
+  // 5. Ineligible due to grant already used
+  const usedCopy = firstRideOfferCopy({ windowOpen: true, signedIn: true, completedTrips: 0, alreadyUsed: true })
+  assert.equal(usedCopy.eligible, false)
+  assert.match(usedCopy.body, /already used the one grant/)
+
+  // 6. confirmChargeLabel states
+  assert.equal(confirmChargeLabel({ booked: true }), 'Booked')
+  assert.equal(confirmChargeLabel({ busyLabel: 'Joining...' }), 'Joining...')
+  assert.equal(confirmChargeLabel({ isCarpool: false }), 'Confirm & charge friends')
+  assert.equal(confirmChargeLabel({ isCarpool: true, firstRideFree: true }), 'Confirm · First ride free')
+  assert.equal(confirmChargeLabel({ isCarpool: true, shareCents: null }), 'Waiting for the split')
+  assert.equal(confirmChargeLabel({ isCarpool: true, shareCents: 1450 }), 'Confirm · charge $14.50 each')
+
+  // 7. confirmChargeNote states
+  assert.equal(confirmChargeNote({ firstRideFree: true }), 'First ride free. This confirm charges $0 for your seat.')
+  assert.equal(confirmChargeNote({ shareCents: null }), null)
+  assert.equal(
+    confirmChargeNote({ shareCents: 1100, fullCarNow: true }),
+    'This confirm charges $11.00 each. That is the full-car price above.',
+  )
+  assert.equal(
+    confirmChargeNote({ shareCents: 1250, riderCount: 3, fullCarShareCents: 1050 }),
+    'This confirm charges $12.50 each for 3 riders. A full car on a surge night is $10.50.',
+  )
+
+  // 8. otherFirstRideLabels filtering
+  const multiShare = {
+    shares: [
+      { id: 'me', firstRideFree: true, firstName: 'Avery' },
+      { id: 'peer1', firstRideFree: true, firstName: 'Taylor' },
+      { id: 'peer2', firstRideFree: false, firstName: 'Jordan' },
+    ],
+  }
+  assert.deepEqual(otherFirstRideLabels(multiShare, 'me'), ['Taylor'])
+  assert.deepEqual(otherFirstRideLabels(multiShare, null), ['Avery', 'Taylor'])
+})
+
+test('makeAmbassadorCode and matchCarpoolRequests: code generation and matching bounds', () => {
+  // 1. makeAmbassadorCode format and uniqueness
+  const code1 = makeAmbassadorCode('user_a')
+  const code2 = makeAmbassadorCode('user_b')
+  assert.ok(code1.startsWith('amb_'))
+  assert.equal(code1.length, 12)
+  assert.match(code1, /^amb_[a-z2-9]{8}$/)
+  assert.notEqual(code1, code2)
+
+  // 2. matchCarpoolRequests with empty array
+  const emptyMatch = matchCarpoolRequests([], { at: new Date() })
+  assert.deepEqual(emptyMatch.pools, [])
+  assert.deepEqual(emptyMatch.rejected, [])
+  assert.equal(emptyMatch.considered, 0)
+
+  // 3. Invalid coordinates in requests
+  const invalidRequests = [
+    { id: 'bad_pickup', pickup: null, dropoff: { lat: 34.68, lng: -82.83 } },
+    { id: 'bad_dropoff', pickup: { lat: 34.68, lng: -82.83 }, dropoff: { lat: NaN, lng: -82.83 } },
+  ]
+  const invalidMatch = matchCarpoolRequests(invalidRequests, { at: new Date() })
+  assert.equal(invalidMatch.rejected.length, 2)
+  assert.equal(invalidMatch.rejected[0].error, 'pickup_coords')
+  assert.equal(invalidMatch.rejected[1].error, 'dropoff_coords')
+
+  // 4. Distant pickups (>1600m) do not merge into the same carpool pool
+  const grandMarc = { lat: 34.685, lng: -82.8165, label: 'Grand Marc' }
+  const patrickSquare = { lat: 34.71, lng: -82.79, label: 'Patrick Square' } // ~3.5km away
+  const collegeAve = { lat: 34.6839, lng: -82.8366, label: 'College Ave' }
+  const depart = new Date('2026-09-27T02:30:00Z')
+
+  const distantRequests = [
+    { id: 'r_near', pickup: grandMarc, dropoff: collegeAve, departAt: depart },
+    { id: 'r_far', pickup: patrickSquare, dropoff: collegeAve, departAt: depart },
+  ]
+  const distantMatch = matchCarpoolRequests(distantRequests, { at: depart })
+  // They should be in separate pools
+  assert.equal(distantMatch.pools.length, 2)
+  assert.ok(distantMatch.pools.every((p) => p.waiting && p.size === 1))
 })
