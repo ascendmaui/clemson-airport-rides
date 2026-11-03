@@ -608,20 +608,22 @@ export function quoteCarpool({
 } = {}) {
   const when = at instanceof Date ? at : new Date(at)
   const priced = (riders || []).map((rider, index) => {
-    const pickup = rider.pickup
-    const dropoff = rider.dropoff
-    const hopM = Number.isFinite(Number(rider.distanceM))
+    const pickup = rider?.pickup
+    const dropoff = rider?.dropoff
+    const hopM = Number.isFinite(Number(rider?.distanceM))
       ? Number(rider.distanceM)
-      : haversineMeters(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng)
-    const hopS = Number.isFinite(Number(rider.durationS))
+      : (pickup?.lat != null && pickup?.lng != null && dropoff?.lat != null && dropoff?.lng != null
+          ? haversineMeters(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng)
+          : 0)
+    const hopS = Number.isFinite(Number(rider?.durationS))
       ? Number(rider.durationS)
       : estimateDurationSeconds(hopM)
-    const depart = new Date(rider.departAt || when)
-    const window = rider.window || demandWindow(depart, { gameDay: Boolean(gameDay || rider.gameDay) })
+    const depart = new Date(rider?.departAt || when)
+    const window = rider?.window || demandWindow(depart, { gameDay: Boolean(gameDay || rider?.gameDay) })
     const soloCents = soloSurgeCents({ distanceM: hopM, durationS: hopS, window })
     return {
-      id: String(rider.id || `rider-${index}`),
-      firstName: firstName(rider.displayName || rider.display_name),
+      id: String(rider?.id || `rider-${index}`),
+      firstName: firstName(rider?.displayName || rider?.display_name),
       soloCents,
       window,
       hopM,
@@ -736,6 +738,7 @@ export function surgeDelta({ pickup, dropoff, at = new Date(), quote = null, sel
   const when = at instanceof Date ? at : new Date(at)
   const peakAt = illustrativePeakAt(when)
   const pitch = pitchQuote({ pickup, dropoff, at: peakAt, displayName: 'You' })
+  if (!pitch) return null
   const share = (quote?.shares || []).find((row) => selfId && row.id === selfId) || quote?.shares?.[0] || null
   const currentShareCents = share ? share.shareCents : null
   const currentRiderCount = quote?.riderCount || null
@@ -788,29 +791,31 @@ export function pitchQuote({ pickup, dropoff, at = new Date(), gameDay = false, 
 export function chargePlan(quote) {
   const lines = (quote?.shares || []).map((share) => ({
     id: share.id,
-    amountCents: share.firstRideFree ? 0 : share.shareCents,
+    amountCents: share.firstRideFree ? 0 : Math.max(0, Math.round(Number(share.shareCents) || 0)),
     firstRideFree: Boolean(share.firstRideFree),
   }))
   const chargedCents = lines.reduce((sum, line) => sum + line.amountCents, 0)
   return {
     lines,
     chargedCents,
-    driverPayoutCents: quote?.driver?.payoutCents || 0,
-    platformFeeCents: quote?.platformFeeCents || 0,
-    subsidyCents: quote?.subsidyCents || 0,
+    driverPayoutCents: Math.max(0, Math.round(Number(quote?.driver?.payoutCents) || 0)),
+    platformFeeCents: Math.max(0, Math.round(Number(quote?.platformFeeCents) || 0)),
+    subsidyCents: Math.max(0, Math.round(Number(quote?.subsidyCents) || 0)),
   }
 }
 
 export function driverTakeCents(trip) {
   const payout = trip?.metadata?.driver_payout_cents
-  if (payout != null && Number.isFinite(Number(payout))) return Number(payout)
+  if (payout != null && Number.isFinite(Number(payout))) return Math.max(0, Math.round(Number(payout)))
   const nested = trip?.metadata?.carpool?.driver?.payoutCents
-  if (nested != null && Number.isFinite(Number(nested))) return Number(nested)
-  return Number(trip?.fare_cents) || 0
+  if (nested != null && Number.isFinite(Number(nested))) return Math.max(0, Math.round(Number(nested)))
+  return Math.max(0, Math.round(Number(trip?.fare_cents) || 0))
 }
 
 export function formatUsd(cents) {
-  return (Number(cents) / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+  const n = Number(cents)
+  const val = Number.isFinite(n) ? n : 0
+  return (val / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 }
 
 export function driverOfferCopy(quote) {
@@ -828,10 +833,10 @@ export function driverOfferCopy(quote) {
 
 export function carpoolSeatCap({ kind, partyType, matchMode, vehicleSeats } = {}) {
   if (kind !== 'carpool') {
-    const seats = Number(vehicleSeats)
+    const seats = Math.round(Number(vehicleSeats))
     return Number.isFinite(seats) && seats > 0 ? seats : 5
   }
-  const seats = Number(vehicleSeats)
+  const seats = Math.round(Number(vehicleSeats))
   const vehicle = Number.isFinite(seats) && seats > 0 ? seats : MAX_RIDERS
   if (partyType === 'tailgate' && matchMode === 'student_driver') {
     return Math.min(6, vehicle)

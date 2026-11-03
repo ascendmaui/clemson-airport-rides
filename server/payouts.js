@@ -17,7 +17,7 @@ import { driverBoostShareCents, driverPayoutWithBoost, readBoostCents } from '..
 /** Settled Tiger Heat pay replaces the default 80% net. Rider fare is not in this number. */
 export function tigerHeatPayoutCents(trip) {
   const heat = trip?.metadata?.tiger_heat
-  if (!heat || heat.preview || heat.settled !== true || heat.released) return null
+  if (!heat || heat.preview === true || heat.preview === 'true' || heat.settled !== true || heat.released === true || heat.released === 'true') return null
   const amount = Number(heat.driverEarningsCents)
   if (!Number.isFinite(amount)) return null
   return Math.max(0, Math.round(amount))
@@ -56,8 +56,9 @@ export function buildPayoutRecord(trip) {
 
 export async function attemptDriverPayout({ trip, stripe, connectAccountId, now = Date.now(), idempotencyPrefix = 'payout' }) {
   const existing = trip?.metadata?.payout || buildPayoutRecord(trip)
-  const amountCents = existing.amountCents ?? resolveDriverNetCents(trip)
-  if (!amountCents) {
+  const rawAmount = existing.amountCents ?? resolveDriverNetCents(trip)
+  const amountCents = Math.max(0, Math.round(Number(rawAmount) || 0))
+  if (amountCents === 0) {
     const paid = applyPayoutAttempt(existing, { ok: true, now, amountCents: 0, transferId: null })
     return { ok: true, payout: { ...paid, amountCents: 0 }, zero: true }
   }
@@ -188,14 +189,18 @@ export async function attemptStandbyBackupPayout({ sb, trip, stripe, connectAcco
 }
 
 async function writeStandbyPayout(sb, trip, payout) {
-  if (!sb || !trip?.id) return
+  if (!sb || !trip?.id) return { error: 'no_trip' }
   let metadata = { ...(trip.metadata || {}) }
   const fresh = await sb.from('trips').select('metadata').eq('id', trip.id).maybeSingle()
   if (!fresh.error && fresh.data?.metadata && typeof fresh.data.metadata === 'object') {
     metadata = { ...fresh.data.metadata }
   }
   metadata = { ...metadata, backup_standby_payout: { ...payout, tripId: trip.id } }
-  await sb.from('trips').update({ metadata }).eq('id', trip.id)
+  const updated = await sb.from('trips').update({ metadata }).eq('id', trip.id)
+  if (updated?.error) {
+    console.error('[payout] standby persist', updated.error.message)
+    return { error: updated.error.message }
+  }
   try {
     const saved = await sb.from('backup_driver_payouts').upsert({
       trip_id: trip.id,
@@ -215,6 +220,7 @@ async function writeStandbyPayout(sb, trip, payout) {
     const message = error?.message || String(error)
     if (!/relation|does not exist|schema cache/i.test(message)) console.error('[payout] backup queue', message)
   }
+  return { error: null, metadata }
 }
 
 /** Rider-cancel fee. One transfer, even if a switch had already assigned that same fee. */
@@ -303,14 +309,18 @@ async function attemptRolePayout({
 }
 
 async function writeRolePayout(sb, trip, payout, metadataKey) {
-  if (!sb || !trip?.id) return
+  if (!sb || !trip?.id) return { error: 'no_trip' }
   let metadata = { ...(trip.metadata || {}) }
   const fresh = await sb.from('trips').select('metadata').eq('id', trip.id).maybeSingle()
   if (!fresh.error && fresh.data?.metadata && typeof fresh.data.metadata === 'object') {
     metadata = { ...fresh.data.metadata }
   }
   metadata = { ...metadata, [metadataKey]: { ...payout, tripId: trip.id } }
-  await sb.from('trips').update({ metadata }).eq('id', trip.id)
+  const updated = await sb.from('trips').update({ metadata }).eq('id', trip.id)
+  if (updated?.error) {
+    console.error('[payout] role persist', updated.error.message)
+    return { error: updated.error.message }
+  }
   try {
     const saved = await sb.from('backup_driver_payouts').upsert({
       trip_id: trip.id,
@@ -330,6 +340,7 @@ async function writeRolePayout(sb, trip, payout, metadataKey) {
     const message = error?.message || String(error)
     if (!/relation|does not exist|schema cache/i.test(message)) console.error('[payout] backup queue', message)
   }
+  return { error: null, metadata }
 }
 
 export async function loadConnectAccount(sb, driverId) {

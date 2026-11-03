@@ -14,6 +14,9 @@ import {
   buildPayoutRecord,
   loadConnectAccount,
   writePayout,
+  tigerHeatPayoutCents,
+  attemptDriverPayout,
+  enqueueAndAttemptPayout,
 } from '../server/payouts.js'
 
 function mockRes() {
@@ -929,6 +932,180 @@ test('writePayout: returns error when trips table update fails, and merges exist
   assert.equal(resMerge.metadata.note, 'keep_me')
   assert.equal(resMerge.metadata.count, 42)
   assert.equal(resMerge.metadata.payout.amountCents, 2000)
+})
+
+test('tigerHeatPayoutCents and buildPayoutRecord: covers preview, released, unfinite earnings, and record integration', () => {
+  // 1. Missing trip or metadata
+  assert.equal(tigerHeatPayoutCents(null), null)
+  assert.equal(tigerHeatPayoutCents({}), null)
+  assert.equal(tigerHeatPayoutCents({ metadata: {} }), null)
+
+  // 2. preview = true / 'true' -> null
+  assert.equal(tigerHeatPayoutCents({ metadata: { tiger_heat: { preview: true, settled: true, driverEarningsCents: 4500 } } }), null)
+  assert.equal(tigerHeatPayoutCents({ metadata: { tiger_heat: { preview: 'true', settled: true, driverEarningsCents: 4500 } } }), null)
+
+  // 3. released = true / 'true' -> null
+  assert.equal(tigerHeatPayoutCents({ metadata: { tiger_heat: { released: true, settled: true, driverEarningsCents: 4500 } } }), null)
+  assert.equal(tigerHeatPayoutCents({ metadata: { tiger_heat: { released: 'true', settled: true, driverEarningsCents: 4500 } } }), null)
+
+  // 4. settled != true -> null
+  assert.equal(tigerHeatPayoutCents({ metadata: { tiger_heat: { settled: false, driverEarningsCents: 4500 } } }), null)
+  assert.equal(tigerHeatPayoutCents({ metadata: { tiger_heat: { driverEarningsCents: 4500 } } }), null)
+
+  // 5. non-finite driverEarningsCents -> null
+  assert.equal(tigerHeatPayoutCents({ metadata: { tiger_heat: { settled: true, driverEarningsCents: NaN } } }), null)
+  assert.equal(tigerHeatPayoutCents({ metadata: { tiger_heat: { settled: true, driverEarningsCents: 'unparsed' } } }), null)
+  assert.equal(tigerHeatPayoutCents({ metadata: { tiger_heat: { settled: true, driverEarningsCents: Infinity } } }), null)
+
+  // 6. Valid numeric driverEarningsCents
+  assert.equal(tigerHeatPayoutCents({ metadata: { tiger_heat: { settled: true, driverEarningsCents: 3500 } } }), 3500)
+  assert.equal(tigerHeatPayoutCents({ metadata: { tiger_heat: { settled: true, driverEarningsCents: 4250.7 } } }), 4251)
+  assert.equal(tigerHeatPayoutCents({ metadata: { tiger_heat: { settled: true, driverEarningsCents: -50 } } }), 0)
+
+  // 7. buildPayoutRecord integration with tiger heat
+  const heatTrip = {
+    id: 't_heat_payout',
+    driver_id: 'd_heat',
+    fare_cents: 6000,
+    metadata: {
+      tiger_heat: {
+        settled: true,
+        driverEarningsCents: 5200,
+        bonusCents: 800,
+        platformFundedCents: 800,
+      },
+      backup_queue: {
+        promotedFromBackup: true,
+        confirmState: 'enroute',
+        bonusCents: 1500,
+      },
+    },
+  }
+  const rec = buildPayoutRecord(heatTrip)
+  assert.equal(rec.tripId, 't_heat_payout')
+  assert.equal(rec.driverId, 'd_heat')
+  assert.equal(rec.fareNetCents, 5200)
+  assert.equal(rec.amountCents, 5200) // Backup bonus excluded when heatPay is present
+  assert.equal(rec.tigerHeatBonusCents, 800)
+  assert.equal(rec.platformFundedCents, 800)
+  assert.equal(rec.status, 'pending')
+  assert.equal(rec.pending, true)
+})
+
+test('attemptDriverPayout and enqueueAndAttemptPayout: handles zero cents, idempotency, backoff, missing connect, and transfer errors', async () => {
+  const baseTrip = {
+    id: 't_attempt_1',
+    driver_id: 'd_att',
+    fare_cents: 5000,
+    metadata: {},
+  }
+
+  // 1. Zero amount (fare = 0 and driver_net_cents = 0) returns zero: true immediately without calling Stripe
+  const zeroTrip = { ...baseTrip, fare_cents: 0, metadata: { driver_net_cents: 0 } }
+  let stripeCalled = false
+  const dummyStripe = {
+    transfers: {
+      create: async () => { stripeCalled = true; return { id: 'tr_never' } },
+    },
+  }
+  const resZero = await attemptDriverPayout({ trip: zeroTrip, stripe: dummyStripe, connectAccountId: 'acct_1' })
+  assert.equal(resZero.ok, true)
+  assert.equal(resZero.zero, true)
+  assert.equal(resZero.payout.amountCents, 0)
+  assert.equal(resZero.payout.status, 'paid')
+  assert.equal(stripeCalled, false)
+
+  // 2. Status 'paid' returns idempotent: true immediately
+  const paidTrip = { ...baseTrip, metadata: { payout: { status: 'paid', amountCents: 4000 } } }
+  const resPaid = await attemptDriverPayout({ trip: paidTrip, stripe: dummyStripe, connectAccountId: 'acct_1' })
+  assert.equal(resPaid.ok, true)
+  assert.equal(resPaid.idempotent, true)
+  assert.equal(resPaid.payout.status, 'paid')
+  assert.equal(stripeCalled, false)
+
+  // 3. Payout not due (attempts > 0 and nextRetryAt in future) returns skipped: true
+  const futureRetry = new Date(Date.now() + 100000).toISOString()
+  const notDueTrip = {
+    ...baseTrip,
+    metadata: {
+      payout: { status: 'pending', amountCents: 4000, attempts: 1, nextRetryAt: futureRetry },
+    },
+  }
+  const resNotDue = await attemptDriverPayout({ trip: notDueTrip, stripe: dummyStripe, connectAccountId: 'acct_1' })
+  assert.equal(resNotDue.ok, false)
+  assert.equal(resNotDue.skipped, true)
+  assert.equal(resNotDue.reason, 'not_due')
+  assert.equal(stripeCalled, false)
+
+  // 4. Missing connectAccountId records failure with 'no_connect_account' and schedules retry
+  const resNoConnect = await attemptDriverPayout({ trip: baseTrip, stripe: dummyStripe, connectAccountId: null })
+  assert.equal(resNoConnect.ok, false)
+  assert.equal(resNoConnect.payout.status, 'pending')
+  assert.equal(resNoConnect.payout.lastError, 'no_connect_account')
+  assert.equal(resNoConnect.payout.attempts, 1)
+  assert.ok(resNoConnect.payout.nextRetryAt)
+
+  // 5. Missing stripe.transfers.create throws error that is captured in payout
+  const resNoTransfers = await attemptDriverPayout({
+    trip: baseTrip,
+    stripe: {},
+    connectAccountId: 'acct_1',
+  })
+  assert.equal(resNoTransfers.ok, false)
+  assert.equal(resNoTransfers.payout.lastError, 'Stripe transfers unavailable')
+  assert.equal(resNoTransfers.payout.attempts, 1)
+
+  // 6. Successful Stripe transfer sets status 'paid' and records stripeTransferId
+  const liveStripe = {
+    transfers: {
+      create: async (payload) => {
+        assert.equal(payload.amount, 4000)
+        assert.equal(payload.destination, 'acct_test_123')
+        return { id: 'tr_success_789' }
+      },
+    },
+  }
+  const resSuccess = await attemptDriverPayout({
+    trip: baseTrip,
+    stripe: liveStripe,
+    connectAccountId: 'acct_test_123',
+  })
+  assert.equal(resSuccess.ok, true)
+  assert.equal(resSuccess.payout.status, 'paid')
+  assert.equal(resSuccess.payout.stripeTransferId, 'tr_success_789')
+  assert.equal(resSuccess.payout.lastError, null)
+
+  // 7. Stripe transfer throws error (e.g. transfer destination closed)
+  const failStripe = {
+    transfers: {
+      create: async () => {
+        throw new Error('Destination account closed')
+      },
+    },
+  }
+  const resFail = await attemptDriverPayout({
+    trip: baseTrip,
+    stripe: failStripe,
+    connectAccountId: 'acct_closed',
+  })
+  assert.equal(resFail.ok, false)
+  assert.equal(resFail.payout.status, 'pending')
+  assert.equal(resFail.payout.lastError, 'Destination account closed')
+  assert.equal(resFail.payout.attempts, 1)
+
+  // 8. enqueueAndAttemptPayout creates payout record and writes it to DB
+  const sbMock = createMockPayoutDb({ trip: baseTrip })
+  const resEnqueue = await enqueueAndAttemptPayout({
+    sb: sbMock,
+    stripe: liveStripe,
+    trip: baseTrip,
+    connectAccountId: 'acct_test_123',
+  })
+  assert.equal(resEnqueue.ok, true)
+  assert.equal(resEnqueue.payout.status, 'paid')
+  assert.equal(sbMock.storedTrip.metadata.payout.status, 'paid')
+  assert.equal(sbMock._writtenPayouts.length, 1)
+  assert.equal(sbMock._writtenPayouts[0].stripe_transfer_id, 'tr_success_789')
 })
 
 

@@ -11,7 +11,14 @@ import {
 import { cancelBackupRide, switchBackupDriver } from '../server/backupRiderActions.js'
 import scheduledDispatchTickHandler from '../server/endpoints/scheduledDispatchTick.js'
 import { releaseScheduledRides } from '../server/releaseScheduledRides.js'
-import { backupBookingMetadata } from '../shared/backupDriverQueue.js'
+import {
+  backupBookingMetadata,
+  estimateDriveMs,
+  leaveNowAtMs,
+  departIsDue,
+  driverStartedTowardPickup,
+  confirmWindowBounds,
+} from '../shared/backupDriverQueue.js'
 import { createMatchingSupabase, seedMatchingScenario } from './fixtures/matchingE2E.js'
 
 function mockRes() {
@@ -1055,6 +1062,116 @@ test('switchBackupDriver: validates rider ownership, open statuses, and unassign
   assert.equal(resNoBackup.status, 409)
   assert.equal(resNoBackup.code, 'backup_not_filled')
   assert.equal(resNoBackup.error, 'A backup driver has not accepted yet.')
+})
+
+test('switchBackupDriver: safetyReport allows switch when en route, while normal switch is blocked with already_enroute', async () => {
+  const now = new Date('2026-10-10T14:55:00.000Z')
+  const enrouteTrip = {
+    id: 'trip_switch_safety',
+    rider_id: 'rider_safety_user',
+    status: 'scheduled',
+    fare_cents: 6000,
+    metadata: {
+      backup_queue: {
+        ...backupBookingMetadata(1000, now),
+        primaryDriverId: 'driver_moving',
+        backupDriverId: 'driver_waiting',
+        confirmState: 'enroute',
+        navigateStartedAt: '2026-10-10T14:50:00.000Z',
+        switchCount: 0,
+        generation: 1,
+        events: [],
+      },
+    },
+  }
+
+  // 1. Without safety report, switch is blocked because driver has already started driving
+  const sbEnroute = createMatchingSupabase({ trips: [enrouteTrip] })
+  const resBlocked = await switchBackupDriver(sbEnroute, {
+    tripId: 'trip_switch_safety',
+    riderId: 'rider_safety_user',
+    safetyReport: false,
+    now,
+  })
+  assert.equal(resBlocked.ok, false)
+  assert.equal(resBlocked.status, 409)
+  assert.equal(resBlocked.code, 'already_enroute')
+  assert.match(resBlocked.error, /A safety report is required to switch/i)
+
+  // 2. With safetyReport = true, switch succeeds despite moving status
+  const resAllowed = await switchBackupDriver(sbEnroute, {
+    tripId: 'trip_switch_safety',
+    riderId: 'rider_safety_user',
+    safetyReport: true,
+    now,
+  })
+  assert.equal(resAllowed.ok, true)
+  assert.equal(resAllowed.action, 'switch')
+  assert.equal(resAllowed.formerPrimaryId, 'driver_moving')
+  assert.equal(resAllowed.newPrimaryId, 'driver_waiting')
+  assert.equal(resAllowed.feeCents, 1000)
+
+  const updatedTrip = sbEnroute._tables.trips[0]
+  const updatedQueue = updatedTrip.metadata.backup_queue
+  assert.equal(updatedQueue.primaryDriverId, 'driver_waiting')
+  assert.equal(updatedQueue.backupDriverId, 'driver_moving')
+  assert.equal(updatedQueue.switchCount, 1)
+  assert.equal(updatedQueue.switchFeeDriverId, 'driver_moving')
+  assert.equal(updatedQueue.switchFeeCents, 1000)
+  assert.equal(updatedQueue.backupBonusRedirected, true)
+  assert.equal(updatedQueue.events.at(-1).safetyReport, true)
+  assert.equal(updatedQueue.events.at(-1).kind, 'rider_switch')
+
+  // 3. Second switch fails due to switch_limit (limit = 1)
+  const resLimit = await switchBackupDriver(sbEnroute, {
+    tripId: 'trip_switch_safety',
+    riderId: 'rider_safety_user',
+    safetyReport: true,
+    now,
+  })
+  assert.equal(resLimit.ok, false)
+  assert.equal(resLimit.status, 409)
+  assert.equal(resLimit.code, 'switch_limit')
+  assert.equal(resLimit.error, 'You can switch to the backup once.')
+})
+
+test('estimateDriveMs, leaveNowAtMs, and departIsDue: boundary conditions and movement calculations', () => {
+  // 1. estimateDriveMs: missing fix or pickup returns 0, which confirmWindowBounds clamps to the 20 min floor
+  assert.equal(estimateDriveMs(null, { lat: 34.68, lng: -82.83 }), 0)
+  assert.equal(estimateDriveMs({ lat: 34.68, lng: -82.83 }, null), 0)
+  assert.equal(estimateDriveMs(null, null), 0)
+
+  // 2. estimateDriveMs: calculates duration based on distance and assumed speed
+  const fixA = { lat: 34.6784, lng: -82.8397 } // Tillman Hall
+  const fixB = { lat: 34.685, lng: -82.8165 } // Grand Marc (~2.2 km)
+  const driveMs = estimateDriveMs(fixA, fixB)
+  assert.ok(driveMs > 2 * 60 * 1000 && driveMs < 10 * 60 * 1000)
+
+  // 3. leaveNowAtMs: invalid or missing pickupAt returns null
+  assert.equal(leaveNowAtMs({ pickupAt: null, driveMs: 60000 }), null)
+  assert.equal(leaveNowAtMs({ pickupAt: 'invalid-date', driveMs: 60000 }), null)
+
+  const pickupIso = '2026-10-10T15:30:00.000Z'
+  const pickupMs = Date.parse(pickupIso)
+  assert.equal(leaveNowAtMs({ pickupAt: pickupIso, driveMs: 15 * 60 * 1000 }), pickupMs - 15 * 60 * 1000)
+
+  // 4. departIsDue: requires confirmedAt, no navigateStartedAt, and leaveNowAt reached
+  const confirmedAtIso = '2026-10-10T15:00:00.000Z'
+  const leaveAtIso = '2026-10-10T15:15:00.000Z'
+  assert.equal(departIsDue({ confirmedAt: null, leaveNowAt: leaveAtIso, now: new Date('2026-10-10T15:16:00.000Z') }), false)
+  assert.equal(departIsDue({ confirmedAt: confirmedAtIso, navigateStartedAt: '2026-10-10T15:10:00.000Z', leaveNowAt: leaveAtIso, now: new Date('2026-10-10T15:16:00.000Z') }), false)
+  assert.equal(departIsDue({ confirmedAt: confirmedAtIso, leaveNowAt: leaveAtIso, now: new Date('2026-10-10T15:15:00.000Z') }), true)
+  assert.equal(departIsDue({ confirmedAt: confirmedAtIso, leaveNowAt: leaveAtIso, now: new Date('2026-10-10T15:16:00.000Z') }), true)
+  assert.equal(departIsDue({ confirmedAt: confirmedAtIso, leaveNowAt: leaveAtIso, now: new Date('2026-10-10T15:14:00.000Z') }), false)
+
+  // 6. driverStartedTowardPickup: movement threshold >= 40m
+  const pickupPoint = { lat: 34.68, lng: -82.83 }
+  const p1 = { lat: 34.67, lng: -82.83 }
+  const pMoved45m = { lat: 34.67041, lng: -82.83 } // ~45 meters away
+  const pMoved20m = { lat: 34.67018, lng: -82.83 } // ~20 meters away
+  assert.equal(driverStartedTowardPickup({ pickup: pickupPoint, previousFix: p1, currentFix: pMoved45m }), true)
+  assert.equal(driverStartedTowardPickup({ pickup: pickupPoint, previousFix: p1, currentFix: pMoved20m }), false)
+  assert.equal(driverStartedTowardPickup({ pickup: pickupPoint, previousFix: null, currentFix: p1 }), false)
 })
 
 

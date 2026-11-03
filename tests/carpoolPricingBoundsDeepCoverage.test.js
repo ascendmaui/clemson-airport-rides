@@ -26,6 +26,7 @@ import {
   firstRideEligible,
   haversineMeters,
   encodeGeohash,
+  formatUsd,
 } from '../src/lib/carpoolEngine.js'
 import {
   resolveOfferedTier,
@@ -563,4 +564,65 @@ test('makeAmbassadorCode and matchCarpoolRequests: code generation and matching 
   // They should be in separate pools
   assert.equal(distantMatch.pools.length, 2)
   assert.ok(distantMatch.pools.every((p) => p.waiting && p.size === 1))
+})
+
+test('quoteCarpool, formatUsd, chargePlan, and driverTakeCents robustness on malformed or missing coordinates and negative numbers', () => {
+  // 1. quoteCarpool does not crash on missing/undefined pickup/dropoff coordinates
+  const resMissingCoords = quoteCarpool({
+    riders: [
+      { id: 'r_no_coords' },
+      { id: 'r_partial', pickup: { lat: 34.68 } }, // missing lng and dropoff
+    ],
+    at: new Date('2026-10-10T22:00:00Z'),
+  })
+  assert.equal(resMissingCoords.riderCount, 2)
+  assert.equal(resMissingCoords.shares.length, 2)
+  assert.ok(resMissingCoords.grossCents > 0)
+  assert.ok(resMissingCoords.driver.payoutCents > 0)
+
+  // 2. formatUsd formats edge cases without throwing or printing $NaN
+  assert.equal(formatUsd(undefined), '$0.00')
+  assert.equal(formatUsd(null), '$0.00')
+  assert.equal(formatUsd(NaN), '$0.00')
+  assert.equal(formatUsd('invalid'), '$0.00')
+  assert.equal(formatUsd(0), '$0.00')
+  assert.equal(formatUsd(1575), '$15.75')
+  assert.equal(formatUsd(-500), '-$5.00')
+
+  // 3. chargePlan handles null, missing shares, and negative/NaN values
+  const emptyPlan = chargePlan(null)
+  assert.deepEqual(emptyPlan.lines, [])
+  assert.equal(emptyPlan.chargedCents, 0)
+  assert.equal(emptyPlan.driverPayoutCents, 0)
+
+  const messyQuote = {
+    shares: [
+      { id: 's1', shareCents: 1200, firstRideFree: false },
+      { id: 's2', shareCents: 'invalid', firstRideFree: false },
+      { id: 's3', shareCents: -300, firstRideFree: false },
+      { id: 's4', shareCents: 1500, firstRideFree: true },
+    ],
+    driver: { payoutCents: 2400 },
+    platformFeeCents: 600,
+    subsidyCents: 0,
+  }
+  const messyPlan = chargePlan(messyQuote)
+  assert.equal(messyPlan.lines.length, 4)
+  assert.equal(messyPlan.lines[0].amountCents, 1200)
+  assert.equal(messyPlan.lines[1].amountCents, 0)
+  assert.equal(messyPlan.lines[2].amountCents, 0) // negative clamped to 0
+  assert.equal(messyPlan.lines[3].amountCents, 0) // firstRideFree = 0
+  assert.equal(messyPlan.chargedCents, 1200)
+
+  // 4. driverTakeCents clamps negative fares and safely extracts nested carpool payouts
+  assert.equal(driverTakeCents({ fare_cents: -500 }), 0)
+  assert.equal(driverTakeCents({ fare_cents: 'bad' }), 0)
+  assert.equal(driverTakeCents({ fare_cents: 2500 }), 2500)
+  assert.equal(driverTakeCents({ metadata: { driver_payout_cents: 3200 } }), 3200)
+  assert.equal(driverTakeCents({ metadata: { carpool: { driver: { payoutCents: 4100 } } } }), 4100)
+
+  // 5. carpoolSeatCap clamps decimal and negative vehicle seats
+  assert.equal(carpoolSeatCap({ kind: 'carpool', vehicleSeats: 4.6 }), 4)
+  assert.equal(carpoolSeatCap({ kind: 'carpool', vehicleSeats: -1 }), 4)
+  assert.equal(carpoolSeatCap({ kind: 'carpool', partyType: 'tailgate', matchMode: 'student_driver', vehicleSeats: 8 }), 6)
 })
