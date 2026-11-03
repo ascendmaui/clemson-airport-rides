@@ -800,4 +800,370 @@ test('settleFareHold: handles overage when final fare exceeds captured hold, cov
   assert.equal(sbFail._trips[0].metadata.outstanding_balance.amountCents, 1500)
 })
 
+test('settleFareHold: credits billing choice cancels hold when no boost, but settles boost hold when boost present', async () => {
+  // Case A: credits billing without boost cancels the hold and returns null
+  let canceledId = null
+  const stripe = {
+    paymentIntents: {
+      retrieve: async (id) => ({ id, status: 'requires_capture', amount: 3000 }),
+      cancel: async (id) => {
+        canceledId = id
+        return { id, status: 'canceled' }
+      },
+      capture: async () => ({ id: 'pi_test', status: 'succeeded' }),
+    },
+  }
+  const tripNoBoost = {
+    id: 't_cred_no_boost',
+    rider_id: 'rider_retry',
+    fare_cents: 3000,
+    metadata: {
+      billing_choice: 'credits',
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_hold_cred',
+        authorizationCents: 3600,
+      },
+    },
+  }
+  const sbA = createMemoryDb([tripNoBoost])
+  const resA = await settleFareHold({
+    sb: sbA,
+    stripe,
+    trip: tripNoBoost,
+    finalFareCents: 3000,
+  })
+  assert.equal(resA, null)
+  assert.equal(canceledId, 'pi_hold_cred')
+  assert.equal(sbA._trips[0].metadata.fare_authorization.status, 'canceled')
+  assert.equal(sbA._trips[0].metadata.fare_authorization.reason, 'credits')
+
+  // Case B: credits billing WITH boost settles the boost hold instead of canceling
+  let capturedAmount = null
+  const stripeBoost = {
+    paymentIntents: {
+      retrieve: async (id) => ({ id, status: 'requires_capture', amount: 1500 }),
+      capture: async (id, params) => {
+        capturedAmount = params.amount_to_capture
+        return { id, status: 'succeeded', amount_received: params.amount_to_capture }
+      },
+      cancel: async () => { throw new Error('should not cancel boost hold') },
+    },
+  }
+  const tripWithBoost = {
+    id: 't_cred_boost',
+    rider_id: 'rider_retry',
+    fare_cents: 3000,
+    boost_cents: 1500,
+    metadata: {
+      billing_choice: 'credits',
+      boost_cents: 1500,
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_hold_boost',
+        authorizationCents: 1500,
+      },
+    },
+  }
+  const sbB = createMemoryDb([tripWithBoost])
+  const resB = await settleFareHold({
+    sb: sbB,
+    stripe: stripeBoost,
+    trip: tripWithBoost,
+    finalFareCents: 1500,
+  })
+  assert.equal(resB.ok, true)
+  assert.equal(resB.method, 'card')
+  assert.equal(resB.amountCents, 1500)
+  assert.equal(capturedAmount, 1500)
+  assert.equal(sbB._trips[0].metadata.fare_authorization.status, 'captured')
+})
+
+test('settleFareHold: capture failure triggers off-session replacement charge; tests successful replacement and parked balance fallback', async () => {
+  // Case A: Capture fails, but replacement off-session charge succeeds
+  let cancelCalled = false
+  let replacementCreated = null
+  const stripeReplaceOk = {
+    paymentIntents: {
+      retrieve: async (id) => ({ id, status: 'requires_capture', amount: 3000 }),
+      capture: async () => {
+        const err = new Error('Card expired during ride')
+        err.code = 'expired_card'
+        throw err
+      },
+      cancel: async (id) => {
+        cancelCalled = true
+        return { id, status: 'canceled' }
+      },
+      create: async (params) => {
+        replacementCreated = params
+        return { id: 'pi_replacement_ok', status: 'succeeded', amount: params.amount }
+      },
+    },
+    paymentMethods: { list: async () => ({ data: [] }) },
+  }
+  const tripReplace = {
+    id: 't_capture_fail_replace_ok',
+    rider_id: 'rider_retry',
+    metadata: {
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_hold_failed',
+        authorizationCents: 3000,
+        paymentMethodId: 'pm_primary',
+      },
+    },
+  }
+  const sbA = createMemoryDb([tripReplace])
+  const resA = await settleFareHold({
+    sb: sbA,
+    stripe: stripeReplaceOk,
+    trip: tripReplace,
+    finalFareCents: 3000,
+  })
+  assert.equal(resA.ok, true)
+  assert.equal(resA.method, 'card')
+  assert.equal(resA.amountCents, 3000)
+  assert.equal(resA.paymentIntentId, 'pi_replacement_ok')
+  assert.equal(cancelCalled, true)
+  assert.equal(replacementCreated.amount, 3000)
+  assert.equal(sbA._trips[0].metadata.fare_authorization.status, 'captured')
+  assert.equal(sbA._trips[0].metadata.fare_authorization.replaced, true)
+
+  // Case B: Capture fails AND replacement charge also fails -> parks balance
+  const stripeReplaceFail = {
+    paymentIntents: {
+      retrieve: async (id) => ({ id, status: 'requires_capture', amount: 3000 }),
+      capture: async () => {
+        const err = new Error('Hold expired')
+        err.code = 'expired_card'
+        throw err
+      },
+      cancel: async () => ({ status: 'canceled' }),
+      create: async () => {
+        const err = new Error('Card declined completely')
+        err.code = 'card_declined'
+        throw err
+      },
+    },
+    paymentMethods: { list: async () => ({ data: [] }) },
+  }
+  const tripBothFail = {
+    id: 't_capture_fail_replace_fail',
+    rider_id: 'rider_retry',
+    metadata: {
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_hold_failed_2',
+        authorizationCents: 3000,
+        paymentMethodId: 'pm_primary',
+      },
+    },
+  }
+  const sbB = createMemoryDb([tripBothFail])
+  const resB = await settleFareHold({
+    sb: sbB,
+    stripe: stripeReplaceFail,
+    trip: tripBothFail,
+    finalFareCents: 3000,
+  })
+  assert.equal(resB.ok, false)
+  assert.equal(resB.parked, true)
+  assert.equal(resB.outstanding.amountCents, 3000)
+  assert.equal(resB.outstanding.reason, 'capture_failed')
+  assert.equal(sbB._trips[0].metadata.outstanding_balance.amountCents, 3000)
+  assert.equal(sbB._trips[0].metadata.outstanding_balance.reason, 'capture_failed')
+})
+
+test('syncBoostAuthorization: handles reauthorization failure by parking balance and setting failed status', async () => {
+  const trip = {
+    id: 't_boost_reauth_fail',
+    rider_id: 'rider_retry',
+    fare_cents: 2000,
+    metadata: {
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_old_boost_hold',
+        authorizationCents: 2400,
+        estimatedFareCents: 2000,
+        bufferCents: 400,
+        boostCents: 0,
+        paymentMethodId: 'pm_primary',
+      },
+    },
+  }
+  let oldCanceled = false
+  const stripe = {
+    paymentIntents: {
+      cancel: async (id) => {
+        oldCanceled = true
+        return { id, status: 'canceled' }
+      },
+      create: async () => {
+        const err = new Error('Card declined on boost reauth')
+        err.code = 'card_declined'
+        throw err
+      },
+    },
+    paymentMethods: { list: async () => ({ data: [] }) },
+  }
+  const sb = createMemoryDb([trip])
+  const res = await syncBoostAuthorization({
+    sb,
+    stripe,
+    trip,
+    boostCents: 1500,
+  })
+  assert.equal(res.ok, false)
+  assert.equal(res.method, 'reauth_failed')
+  assert.equal(oldCanceled, true)
+  assert.equal(res.parked, true)
+  assert.equal(res.outstanding.code, 'card_declined')
+  assert.equal(sb._trips[0].metadata.fare_authorization.status, 'failed')
+  assert.equal(sb._trips[0].metadata.outstanding_balance.code, 'card_declined')
+})
+
+test('releaseOpenFareHold: returns hold_release_failed when stripe cancel rejects', async () => {
+  const trip = {
+    id: 't_release_fail',
+    metadata: {
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_cancel_error',
+        authorizationCents: 2500,
+      },
+    },
+  }
+  const stripe = {
+    paymentIntents: {
+      cancel: async () => {
+        throw new Error('Stripe network error on cancel')
+      },
+    },
+  }
+  const sb = createMemoryDb([trip])
+  const res = await releaseOpenFareHold({
+    sb,
+    stripe,
+    trip,
+    reason: 'rider_cancel',
+  })
+  assert.equal(res.ok, false)
+  assert.equal(res.reason, 'hold_release_failed')
+  assert.equal(res.paymentIntentId, 'pi_cancel_error')
+  assert.equal(sb._trips[0].metadata.fare_authorization.status, 'requires_capture')
+})
+
+test('settleSwitchHold: deep coverage for cancel failure, create failure, status mismatch cancellation, and prior intent cleanup', async () => {
+  const trip = {
+    id: 't_switch_errors',
+    fare_cents: 2500,
+    metadata: {
+      fare_authorization: {
+        status: 'requires_capture',
+        paymentIntentId: 'pi_switch_prior',
+        authorizationCents: 3000,
+      },
+    },
+  }
+
+  // 1. hold = 'release' and stripe.paymentIntents.cancel fails
+  const stripeCancelFail = {
+    paymentIntents: {
+      cancel: async () => { throw new Error('Stripe cancel error') },
+    },
+  }
+  const sb1 = createMemoryDb([trip])
+  const resCancelFail = await settleSwitchHold({
+    stripe: stripeCancelFail,
+    sb: sb1,
+    trip,
+    quote: { hold: 'release' },
+    riderId: 'rider_retry',
+  })
+  assert.equal(resCancelFail.ok, false)
+  assert.equal(resCancelFail.code, 'hold_release_failed')
+  assert.match(resCancelFail.error, /Could not release the card hold/)
+
+  // 2. hold = 'place' and stripe.paymentIntents.create throws
+  const stripeCreateFail = {
+    paymentIntents: {
+      create: async () => { throw new Error('Card declined on switch') },
+    },
+  }
+  const sb2 = createMemoryDb([trip])
+  const resCreateFail = await settleSwitchHold({
+    stripe: stripeCreateFail,
+    sb: sb2,
+    trip,
+    quote: { hold: 'place' },
+    riderId: 'rider_retry',
+    customerId: 'cus_retry',
+    paymentMethodId: 'pm_primary',
+    fareCents: 2500,
+  })
+  assert.equal(resCreateFail.ok, false)
+  assert.equal(resCreateFail.code, 'hold_replace_failed')
+  assert.match(resCreateFail.error, /Could not update the card hold/)
+
+  // 3. hold = 'place' returns status other than requires_capture or succeeded (e.g. requires_action)
+  let createdCanceled = false
+  const stripeRequiresAction = {
+    paymentIntents: {
+      create: async () => ({ id: 'pi_needs_3ds', status: 'requires_action' }),
+      cancel: async (id) => {
+        if (id === 'pi_needs_3ds') createdCanceled = true
+        return { id, status: 'canceled' }
+      },
+    },
+  }
+  const sb3 = createMemoryDb([trip])
+  const res3ds = await settleSwitchHold({
+    stripe: stripeRequiresAction,
+    sb: sb3,
+    trip,
+    quote: { hold: 'place' },
+    riderId: 'rider_retry',
+    customerId: 'cus_retry',
+    paymentMethodId: 'pm_primary',
+    fareCents: 2500,
+  })
+  assert.equal(res3ds.ok, false)
+  assert.equal(res3ds.code, 'hold_replace_failed')
+  assert.equal(createdCanceled, true)
+
+  // 4. hold = 'place' succeeds: cleans up prior intent and marks previous payment row canceled
+  let priorCanceled = false
+  const stripeSuccess = {
+    paymentIntents: {
+      create: async (params) => ({ id: 'pi_new_switch_hold', status: 'requires_capture', amount: params.amount }),
+      cancel: async (id) => {
+        if (id === 'pi_switch_prior') priorCanceled = true
+        return { id, status: 'canceled' }
+      },
+    },
+  }
+  const sb4 = createMemoryDb([trip])
+  sb4._payments.push({
+    trip_id: 't_switch_errors',
+    stripe_payment_intent_id: 'pi_switch_prior',
+    status: 'pending',
+  })
+  const resSuccess = await settleSwitchHold({
+    stripe: stripeSuccess,
+    sb: sb4,
+    trip,
+    quote: { hold: 'place' },
+    riderId: 'rider_retry',
+    customerId: 'cus_retry',
+    paymentMethodId: 'pm_primary',
+    fareCents: 2500,
+  })
+  assert.equal(resSuccess.ok, true)
+  assert.equal(priorCanceled, true)
+  assert.equal(resSuccess.patch.fare_authorization.paymentIntentId, 'pi_new_switch_hold')
+  assert.equal(resSuccess.patch.fare_authorization.replacedPaymentIntentId, 'pi_switch_prior')
+  assert.equal(sb4._payments[0].status, 'canceled')
+})
+
 
