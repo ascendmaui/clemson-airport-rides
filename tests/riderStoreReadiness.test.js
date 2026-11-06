@@ -22,11 +22,25 @@ test('rider store name and version are Clemson Rides 1.2.0', () => {
   assert.match(home, /Surge · On/)
 })
 
+test('rider iOS excludes @expo/ui so WidgetKit is not linked, and ships no widget extension', () => {
+  const pkg = JSON.parse(read('apps/rider/package.json'))
+  assert.deepEqual(pkg.expo.autolinking.ios.exclude, ['@expo/ui'])
+  assert.equal(pkg.expo.autolinking.android, undefined)
+  const expo = JSON.parse(read('apps/rider/app.json')).expo
+  const plugins = expo.plugins.map((plugin) => (Array.isArray(plugin) ? plugin[0] : plugin))
+  assert.equal(plugins.includes('expo-widgets'), false)
+  assert.equal(expo.ios.entitlements, undefined)
+  const config = JSON.stringify(expo)
+  assert.equal(config.includes('NSExtension'), false)
+  assert.equal(config.includes('com.apple.security.application-groups'), false)
+  assert.equal(config.includes('WidgetKit'), false)
+})
+
 test('rider android manifest has a versionCode and no background location', () => {
   const expo = JSON.parse(read('apps/rider/app.json')).expo
   assert.equal(expo.android.package, 'com.ascendmaui.clemsonrides.rider')
   assert.equal(expo.android.versionCode, 19)
-  assert.equal(expo.ios.buildNumber, '19')
+  assert.equal(expo.ios.buildNumber, '50')
   assert.equal(expo.android.permissions.includes('ACCESS_BACKGROUND_LOCATION'), false)
   assert.deepEqual(expo.android.permissions, [
     'ACCESS_COARSE_LOCATION',
