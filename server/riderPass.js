@@ -197,7 +197,7 @@ function checkoutOrigin(body) {
   return process.env.VITE_APP_URL || WEB_ORIGIN
 }
 
-export async function startTigerPassCheckout(sb, user, body, { stripe, ensureStripeCustomer } = {}) {
+export async function startTigerPassCheckout(sb, user, body, { stripe, ensureStripeCustomer, now = new Date() } = {}) {
   if (!stripe?.checkout?.sessions?.create) {
     const error = new Error('STRIPE_SECRET_KEY is not configured.')
     error.status = 503
@@ -205,7 +205,7 @@ export async function startTigerPassCheckout(sb, user, body, { stripe, ensureStr
     throw error
   }
   const existingPass = await readPassRow(sb, user.id)
-  if (subscriptionIsActive(existingPass) || existingPass?.status === 'past_due') {
+  if (subscriptionIsActive(existingPass, now) || existingPass?.status === 'past_due') {
     const error = new Error(existingPass?.status === 'past_due'
       ? 'This pass is past due. A second subscription was not started.'
       : 'This pass is already active.')

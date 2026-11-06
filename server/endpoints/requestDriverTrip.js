@@ -67,6 +67,7 @@ export default async function handler(req, res, deps = {}) {
   if (!sb) return json(res, 503, { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' })
   const user = deps.user !== undefined ? deps.user : await userFromAuth(req)
   if (!user) return json(res, 401, { error: 'Sign in required' })
+  const now = deps.now instanceof Date ? deps.now : new Date()
   const e2eRider = isE2ETestUser(user)
   const runEnsureProfile = deps.ensureProfile || ensureProfile
 
@@ -129,7 +130,7 @@ export default async function handler(req, res, deps = {}) {
 
   let offerDriverId = driverId
   let assignQueue = null
-  const prefs = await loadRiderMatchPreferences(sb, user.id)
+  const prefs = await loadRiderMatchPreferences(sb, user.id, now)
   if (autoAssign) {
     const ordered = await listAssignableDrivers(sb, {
       tier,
