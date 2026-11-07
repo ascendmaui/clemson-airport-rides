@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Clemson RIDES — X header 1500×500</title>
+  <style>
+    html, body { margin: 0; width: 1500px; height: 500px; overflow: hidden; background: #F7F4F0; }
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #0B1220;
+      position: relative;
+    }
+    .glow-orange, .glow-purple { position: absolute; border-radius: 50%; }
+    .glow-orange { width: 600px; height: 600px; left: -260px; top: -320px; background: rgba(245, 102, 0, 0.14); }
+    .glow-purple { width: 560px; height: 560px; right: -140px; top: -240px; background: rgba(82, 45, 128, 0.12); }
+    .row { position: relative; display: flex; align-items: center; height: 490px; padding: 0 80px 0 500px; gap: 40px; }
+    .row img { width: 250px; height: 250px; }
+    .kicker { margin: 0 0 12px; color: #BA4700; font-size: 18px; font-weight: 700; letter-spacing: 1.8px; }
+    h1 { margin: 0 0 14px; font-size: 42px; font-weight: 700; letter-spacing: -0.6px; }
+    .sub { margin: 0 0 16px; color: #5C6570; font-size: 22px; font-weight: 500; }
+    .types { margin: 0; color: #522D80; font-size: 18px; font-weight: 600; }
+    .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 10px; display: flex; }
+    .bar i { display: block; width: 50%; }
+    .bar i:first-child { background: #F56600; }
+    .bar i:last-child { background: #522D80; }
+  </style>
+</head>
+<body>
+  <div class="glow-orange"></div>
+  <div class="glow-purple"></div>
+  <div class="row">
+    <img src="../logo/mark.svg" alt="" />
+    <div>
+      <p class="kicker">CLEMSON RIDES</p>
+      <h1>Peace of mind, every ride</h1>
+      <p class="sub">Airport, campus, and game day rides</p>
+      <p class="types">Standard · Wait &amp; Save · Extra Comfort · Carpool</p>
+    </div>
+  </div>
+  <div class="bar"><i></i><i></i></div>
+</body>
+</html>

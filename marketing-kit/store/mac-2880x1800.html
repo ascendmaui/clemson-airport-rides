@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Clemson RIDES — Mac screenshot template 2880×1800</title>
+  <style>
+    html, body { margin: 0; width: 2880px; height: 1800px; overflow: hidden; }
+    body {
+      display: flex;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #0B1220;
+    }
+    * { box-sizing: border-box; }
+    .panel {
+      width: 1080px;
+      height: 1800px;
+      background: #522D80;
+      color: #FFFFFF;
+      padding: 88px 80px;
+      position: relative;
+    }
+    .panel img { width: 148px; height: 148px; }
+    .kicker { margin: 36px 0 48px; font-size: 28px; font-weight: 700; letter-spacing: 1.6px; }
+    h1 { margin: 0; font-size: 72px; font-weight: 700; letter-spacing: -1.4px; line-height: 1.05; }
+    .sub { margin: 36px 0 0; font-size: 28px; font-weight: 500; line-height: 1.45; }
+    .label { margin: 64px 0 20px; color: #FFFFFF; font-size: 22px; font-weight: 700; letter-spacing: 1.4px; }
+    ul { margin: 0; padding: 0; list-style: none; }
+    li { margin: 0 0 16px; font-size: 32px; font-weight: 600; }
+    .book { position: absolute; left: 80px; bottom: 132px; }
+    .book strong { display: block; font-size: 28px; }
+    .book span { display: block; margin-top: 8px; font-size: 24px; font-weight: 500; }
+    .stage { width: 1800px; height: 1800px; background: #F7F4F0; padding: 120px 120px 0 120px; }
+    .window { background: #FFFFFF; border-radius: 28px; height: 1560px; overflow: hidden; }
+    .chrome { height: 72px; background: #EFE8F6; display: flex; align-items: center; gap: 12px; padding: 0 28px; color: #522D80; font-size: 20px; font-weight: 600; }
+    .dots { display: flex; gap: 12px; margin-right: 20px; }
+    .dots i { width: 16px; height: 16px; border-radius: 50%; display: block; }
+    .dots i:nth-child(1) { background: #F56600; }
+    .dots i:nth-child(2) { background: #522D80; }
+    .dots i:nth-child(3) { background: #5C6570; }
+    .content { padding: 48px 64px; }
+    h2 { margin: 0; font-size: 40px; font-weight: 700; }
+    .lede { margin: 12px 0 36px; color: #5C6570; font-size: 22px; font-weight: 500; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .card { background: #F7F4F0; border-radius: 20px; min-height: 180px; padding: 36px 36px 36px 40px; border-left: 10px solid #F56600; }
+    .card.purple { border-left-color: #522D80; }
+    .card h3 { margin: 0 0 12px; font-size: 28px; }
+    .card p { margin: 0; color: #5C6570; font-size: 20px; font-weight: 500; }
+    .air-label { margin: 40px 0 16px; color: #BA4700; font-size: 16px; font-weight: 700; letter-spacing: 1.4px; }
+    .air { background: #FFFFFF; border: 1px solid rgba(82, 45, 128, 0.18); border-radius: 20px; padding: 28px 32px; }
+    .air strong { display: block; font-size: 26px; margin-bottom: 8px; }
+    .air span { color: #5C6570; font-size: 20px; font-weight: 500; }
+    .actions { display: flex; align-items: center; gap: 28px; margin-top: 40px; }
+    .cta { height: 72px; padding: 0 36px; border: 0; border-radius: 36px; background: #F56600; color: #FFFFFF; font: 700 24px/72px Inter, sans-serif; }
+    .fine { margin: 0; color: #5C6570; font-size: 20px; font-weight: 500; }
+  </style>
+</head>
+<body>
+  <aside class="panel">
+    <img src="../logo/mark.svg" alt="" />
+    <p class="kicker">CLEMSON RIDES</p>
+    <h1>Peace of mind,<br />every ride</h1>
+    <p class="sub">Drivers confirm before they come.<br />A backup is ready if they don't.</p>
+    <p class="label">RIDE TYPES</p>
+    <ul>
+      <li>Standard</li>
+      <li>Wait &amp; Save</li>
+      <li>Extra Comfort</li>
+      <li>Carpool</li>
+    </ul>
+    <div class="book">
+      <strong>Book a ride</strong>
+      <span>clemsonrides.com</span>
+    </div>
+  </aside>
+  <main class="stage">
+    <div class="window">
+      <div class="chrome">
+        <span class="dots"><i></i><i></i><i></i></span>
+        clemsonrides.com/#/home
+      </div>
+      <div class="content">
+        <h2>Four ways to ride</h2>
+        <p class="lede">The quote on the booking screen is the price before you confirm.</p>
+        <div class="grid">
+          <article class="card">
+            <h3>Standard</h3>
+            <p>The base ride.</p>
+          </article>
+          <article class="card">
+            <h3>Wait &amp; Save</h3>
+            <p>Shown when a driver can serve it.</p>
+          </article>
+          <article class="card purple">
+            <h3>Extra Comfort</h3>
+            <p>Nicer cars. Comfort service class only.</p>
+          </article>
+          <article class="card purple">
+            <h3>Carpool</h3>
+            <p>50% of Standard per seat when 3 or 4 riders split.</p>
+          </article>
+          <article class="air">
+            <strong>GSP</strong>
+            <span>Greenville-Spartanburg · $75 flat</span>
+          </article>
+          <article class="air">
+            <strong>CLT</strong>
+            <span>Charlotte Douglas · $175 flat</span>
+          </article>
+        </div>
+        <div class="actions">
+          <button class="cta" type="button">Book a ride</button>
+          <p class="fine">Scheduling does not charge the card.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

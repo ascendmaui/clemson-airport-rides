@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Horizontal Clemson RIDES lockup.
+  Mark derived from public/brand/rider-icon.svg.
+  Wordmark color #522D80 matches the marketing name in src/styles/liquidGlass.css.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="320" viewBox="0 0 1400 320">
+  <rect width="1400" height="320" fill="#F7F4F0"/>
+  <svg x="40" y="40" width="240" height="240" viewBox="0 0 1024 1024">
+    <defs>
+      <clipPath id="tile">
+        <rect width="1024" height="1024" rx="226"/>
+      </clipPath>
+    </defs>
+    <g clip-path="url(#tile)">
+      <rect width="1024" height="1024" fill="#F56600"/>
+      <circle cx="1040" cy="1080" r="560" fill="#522D80" opacity="0.48"/>
+      <circle cx="160" cy="20" r="380" fill="#FFFFFF" opacity="0.16"/>
+      <g transform="translate(512 560) scale(0.9) translate(-512 -520)">
+        <path fill="#FFFFFF" fill-rule="evenodd" d="M 342.00 593.86 A 224.00 224.00 0 1 1 682.00 593.86 L 534.14 766.20 Q 512.00 800.00 489.86 766.20 Z M 432.00 440.00 A 80.00 80.00 0 1 1 592.00 440.02 A 80.00 80.00 0 1 1 432.00 440.00 Z"/>
+      </g>
+    </g>
+  </svg>
+  <text x="320" y="158" fill="#522D80" font-family="Inter, sans-serif" font-size="72" font-weight="700" letter-spacing="-0.6">Clemson RIDES</text>
+  <text x="324" y="214" fill="#5C6570" font-family="Inter, sans-serif" font-size="28" font-weight="500">clemsonrides.com</text>
+</svg>

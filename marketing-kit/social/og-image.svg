@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Open Graph image, 1200×630. Homepage headline and subhead from src/content/differentiators.js. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#F7F4F0"/>
+  <circle cx="80" cy="20" r="340" fill="#F56600" opacity="0.16"/>
+  <circle cx="1140" cy="40" r="300" fill="#522D80" opacity="0.13"/>
+  <svg x="72" y="64" width="148" height="148" viewBox="0 0 1024 1024">
+    <defs>
+      <clipPath id="tile">
+        <rect width="1024" height="1024" rx="226"/>
+      </clipPath>
+    </defs>
+    <g clip-path="url(#tile)">
+      <rect width="1024" height="1024" fill="#F56600"/>
+      <circle cx="1040" cy="1080" r="560" fill="#522D80" opacity="0.48"/>
+      <circle cx="160" cy="20" r="380" fill="#FFFFFF" opacity="0.16"/>
+      <g transform="translate(512 560) scale(0.9) translate(-512 -520)">
+        <path fill="#FFFFFF" fill-rule="evenodd" d="M 342.00 593.86 A 224.00 224.00 0 1 1 682.00 593.86 L 534.14 766.20 Q 512.00 800.00 489.86 766.20 Z M 432.00 440.00 A 80.00 80.00 0 1 1 592.00 440.02 A 80.00 80.00 0 1 1 432.00 440.00 Z"/>
+      </g>
+    </g>
+  </svg>
+  <text x="244" y="128" fill="#522D80" font-family="Inter, sans-serif" font-size="36" font-weight="700" letter-spacing="-0.4">Clemson RIDES</text>
+  <text x="244" y="172" fill="#5C6570" font-family="Inter, sans-serif" font-size="20" font-weight="500">clemsonrides.com</text>
+  <text x="72" y="320" fill="#0B1220" font-family="Inter, sans-serif" font-size="64" font-weight="700" letter-spacing="-1">Peace of mind, every ride</text>
+  <text x="72" y="388" fill="#5C6570" font-family="Inter, sans-serif" font-size="28" font-weight="500">Drivers confirm before they come.</text>
+  <text x="72" y="430" fill="#5C6570" font-family="Inter, sans-serif" font-size="28" font-weight="500">A backup is ready if they don't.</text>
+  <text x="72" y="508" fill="#522D80" font-family="Inter, sans-serif" font-size="24" font-weight="600">Standard · Wait &amp; Save · Extra Comfort · Carpool</text>
+  <rect y="616" width="600" height="14" fill="#F56600"/>
+  <rect x="600" y="616" width="600" height="14" fill="#522D80"/>
+</svg>
