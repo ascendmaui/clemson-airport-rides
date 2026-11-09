@@ -220,7 +220,7 @@ export function PickDriver({
       return
     }
     if (selected && (tier === 'comfort' || tier === 'comfort') && !selected.comfortClass) {
-      setError('Extra Comfort fleet only. That driver is not listed as Comfort.')
+      setError('Extra Comfort only.')
       return
     }
     setRequesting(true)
