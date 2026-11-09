@@ -19,9 +19,9 @@ Photos live in `public/demo-drivers/` at 512px and 128px. The small file is the 
 | demo-wade | Wade | Ford F-150 | white | /demo-drivers/09-wade.webp | /demo-drivers/09-wade@128.webp |
 | demo-tasha | Tasha | Ford F-150 | orange | /demo-drivers/10-tasha.webp | /demo-drivers/10-tasha@128.webp |
 | demo-luis | Luis | Ford F-150 | purple | /demo-drivers/11-luis.webp | /demo-drivers/11-luis@128.webp |
-| demo-brooke | Brooke | Tesla Cybertruck | Silver | /demo-drivers/12-brooke.webp | /demo-drivers/12-brooke@128.webp |
+| demo-brooke | Brooke | 2022 Honda CR-V | Orange & Purple | /demo-drivers/12-brooke.webp | /demo-drivers/12-brooke@128.webp |
 
-Brooke is the only demo-map exception that names that make. The label on the map is `Cybertruck`.
+Brooke's map label is `2022 Honda CR-V`. Her photo is a portrait, the same kind of file the other demo drivers use. The map marker uses the shared SUV silhouette.
 
 iOS can read the same fields from `shared/demoFleet.js`: `id`, `firstName`, `make`, `model`, `year`, `body` (`suv`, `truck`, or `wedge`), `livery`, `label`, `photo`, `photoSmall`, `isDemo`, `source`, `bookable: false`.
 

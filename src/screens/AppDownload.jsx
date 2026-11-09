@@ -3,7 +3,6 @@ import { MarketingChrome } from '../components/MarketingChrome'
 import { QrMark } from '../components/QrMark'
 import { RiderBetaInstall } from '../components/RiderBetaInstall'
 import {
-  CLEMSON_ORANGE,
   CLEMSON_PURPLE,
   installOffer,
   redirectTarget,
@@ -51,9 +50,6 @@ export function AppDownloadPage({ appId }) {
   const iosNote = offer.iosState === 'app-store'
     ? 'Opens the App Store listing.'
     : 'Coming soon to the App Store. Until then, use clemsonrides.com in Safari.'
-  const androidNote = offer.androidKind === 'play'
-    ? 'Opens the Play Store listing.'
-    : 'Downloads the latest Android APK.'
 
   return (
     <MarketingChrome current="get-the-app">
@@ -62,7 +58,7 @@ export function AppDownloadPage({ appId }) {
         <h1>{offer.product}</h1>
         <p>
           Scan a code, or open this page on your phone. The iPhone app is coming soon to the App Store.
-          Android downloads the latest APK, or opens Play once that listing is set.
+          Until then, book and drive on clemsonrides.com.
         </p>
       </div>
       <article className="mkt-card dl-card dl-card--page">
@@ -84,13 +80,6 @@ export function AppDownloadPage({ appId }) {
             note={iosNote}
           />
         )}
-        <PlatformCode
-          href={offer.androidHref}
-          label="Android"
-          color={CLEMSON_ORANGE}
-          action={offer.androidKind === 'play' ? 'Get it on Google Play' : 'Download the Android APK'}
-          note={androidNote}
-        />
       </div>
       <p className="dl-stay">
         <a href={`${offer.pagePath}?stay=1`}>Stay on this page</a>

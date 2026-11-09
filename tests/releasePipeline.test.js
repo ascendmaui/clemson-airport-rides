@@ -200,7 +200,7 @@ test('install links show App Store coming soon, the APK until Play exists, and p
   assert.equal(redirectTarget(listed, iphone), 'https://apps.apple.com/app/id123')
   const testflightOverride = installOffer('rider', { riderAppStore: 'https://testflight.apple.com/join/DXcYmBQg', driverAppStore: '', riderPlay: '', driverPlay: '', riderApk: '', driverApk: '' })
   assert.equal(testflightOverride.iosHref, null)
-  assert.equal(redirectTarget(rider, android), rider.androidHref)
+  assert.equal(redirectTarget(rider, android), null)
   assert.equal(redirectTarget(rider, 'desktop'), null)
   assert.equal(redirectTarget(rider, iphone, { stay: true }), null)
   assert.equal(redirectTarget(hidden, iphone), null)
@@ -242,7 +242,7 @@ test('download pages are wired into the site shell', async () => {
   assert.match(page, /Coming soon/)
   assert.match(page, /redirectTarget/)
   assert.match(page, /offer\.pageUrl/)
-  assert.match(page, /offer\.androidHref/)
+  assert.doesNotMatch(page, /offer\.androidHref|Google Play|Android APK|Play Store/)
 })
 
 test('EAS output parsing keeps the finished build id and does not require a printed URL', () => {
