@@ -57,19 +57,17 @@ export function supportMailto(subject, body) {
 
 /**
  * Public App Store and Google Play URLs.
- * Stay null until a real listing for that specific app is published.
- * Do not invent store ids.
- * Rider and driver are separate binaries, so one shared store URL is not used.
+ * These are the verified public App Store listings for the separate Rider and Driver binaries.
  */
 export const IOS_STORE_URL = null
 
 export const ANDROID_STORE_URL = null
 
-export const RIDER_IOS_STORE_URL = null
+export const RIDER_IOS_STORE_URL = 'https://apps.apple.com/us/app/clemson-rides/id6815430021'
 
 export const RIDER_ANDROID_STORE_URL = null
 
-export const DRIVER_IOS_STORE_URL = null
+export const DRIVER_IOS_STORE_URL = 'https://apps.apple.com/us/app/clemson-rides-driver/id6815445517'
 
 export const DRIVER_ANDROID_STORE_URL = null
 
@@ -88,9 +86,7 @@ export function publishedStoreUrl(url) {
 }
 
 /**
- * Release tooling only. The one public web TestFlight link is the rider iPhone beta
- * in src/content/riderBeta.js; store buttons still read 'Coming soon to the App Store'
- * until a store URL is published.
+ * TestFlight links remain in the release tooling only and are not advertised publicly.
  */
 /** Accept only a public TestFlight join link on Apple's HTTPS host. */
 export function publicTestFlightUrl(url) {
@@ -105,7 +101,7 @@ function installHref(storeUrl, webUrl) {
 
 /**
  * Web booking and driver desk remain available on every platform.
- * iPhone buttons open the App Store once a listing is published; until then they read 'Coming soon to the App Store'.
+ * iPhone buttons open the verified App Store listing.
  */
 export const APP_DOWNLOADS = [
   {
