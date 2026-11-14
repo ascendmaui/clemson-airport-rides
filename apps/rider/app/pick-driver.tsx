@@ -565,7 +565,7 @@ function PickDriver() {
         </View>
       </View>
       <View style={styles.mapWrap}>
-        <CampusMap spots={[]} showHeat={false} mapType={mapType} theater gameDay={false} surge={false} pins={pins} />
+        <CampusMap spots={[]} showHeat={false} mapType={mapType} theater={false} gameDay={false} surge={false} pins={pins} />
         {phase === 'loading' ? (
           <View style={styles.loader} pointerEvents="none">
             <View style={[styles.loaderCard, lift(colors, 'float')]}>

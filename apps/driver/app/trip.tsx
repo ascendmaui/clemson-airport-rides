@@ -1,6 +1,6 @@
 import { riderDriverFirstName } from '../../../shared/riderDriverPrivacy.js'
 import { Glyph } from 'rides-native/icons'
-import { createTrackingRefresh } from 'rides-native/tracking'
+import { createTrackingRefresh, isTransientTrackingError } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AccessibilityInfo, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
@@ -250,7 +250,12 @@ function TripScreenBody() {
         setTripLoaded(true)
       },
       onError: (err) => {
-        const message = err ? (err instanceof Error ? err.message : 'Could not refresh trip. Retrying automatically.') : null
+        if (!err) {
+          setError(null)
+          return
+        }
+        const message = err instanceof Error ? err.message : 'Could not refresh trip. Retrying automatically.'
+        if (confirmedRef.current && isTransientTrackingError(err)) return
         setError(message)
         if (!confirmedRef.current && message) setReconcileError(message)
       },
@@ -431,7 +436,9 @@ function TripScreenBody() {
         setTrip((current) => current?.id === tripId && current.status === 'arrived'
           ? toDriverCard(result.trip, { driverId: user?.id }) : current)
       } catch (err) {
-        if (alive) setWaitError(err instanceof Error ? err.message : 'Could not sync wait timer. Retrying automatically.')
+        if (alive && !isTransientTrackingError(err)) {
+          setWaitError(err instanceof Error ? err.message : 'Could not sync wait timer. Retrying automatically.')
+        }
       } finally {
         ticking = false
       }

@@ -1,5 +1,5 @@
 import { Glyph } from 'rides-native/icons'
-import { trackingIssue, staleEtaLine, withTrackingTimeout } from 'rides-native/tracking'
+import { trackingIssue, staleEtaLine, withTrackingTimeout, isTransientTrackingError } from 'rides-native/tracking'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { reconcileCheckout } from 'rides-native/riderMoney.js'
@@ -179,6 +179,7 @@ function RequestedRide() {
       setMapError(null)
     } catch (err) {
       if (request !== mapRequest.current) return
+      if (liveStatusRef.current && isTransientTrackingError(err)) return
       setMapError(err instanceof Error ? err.message : 'Could not load this trip')
     } finally { if (request === mapRequest.current) mapPending.current = false }
   }
@@ -295,7 +296,7 @@ function RequestedRide() {
     etaLine = null
   }
   const preview = showSearchTheater(shown?.status || null)
-  const searchingMap = shown?.status === 'searching' && !located
+  const searchingMap = false && shown?.status === 'searching' && !located
   const approachLive = isApproachStatus(shown?.status || null)
   const showCheckoutReturn = checkoutReturn
     && Boolean(tripId)
@@ -443,7 +444,7 @@ function RequestedRide() {
           <CampusMap
             spots={[]}
             showHeat={false}
-            theater={preview && !located && !searchingMap}
+            theater={false}
             searchMotion={searchingMap}
             pins={pinsFor(live)}
             fitPins={!searchingMap}

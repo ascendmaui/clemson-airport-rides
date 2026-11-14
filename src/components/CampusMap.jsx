@@ -739,9 +739,8 @@ export function CampusMap({
           </OverlayView>
         ))}
       </GoogleMap>
-      
-      
-      
+      <GoogleFleetMotion map={mapReady} enabled={showSimulatedFleet} onSelect={setPreviewDriver} />
+      <DriverProfileCard driver={previewDriver} onClose={() => setPreviewDriver(null)} />
       {gameDayLabel ? (
         <div style={{
           position: 'absolute',

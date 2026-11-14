@@ -10,7 +10,7 @@ import { sanitizeCompletedTripForDriver, summarizeDriverEarnings } from './drive
 
 /** Routes that sign a driver in on the web instead of the rider Google-only screen. */
 export const DRIVER_SIGN_IN_ROUTE = 'driver-sign-in'
-export const DRIVER_AUTH_PATHS = Object.freeze(['driver', 'earnings', 'driver-payouts', 'driver-w9'])
+export const DRIVER_AUTH_PATHS = Object.freeze(['driver', 'driver-onboarding', 'earnings', 'driver-payouts', 'driver-w9'])
 
 export function driverSignInTarget(path) {
   return DRIVER_AUTH_PATHS.includes(path) ? DRIVER_SIGN_IN_ROUTE : null

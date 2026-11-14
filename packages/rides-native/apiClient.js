@@ -49,9 +49,29 @@ export async function authedJson(
       abortErr.name = err?.name || 'AbortError'
       throw abortErr
     }
-    const error = new Error(err?.message || 'Network error')
-    error.network = true
-    throw error
+    if (/FetchRequestCanceledException|request has been cancel+ed/i.test(String(err?.message || err?.name || '')) && !signal?.aborted) {
+      try {
+        res = await fetcher(url, {
+          method,
+          headers,
+          body: reqBody,
+          signal,
+        })
+      } catch (retryErr) {
+        if (retryErr?.name === 'AbortError' || retryErr?.name === 'TimeoutError' || signal?.aborted) {
+          const abortErr = new Error(retryErr?.message || 'The operation was aborted')
+          abortErr.name = retryErr?.name || 'AbortError'
+          throw abortErr
+        }
+        const error = new Error(retryErr?.message || 'Network error')
+        error.network = true
+        throw error
+      }
+    } else {
+      const error = new Error(err?.message || 'Network error')
+      error.network = true
+      throw error
+    }
   }
 
   // On 401, call supabase.auth.refreshSession() ONCE.

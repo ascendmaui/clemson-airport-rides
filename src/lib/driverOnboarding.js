@@ -1,5 +1,6 @@
 import { serviceClassFromBody } from '../../shared/rideOptions.js'
 import { isAiReviewedDocument } from '../../shared/documentAiReview.js'
+import { fetchDriverApplication } from '../../packages/rides-native/drivers.js'
 import { supabase } from './supabase'
 import {
   EMAIL_TODO,
@@ -166,6 +167,11 @@ export async function fetchMyDriverApplication(userId) {
       .maybeSingle()
   }
   if (result.error) throw new Error(result.error.message)
+  if (result.data?.onboarding_status === 'approved') return result.data
+  const resolved = await fetchDriverApplication(supabase, userId).catch(() => ({ application: null }))
+  if (resolved?.application?.onboarding_status === 'approved') {
+    return { ...(result.data || {}), ...resolved.application, onboarding_status: 'approved' }
+  }
   return result.data
 }
 

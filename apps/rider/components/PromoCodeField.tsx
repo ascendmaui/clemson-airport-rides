@@ -78,7 +78,7 @@ export function PromoCodeField({ code, onChange }: Props) {
           placeholderTextColor={colors.inkSecondary}
           autoCapitalize="characters"
           autoCorrect={false}
-          maxLength={16}
+          maxLength={24}
           accessibilityLabel="Promo code"
           style={{
             flex: 1, minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: colors.purple,

@@ -94,7 +94,7 @@ export function DriverSignIn() {
         <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.4, color: ORANGE, textTransform: 'uppercase' }}>Clemson Rides · Driver</div>
         <h1 style={{ fontSize: 28, fontWeight: 800, marginTop: 6, letterSpacing: -0.4 }}>Drive on the web</h1>
         <p style={{ fontSize: 15, opacity: 0.88, marginTop: 6, lineHeight: 1.45 }}>
-          Approved drivers can go online, take requests, and run trips here until the Driver app is in the App Store.
+          Approved drivers can go online, take requests, and run trips here or in the Clemson RIDES Driver app on the App Store.
         </p>
       </div>
       <div className="sheet" style={{ background: '#fff', borderRadius: 24, padding: 22, boxShadow: '0 12px 32px rgba(82,45,128,0.18)' }}>
@@ -124,10 +124,12 @@ export function DriverSignIn() {
           </div>
         )}
         <p style={{ marginTop: 18, fontSize: 14, color: '#5f5a66', textAlign: 'center', lineHeight: 1.5 }}>
-          Not a driver yet?{' '}
-          <button type="button" className="pressable" onClick={() => navigate('drive')} style={{ color: PURPLE, fontWeight: 700, minHeight: 44 }}>Apply to drive</button>
+          New applicant?{' '}
+          <button type="button" className="pressable" onClick={() => navigate('sign-up', nextParams())} style={{ color: ORANGE, fontWeight: 800, minHeight: 44 }}>Create your driver account</button>
           <br />
-          Need a ride?{' '}
+          Not a driver yet?{' '}
+          <button type="button" className="pressable" onClick={() => navigate('drive')} style={{ color: PURPLE, fontWeight: 700, minHeight: 44 }}>Driver overview &amp; perks</button>
+          {' · '}
           <button type="button" className="pressable" onClick={() => navigate('sign-in')} style={{ color: PURPLE, fontWeight: 700, minHeight: 44 }}>Rider sign in</button>
         </p>
       </div>

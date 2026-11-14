@@ -133,7 +133,7 @@ test('VPS copy script only uploads APKs and the compose volume is read-only', as
   }
 })
 
-test('install links show App Store coming soon, the APK until Play exists, and phones redirect', () => {
+test('install links resolve verified App Store URLs, the APK until Play exists, and phones redirect', () => {
   assert.equal(CLEMSON_ORANGE, '#F56600')
   assert.equal(CLEMSON_PURPLE, '#522D80')
   const rider = installOffer('rider', {
@@ -154,13 +154,13 @@ test('install links show App Store coming soon, the APK until Play exists, and p
   })
   assert.equal(rider.pagePath, '/download')
   assert.equal(rider.pageUrl, 'https://clemsonrides.com/download')
-  assert.equal(rider.iosHref, null)
-  assert.equal(rider.iosState, 'coming-soon')
+  assert.equal(rider.iosHref, 'https://apps.apple.com/us/app/clemson-rides/id6815430021')
+  assert.equal(rider.iosState, 'app-store')
   assert.equal(rider.androidKind, 'apk')
   assert.equal(rider.androidHref, `https://clemsonrides.com/downloads/${RIDER_APK_NAME}`)
   assert.equal(driver.pagePath, '/driver/download')
-  assert.equal(driver.iosHref, null)
-  assert.equal(driver.iosState, 'coming-soon')
+  assert.equal(driver.iosHref, 'https://apps.apple.com/us/app/clemson-rides-driver/id6815445517')
+  assert.equal(driver.iosState, 'app-store')
   assert.equal(driver.androidHref, `https://clemsonrides.com/downloads/${DRIVER_APK_NAME}`)
 
   const hidden = installOffer('rider', {
@@ -193,8 +193,8 @@ test('install links show App Store coming soon, the APK until Play exists, and p
   assert.equal(clientPlatform(iphone), 'ios')
   assert.equal(clientPlatform(android), 'android')
   assert.equal(clientPlatform('Mozilla/5.0 (Macintosh)'), 'other')
-  assert.equal(redirectTarget(rider, iphone), null)
-  assert.equal(redirectTarget(rider, iphone, { stay: false }), null)
+  assert.equal(redirectTarget(rider, iphone), 'https://apps.apple.com/us/app/clemson-rides/id6815430021')
+  assert.equal(redirectTarget(rider, iphone, { stay: false }), 'https://apps.apple.com/us/app/clemson-rides/id6815430021')
   const listed = installOffer('rider', { riderAppStore: 'https://apps.apple.com/app/id123', driverAppStore: '', riderPlay: '', driverPlay: '', riderApk: '', driverApk: '' })
   assert.equal(listed.iosState, 'app-store')
   assert.equal(redirectTarget(listed, iphone), 'https://apps.apple.com/app/id123')

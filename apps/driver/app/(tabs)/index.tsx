@@ -166,6 +166,7 @@ function DriverHomeBody() {
   const [weekCents, setWeekCents] = useState(0)
   const [lastTrip, setLastTrip] = useState<string | null>(null)
   const [status, setStatus] = useState('none')
+  const [statusLoaded, setStatusLoaded] = useState(false)
   const [reason, setReason] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -282,6 +283,7 @@ function DriverHomeBody() {
     if (!user || !supabase) {
       setDocuments(null)
       setInspectionDueAt(null)
+      setStatusLoaded(true)
       return
     }
     const [application, rows, deadline] = await Promise.all([
@@ -293,11 +295,13 @@ function DriverHomeBody() {
     setInspectionDueAt(deadline?.inspection_due_at ?? null)
     if (application.error) {
       setError(application.error)
+      setStatusLoaded(true)
       return
     }
     const nextStatus = application.application?.onboarding_status || 'none'
     setStatus(nextStatus)
     setReason(application.application?.rejection_reason || null)
+    setStatusLoaded(true)
     const currentGate = driverGateView(nextStatus, {
       rejectionReason: application.application?.rejection_reason || null,
     })
@@ -819,7 +823,7 @@ function DriverHomeBody() {
             </Pressable>
           ) : null}
 
-          {!canSeeOffers ? (
+          {statusLoaded && !canSeeOffers ? (
             <View style={styles.statusWrap}>
               <DriverStatusCard
                 status={status}

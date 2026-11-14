@@ -312,4 +312,4 @@ export const AIRPORT_SECTION = {
   ],
 }
 
-export const APP_STORE_NOTE = 'The iPhone app is coming soon to the App Store. Until then, you can book and drive on clemsonrides.com.'
+export const APP_STORE_NOTE = 'Both official iPhone apps — Clemson RIDES Rider and Clemson RIDES Driver — are live on the App Store. You can also book and drive on clemsonrides.com.'

@@ -107,32 +107,32 @@ export const APP_DOWNLOADS = [
   {
     id: 'rider',
     label: 'Rider',
-    product: 'Clemson Rides Rider',
+    product: 'Clemson RIDES Rider',
     href: WEB_BOOK_URL,
     iosHref: publishedStoreUrl(RIDER_IOS_STORE_URL) || WEB_BOOK_URL,
     androidHref: installHref(RIDER_ANDROID_STORE_URL, WEB_BOOK_URL),
     iosNote: publishedStoreUrl(RIDER_IOS_STORE_URL)
-      ? 'App Store'
+      ? 'Available on the App Store for iPhone.'
       : 'iPhone: coming soon to the App Store.',
     androidNote: publishedStoreUrl(RIDER_ANDROID_STORE_URL)
       ? 'Google Play'
       : 'The Play Store listing is not live yet. This opens booking on clemsonrides.com.',
-    blurb: 'iPhone: coming soon to the App Store. Android: book on clemsonrides.com while the Play Store listing is not live yet.',
+    blurb: 'Official iPhone app for campus rides, carpools, and scheduled GSP & CLT airport transfers.',
   },
   {
     id: 'driver',
     label: 'Driver',
-    product: 'Clemson Rides Driver',
+    product: 'Clemson RIDES Driver',
     href: WEB_DRIVER_URL,
     iosHref: publishedStoreUrl(DRIVER_IOS_STORE_URL) || WEB_DRIVER_URL,
     androidHref: installHref(DRIVER_ANDROID_STORE_URL, WEB_DRIVER_URL),
     iosNote: publishedStoreUrl(DRIVER_IOS_STORE_URL)
-      ? 'App Store'
+      ? 'Available on the App Store for iPhone.'
       : 'iPhone: coming soon to the App Store.',
     androidNote: publishedStoreUrl(DRIVER_ANDROID_STORE_URL)
       ? 'Google Play'
       : 'The Play Store listing is not live yet. This opens the driver web app on clemsonrides.com.',
-    blurb: 'iPhone: coming soon to the App Store. Android: open the driver desk on clemsonrides.com while the Play Store listing is not live yet.',
+    blurb: 'Official iPhone app for approved Clemson RIDES drivers — accept offers, navigate, and track earnings.',
   },
 ]
 

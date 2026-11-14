@@ -265,6 +265,7 @@ function QueueScreenBody() {
   const [warning, setWarning] = useState<string | null>(null)
   const [offerNote, setOfferNote] = useState<string | null>(null)
   const [status, setStatus] = useState('none')
+  const [statusLoaded, setStatusLoaded] = useState(false)
   const [reason, setReason] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -275,16 +276,21 @@ function QueueScreenBody() {
   const canSeeOffers = gate.canSeeOffers
 
   const refresh = useCallback(async () => {
-    if (!user || !supabase) return
+    if (!user || !supabase) {
+      setStatusLoaded(true)
+      return
+    }
     const application = await fetchDriverApplication(supabase, user.id)
     if (application.error) {
       setError(application.error)
+      setStatusLoaded(true)
       return
     }
     const nextStatus = application.application?.onboarding_status || 'none'
     const nextReason = application.application?.rejection_reason || null
     setStatus(nextStatus)
     setReason(nextReason)
+    setStatusLoaded(true)
 
     const currentGate = driverGateView(nextStatus, { rejectionReason: nextReason })
     if (currentGate.canSeeOffers) {
@@ -521,13 +527,15 @@ function QueueScreenBody() {
             {!user ? <Primary label="Sign in" onPress={() => router.push('/sign-in')} /> : null}
 
             {!canSeeOffers ? (
-              <DriverStatusCard
-                status={status}
-                gate={gate}
-                reason={reason}
-                onRefresh={onPullRefresh}
-                refreshing={refreshing}
-              />
+              statusLoaded ? (
+                <DriverStatusCard
+                  status={status}
+                  gate={gate}
+                  reason={reason}
+                  onRefresh={onPullRefresh}
+                  refreshing={refreshing}
+                />
+              ) : null
             ) : (
               <>
                 {shown.length === 0 ? (

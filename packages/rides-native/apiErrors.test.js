@@ -229,4 +229,5 @@ test('isUserFacing distinguishes user-friendly messages from technical traces', 
   assert.equal(isUserFacing('at /app/routes.js:10:4'), false)
   assert.equal(isUserFacing('STRIPE_SECRET_KEY is not configured.'), false)
   assert.equal(isUserFacing('{"error":"bad"}'), false)
+  assert.equal(isUserFacing('FetchRequestCanceledException: Fetch request has been canceled'), false)
 })

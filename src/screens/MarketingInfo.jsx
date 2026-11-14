@@ -3,11 +3,10 @@ import { getHashRoute, navigate } from '../lib/navigation'
 import { MarketingChrome } from '../components/MarketingChrome'
 import { MarketingPhoto } from '../components/MarketingPhoto'
 import { QrMark } from '../components/QrMark'
-import { RiderBetaInstall } from '../components/RiderBetaInstall'
 import { FeatureBlock } from '../components/FeatureBlock'
 import { messagingGuide } from '../../shared/copy/messaging.js'
 import { HERO_COLLAGE, NIGHT_VENUES } from '../content/images.js'
-import { installOffer } from '../../shared/installLinks.js'
+import { CLEMSON_ORANGE, CLEMSON_PURPLE, installOffer } from '../../shared/installLinks.js'
 import { APP_DOWNLOADS, supportEmail } from '../../shared/productLinks.js'
 import { RIDE_TYPE_NOTES, RIDE_TYPE_STUDENT_NOTE } from '../../shared/copy/rideTypes.js'
 import { RIDE_OPTION_CATALOG, SCHEDULE_AHEAD_DISCOUNT_PCT } from '../../shared/rideOptions.js'
@@ -304,43 +303,60 @@ export function SupportPage() {
 }
 
 export function GetTheAppPage() {
-  useEffect(() => {
-    if (getHashRoute().params.section !== 'iphone-beta') return undefined
-    const frame = window.requestAnimationFrame(() => {
-      document.getElementById('iphone-beta')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
-    return () => window.cancelAnimationFrame(frame)
-  }, [])
   return (
     <MarketingChrome current="get-the-app">
-      <PageHead kicker="Get the App" title="Rider and driver" lede={APP_STORE_NOTE} />
-      <RiderBetaInstall />
-      {APP_DOWNLOADS.map((app) => (
-        <article key={app.id} className="mkt-card mkt-feature" id={app.id === 'rider' ? 'get-the-app' : undefined}>
-          <img
-            className="mkt-app-icon"
-            src={app.id === 'driver' ? '/brand/driver-icon.svg' : '/brand/rider-icon.svg'}
-            alt=""
-            width="72"
-            height="72"
-          />
-          <h2>{app.product}</h2>
-          <p>{app.blurb}</p>
-          <p>{app.iosNote}</p>
-          <p>{app.androidNote}</p>
-          <QrMark value={installOffer(app.id).pageUrl} label={`QR code for the ${app.product} install page`} />
-          <a className="mkt-text pressable" href={installOffer(app.id).pagePath}>
-            Phone install page
-          </a>
-          <button
-            type="button"
-            className="mkt-text pressable"
-            onClick={() => navigate(app.id === 'driver' ? 'driver' : 'home')}
-          >
-            {app.id === 'driver' ? 'Open the driver desk' : 'Book a ride'}
-          </button>
-        </article>
-      ))}
+      <PageHead kicker="Get the App" title="Clemson RIDES on the App Store" lede={APP_STORE_NOTE} />
+      <div className="dl-grid">
+        {APP_DOWNLOADS.map((app) => {
+          const offer = installOffer(app.id)
+          const isDriver = app.id === 'driver'
+          const accent = isDriver ? CLEMSON_PURPLE : CLEMSON_ORANGE
+          return (
+            <article
+              key={app.id}
+              className="mkt-card mkt-feature dl-card dl-card--page"
+              id={app.id === 'rider' ? 'get-the-app' : 'get-the-driver-app'}
+              style={{ borderTop: `4px solid ${accent}` }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <img
+                  className="mkt-app-icon"
+                  src={isDriver ? '/brand/driver-icon.svg' : '/brand/rider-icon.svg'}
+                  alt=""
+                  width="64"
+                  height="64"
+                />
+                <div>
+                  <p className="mkt-kicker" style={{ background: accent, marginBottom: 6 }}>
+                    {isDriver ? 'Drivers' : 'Riders'}
+                  </p>
+                  <h2 style={{ margin: 0 }}>{app.product}</h2>
+                </div>
+              </div>
+              <p>{app.blurb}</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                <a
+                  className="dl-go pressable"
+                  href={app.iosHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ background: accent }}
+                >
+                  Download on the App Store
+                </a>
+                <button
+                  type="button"
+                  className="mkt-text pressable"
+                  onClick={() => navigate(isDriver ? 'driver' : 'home')}
+                >
+                  {isDriver ? 'Open the driver desk' : 'Book a ride'}
+                </button>
+              </div>
+              <QrMark value={offer.pageUrl} label={`QR code for the ${app.product} install page`} color={accent} />
+            </article>
+          )
+        })}
+      </div>
     </MarketingChrome>
   )
 }

@@ -329,7 +329,7 @@ export function RiderHome() {
           gameDayLabel={gameNotice?.live ? gameNotice.headline : null}
           surge={surge}
           userCoordinate={userCoord}
-          showSimulatedFleet
+          showSimulatedFleet={false}
           showFleetBadge={false}
         />
         </View>
@@ -369,9 +369,11 @@ export function RiderHome() {
               )}
             </Pressable>
           </View>
+          {false ? (
           <View pointerEvents="none" style={styles.previewRow}>
             <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1} style={styles.previewPill}>{SIMULATED_FLEET_BADGE}</Text>
           </View>
+          ) : null}
           </View>
           <View style={styles.mapControls}>
             <View style={[styles.kindRow, lift(colors, 'rest')]}>

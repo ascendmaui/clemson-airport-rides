@@ -15,6 +15,7 @@ import { missingLuxuryExceptionColumn } from '../../shared/ownedVehicle.js'
 import { vehicleServesComfort } from '../../shared/rideOptions.js'
 import { headingOrNull, isLiveLocationStatus, speedOrNull } from './liveFix.js'
 import { authedJson } from './apiClient.js'
+import { fetchDriverApplication } from './drivers.js'
 import { driverBackupPresentation, isBackupQueueRide } from '../../shared/backupDriverQueue.js'
 import { approvalGateMessage } from './syntheticOffers.js'
 import {
@@ -287,12 +288,12 @@ export async function loadDriverDesk(supabase, driverId) {
     supabase.from('driver_status').select('online, priority_mode, lat, lng').eq('driver_id', driverId).maybeSingle(),
     loadVehicle(supabase, driverId).catch(() => null),
     loadDriverProfile(supabase, driverId).catch(() => null),
-    supabase.from('driver_applications').select('onboarding_status').eq('profile_id', driverId).maybeSingle(),
+    fetchDriverApplication(supabase, driverId),
   ])
   if (statusRes.error) throw new Error(statusRes.error.message)
 
-  const approvedForOffers = !appRes.error && appRes.data?.onboarding_status === 'approved'
-  if (appRes.error) warnings.push(`approval: ${appRes.error.message}`)
+  const approvedForOffers = !appRes.error && appRes.application?.onboarding_status === 'approved'
+  if (appRes.error) warnings.push(`approval: ${appRes.error}`)
   const approvalGate = approvedForOffers ? null : approvalGateMessage()
 
   const passedIds = approvedForOffers
@@ -435,13 +436,9 @@ export async function acceptTrip(supabase, trip, driverId) {
   if (isUnpaidAirportDepositTrip(fresh)) {
     throw new Error(UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR)
   }
-  const gate = await supabase
-    .from('driver_applications')
-    .select('onboarding_status')
-    .eq('profile_id', driverId)
-    .maybeSingle()
-  if (gate.error) throw new Error(gate.error.message)
-  if (gate.data?.onboarding_status !== 'approved') {
+  const gate = await fetchDriverApplication(supabase, driverId)
+  if (gate.error) throw new Error(gate.error)
+  if (gate.application?.onboarding_status !== 'approved') {
     throw new Error('Finish approval to go online. Your account is still under review.')
   }
   // The card can be stale by the time a driver taps Accept. Use the row we

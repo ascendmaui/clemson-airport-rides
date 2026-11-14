@@ -3,6 +3,7 @@
  * The TIN is sent only to save_driver_tax_info. Callers must not log it.
  */
 import { authedJson } from './apiClient.js'
+import { fetchDriverApplication } from './drivers.js'
 import { driverQuizError } from '../../shared/driverQuiz.js'
 import {
   IC_AGREEMENT_HTML,
@@ -210,7 +211,13 @@ export async function replyApplicantInbox(supabase, body) {
 }
 
 export async function loadOnboarding(supabase, userId) {
-  const application = await fetchMyDriverApplication(supabase, userId)
+  let application = await fetchMyDriverApplication(supabase, userId)
+  if (application?.onboarding_status !== 'approved') {
+    const resolved = await fetchDriverApplication(supabase, userId).catch(() => ({ application: null }))
+    if (resolved?.application?.onboarding_status === 'approved') {
+      application = { ...(application || {}), ...resolved.application, onboarding_status: 'approved' }
+    }
+  }
   if (application?.onboarding_status === 'approved') {
     const ctx = { status: 'approved' }
     return { application, documents: [], tax: null, agreement: null, ctx,

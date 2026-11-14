@@ -60,6 +60,7 @@ import { driverRouteForOnboarding } from '../../shared/driverRoute.js'
 import { pickupCodeState, requestBrowserOfferPermission, todayDriverEarnings } from '../lib/webDriverConsole'
 import { isStaleLiveOffer } from '../../shared/staleLiveOffer.js'
 import { acceptTrip, declineTrip, listPassedTripIds } from '../../packages/rides-native/driverDesk.js'
+import { fetchDriverApplication } from '../../packages/rides-native/drivers.js'
 import {
   acceptActionLabel,
   declineActionLabel,
@@ -248,16 +249,12 @@ function DriverShell({ driverId, openChatTripId = '' }) {
       return undefined
     }
     let alive = true
-    supabase
-      .from('driver_applications')
-      .select('onboarding_status, rejection_reason, submitted_at')
-      .eq('profile_id', driverId)
-      .maybeSingle()
-      .then(({ data, error }) => {
+    fetchDriverApplication(supabase, driverId)
+      .then(({ application: data, error }) => {
         if (!alive) return
         if (error) {
-          console.error('[driver approval]', error.message)
-          setApplicationError(error.message || 'Could not check driver approval')
+          console.error('[driver approval]', error)
+          setApplicationError(error || 'Could not check driver approval')
           setApplication((prev) => (prev && prev.onboarding_status ? prev : null))
           return
         }

@@ -43,7 +43,7 @@ export const PROMO_DISCOUNT_TYPES = Object.freeze(['percent', 'flat'])
 /** Safety guardrails. The SQL check constraints match these. */
 export const PROMO_LIMITS = Object.freeze({
   minCodeLength: 4,
-  maxCodeLength: 16,
+  maxCodeLength: 24,
   maxPercentBps: 5000,
   maxFlatCents: 5000,
   maxDiscountCapCents: 5000,
@@ -55,6 +55,32 @@ export const PROMO_LIMITS = Object.freeze({
   maxLifetimeDays: 366,
   maxBatch: 500,
   defaultPercentCapCents: 1500,
+})
+
+/** Official Clemson game-day promotion (November 13–14, 2026 Eastern Time). */
+export const GAME_DAY_PROMO_CODE = 'ILOVECLEMSONRIDES'
+export const GAME_DAY_PROMO_DEFINITION = Object.freeze({
+  id: 'campaign-iloveclemsonrides-2026',
+  code: GAME_DAY_PROMO_CODE,
+  side: 'rider',
+  discount_type: 'percent',
+  percent_off_bps: 5000,
+  amount_off_cents: 0,
+  max_discount_cents: null,
+  min_trip_cents: 0,
+  starts_at: '2026-11-13T00:00:00-05:00',
+  expires_at: '2026-11-14T23:59:59-05:00',
+  max_redemptions: 1,
+  per_account_limit: 1,
+  limit_per_device: true,
+  limit_per_card: true,
+  first_ride_only: true,
+  require_payment_method: true,
+  active: true,
+  public_listing: true,
+  campaign: 'Clemson Game Day 2026',
+  source: 'admin',
+  notes: '50% off first eligible ride, Nov 13-14, 2026 ET',
 })
 
 /** Auto-issued code defaults. promo_auto_settings in the database is the live copy. */
@@ -203,7 +229,7 @@ export function planPromoCodes({ code, prefix, count = 1 } = {}, random = Math.r
     const raw = String(code).trim().toUpperCase()
     const norm = normalizePromoCode(raw)
     if (norm !== raw || norm.length < PROMO_LIMITS.minCodeLength) {
-      return { ok: false, error: 'Codes are 4–16 letters or numbers.' }
+      return { ok: false, error: `Codes are ${PROMO_LIMITS.minCodeLength}–${PROMO_LIMITS.maxCodeLength} letters or numbers.` }
     }
     if (looksLikeWeeklyCoupon(norm)) return { ok: false, error: 'That looks like a Friday coupon code. Pick another.' }
     return { ok: true, codes: [norm] }
@@ -312,6 +338,8 @@ const REASONS = {
   budget_exhausted: 'That code has been fully redeemed.',
   too_many_attempts: 'Too many tries. Wait an hour and try again.',
   better_discount_applied: 'Your student or Tiger Pass price is already lower, so the code was not used. It stays available.',
+  payment_method_required: 'Save a valid payment method to your account before redeeming this promotion.',
+  first_ride_only: 'This promotion is valid for your first completed ride only.',
   no_code: 'No code to apply.',
   sign_in_required: 'Sign in to use a code.',
 }

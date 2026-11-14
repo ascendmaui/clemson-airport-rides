@@ -282,3 +282,128 @@ test('booking with no code and no saved signup code changes nothing', async () =
   assert.equal(out.promo, null)
   assert.equal(sb.calls.rpc.length, 0)
 })
+
+const GAMEDAY_NOW = new Date('2026-11-14T15:00:00-05:00')
+
+test('ILOVECLEMSONRIDES: 50% off first eligible ride on Nov 13-14, 2026 ET with full eligibility guards', async () => {
+  const state = {
+    profiles: { id: RIDER.id, stripe_default_pm_id: 'pm_card_valid' },
+    trips: [],
+    redemptions: [],
+  }
+  const sb = fakeSb({
+    tables: {
+      profiles: () => ({ data: state.profiles, error: null }),
+      trips: () => ({ data: state.trips, error: null }),
+      promo_code_redemptions: () => ({ data: state.redemptions, error: null }),
+    },
+    rpc: {
+      promo_reserve_for_trip: (args) => ({
+        data: {
+          ok: true,
+          redemption_id: 'red_gameday_1',
+          code: 'ILOVECLEMSONRIDES',
+          discount_cents: Math.round(args.p_fare_cents / 2),
+        },
+        error: null,
+      }),
+    },
+  })
+  const stripe = { paymentMethods: { retrieve: async () => ({ card: { fingerprint: 'fp_gameday_1' } }) } }
+
+  // 1. Eligible rider during Nov 13-14, 2026 ET gets 50% off list fare
+  const win = await applyPromoToRideRequest({
+    sb,
+    stripe,
+    userId: RIDER.id,
+    code: 'iloveclemsonrides',
+    deviceId: 'dev-gameday123456',
+    recurring: RECURRING,
+    list: LIST,
+    now: GAMEDAY_NOW,
+  })
+  assert.equal(win.promo.applied, true)
+  assert.equal(win.promo.code, 'ILOVECLEMSONRIDES')
+  assert.equal(win.promo.discountCents, 1000)
+  assert.equal(win.promo.riderPaysCents, 1000)
+  assert.equal(win.priced, LIST)
+  assert.equal(win.snapshot.code, 'ILOVECLEMSONRIDES')
+  assert.equal(win.snapshot.percent_off_bps, 5000)
+  assert.equal(win.snapshot.device_id, 'dev-gameday123456')
+  assert.equal(win.snapshot.card_fingerprint, 'fp_gameday_1')
+
+  // 2. Before Nov 13, 2026 ET -> not_started
+  const early = await applyPromoToRideRequest({
+    sb,
+    stripe,
+    userId: RIDER.id,
+    code: 'ILOVECLEMSONRIDES',
+    recurring: RECURRING,
+    list: LIST,
+    now: new Date('2026-11-12T23:59:00-05:00'),
+  })
+  assert.equal(early.promo.applied, false)
+  assert.equal(early.promo.reason, 'not_started')
+
+  // 3. After Nov 14, 2026 11:59:59 PM ET -> expired
+  const late = await applyPromoToRideRequest({
+    sb,
+    stripe,
+    userId: RIDER.id,
+    code: 'ILOVECLEMSONRIDES',
+    recurring: RECURRING,
+    list: LIST,
+    now: new Date('2026-11-15T00:00:00-05:00'),
+  })
+  assert.equal(late.promo.applied, false)
+  assert.equal(late.promo.reason, 'expired')
+
+  // 4. Missing payment method -> payment_method_required
+  state.profiles = { id: RIDER.id, stripe_default_pm_id: null }
+  const noCard = await applyPromoToRideRequest({
+    sb,
+    stripe,
+    userId: RIDER.id,
+    code: 'ILOVECLEMSONRIDES',
+    recurring: RECURRING,
+    list: LIST,
+    now: GAMEDAY_NOW,
+  })
+  assert.equal(noCard.promo.applied, false)
+  assert.equal(noCard.promo.reason, 'payment_method_required')
+  state.profiles = { id: RIDER.id, stripe_default_pm_id: 'pm_card_valid' }
+
+  // 5. Prior completed ride -> first_ride_only
+  state.trips = [{ id: 't-prior', rider_id: RIDER.id, status: 'completed', metadata: {} }]
+  const notFirst = await applyPromoToRideRequest({
+    sb,
+    stripe,
+    userId: RIDER.id,
+    code: 'ILOVECLEMSONRIDES',
+    recurring: RECURRING,
+    list: LIST,
+    now: GAMEDAY_NOW,
+  })
+  assert.equal(notFirst.promo.applied, false)
+  assert.equal(notFirst.promo.reason, 'first_ride_only')
+
+  // 6. Duplicate-account abuse via same device or same card fingerprint -> rejected
+  state.trips = [{
+    id: 't-other',
+    rider_id: 'u-other-account',
+    status: 'completed',
+    metadata: { promo: { code: 'ILOVECLEMSONRIDES', device_id: 'dev-gameday123456', card_fingerprint: 'fp_gameday_1' } },
+  }]
+  const dupDevice = await applyPromoToRideRequest({
+    sb,
+    stripe,
+    userId: RIDER.id,
+    code: 'ILOVECLEMSONRIDES',
+    deviceId: 'dev-gameday123456',
+    recurring: RECURRING,
+    list: LIST,
+    now: GAMEDAY_NOW,
+  })
+  assert.equal(dupDevice.promo.applied, false)
+  assert.equal(dupDevice.promo.reason, 'device_limit')
+})

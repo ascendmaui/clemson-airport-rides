@@ -43,7 +43,7 @@ function AmbassadorAttributionSync() {
   return null
 }
 
-const PROTECTED = new Set(['drivers', 'rentals', 'driver', 'driver-onboarding', 'account', 'driver-signup', 'admin', 'admin-dashboard', 'incentives', 'lost-found', 'history', 'earnings', 'sign-agreement'])
+const PROTECTED = new Set(['drivers', 'rentals', 'driver', 'driver-onboarding', 'account', 'admin', 'admin-dashboard', 'incentives', 'lost-found', 'history', 'earnings', 'sign-agreement'])
 /** Driver desk and admin screens load on demand so riders and visitors skip that code. */
 /** Signed-in watchers load right after first paint; they render nothing until a trip or offer exists. */
 const RideToastWatcher = lazy(() => import('./components/RideToastWatcher').then((m) => ({ default: m.RideToastWatcher })))
@@ -123,6 +123,7 @@ const SITE_ROUTES = new Set([
   'service-area',
   'why-clemson-rides',
   'drive',
+  'driver-signup',
   'how-it-works',
   'ride-types',
   'tiger-pass',
@@ -276,11 +277,7 @@ function Screen({ path, params }) {
         </RequireAuth>
       )
     case 'driver-signup':
-      return (
-        <RequireAuth>
-          <DriverSignup needsVehicle={params.needs_vehicle === '1'} />
-        </RequireAuth>
-      )
+      return <DriverSignup needsVehicle={params.needs_vehicle === '1'} />
     case 'sign-agreement':
       return (
         <RequireAuth>

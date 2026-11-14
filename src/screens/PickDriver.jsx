@@ -30,6 +30,8 @@ import { SignInToBookModal, useRequireAuthForAction } from '../components/SignIn
 import { resolveDriverPortrait } from '../../shared/driverPortrait.js'
 import { setFavoriteDrivers } from '../../packages/rides-native/tigerPassClient.js'
 import { PREPAID_TIP_PRESETS_CENTS, formatTipDollars, parsePrepaidTipDollars } from '../../shared/prepaidTip.js'
+import { describePromo, normalizePromoCode } from '../../shared/promoCodes.js'
+import { checkPromoCode, promoDeviceId } from '../../packages/rides-native/promoCodesClient.js'
 import { paymentMethodRequiredError, riderPaymentMethodReady } from '../../shared/ridePaymentReady.js'
 import { saveRideRequestDraft } from '../lib/rideRequestDraft.js'
 import { webApplePaySetUp } from '../lib/applePayReady.js'
@@ -89,6 +91,12 @@ export function PickDriver({
   })
   const [customTip, setCustomTip] = useState('')
   const [tipError, setTipError] = useState(null)
+  const [promoCode, setPromoCode] = useState('')
+  const [promoDraft, setPromoDraft] = useState('')
+  const [promoOpen, setPromoOpen] = useState(false)
+  const [promoChecking, setPromoChecking] = useState(false)
+  const [promoNote, setPromoNote] = useState(null)
+  const [promoError, setPromoError] = useState(null)
   const [promptOpen, setPromptOpen] = useState(false)
   const stadium = pickupPoint(pickup || 'Memorial Stadium')
   const pinLat = finiteCoordinate(pickupLat)
@@ -231,6 +239,7 @@ export function PickDriver({
         rememberRequest()
         return
       }
+      const deviceId = await promoDeviceId(browserStorage)
       const trip = await requestDriverTrip({
         riderId: user.id,
         ...(selected ? { driverId: selected.id } : { autoAssign: true }),
@@ -246,6 +255,8 @@ export function PickDriver({
         listCents,
         billingChoice: billing || null,
         prepaidTipCents,
+        ...(promoCode ? { promoCode } : {}),
+        ...(deviceId ? { deviceId } : {}),
         ...(gate.source === 'apple_pay' ? { applePay: true } : {}),
       })
       navigate('requested', { dest, trip: trip.id, driver: selected?.name || 'Next driver' })
@@ -478,6 +489,75 @@ export function PickDriver({
           </div>
           {tipError ? <p role="alert" style={{ color: 'var(--orange)', fontSize: 12 }}>{tipError}</p> : null}
         </fieldset>
+        <div style={{ marginBottom: 10 }}>
+          {!promoOpen ? (
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => setPromoOpen(true)}
+              style={{ fontSize: 13, fontWeight: 800, color: 'var(--purple)', minHeight: 36, padding: 0, background: 'transparent', border: 0 }}
+            >
+              Have a promo code?
+            </button>
+          ) : (
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--purple)', marginBottom: 4 }}>Promo code</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  aria-label="Promo code"
+                  placeholder="ILOVECLEMSONRIDES"
+                  maxLength={24}
+                  value={promoDraft}
+                  onChange={(e) => {
+                    setPromoDraft(e.target.value.toUpperCase())
+                    setPromoError(null)
+                    if (promoCode) setPromoCode('')
+                  }}
+                  style={{ flex: 1, minHeight: 44, borderRadius: 12, border: '1px solid var(--purple)', padding: '0 12px', fontWeight: 700, letterSpacing: 0.8 }}
+                />
+                <button
+                  type="button"
+                  className="pressable"
+                  disabled={promoChecking}
+                  onClick={async () => {
+                    if (promoCode) {
+                      setPromoDraft('')
+                      setPromoCode('')
+                      setPromoNote(null)
+                      setPromoError(null)
+                      return
+                    }
+                    const norm = normalizePromoCode(promoDraft)
+                    if (!norm) { setPromoError('Enter a promo code.'); return }
+                    setPromoChecking(true)
+                    setPromoError(null)
+                    setPromoNote(null)
+                    try {
+                      const res = await checkPromoCode(supabase, { code: norm, side: 'rider' })
+                      if (res?.ok) {
+                        setPromoCode(norm)
+                        setPromoNote(`${describePromo(res)} applies when you request.`)
+                      } else {
+                        setPromoCode('')
+                        setPromoError(res?.message || 'That code could not be applied.')
+                      }
+                    } catch (err) {
+                      setPromoCode('')
+                      setPromoError(err instanceof Error ? err.message : 'Could not check that code.')
+                    } finally {
+                      setPromoChecking(false)
+                    }
+                  }}
+                  style={{ minHeight: 44, minWidth: 76, padding: '0 14px', borderRadius: 999, fontWeight: 800, border: '1px solid var(--purple)', background: 'var(--purple)', color: '#fff', opacity: promoChecking ? 0.6 : 1 }}
+                >
+                  {promoChecking ? 'Checking…' : promoCode ? 'Remove' : 'Apply'}
+                </button>
+              </div>
+              {promoNote && promoCode ? <p style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 4 }}>{promoNote}</p> : null}
+              {promoError ? <p role="alert" style={{ fontSize: 12, color: 'var(--orange)', marginTop: 4 }}>{promoError}</p> : null}
+            </div>
+          )}
+        </div>
         <PrimaryButton
           disabled={requesting || (selected ? !selected.online : !anyOnline)}
           loading={requesting}

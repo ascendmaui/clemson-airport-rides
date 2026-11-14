@@ -42,11 +42,11 @@ export default async function handlePromoCodes(req, res, action, deps = {}) {
     if (action === 'promo-check') {
       const fare = body.fareCents == null || body.fareCents === '' ? null : Number(body.fareCents)
       const result = await checkPromo(sb, {
-        userId: user.id, code: body.code, side, fareCents: Number.isFinite(fare) ? fare : null,
+        userId: user.id, code: body.code, side, fareCents: Number.isFinite(fare) ? fare : null, deviceId: body.deviceId, now: deps.now,
       })
       return json(res, 200, result)
     }
-    const result = await claimPromo(sb, { userId: user.id, code: body.code, side, deviceId: body.deviceId })
+    const result = await claimPromo(sb, { userId: user.id, code: body.code, side, deviceId: body.deviceId, now: deps.now })
     return json(res, 200, result)
   } catch (err) {
     console.error('[promo]', action, err?.message || err)

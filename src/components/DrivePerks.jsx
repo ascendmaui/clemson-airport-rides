@@ -65,9 +65,9 @@ export function DrivePerks() {
         <div className="dp-hero-copy">
           <p className="mkt-kicker">Drive with Clemson Rides</p>
           <h1 id="dp-hero-heading">Know the pay. Keep the tips. Cash out today.</h1>
-          <p className="dp-lede">Every offer shows per-hour pay, the rider’s photo and rating, and a color-coded worth-it gauge. Tips are 100% yours.</p>
+          <p className="dp-lede">Keep 80% of the fare and 100% of tips. Drive alongside Uber and Lyft on your own flexible schedule — catch GSP &amp; CLT airport rides, peak hours, and Clemson game days. Every offer shows per-hour pay, the rider’s photo and rating, and a color-coded worth-it gauge.</p>
           <div className="dp-hero-actions">
-            <button type="button" className="dp-btn dp-btn-primary pressable" onClick={() => navigate('driver-signup')}>Apply to drive</button>
+            <button type="button" className="dp-btn dp-btn-primary pressable" onClick={() => { navigate('driver-signup'); navigate('driver-onboarding') }}>Apply to drive</button>
             <a className="dp-btn dp-btn-ghost" href="#dp-rental">No car? Rent one</a>
           </div>
         </div>

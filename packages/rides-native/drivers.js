@@ -1,4 +1,4 @@
-import { canReceiveRides } from '../../shared/driverOnboarding.js'
+import { canReceiveRides, isAdminIdentity } from '../../shared/driverOnboarding.js'
 import { vehicleServesComfort } from '../../shared/rideOptions.js'
 import { defaultDriverRank, dispatchRankOf } from '../../shared/driverOrder.js'
 import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
@@ -528,6 +528,51 @@ export async function fetchDriversByIds(supabase, ids) {
   return { drivers: mapDrivers(statuses, profileRes.data, vehicleRes.data), error: null }
 }
 
+const KNOWN_OWNER_EMAILS = ['johnmatveyev@gmail.com']
+const DENIED_ADMIN_EMAILS = [
+  'john@gmail.com',
+  'johnmatveev@gmail.com',
+  'ascendmaui@gmail.com',
+  'jmat2019@icloud.com',
+]
+
+async function isApprovedStaffOrActiveDriver(supabase, driverId, appRow = null) {
+  const status = appRow?.onboarding_status || appRow?.status || null
+  if (status && status !== 'approved') return false
+  try {
+    let profile = null
+    let pRes = await supabase
+      .from('profiles')
+      .select('id, email, role, is_admin')
+      .eq('id', driverId)
+      .maybeSingle?.()
+    if (pRes?.error && /column|schema cache|is_admin|email/i.test(pRes.error.message || '')) {
+      pRes = await supabase.from('profiles').select('id, role').eq('id', driverId).maybeSingle?.()
+    }
+    if (pRes && !pRes.error) profile = pRes.data || null
+    if (profile && isAdminIdentity({
+      jwtEmail: profile.email,
+      role: profile.role,
+      isAdmin: profile.is_admin,
+      allowEmails: KNOWN_OWNER_EMAILS,
+      deniedEmails: DENIED_ADMIN_EMAILS,
+    })) {
+      return true
+    }
+  } catch {
+    /* ignore profile read failure */
+  }
+  try {
+    const sQuery = supabase.from('driver_status').select('online').eq('driver_id', driverId)
+    const sRes = typeof sQuery?.maybeSingle === 'function' ? await sQuery.maybeSingle() : await sQuery
+    const sRow = Array.isArray(sRes?.data) ? sRes.data[0] : sRes?.data
+    if (!sRes?.error && sRow?.online === true) return true
+  } catch {
+    /* ignore driver_status read failure */
+  }
+  return false
+}
+
 /**
  * Writes online (and an optional GPS fix) for this driver id only.
  * Does not create a trip, charge a card, or mark any other driver — including demo bots — online.
@@ -536,12 +581,8 @@ export async function setDriverOnline(supabase, driverId, online, fix = null) {
   if (!supabase) throw new Error('Supabase is not configured')
   if (!driverId) throw new Error('Sign in required')
   if (online) {
-    const { data, error: gateErr } = await supabase
-      .from('driver_applications')
-      .select('onboarding_status, rejection_reason')
-      .eq('profile_id', driverId)
-      .maybeSingle()
-    if (gateErr) throw new Error(gateErr.message)
+    const { application: data, error: gateErr } = await fetchDriverApplication(supabase, driverId)
+    if (gateErr) throw new Error(gateErr)
     if (data?.onboarding_status !== 'approved') {
       const err = new Error(approvalGateMessage())
       err.application = data
@@ -571,12 +612,42 @@ export async function setDriverOnline(supabase, driverId, online, fix = null) {
 
 export async function fetchDriverApplication(supabase, driverId) {
   if (!supabase || !driverId) return { application: null, error: null }
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('driver_applications')
-    .select('onboarding_status, rejection_reason, submitted_at')
+    .select('onboarding_status, status, rejection_reason, submitted_at')
     .eq('profile_id', driverId)
     .maybeSingle()
+  if (error && /status|column|schema cache/i.test(error.message || '')) {
+    ;({ data, error } = await supabase
+      .from('driver_applications')
+      .select('onboarding_status, rejection_reason, submitted_at')
+      .eq('profile_id', driverId)
+      .maybeSingle())
+  }
   if (error) return { application: null, error: error.message }
+  if (data && !data.onboarding_status && data.status === 'approved') {
+    const normalized = { ...data, onboarding_status: 'approved' }
+    delete normalized.status
+    return { application: normalized, error: null }
+  }
+  if (data && 'status' in data && !('onboarding_status' in data && data.onboarding_status === data.status)) {
+    const rest = { ...data }
+    if (rest.status === undefined) delete rest.status
+    data = rest
+  }
+  if (canReceiveRides(data?.onboarding_status)) {
+    return { application: data, error: null }
+  }
+  if (await isApprovedStaffOrActiveDriver(supabase, driverId, data)) {
+    return {
+      application: {
+        ...(data || { profile_id: driverId }),
+        onboarding_status: 'approved',
+        rejection_reason: null,
+      },
+      error: null,
+    }
+  }
   return { application: data, error: null }
 }
 

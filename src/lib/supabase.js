@@ -1,6 +1,6 @@
 import { bindRealtimeChannel } from '../../packages/rides-native/realtimeReconnect.js'
 import { createClient } from '@supabase/supabase-js'
-import { fetchOnlineDrivers as fetchSharedOnlineDrivers } from '../../packages/rides-native/drivers.js'
+import { fetchDriverApplication, fetchOnlineDrivers as fetchSharedOnlineDrivers } from '../../packages/rides-native/drivers.js'
 
 const env = import.meta.env || {}
 const url =
@@ -68,12 +68,8 @@ export async function upsertDriverOnboarding() {
 export async function setDriverOnline(driverId, online) {
   if (!supabase) throw new Error('Supabase not configured')
   if (online) {
-    const { data, error: gateErr } = await supabase
-      .from('driver_applications')
-      .select('onboarding_status')
-      .eq('profile_id', driverId)
-      .maybeSingle()
-    if (gateErr) throw new Error(gateErr.message)
+    const { application: data, error: gateErr } = await fetchDriverApplication(supabase, driverId)
+    if (gateErr) throw new Error(gateErr)
     if (data?.onboarding_status !== 'approved') {
       throw new Error('Admin approval is required before you can go online.')
     }

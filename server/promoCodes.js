@@ -8,6 +8,8 @@ import { isPayoutApprover } from '../shared/payoutApproval.js'
 import { stripeClient, stripeOk } from './friendRideLib.js'
 import {
   choosePromoOrRecurring,
+  GAME_DAY_PROMO_CODE,
+  GAME_DAY_PROMO_DEFINITION,
   normalizePromoCode,
   planPromoCodes,
   PROMO_AUTO_DEFAULTS,
@@ -21,6 +23,102 @@ import {
 } from '../shared/promoCodes.js'
 
 const MISSING = /schema cache|does not exist|could not find the (table|function)/i
+const CANCELED_TRIP_STATUSES = new Set(['canceled', 'cancelled', 'canceled_midride', 'cancelled_wait', 'expired', 'no_drivers'])
+
+async function checkGameDayPromoEligibility(sb, {
+  userId,
+  side = 'rider',
+  fareCents = null,
+  deviceId = null,
+  cardFingerprint = null,
+  now = new Date(),
+  excludeTripId = null,
+}) {
+  if (!userId) return { ok: false, reason: 'sign_in_required' }
+  if (side !== 'rider') return { ok: false, reason: 'wrong_side' }
+  const clock = now instanceof Date ? now : new Date(now)
+  const startsAt = new Date(GAME_DAY_PROMO_DEFINITION.starts_at)
+  const expiresAt = new Date(GAME_DAY_PROMO_DEFINITION.expires_at)
+  if (!GAME_DAY_PROMO_DEFINITION.active) return { ok: false, reason: 'inactive' }
+  if (clock < startsAt) return { ok: false, reason: 'not_started' }
+  if (clock > expiresAt) return { ok: false, reason: 'expired' }
+
+  const cleanDev = cleanDeviceId(deviceId)
+  const cleanCard = typeof cardFingerprint === 'string' && cardFingerprint.trim() ? cardFingerprint.trim().slice(0, 64) : null
+
+  if (sb?.from) {
+    // 1. Valid customer registration & valid payment method saved
+    const profileRes = await sb.from('profiles').select('id, stripe_default_pm_id').eq('id', userId).maybeSingle()
+    if (!profileRes?.error) {
+      if (!profileRes?.data?.id) return { ok: false, reason: 'sign_in_required' }
+      if (!profileRes.data.stripe_default_pm_id) return { ok: false, reason: 'payment_method_required' }
+    }
+
+    // 2. First eligible completed ride only & one redemption per customer / device / card
+    const riderTripsRes = await sb.from('trips').select('id, rider_id, status, metadata').eq('rider_id', userId).limit(50)
+    if (!riderTripsRes?.error && Array.isArray(riderTripsRes?.data)) {
+      const ownRows = riderTripsRes.data.filter((row) => !row.rider_id || row.rider_id === userId)
+      const completed = ownRows.some((row) => row.status === 'completed' && row.id !== excludeTripId)
+      if (completed) return { ok: false, reason: 'first_ride_only' }
+      const alreadyUsed = ownRows.some((row) => {
+        if (row.id === excludeTripId || CANCELED_TRIP_STATUSES.has(row.status)) return false
+        return row?.metadata?.promo?.code === GAME_DAY_PROMO_CODE
+      })
+      if (alreadyUsed) return { ok: false, reason: 'per_account_limit' }
+    }
+
+    // 3. Check promo_code_redemptions if present
+    const redemptionsRes = await sb.from('promo_code_redemptions')
+      .select('id, profile_id, trip_id, status, device_id, card_fingerprint')
+      .eq('code', GAME_DAY_PROMO_CODE)
+      .in('status', ['reserved', 'redeemed'])
+      .limit(200)
+    if (!redemptionsRes?.error && Array.isArray(redemptionsRes?.data)) {
+      for (const r of redemptionsRes.data) {
+        if (excludeTripId && r.trip_id === excludeTripId) continue
+        if (r.profile_id === userId) return { ok: false, reason: 'per_account_limit' }
+        if (cleanDev && r.device_id && r.device_id === cleanDev) return { ok: false, reason: 'device_limit' }
+        if (cleanCard && r.card_fingerprint && r.card_fingerprint === cleanCard) return { ok: false, reason: 'card_limit' }
+      }
+    }
+
+    // 4. Duplicate-account abuse check across trips metadata (device_id / card_fingerprint)
+    if (cleanDev || cleanCard) {
+      const promoTripsRes = await sb.from('trips')
+        .select('id, rider_id, status, metadata')
+        .eq('metadata->promo->>code', GAME_DAY_PROMO_CODE)
+        .limit(200)
+      if (!promoTripsRes?.error && Array.isArray(promoTripsRes?.data)) {
+        for (const t of promoTripsRes.data) {
+          if (excludeTripId && t.id === excludeTripId) continue
+          if (CANCELED_TRIP_STATUSES.has(t.status)) continue
+          const p = t?.metadata?.promo || {}
+          if (t.rider_id === userId) return { ok: false, reason: 'per_account_limit' }
+          if (cleanDev && p.device_id && p.device_id === cleanDev) return { ok: false, reason: 'device_limit' }
+          if (cleanCard && p.card_fingerprint && p.card_fingerprint === cleanCard) return { ok: false, reason: 'card_limit' }
+        }
+      }
+    }
+  }
+
+  const discount = fareCents == null
+    ? null
+    : promoDiscountCents(GAME_DAY_PROMO_DEFINITION, Math.round(Number(fareCents) || 0))
+  return {
+    ok: true,
+    code: GAME_DAY_PROMO_CODE,
+    code_id: GAME_DAY_PROMO_DEFINITION.id,
+    side: 'rider',
+    discount_type: GAME_DAY_PROMO_DEFINITION.discount_type,
+    percent_off_bps: GAME_DAY_PROMO_DEFINITION.percent_off_bps,
+    amount_off_cents: GAME_DAY_PROMO_DEFINITION.amount_off_cents,
+    max_discount_cents: GAME_DAY_PROMO_DEFINITION.max_discount_cents,
+    min_trip_cents: GAME_DAY_PROMO_DEFINITION.min_trip_cents,
+    starts_at: GAME_DAY_PROMO_DEFINITION.starts_at,
+    expires_at: GAME_DAY_PROMO_DEFINITION.expires_at,
+    discount_cents: discount,
+  }
+}
 
 /**
  * The promo admin is the sole owner account (johnmatveyev@gmail.com with a
@@ -51,26 +149,84 @@ function withMessage(result) {
   return { ...result, message: promoReasonMessage(result?.reason) }
 }
 
-export async function checkPromo(sb, { userId, code, side = 'rider', fareCents = null }) {
+export async function checkPromo(sb, { userId, code, side = 'rider', fareCents = null, deviceId = null, cardFingerprint = null, now = new Date() }) {
   const norm = normalizePromoCode(code)
   if (!norm) return withMessage({ ok: false, reason: 'no_code' })
+  if (norm === GAME_DAY_PROMO_CODE) {
+    const checked = await checkGameDayPromoEligibility(sb, { userId, side, fareCents, deviceId, cardFingerprint, now })
+    return withMessage(checked)
+  }
   return withMessage(rpcResult(await sb.rpc('promo_check_code', {
     p_profile: userId, p_code: norm, p_side: side, p_fare_cents: fareCents == null ? null : Math.round(fareCents),
   })))
 }
 
-export async function claimPromo(sb, { userId, code, side = 'rider', deviceId = null }) {
+export async function claimPromo(sb, { userId, code, side = 'rider', deviceId = null, now = new Date() }) {
   const norm = normalizePromoCode(code)
   if (!norm) return withMessage({ ok: false, reason: 'no_code' })
+  if (norm === GAME_DAY_PROMO_CODE) {
+    const checked = await checkGameDayPromoEligibility(sb, { userId, side, deviceId, now })
+    if (!checked.ok) return withMessage(checked)
+    return {
+      ok: true,
+      duplicate: false,
+      redemption_id: `claim:${GAME_DAY_PROMO_CODE}:${userId}`,
+      code: GAME_DAY_PROMO_CODE,
+      side: 'rider',
+      status: 'claimed',
+      discount_cents: 0,
+    }
+  }
   return withMessage(rpcResult(await sb.rpc('promo_claim_code', {
     p_profile: userId, p_code: norm, p_side: side, p_device_id: cleanDeviceId(deviceId),
   })))
 }
 
-export async function reservePromoForTrip(sb, { userId, code = null, tripId, fareCents, deviceId = null, cardFingerprint = null }) {
+export async function reservePromoForTrip(sb, { userId, code = null, tripId, fareCents, deviceId = null, cardFingerprint = null, now = new Date() }) {
+  const norm = normalizePromoCode(code) || null
+  if (norm === GAME_DAY_PROMO_CODE) {
+    const fare = Math.max(0, Math.round(Number(fareCents) || 0))
+    const checked = await checkGameDayPromoEligibility(sb, {
+      userId, side: 'rider', fareCents: fare, deviceId, cardFingerprint, now, excludeTripId: tripId,
+    })
+    if (!checked.ok) return withMessage(checked)
+    if ((checked.discount_cents || 0) <= 0) return withMessage({ ok: false, reason: 'below_minimum' })
+    let redemptionId = `gameday:${tripId || userId}`
+    if (sb?.rpc) {
+      try {
+        const rpcRes = await sb.rpc('promo_reserve_for_trip', {
+          p_profile: userId,
+          p_code: GAME_DAY_PROMO_CODE,
+          p_trip_id: tripId,
+          p_fare_cents: fare,
+          p_device_id: cleanDeviceId(deviceId),
+          p_card_fingerprint: cardFingerprint || null,
+        })
+        if (rpcRes?.data?.ok && rpcRes.data.redemption_id) {
+          redemptionId = rpcRes.data.redemption_id
+        }
+      } catch {
+        /* fallback to deterministic trip reservation id if DB constraint not yet widened */
+      }
+    }
+    return {
+      ok: true,
+      duplicate: false,
+      redemption_id: redemptionId,
+      code: GAME_DAY_PROMO_CODE,
+      code_id: GAME_DAY_PROMO_DEFINITION.id,
+      status: 'reserved',
+      discount_cents: checked.discount_cents,
+      discount_type: GAME_DAY_PROMO_DEFINITION.discount_type,
+      percent_off_bps: GAME_DAY_PROMO_DEFINITION.percent_off_bps,
+      amount_off_cents: GAME_DAY_PROMO_DEFINITION.amount_off_cents,
+      max_discount_cents: GAME_DAY_PROMO_DEFINITION.max_discount_cents,
+      min_trip_cents: GAME_DAY_PROMO_DEFINITION.min_trip_cents,
+    }
+  }
   return withMessage(rpcResult(await sb.rpc('promo_reserve_for_trip', {
     p_profile: userId,
-    p_code: normalizePromoCode(code) || null,
+    p_code: norm,
     p_trip_id: tripId,
     p_fare_cents: Math.max(0, Math.round(Number(fareCents) || 0)),
     p_device_id: cleanDeviceId(deviceId),
@@ -158,7 +314,7 @@ export async function applyPromoToRideRequest({
     const listFare = Math.max(0, Math.round(Number(list.fareCents) || 0))
     let discount = 0
     if (typed) {
-      const check = await checkPromo(sb, { userId, code: typed, side: 'rider', fareCents: listFare })
+      const check = await checkPromo(sb, { userId, code: typed, side: 'rider', fareCents: listFare, deviceId, now })
       if (!check.ok) return { ...base, promo: { applied: false, code: typed, reason: check.reason, message: check.message } }
       discount = Math.max(0, Number(check.discount_cents) || 0)
     } else {
@@ -180,14 +336,18 @@ export async function applyPromoToRideRequest({
       sb, stripe: stripe || (stripeOk() ? stripeClient() : null), userId,
     })
     const reserved = await reservePromoForTrip(sb, {
-      userId, code: typed || null, tripId, fareCents: listFare, deviceId, cardFingerprint,
+      userId, code: typed || null, tripId, fareCents: listFare, deviceId, cardFingerprint, now,
     })
     if (!reserved.ok) {
       return typed || reserved.reason !== 'no_code'
         ? { ...base, promo: { applied: false, code: typed || null, reason: reserved.reason, message: reserved.message } }
         : base
     }
-    const snapshot = promoTripSnapshot(reserved, { listFareCents: listFare, recurringFareCents: recurring.fareCents })
+    const snapshot = {
+      ...promoTripSnapshot(reserved, { listFareCents: listFare, recurringFareCents: recurring.fareCents }),
+      ...(cleanDeviceId(deviceId) ? { device_id: cleanDeviceId(deviceId) } : {}),
+      ...(cardFingerprint ? { card_fingerprint: cardFingerprint } : {}),
+    }
     return {
       tripId,
       priced: list,
@@ -330,9 +490,10 @@ export async function exportPromoCodes(sb, { actor, campaign = null, includeAuto
 
 /** Marketing feed: opt-in (public_listing) rider codes that are live now. */
 export async function publicCampaigns(sb, { now = new Date() } = {}) {
+  const clock = now instanceof Date ? now : new Date(now)
   const res = await sb.from('promo_campaign_codes').select('*')
     .eq('public_listing', true).eq('active', true).eq('side', 'rider').eq('source', 'admin')
-    .lte('starts_at', now.toISOString()).gt('expires_at', now.toISOString())
+    .lte('starts_at', clock.toISOString()).gt('expires_at', clock.toISOString())
     .order('expires_at', { ascending: true }).limit(50)
   if (res?.error) {
     if (MISSING.test(res.error.message || '')) return []

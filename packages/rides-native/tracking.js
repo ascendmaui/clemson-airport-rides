@@ -91,6 +91,13 @@ export async function withTrackingTimeout(promise, timeoutMs = 15000) {
   } finally { clearTimeout(timer) }
 }
 
+const TRANSIENT_TRACKING_ERROR = /Tracking refresh timed out|FetchRequestCanceledException|request has been cancel+ed|Network request failed|Failed to fetch|Network error|aborted/i
+
+export function isTransientTrackingError(error) {
+  const text = typeof error === 'string' ? error : String(error?.message || error?.name || '')
+  return TRANSIENT_TRACKING_ERROR.test(text)
+}
+
 /** Latest recovery wins; routine polls coalesce, resume supersedes a hung read. */
 export function createTrackingRefresh({ load, onData, onError, timeoutMs = 15000 }) {
   let generation = 0
@@ -102,7 +109,16 @@ export function createTrackingRefresh({ load, onData, onError, timeoutMs = 15000
       const request = ++generation
       pending = true
       try {
-        const data = await withTrackingTimeout(Promise.resolve().then(load), timeoutMs)
+        let data
+        try {
+          data = await withTrackingTimeout(Promise.resolve().then(load), timeoutMs)
+        } catch (firstErr) {
+          if (!stopped && request === generation && /FetchRequestCanceledException|request has been cancel+ed/i.test(String(firstErr?.message || firstErr?.name || ''))) {
+            data = await withTrackingTimeout(Promise.resolve().then(load), timeoutMs)
+          } else {
+            throw firstErr
+          }
+        }
         if (!stopped && request === generation) { onData(data); onError(null) }
       } catch (error) {
         if (!stopped && request === generation) onError(error)
