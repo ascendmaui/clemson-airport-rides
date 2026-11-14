@@ -112,6 +112,16 @@ test('push posts without an access token while sms and email stay no-send', asyn
     assert.equal(result.channels.in_app.sent, false)
     assert.equal(pushCall.init.method, 'POST')
     assert.equal(Object.hasOwn(pushCall.init.headers, 'Authorization'), false)
+    const offerPush = JSON.parse(pushCall.init.body)
+    assert.equal(offerPush.sound, 'default')
+    assert.equal(offerPush.priority, 'high')
+    assert.equal(offerPush.interruptionLevel, 'time-sensitive')
+    assert.equal(offerPush.data.kind, 'ride_offer')
+    assert.equal(offerPush.data.tripId, 'trip-1')
+    assert.equal(db.tables.driver_notifications.length, 1)
+    assert.equal(db.tables.driver_notifications[0].type, 'ride_offer')
+    assert.equal(db.tables.driver_notifications[0].user_id, 'driver-1')
+    assert.equal(db.tables.driver_notifications[0].title, 'New ride request')
     assert.equal(result.channels.push.reason, 'sent')
     assert.equal(result.channels.push.sent, true)
     assert.equal(result.channels.push.tokenPresent, true)
@@ -207,6 +217,7 @@ test('quiet hours and the ride toggle suppress every channel', async () => {
     assert.equal(quiet.channels[channel].sent, false)
     assert.equal(quiet.channels[channel].reason, 'quiet_hours')
   }
+  assert.equal(db.tables.driver_notifications, undefined)
 
   const muted = memorySb({
     profiles: [{ id: 'driver-2', email: 'driver@example.com', notification_prefs: { ride: false } }],

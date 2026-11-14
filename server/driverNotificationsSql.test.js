@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import test from 'node:test'
+
+const sql = readFileSync(new URL('../supabase/migrations/20261018101000_driver_notifications.sql', import.meta.url), 'utf8')
+const appJson = readFileSync(new URL('../apps/driver/app.json', import.meta.url), 'utf8')
+const appConfig = readFileSync(new URL('../apps/driver/app.config.js', import.meta.url), 'utf8')
+const offers = readFileSync(new URL('./driverOfferAlerts.js', import.meta.url), 'utf8')
+
+test('driver notifications migration is additive and own-row only', () => {
+  assert.match(sql, /create table if not exists public\.driver_notifications/i)
+  assert.match(sql, /id uuid primary key default gen_random_uuid\(\)/i)
+  assert.match(sql, /user_id uuid not null references auth\.users\(id\) on delete cascade/i)
+  assert.match(sql, /type text not null/i)
+  assert.match(sql, /title text not null/i)
+  assert.match(sql, /body text not null/i)
+  assert.match(sql, /data jsonb not null default '\{\}'::jsonb/i)
+  assert.match(sql, /read_at timestamptz/i)
+  assert.match(sql, /created_at timestamptz not null default now\(\)/i)
+  assert.match(sql, /create index if not exists driver_notifications_user_created_idx[\s\S]*\(user_id, created_at desc\)/i)
+  assert.match(sql, /enable row level security/i)
+  assert.match(sql, /for select to authenticated using \(user_id = auth\.uid\(\)\)/i)
+  assert.match(sql, /for update to authenticated[\s\S]*using \(user_id = auth\.uid\(\)\)[\s\S]*with check \(user_id = auth\.uid\(\)\)/i)
+  assert.doesNotMatch(sql, /for insert to authenticated/i)
+  assert.doesNotMatch(sql, /for delete to authenticated/i)
+  assert.match(sql, /grant select, update on public\.driver_notifications to authenticated/i)
+  assert.match(sql, /grant all on public\.driver_notifications to service_role/i)
+  assert.equal(sql.toLowerCase().includes('drop table'), false)
+  assert.equal(sql.toLowerCase().includes('drop column'), false)
+  assert.match(sql, /f2262bf6-1fef-4d90-9e2e-7edfb7f097dc/)
+  assert.match(sql, /admin_signup/)
+  assert.match(sql, /net\.http_post/i)
+  assert.match(sql, /action=admin-signup-alert/)
+  assert.match(sql, /after insert on auth\.users/i)
+  assert.match(sql, /after insert on public\.profiles/i)
+  assert.match(sql, /TestFlight join alerts are intentionally not part of this migration/)
+})
+
+test('ride-offer pushes ask for time-sensitive delivery without the missing entitlement', () => {
+  assert.match(offers, /interruptionLevel: 'time-sensitive'/)
+  assert.match(offers, /sound: sound == null \? null : 'default'/)
+  assert.match(offers, /com\.apple\.developer\.usernotifications\.time-sensitive/)
+  assert.doesNotMatch(appJson, /com\.apple\.developer\.usernotifications\.time-sensitive/)
+  assert.doesNotMatch(appConfig, /com\.apple\.developer\.usernotifications\.time-sensitive/)
+  assert.doesNotMatch(appJson, /time-sensitive/)
+})

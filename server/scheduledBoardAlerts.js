@@ -7,6 +7,7 @@
  */
 import { readDriverPushTokens } from './driverPushToken.js'
 import { sendExpoPush, PUSH_CREDENTIAL_GAP } from './expoPush.js'
+import { insertDriverNotification } from './driverNotifications.js'
 import { noteExpoPushResult } from './expoPushReceipts.js'
 import { isQuietForDriverOffer } from './driverOfferAlerts.js'
 import { isE2ETestUser } from '../shared/e2eTestAccounts.js'
@@ -131,12 +132,21 @@ export async function notifyScheduledBoard(sb, { trip, riderIsE2E } = {}, deps =
           const mode = prefs?.ride_alerts && typeof prefs.ride_alerts === 'object'
             ? prefs.ride_alerts[trip?.metadata?.ride_option || 'standard'] || prefs.ride_alerts.standard
             : null
+          const boardData = { tripId, kind: 'scheduled_board' }
+          const recorded = await insertDriverNotification(sb, {
+            userId: driverId,
+            type: 'scheduled_board',
+            title: copy.title,
+            body: copy.body,
+            data: boardData,
+          })
+          if (recorded.id) boardData.notificationId = recorded.id
           const pushed = await sendExpoPush({
             to: token,
             title: copy.title,
             body: copy.body,
             sound: mode === 'silent' || mode === 'vibrate' ? null : 'default',
-            data: { tripId, kind: 'scheduled_board' },
+            data: boardData,
           }, deps)
           channels.push = {
             sent: Boolean(pushed.sent),

@@ -9,6 +9,7 @@ import { BootScreen } from '@/components/BootScreen'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { FeedbackProvider } from '@/lib/feedback'
 import { OfferBridge } from '@/components/OfferBridge'
+import { DriverNotificationHost } from '@/components/DriverNotificationHost'
 import { ActiveTripResume } from '@/components/ActiveTripResume'
 import { PickupBeaconHost } from '@/components/PickupBeaconHost'
 import { DriverMoments } from '@/components/DriverMoments'
@@ -165,6 +166,7 @@ export default function RootLayout() {
                 <SyncBanner />
               </CrashBoundary>
               <ToastMount />
+              <DriverNotificationHost />
               <DriverMoments />
             </Gate>
           </FeedbackProvider>

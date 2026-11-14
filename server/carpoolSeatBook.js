@@ -7,6 +7,7 @@
 import { planCarpoolFill } from '../shared/carpoolSeatMatch.js'
 import { readDriverPushToken } from './driverPushToken.js'
 import { sendExpoPush } from './expoPush.js'
+import { insertDriverNotification } from './driverNotifications.js'
 import { noteExpoPushResult } from './expoPushReceipts.js'
 
 function queueMissing(error) {
@@ -121,13 +122,22 @@ export async function enrollCarpoolSeat(sb, input = {}, deps = {}) {
   let sent = null
   if (token) {
     try {
+      const data = plan.push.data && typeof plan.push.data === 'object' ? { ...plan.push.data } : {}
+      const recorded = await insertDriverNotification(sb, {
+        userId: plan.driverId,
+        type: data.kind || 'ride_offer',
+        title: plan.push.title,
+        body: plan.push.body,
+        data,
+      })
+      if (recorded.id) data.notificationId = recorded.id
       sent = await sendPush({
         to: token,
         title: plan.push.title,
         body: plan.push.body,
         sound: 'default',
         channelId: 'ride-requests',
-        data: plan.push.data,
+        data,
       })
       await noteExpoPushResult(sb, { push: sent, token, ownerId: plan.driverId, ownerRole: 'driver' })
     } catch (error) {

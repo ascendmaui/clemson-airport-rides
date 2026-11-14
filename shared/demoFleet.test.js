@@ -38,7 +38,9 @@ test('demo fleet matches the twelve named map cars and their photos', () => {
     assert.equal(existsSync(path.join(root, 'public', car.photo)), true)
     assert.equal(existsSync(path.join(root, 'public', car.photoSmall)), true)
   }
-  assert.equal(DEMO_FLEET.filter((car) => car.body === 'wedge').length, 1)
+  assert.equal(DEMO_FLEET.filter((car) => car.body === 'wedge').length, 0)
+  assert.equal(DEMO_FLEET[11].make, 'Toyota')
+  assert.equal(DEMO_FLEET[11].vehicle, 'Toyota Camry')
   assert.equal(DEMO_FLEET.filter((car) => car.body === 'truck').length, 3)
   assert.equal(isDemoDriverId('11111111-1111-4111-8111-111111111111'), false)
 })

@@ -8,6 +8,39 @@ import { formatEasternWhen } from '../../../shared/nearTermSlots.js'
 let appActive = true
 let driverOnline = false
 
+export type ForegroundPush = {
+  title: string
+  body: string
+  data: Record<string, unknown>
+}
+
+const foregroundListeners = new Set<(notice: ForegroundPush) => void>()
+
+/** Foreground handler subscribers. The system banner decision stays separate. */
+export function subscribeForegroundPushes(listener: (notice: ForegroundPush) => void) {
+  foregroundListeners.add(listener)
+  return () => { foregroundListeners.delete(listener) }
+}
+
+function emitForegroundPush(notification: { request?: { content?: { title?: string | null; body?: string | null; data?: unknown } } } | undefined) {
+  if (!appActive || !notification?.request?.content) return
+  const content = notification.request.content
+  const raw = content.data
+  const data = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {}
+  const notice: ForegroundPush = {
+    title: typeof content.title === 'string' ? content.title : '',
+    body: typeof content.body === 'string' ? content.body : '',
+    data,
+  }
+  for (const listener of foregroundListeners) {
+    try {
+      listener(notice)
+    } catch {
+      /* A toast listener must not change the system notification decision. */
+    }
+  }
+}
+
 /** In-app sound and vibration replace the system toast while the driver is online and the app is open. */
 export function setRideAlertSurface(patch: { active?: boolean; online?: boolean }) {
   if (patch.active != null) appActive = patch.active
@@ -20,6 +53,7 @@ export function inAppRideAlert() {
 
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
+    emitForegroundPush(notification)
     const data = notification?.request?.content?.data
     if (isTripStatusPush(data)) {
       // The offer banner ignores status pushes, so they show as normal alerts even in the app.

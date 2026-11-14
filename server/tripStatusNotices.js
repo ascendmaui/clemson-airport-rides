@@ -6,6 +6,7 @@
  * Push failures are recorded on the row and never fail the sweep.
  */
 import { sendExpoPush } from './expoPush.js'
+import { insertDriverNotification } from './driverNotifications.js'
 import { noteExpoPushResult } from './expoPushReceipts.js'
 import { GRACE_MS } from '../src/lib/waitFee.js'
 import { riderDriverFirstName, sanitizeRiderNotice } from '../shared/riderDriverPrivacy.js'
@@ -250,11 +251,22 @@ export async function sweepTripStatusNotices(sb, { now = new Date(), dryRun = fa
       const rider = row.recipient_role === 'rider'
       const token = rider ? await readRiderPushToken(sb, row.recipient_id) : await readDriverStatusPushToken(sb, row.recipient_id)
       if (!copy || !token) { await finish(sb, row.id, copy ? 'no_token' : 'unknown_kind', nowIso); skip(row.id); continue }
+      const noticeData = { tripId: trip.id, kind: row.kind, status: trip.status }
+      if (!rider) {
+        const recorded = await insertDriverNotification(sb, {
+          userId: row.recipient_id,
+          type: row.kind,
+          title: copy.title,
+          body: copy.body,
+          data: noticeData,
+        })
+        if (recorded.id) noticeData.notificationId = recorded.id
+      }
       const push = await sendPush(sanitizeRiderNotice({
         to: token,
         title: copy.title,
         body: copy.body,
-        data: { tripId: trip.id, kind: row.kind, status: trip.status },
+        data: noticeData,
         channelId: rider ? RIDER_PUSH_CHANNEL : DRIVER_PUSH_CHANNEL,
       }))
       await noteExpoPushResult(sb, {
