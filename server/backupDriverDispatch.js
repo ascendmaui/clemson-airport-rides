@@ -9,6 +9,7 @@ import { riderDriverFirstName } from '../shared/riderDriverPrivacy.js'
 import { unchangedOfferQuery } from '../shared/driverOrder.js'
 import { insertTripEvent } from './tripEvents.js'
 import { sendExpoPush } from './expoPush.js'
+import { insertDriverNotification } from './driverNotifications.js'
 import { noteExpoPushResult } from './expoPushReceipts.js'
 import {
   acceptBackupRole,
@@ -82,11 +83,20 @@ async function pushToDriver(sb, driverId, { title, body, tripId, kind }) {
   if (!driverId) return { sent: false, reason: 'no_driver' }
   const { token } = await readDriverPushToken(sb, driverId)
   if (!token) return { sent: false, reason: 'push_token_missing' }
+  const data = { tripId, kind }
+  const recorded = await insertDriverNotification(sb, {
+    userId: driverId,
+    type: kind || 'trip_update',
+    title,
+    body,
+    data,
+  })
+  if (recorded.id) data.notificationId = recorded.id
   const pushed = await sendExpoPush({
     to: token,
     title,
     body,
-    data: { tripId, kind },
+    data,
     channelId: 'ride-requests',
   })
   await noteExpoPushResult(sb, { push: pushed, token, ownerId: driverId, ownerRole: 'driver' })

@@ -31,7 +31,15 @@ function clean(value) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 180)
 }
 
-export async function sendExpoPush({ to, title, body, data, sound = 'default', channelId = 'ride-requests' } = {}, deps = {}) {
+export async function sendExpoPush({
+  to,
+  title,
+  body,
+  data,
+  sound = 'default',
+  channelId = 'ride-requests',
+  interruptionLevel,
+} = {}, deps = {}) {
   const token = String(to || '').trim()
   if (!token) return { sent: false, reason: 'push_token_missing' }
   if (!/^Expo(nent)?PushToken\[/.test(token)) return { sent: false, reason: 'raw_device_token_unsupported' }
@@ -56,6 +64,13 @@ export async function sendExpoPush({ to, title, body, data, sound = 'default', c
     data: data && typeof data === 'object' ? data : {},
   }
   if (sound) message.sound = sound
+  // iOS interruptionLevel is forwarded only when a caller sets it. Ride offers
+  // pass 'time-sensitive' so a backgrounded or locked phone can surface the
+  // request. Do not add the com.apple.developer.usernotifications.time-sensitive
+  // entitlement: the current Driver provisioning profile does not include it,
+  // and adding it would fail signing. Without that entitlement iOS still
+  // delivers the alert as a normal high-priority notification.
+  if (interruptionLevel) message.interruptionLevel = interruptionLevel
   let response
   try {
     response = await fetchImpl(EXPO_PUSH_URL, {
