@@ -114,9 +114,6 @@ export const APP_DOWNLOADS = [
     iosNote: publishedStoreUrl(RIDER_IOS_STORE_URL)
       ? 'Available on the App Store for iPhone.'
       : 'iPhone: coming soon to the App Store.',
-    androidNote: publishedStoreUrl(RIDER_ANDROID_STORE_URL)
-      ? 'Google Play'
-      : 'The Play Store listing is not live yet. This opens booking on clemsonrides.com.',
     blurb: 'Official iPhone app for campus rides, carpools, and scheduled GSP & CLT airport transfers.',
   },
   {
@@ -129,9 +126,6 @@ export const APP_DOWNLOADS = [
     iosNote: publishedStoreUrl(DRIVER_IOS_STORE_URL)
       ? 'Available on the App Store for iPhone.'
       : 'iPhone: coming soon to the App Store.',
-    androidNote: publishedStoreUrl(DRIVER_ANDROID_STORE_URL)
-      ? 'Google Play'
-      : 'The Play Store listing is not live yet. This opens the driver web app on clemsonrides.com.',
     blurb: 'Official iPhone app for approved Clemson RIDES drivers — accept offers, navigate, and track earnings.',
   },
 ]

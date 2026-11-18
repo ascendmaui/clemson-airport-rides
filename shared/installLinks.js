@@ -105,11 +105,11 @@ export function clientPlatform(userAgent) {
   return 'other'
 }
 
-/** Phone visitors leave for the store or APK. Desktop stays to show the codes. */
+/** iPhone visitors leave for a published App Store listing. Everyone else stays on the page. */
 export function redirectTarget(offer, userAgent, { stay = false } = {}) {
   if (!offer || stay) return null
-  const platform = clientPlatform(userAgent)
-  const target = platform === 'ios' ? offer.iosHref : platform === 'android' ? offer.androidHref : null
+  if (clientPlatform(userAgent) !== 'ios') return null
+  const target = offer.iosHref
   if (!target || target === offer.pageUrl) return null
   return target
 }
