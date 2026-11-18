@@ -59,8 +59,8 @@ test('store listings publish verified iOS App Store URLs and keep Android unpubl
   assert.equal(APP_DOWNLOADS[1].testflightHref, undefined)
   for (const app of APP_DOWNLOADS) {
     assert.equal(app.iosNote, 'Available on the App Store for iPhone.')
-    assert.match(app.androidNote, /not live yet/)
-    assert.doesNotMatch(`${app.blurb} ${app.iosNote} ${app.androidNote}`, /testflight|beta|coming soon/i)
+    assert.equal(app.androidNote, undefined)
+    assert.doesNotMatch(`${app.blurb} ${app.iosNote}`, /testflight|beta|coming soon|android|play store|google play|\bapk\b|not live yet/i)
     const targets = `${app.href} ${app.iosHref} ${app.androidHref}`
     assert.doesNotMatch(targets, /testflight/i)
     assert.doesNotMatch(targets, EXPO_LINK)

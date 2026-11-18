@@ -48,14 +48,6 @@ function AppCard({ offer, title, accent, active }) {
       <QrMark value={offer.pageUrl} label={`QR code for ${title}`} color={accent} />
       <p style={{ fontSize: 13, opacity: 0.88 }}>
         <a href={offer.pageUrl}>{offer.pageUrl}</a>
-        {offer.androidHref ? (
-          <>
-            {' · '}
-            <a href={offer.androidHref}>
-              {offer.androidKind === 'play' ? 'Get it on Google Play' : 'Android APK'}
-            </a>
-          </>
-        ) : null}
       </p>
     </article>
   )

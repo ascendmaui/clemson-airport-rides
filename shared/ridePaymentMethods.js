@@ -106,7 +106,7 @@ export function walletUnavailableCopy(methodId) {
     return 'Apple Pay is not available in this browser. Register this domain under Stripe Payment method domains, then open billing on a supported Apple device. No charge was made.'
   }
   if (methodId === 'google_pay') {
-    return 'Google Pay is not available in this browser. Open billing on a supported Android device or Chrome with Google Pay set up. No charge was made.'
+    return 'Google Pay is not available in this browser. Open billing in Chrome with Google Pay set up. No charge was made.'
   }
   return 'That wallet is not available on this device. No charge was made.'
 }

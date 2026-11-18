@@ -775,8 +775,8 @@ export function depositStatusLine(payments) {
   if (!rows.length) return null
   const cents = rows.reduce((sum, row) => sum + (Number(row.amountCents ?? row.amount_cents) || 0), 0)
   const open = rows.find((row) => !succeeded(row.status))
-  if (!open) return `Deposit ${formatCents(cents)} paid`
-  return `Deposit ${formatCents(cents)} · ${open.status || 'pending'}`
+  if (!open) return `Already paid ${formatCents(cents)}`
+  return `Card hold ${formatCents(cents)} · ${open.status || 'pending'}`
 }
 
 export function summarizeDepositAwareness(trips, paymentsByTrip, now = new Date()) {
