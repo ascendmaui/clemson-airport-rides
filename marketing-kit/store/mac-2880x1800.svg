@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Mac screenshot template, 2880×1800.
+  Browser frame uses product copy only. No sample account, rating, or testimonial.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="2880" height="1800" viewBox="0 0 2880 1800">
+  <rect width="1080" height="1800" fill="#522D80"/>
+  <rect x="1080" width="1800" height="1800" fill="#F7F4F0"/>
+  <circle cx="980" cy="160" r="280" fill="#F56600" opacity="0.35"/>
+  <svg x="80" y="88" width="148" height="148" viewBox="0 0 1024 1024">
+    <defs>
+      <clipPath id="tile">
+        <rect width="1024" height="1024" rx="226"/>
+      </clipPath>
+    </defs>
+    <g clip-path="url(#tile)">
+      <rect width="1024" height="1024" fill="#F56600"/>
+      <circle cx="1040" cy="1080" r="560" fill="#522D80" opacity="0.48"/>
+      <circle cx="160" cy="20" r="380" fill="#FFFFFF" opacity="0.16"/>
+      <g transform="translate(512 560) scale(0.9) translate(-512 -520)">
+        <path fill="#FFFFFF" fill-rule="evenodd" d="M 342.00 593.86 A 224.00 224.00 0 1 1 682.00 593.86 L 534.14 766.20 Q 512.00 800.00 489.86 766.20 Z M 432.00 440.00 A 80.00 80.00 0 1 1 592.00 440.02 A 80.00 80.00 0 1 1 432.00 440.00 Z"/>
+      </g>
+    </g>
+  </svg>
+  <text x="80" y="320" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="28" font-weight="700" letter-spacing="1.6">CLEMSON RIDES</text>
+  <text x="80" y="430" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="72" font-weight="700" letter-spacing="-1.4">Peace of mind,</text>
+  <text x="80" y="518" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="72" font-weight="700" letter-spacing="-1.4">every ride</text>
+  <text x="80" y="610" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="28" font-weight="500" opacity="0.92">Drivers confirm before they come.</text>
+  <text x="80" y="654" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="28" font-weight="500" opacity="0.92">A backup is ready if they don't.</text>
+  <text x="80" y="760" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="22" font-weight="700" letter-spacing="1.4">RIDE TYPES</text>
+  <text x="80" y="820" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="32" font-weight="600">Standard</text>
+  <text x="80" y="876" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="32" font-weight="600">Wait &amp; Save</text>
+  <text x="80" y="932" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="32" font-weight="600">Extra Comfort</text>
+  <text x="80" y="988" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="32" font-weight="600">Carpool</text>
+  <text x="80" y="1620" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="28" font-weight="700">Book a ride</text>
+  <text x="80" y="1668" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="24" font-weight="500" opacity="0.9">clemsonrides.com</text>
+
+  <rect x="1200" y="120" width="1560" height="1560" rx="28" fill="#FFFFFF"/>
+  <rect x="1200" y="120" width="1560" height="72" fill="#EFE8F6"/>
+  <circle cx="1244" cy="156" r="8" fill="#F56600"/>
+  <circle cx="1272" cy="156" r="8" fill="#522D80"/>
+  <circle cx="1300" cy="156" r="8" fill="#5C6570"/>
+  <text x="1360" y="164" fill="#522D80" font-family="Inter, sans-serif" font-size="20" font-weight="600">clemsonrides.com/#/home</text>
+  <text x="1264" y="280" fill="#0B1220" font-family="Inter, sans-serif" font-size="40" font-weight="700">Four ways to ride</text>
+  <text x="1264" y="328" fill="#5C6570" font-family="Inter, sans-serif" font-size="22" font-weight="500">The quote on the booking screen is the price before you confirm.</text>
+
+  <rect x="1264" y="380" width="700" height="220" rx="20" fill="#F7F4F0"/>
+  <rect x="1264" y="380" width="10" height="220" fill="#F56600"/>
+  <text x="1304" y="460" fill="#0B1220" font-family="Inter, sans-serif" font-size="28" font-weight="700">Standard</text>
+  <text x="1304" y="508" fill="#5C6570" font-family="Inter, sans-serif" font-size="20" font-weight="500">The base ride.</text>
+  <rect x="2000" y="380" width="700" height="220" rx="20" fill="#F7F4F0"/>
+  <rect x="2000" y="380" width="10" height="220" fill="#F56600"/>
+  <text x="2040" y="460" fill="#0B1220" font-family="Inter, sans-serif" font-size="28" font-weight="700">Wait &amp; Save</text>
+  <text x="2040" y="508" fill="#5C6570" font-family="Inter, sans-serif" font-size="20" font-weight="500">Shown when a driver can serve it.</text>
+
+  <rect x="1264" y="624" width="700" height="220" rx="20" fill="#F7F4F0"/>
+  <rect x="1264" y="624" width="10" height="220" fill="#522D80"/>
+  <text x="1304" y="704" fill="#0B1220" font-family="Inter, sans-serif" font-size="28" font-weight="700">Extra Comfort</text>
+  <text x="1304" y="752" fill="#5C6570" font-family="Inter, sans-serif" font-size="20" font-weight="500">Nicer cars. Comfort service class only.</text>
+  <rect x="2000" y="624" width="700" height="220" rx="20" fill="#F7F4F0"/>
+  <rect x="2000" y="624" width="10" height="220" fill="#522D80"/>
+  <text x="2040" y="704" fill="#0B1220" font-family="Inter, sans-serif" font-size="28" font-weight="700">Carpool</text>
+  <text x="2040" y="752" fill="#5C6570" font-family="Inter, sans-serif" font-size="20" font-weight="500">50% of Standard per seat when 3 or 4 riders split.</text>
+
+  <text x="1264" y="940" fill="#BA4700" font-family="Inter, sans-serif" font-size="16" font-weight="700" letter-spacing="1.4">SCHEDULED AIRPORTS</text>
+  <rect x="1264" y="972" width="700" height="140" rx="20" fill="#FFFFFF" stroke="#522D80" stroke-opacity="0.18"/>
+  <text x="1300" y="1036" fill="#0B1220" font-family="Inter, sans-serif" font-size="26" font-weight="700">GSP</text>
+  <text x="1300" y="1076" fill="#5C6570" font-family="Inter, sans-serif" font-size="20" font-weight="500">Greenville-Spartanburg · $75 flat</text>
+  <rect x="2000" y="972" width="700" height="140" rx="20" fill="#FFFFFF" stroke="#522D80" stroke-opacity="0.18"/>
+  <text x="2036" y="1036" fill="#0B1220" font-family="Inter, sans-serif" font-size="26" font-weight="700">CLT</text>
+  <text x="2036" y="1076" fill="#5C6570" font-family="Inter, sans-serif" font-size="20" font-weight="500">Charlotte Douglas · $175 flat</text>
+
+  <rect x="1264" y="1168" width="420" height="72" rx="36" fill="#F56600"/>
+  <text x="1474" y="1214" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="24" font-weight="700" text-anchor="middle">Book a ride</text>
+  <text x="1710" y="1214" fill="#5C6570" font-family="Inter, sans-serif" font-size="20" font-weight="500">Scheduling does not charge the card.</text>
+</svg>
