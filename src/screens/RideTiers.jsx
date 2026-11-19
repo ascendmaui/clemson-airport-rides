@@ -54,6 +54,10 @@ export function RideTiers({
     let alive = true
     setQuote(null)
     setQuoteError(null)
+    if (!String(pickup || '').trim() && !(Number.isFinite(Number(pickupLat)) && String(pickupLat).trim() && Number.isFinite(Number(pickupLng)) && String(pickupLng).trim())) {
+      setQuoteError('Choose a pickup spot first to load live fares.')
+      return () => { alive = false }
+    }
     fetchRideQuote({
       pickupLabel: pickup,
       pickupLat,

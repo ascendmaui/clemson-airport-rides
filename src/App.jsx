@@ -3,6 +3,8 @@ import { useGlassMotion } from './lib/glassMotion'
 import { bindKeyboardInset, scrollFocusedFieldIntoView } from './lib/keyboardInset'
 import { getHashRoute, navigate, redirectShareHashToPath } from './lib/navigation'
 import { capturePromoFromLocation } from './lib/riderPromo'
+import { captureCampaignAttribution } from './lib/campaignAttribution'
+import { rememberAffiliateRef } from './lib/affiliates'
 import {
   hasClemsonMiamiLink,
   openClemsonMiamiCheckout,
@@ -398,6 +400,7 @@ export default function App() {
     if (redirectShareHashToPath()) return undefined
     const onRoute = () => {
       capturePromoFromLocation()
+      captureCampaignAttribution({ rememberAffiliate: rememberAffiliateRef })
       rememberClemsonMiamiFromLocation()
       if (redirectShareHashToPath()) return
       setRoute(getHashRoute())

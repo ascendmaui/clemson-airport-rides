@@ -45,6 +45,7 @@ export function Primary({
   disabled,
   tone = 'orange',
   accessibilityLabel,
+  accessibilityHint,
   accessibilityRole = 'button',
   icon,
 }: {
@@ -54,6 +55,7 @@ export function Primary({
   icon?: string
   tone?: 'orange' | 'purple' | 'ghost'
   accessibilityLabel?: string
+  accessibilityHint?: string
   accessibilityRole?: 'button' | 'link'
 }) {
   const { scheme } = useTheme()
@@ -70,6 +72,7 @@ export function Primary({
       disabled={disabled}
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel || label}
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: Boolean(disabled) }}
       style={[styles.primary, { flexDirection: 'row', gap: 8 }]}
     >

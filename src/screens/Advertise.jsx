@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { SitePage } from '../components/SitePage'
 import { MarketingPhoto } from '../components/MarketingPhoto'
 import { buildFieldA11yProps, getFieldErrorProps } from '../lib/formA11y'
+import { formatCampaignSummary, readCampaignAttribution } from '../lib/campaignAttribution'
 import { supportEmail } from '../../shared/productLinks.js'
 import { AD_LEAD_HONEYPOT, adLeadErrors, normalizeAdLead } from '../../shared/adLeads.js'
 import {
@@ -99,7 +100,12 @@ export function AdInterestForm({ submit = submitAdLead }) {
     setState('sending')
     setNotice('')
     try {
-      await submit({ ...normalizeAdLead(values), [AD_LEAD_HONEYPOT]: values[AD_LEAD_HONEYPOT] })
+      const campaign = formatCampaignSummary(readCampaignAttribution())
+      await submit({
+        ...normalizeAdLead(values),
+        [AD_LEAD_HONEYPOT]: values[AD_LEAD_HONEYPOT],
+        ...(campaign ? { campaign } : {}),
+      })
       setState('sent')
       setValues(EMPTY)
     } catch (err) {

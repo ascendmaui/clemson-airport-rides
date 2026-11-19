@@ -388,7 +388,7 @@ function PickDriver() {
   useReconnectRetry('pick-driver', () => setAttempt((value: number) => value + 1), Boolean(error))
 
   const selectedDriver = drivers.find((row: OnlineDriver) => row.id === selected) || null
-  const comfortNotice = comfortFleetNotice(tier === 'comfort' || tier === 'comfort' || Boolean(selectedDriver?.comfortClass))
+  const comfortNotice = comfortFleetNotice(tier === 'comfort' || Boolean(selectedDriver?.comfortClass))
 
   async function toggleFavorite(driverId: string) {
     if (!user) {

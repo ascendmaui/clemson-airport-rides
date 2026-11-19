@@ -63,7 +63,12 @@ export function adLeadRow(input = {}, { userAgent = '' } = {}) {
   }
 }
 
-export function adLeadEmail(row, origin = 'https://clemsonrides.com') {
+export function sanitizeAdLeadCampaign(raw) {
+  return clean(raw, 220)
+}
+
+export function adLeadEmail(row, origin = 'https://clemsonrides.com', { campaign = '' } = {}) {
+  const attribution = sanitizeAdLeadCampaign(campaign)
   return {
     subject: `New advertising lead: ${row.business_name}`,
     text: [
@@ -74,6 +79,7 @@ export function adLeadEmail(row, origin = 'https://clemsonrides.com') {
       `Phone: ${row.phone}`,
       `Category: ${row.category}`,
       `Interested tier: ${row.interested_tier || 'not picked'}`,
+      attribution ? `Campaign: ${attribution}` : null,
       row.message ? `Message: ${row.message}` : null,
       '',
       `Leads are in Supabase table ad_partner_leads. Page: ${origin}/advertise`,

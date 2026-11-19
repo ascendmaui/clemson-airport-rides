@@ -113,9 +113,10 @@ export function useRiderPickupBeacon(userId: string | null) {
 
   useEffect(() => {
     if (!tripId || !supabase) return undefined
+    const activeTripId = tripId
     let alive = true
     async function load() {
-      const next = await readCode(tripId)
+      const next = await readCode(activeTripId)
       if (alive) setCode(next)
     }
     void load()

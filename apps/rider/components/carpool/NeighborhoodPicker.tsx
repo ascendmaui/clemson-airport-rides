@@ -343,7 +343,7 @@ function makeStyles(colors: Palette) {
     searchRowOpen: { alignItems: 'flex-start' as const },
     searchColumn: { flex: 1 },
     search: {
-      width: '100%',
+      width: '100%' as const,
       backgroundColor: colors.input,
       borderWidth: 1,
       borderColor: colors.border,
@@ -358,7 +358,7 @@ function makeStyles(colors: Palette) {
       borderBottomRightRadius: 0,
     },
     dropdown: {
-      width: '100%',
+      width: '100%' as const,
       borderWidth: 1,
       borderTopWidth: 0,
       borderColor: colors.border,

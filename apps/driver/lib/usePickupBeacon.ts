@@ -119,9 +119,10 @@ export function useDriverPickupBeacon(userId: string | null) {
 
   useEffect(() => {
     if (!tripId) return undefined
+    const activeTripId = tripId
     let alive = true
     async function load() {
-      const next = await readCode(tripId)
+      const next = await readCode(activeTripId)
       if (alive) setCode(next)
     }
     void load()
@@ -167,9 +168,10 @@ export function useDriverPickupBeacon(userId: string | null) {
   useEffect(() => {
     if (!tracking || !tripId || !supabase) return undefined
     const client = supabase
+    const activeTripId = tripId
     let alive = true
     async function pull() {
-      const fix = await loadRiderFix(client, tripId)
+      const fix = await loadRiderFix(client, activeTripId)
       const fromShare = fix ? finitePoint(fix.latitude, fix.longitude) : null
       if (alive) setRider(fromShare || riderFromMetadata(trip?.metadata))
     }

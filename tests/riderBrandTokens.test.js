@@ -14,6 +14,7 @@ function riderSources() {
   const out = []
   const walk = (dir) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name === '.expo' || entry.name === 'dist') continue
       const full = path.join(dir, entry.name)
       if (entry.isDirectory()) walk(full)
       else if (/\.(tsx?|jsx?)$/.test(entry.name)) out.push(path.relative(ROOT, full))

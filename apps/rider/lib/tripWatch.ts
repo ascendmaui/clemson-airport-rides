@@ -76,7 +76,7 @@ export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
     .maybeSingle()
   if (error && missingHeartbeatColumn(error.message || '')) {
     const plain = await supabase.from('trips').select(TRIP_COLUMNS).eq('id', tripId).maybeSingle()
-    data = plain.data
+    data = plain.data ? { ...plain.data, driver_heartbeat_at: null } : null
     error = plain.error
   }
   if (error) throw new Error(error.message)

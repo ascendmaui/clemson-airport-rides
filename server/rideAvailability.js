@@ -41,6 +41,11 @@ async function selectVehicles(sb, ids) {
   return full
 }
 
+async function selectRelevantTrips(sb, ids, statuses) {
+  const q = sb.from('trips').select('driver_id, status, pickup_at, scheduled_for').in('driver_id', ids)
+  return typeof q?.in === 'function' ? q.in('status', statuses) : q
+}
+
 function indexByDriver(rows) {
   const map = new Map()
   for (const row of rows || []) {
@@ -93,10 +98,11 @@ export async function loadRideAvailability(sb, { scheduledFor = null, now = new 
     })
   }
 
+  const tripStatuses = scheduled ? ['scheduled', ...BUSY_TRIP_STATUSES] : BUSY_TRIP_STATUSES
   const [vehicles, presence, trips] = await Promise.all([
     selectVehicles(sb, approvedIds),
     sb.from('driver_status').select('driver_id, online').in('driver_id', approvedIds),
-    sb.from('trips').select('driver_id, status, pickup_at, scheduled_for').in('driver_id', approvedIds),
+    selectRelevantTrips(sb, approvedIds, tripStatuses),
   ])
   if (vehicles.error) {
     return availabilityPayload({

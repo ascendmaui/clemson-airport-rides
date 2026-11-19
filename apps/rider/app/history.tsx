@@ -40,27 +40,29 @@ function HistoryScreen() {
   const styles = useThemedStyles(makeStyles)
 
   useEffect(() => {
-    if (!user || !supabase) return undefined
+    const client = supabase
+    if (!user || !client) return undefined
     let alive = true
     setLoading(true)
-    supabase
-      .from('trips')
-      .select('id, status, pickup_label, dropoff_label, fare_cents, deposit_cents, created_at, driver_id')
-      .eq('rider_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(20)
-      .then(({ data, error: queryError }) => {
+    void (async () => {
+      try {
+        const { data, error: queryError } = await client
+          .from('trips')
+          .select('id, status, pickup_label, dropoff_label, fare_cents, deposit_cents, created_at, driver_id')
+          .eq('rider_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(20)
         if (!alive) return
         if (queryError) setError(queryError.message)
         else setRows((data || []) as RideRow[])
-        setLoading(false)
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         if (!alive) return
         logCaught('history', err)
         setError(caughtMessage(err, 'Could not load your rides. Try again.'))
-        setLoading(false)
-      })
+      } finally {
+        if (alive) setLoading(false)
+      }
+    })()
     return () => {
       alive = false
     }

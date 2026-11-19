@@ -125,11 +125,20 @@ export function readHoldPrompt(trip: unknown) {
 }
 
 export function readPaymentFailedMoment(prevHold: unknown, row: unknown, role: 'rider' | 'driver' = 'rider') {
-  return guardValue(() => paymentFailedMoment(prevHold, row, role), null)
+  const normalizedPrev = typeof prevHold === 'string' ? prevHold : prevHold === null ? null : undefined
+  return guardValue(() => paymentFailedMoment(normalizedPrev, row, role), null)
 }
 
 export function readTrackingIssue(status: unknown, timestamp: unknown, now?: number, heartbeatAt?: unknown) {
-  return guardValue(() => trackingIssue(status, timestamp, now, heartbeatAt), null)
+  return guardValue(
+    () => trackingIssue(
+      typeof status === 'string' ? status : null,
+      typeof timestamp === 'string' ? timestamp : null,
+      now,
+      typeof heartbeatAt === 'string' ? heartbeatAt : null,
+    ),
+    null,
+  )
 }
 
 export type PickerDriverCard = {

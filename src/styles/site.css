@@ -435,8 +435,23 @@ html body .site .mkt-menu-bar .mkt-menu {
   padding: 0 !important;
   overflow-x: auto;
   scrollbar-width: none;
-  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
-  mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+html body .site .mkt-menu-bar .mkt-menu.mkt-menu--left {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px);
+  mask-image: linear-gradient(90deg, transparent, #000 28px);
+}
+
+html body .site .mkt-menu-bar .mkt-menu.mkt-menu--right {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent);
+}
+
+html body .site .mkt-menu-bar .mkt-menu.mkt-menu--left.mkt-menu--right {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 36px), transparent);
 }
 
 html body .site.mkt .mkt-menu-bar .mkt-menu button,
@@ -458,6 +473,18 @@ html body .site.mkt .mkt-menu-bar .mkt-menu button[aria-current="page"] {
   letter-spacing: 0 !important;
   white-space: nowrap;
   transition: color 180ms var(--ease);
+}
+
+@media (min-width: 1100px) {
+  html body .site .mkt-menu-bar .mkt-menu {
+    gap: 2px;
+    margin-left: -8px;
+  }
+  html body .site.mkt .mkt-menu-bar .mkt-menu button,
+  html body .site.mkt .mkt-menu-bar .mkt-menu button[aria-current="page"] {
+    padding: 0 8px !important;
+    font-size: 0.8125rem !important;
+  }
 }
 
 html body .site.mkt .mkt-menu-bar .mkt-menu button.pressable::after {
@@ -998,9 +1025,10 @@ html body .site .mkt-choice .site-icon {
 
 html body .site .site-hero-links {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s-3);
+  gap: var(--s-2) var(--s-3);
   margin-top: var(--s-5);
   padding-top: var(--s-4);
   border-top: 1px solid var(--line);

@@ -410,9 +410,7 @@ export function RiderHome() {
       </View>
 
       <Animated.View
-        ref={(node) => {
-          sheetSwipe.ref.current = node
-        }}
+        ref={sheetSwipe.setRef}
         onLayout={sheetSwipe.onLayout}
         style={[styles.sheetWrap, lift(colors, 'float'), sheetMotion]}
       >

@@ -65,16 +65,20 @@ export default function RideTiers() {
   const listMotion = useEnterMotion(14)
 
   useEffect(() => {
-    if (!user || !supabase) return undefined
+    if (!supabase) return undefined
     let alive = true
-    loadTigerPass(supabase).then((next) => {
-      if (!alive) return
-      setPass(next)
-      const preferred = (next.preferredCarTypes || []).find((id) => tiers.some((tier) => tier.id === id))
-      if (preferred && !tiers.some((tier) => tier.id === presetTier)) setSelected(preferred)
-    }).catch((err: unknown) => {
-      toastCaught('tiers-pass', err, 'Could not load Tiger Pass')
-    })
+    if (user) {
+      loadTigerPass(supabase).then((next) => {
+        if (!alive) return
+        setPass(next)
+        const preferred = (next.preferredCarTypes || []).find((id) => tiers.some((tier) => tier.id === id))
+        if (preferred && !tiers.some((tier) => tier.id === presetTier)) setSelected(preferred)
+      }).catch((err: unknown) => {
+        toastCaught('tiers-pass', err, 'Could not load Tiger Pass')
+      })
+    } else {
+      setPass(null)
+    }
     const pickupLatN = Number(pickupLat)
     const pickupLngN = Number(pickupLng)
     const destLatN = Number(destLat)
