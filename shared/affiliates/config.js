@@ -21,11 +21,10 @@ export const AFFILIATE_PARTNER_LABELS = {
 
 export const AFFILIATE_RATES_DEFAULTS = Object.freeze({
   plan: 'option_c',
-  // Base amounts are the selected Option C plan. The partner-type bonuses
-  // are still proposed — John to confirm before they are treated as final.
+  // Base amounts and partner-type bonuses confirmed by John on 2026-11-19.
   placeholder: false,
-  multipliers_pending_confirmation: true,
-  multipliers_note: 'Proposed partner-type bonuses for John to confirm: campus groups 1.25x, local businesses 1.25x, creators 1.5x. Students stay at 1x.',
+  multipliers_pending_confirmation: false,
+  multipliers_note: 'Confirmed Option C partner bonuses: campus groups 1.25x, local businesses 1.25x, creators 1.5x. Students stay at 1x.',
   currency: 'usd',
   // $4 once a referred rider's first completed fare is at least rider_min_fare_cents.
   rider_first_ride_cents: 400,

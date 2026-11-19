@@ -161,7 +161,7 @@ export function describeAffiliatePlan(rates = AFFILIATE_RATES_DEFAULTS) {
     rider_min_fare_cents: merged.rider_min_fare_cents,
     hold_days: merged.hold_days,
     placeholder: merged.placeholder === true,
-    multipliers_pending_confirmation: merged.multipliers_pending_confirmation !== false,
+    multipliers_pending_confirmation: merged.multipliers_pending_confirmation === true,
     multipliers_note: merged.multipliers_note,
     partners: AFFILIATE_PARTNER_TYPES.map((type) => {
       const bps = merged.partner_type_bps[type] ?? 10000

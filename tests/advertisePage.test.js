@@ -98,7 +98,7 @@ test('page renders the QR-first, pay-per-ride pitch, draft ride bundles and the 
     assert.match(html, new RegExp(`<h3>${rides}</h3><p class="adv-price">${price}</p>`))
   }
   assert.match(html, /Game-day weekend boost/)
-  assert.match(html, /Draft launch pricing, pending approval/)
+  assert.match(html, /Approved launch pricing/)
   assert.match(html, /every ride your ad ran on, with timestamp and QR scans/i)
   assert.doesNotMatch(html, /\b\d[\d,]* (cars|drivers|rides (a|per) (week|month|day))\b/i, 'no fleet size or ride volume claims')
   assert.doesNotMatch(html, /data-testid="adv-(samples|hero-demo|how-video)"/, 'media slots stay empty until John approves the assets')
@@ -112,18 +112,19 @@ test('page renders the QR-first, pay-per-ride pitch, draft ride bundles and the 
   assert.match(read('src/styles/advertise.css'), /#522D80/)
 })
 
-test('pricing config: draft ride bundles, per-ride rates, and billing still pending approval', () => {
-  assert.equal(ADS_PACKAGES_APPROVED, false)
+test('pricing config: approved ride bundles, per-ride rates, and addon placeholder guard', () => {
+  assert.equal(ADS_PACKAGES_APPROVED, true)
   assert.deepEqual(RIDE_BUNDLES.map((b) => [b.rides, b.priceCents]), [[100, 1200], [250, 2500], [1000, 8900], [5000, 29900]])
   assert.deepEqual(RIDE_BUNDLES.map(perRideCents), [12, 10, 8.9, 5.98])
   assert.equal(formatPerRide(RIDE_BUNDLES[2]), '8.9¢ per ride')
   assert.deepEqual(publicAdPackages().map((b) => b.id), ['rides-100', 'rides-250', 'rides-1000', 'rides-5000'])
   assert.deepEqual(tierChoices().map((t) => t.id), ['founding-partner', 'rides-100', 'rides-250', 'rides-1000', 'rides-5000', 'not-sure'])
   const rows = bundlePackageRows()
-  assert.ok(rows.every((r) => r.placeholder === true && r.active === false), 'draft rows stay out of billing until approved')
+  assert.ok(rows.filter((r) => r.kind === 'bundle').every((r) => r.active === true && r.placeholder === false), 'approved ride bundles are active and non-placeholder')
+  assert.ok(rows.filter((r) => r.kind === 'addon').every((r) => r.active === false && r.placeholder === true), 'unpriced add-on stays placeholder')
   assert.ok(rows.filter((r) => r.kind === 'bundle').every((r) => r.rides_included > 0 && r.price_cents > 0))
-  assert.ok(bundlePackageRows(true).filter((r) => r.kind === 'bundle').every((r) => r.active && !r.placeholder))
-  assert.match(PRICING_STATUS_COPY, /pending approval/)
+  assert.ok(bundlePackageRows(false).every((r) => r.placeholder === true && r.active === false), 'draft mode keeps rows out of billing')
+  assert.match(PRICING_STATUS_COPY, /Approved launch pricing/)
 })
 
 test('form validation flags each required field and accepts a good lead', () => {
