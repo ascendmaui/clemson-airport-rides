@@ -42,11 +42,14 @@ export function PrimaryButton({
     textAlign: 'center',
     ...rest.style,
   }
-  const label = ariaLabel || (typeof children === 'string' ? children : undefined)
-
   if (href && !isDisabled) {
     return (
-      <a href={href} className={`pressable primary-cta variant-${variant} ${className}`} aria-label={label} style={style}>
+      <a
+        href={href}
+        className={`pressable primary-cta variant-${variant} ${className}`}
+        aria-label={ariaLabel || (typeof children === 'string' ? children : undefined)}
+        style={style}
+      >
         {children}
       </a>
     )
@@ -60,7 +63,7 @@ export function PrimaryButton({
       disabled={isDisabled}
       aria-disabled={isDisabled ? 'true' : undefined}
       aria-busy={loading ? 'true' : undefined}
-      aria-label={label}
+      aria-label={ariaLabel || (typeof children === 'string' ? children : undefined)}
       onClick={isDisabled ? undefined : onClick}
       {...buttonRest}
       style={style}

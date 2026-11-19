@@ -67,7 +67,7 @@ test('the marketing page does not install the frozen 1.0.0 binary', () => {
   assert.doesNotMatch(source, /expo\.dev|expo\.go|exp:\/\/|RIDER_EXPO_PROJECT|DRIVER_EXPO_PROJECT/)
   assert.doesNotMatch(chrome, /ae9bb5b6|a9cfec15|expo\.dev|expo\.go|exp:\/\//)
   assert.match(source, /Book a ride/)
-  assert.match(source, /navigate\('home'\)/)
+  assert.match(source, /bookRideHref\(\)/)
   assert.match(source, /navigate\('home', \{ tier: 'carpool' \}\)/)
   assert.match(chrome, /Get the App/)
   assert.match(chrome, /navigate\('drive'\)/)
