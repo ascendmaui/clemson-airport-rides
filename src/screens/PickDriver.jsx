@@ -227,8 +227,8 @@ export function PickDriver({
       setError('No approved drivers are online right now.')
       return
     }
-    if (selected && (tier === 'comfort' || tier === 'comfort') && !selected.comfortClass) {
-      setError('Extra Comfort fleet only. That driver is not listed as Comfort.')
+    if (selected && tier === 'comfort' && !selected.comfortClass) {
+      setError('Extra Comfort only.')
       return
     }
     setRequesting(true)

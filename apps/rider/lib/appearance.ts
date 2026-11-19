@@ -43,7 +43,7 @@ export function nativeColorScheme(mode: DisplayMode): 'light' | 'dark' | 'unspec
 }
 
 /** `auto` uses the iOS/Android color scheme. A null scheme opens light. */
-export function resolveScheme(mode: DisplayMode, systemScheme: 'light' | 'dark' | null | undefined): 'light' | 'dark' {
+export function resolveScheme(mode: DisplayMode, systemScheme: 'light' | 'dark' | 'unspecified' | null | undefined): 'light' | 'dark' {
   switch (mode) {
     case 'light':
       return 'light'

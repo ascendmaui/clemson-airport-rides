@@ -41,7 +41,7 @@ export function createAdLeadsHandler({
     }
     let notified = false
     try {
-      const msg = adLeadEmail(row, WEB_ORIGIN)
+      const msg = adLeadEmail(row, WEB_ORIGIN, { campaign: body.campaign })
       for (const to of recipients() || []) {
         const out = await send({ to, ...msg })
         notified = notified || Boolean(out?.emailed)

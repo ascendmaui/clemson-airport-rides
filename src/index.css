@@ -661,10 +661,9 @@ select[aria-invalid="true"]:focus-visible {
 }
 .tier-card.selected .tier-card__check { background: #F56600; border-color: #F56600; }
 .ride-tiers__cta {
-  position: sticky;
-  bottom: 0;
+  position: relative;
   z-index: 5;
-  margin: 12px -16px 0;
+  margin: 16px -16px 0;
   padding: 12px 16px calc(14px + var(--safe-bottom, 0px));
   background: linear-gradient(180deg, rgba(255,255,255,0) 0, rgba(255,255,255,0.94) 18px, #fff 100%);
 }

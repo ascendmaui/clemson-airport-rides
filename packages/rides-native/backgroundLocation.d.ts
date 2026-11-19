@@ -7,7 +7,7 @@ export function createTripLocationHeartbeat(options?: {
   active?: () => Promise<boolean> | boolean
   intervalMs?: number
 }): {
-  remember: (fix: { lat?: number; lng?: number; heading?: number | null; speed?: number | null } | null) => void
+  remember: (fix: { lat?: number | null; lng?: number | null; heading?: number | null; speed?: number | null } | null) => void
   lastFix: () => { lat: number; lng: number; heading: number | null; speed: number | null } | null
   start: () => void
   stop: () => void

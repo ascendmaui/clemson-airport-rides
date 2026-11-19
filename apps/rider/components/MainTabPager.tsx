@@ -8,10 +8,8 @@ import {
   useRef,
   type ReactNode,
   type RefObject,
-  type StyleProp,
-  type ViewStyle,
 } from 'react'
-import { StyleSheet, View, useWindowDimensions } from 'react-native'
+import { StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
 import { SPRING } from 'rides-native/icons'
@@ -76,7 +74,10 @@ export function useTabSwipeRemeasure() {
 export function useTabSwipeMeasure(kind: Kind) {
   const api = useContext(TabSwipeContext)
   const id = useId()
-  const host = useRef<MeasureHost | null>(null)
+  const host = useRef<MeasureHost | { getNode?: () => MeasureHost | null } | null>(null)
+  const setRef = useCallback((node: unknown) => {
+    host.current = node && typeof node === 'object' ? (node as MeasureHost | { getNode?: () => MeasureHost | null }) : null
+  }, [])
   const measure = useCallback(() => {
     const node = host.current as (MeasureHost & { getNode?: () => MeasureHost }) | null
     const target = node && typeof node.measureInWindow === 'function' ? node : node?.getNode?.()
@@ -90,7 +91,7 @@ export function useTabSwipeMeasure(kind: Kind) {
     return api.watch(id, measure)
   }, [api, id, measure])
   useEffect(() => () => api?.report(id, kind, null), [api, id, kind])
-  return { ref: host, onLayout: measure }
+  return { ref: host, setRef, onLayout: measure }
 }
 
 /**

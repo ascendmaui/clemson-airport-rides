@@ -90,14 +90,30 @@ function useHeroHeight(rootRef) {
 function MenuLinks({ current, menuRef }) {
   useEffect(() => {
     const menu = menuRef.current
-    if (!menu || !current) return undefined
+    if (!menu) return undefined
+    const syncEdges = () => {
+      const canLeft = menu.scrollLeft > 4
+      const canRight = menu.scrollLeft + menu.clientWidth < menu.scrollWidth - 4
+      menu.classList.toggle('mkt-menu--left', canLeft)
+      menu.classList.toggle('mkt-menu--right', canRight)
+    }
     const frame = window.requestAnimationFrame(() => {
-      const button = menu.querySelector('[aria-current="page"]')
-      if (!button) return
-      const left = button.offsetLeft - (menu.clientWidth - button.offsetWidth) / 2
-      menu.scrollTo({ left: Math.max(0, left) })
+      if (current && menu.scrollWidth > menu.clientWidth + 2) {
+        const button = menu.querySelector('[aria-current="page"]')
+        if (button) {
+          const left = button.offsetLeft - (menu.clientWidth - button.offsetWidth) / 2
+          menu.scrollTo({ left: Math.max(0, left) })
+        }
+      }
+      syncEdges()
     })
-    return () => window.cancelAnimationFrame(frame)
+    menu.addEventListener('scroll', syncEdges, { passive: true })
+    window.addEventListener('resize', syncEdges)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      menu.removeEventListener('scroll', syncEdges)
+      window.removeEventListener('resize', syncEdges)
+    }
   }, [current, menuRef])
 
   return MARKETING_MENU.map((item) => (

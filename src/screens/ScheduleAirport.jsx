@@ -198,8 +198,8 @@ export function ScheduleAirport() {
   }
 
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'transparent' }}>
-      <div style={{ flex: 1, padding: '20px 20px 24px', overflowY: 'auto' }}>
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'transparent' }}>
+      <div style={{ flex: 1, minHeight: 0, padding: '20px 20px 32px', overflowY: 'auto' }}>
         <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to home" onClick={() => navigate('home')} style={{ marginBottom: 12 }}><SiteIcon name="arrow-left" size={20} /></button>
         <h1 style={{ fontSize: 24, fontWeight: 600, letterSpacing: -0.4, color: '#522D80' }}>Schedule</h1>
         <p style={{ color: 'var(--ink-secondary)', fontSize: 14, marginTop: 6, marginBottom: 20 }}>

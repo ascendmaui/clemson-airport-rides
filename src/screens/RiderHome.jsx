@@ -147,8 +147,8 @@ export function RiderHome() {
   )
 
   return (
-    <div className="fade-in booking-home" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: 'transparent' }}>
-      <div className="booking-home-scroll" style={{ flex: 1, overflowY: 'auto', paddingBottom: 8 }}>
+    <div className="fade-in booking-home" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'transparent' }}>
+      <div className="booking-home-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: 24 }}>
         <div style={{ padding: '14px 20px 0' }}>
           <header
             style={{

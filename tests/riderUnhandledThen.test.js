@@ -9,6 +9,7 @@ const RIDER = path.join(ROOT, 'apps/rider')
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
+    if (name === 'node_modules' || name === '.expo' || name === 'dist') continue
     const full = path.join(dir, name)
     if (statSync(full).isDirectory()) walk(full, out)
     else if (/\.(ts|tsx)$/.test(name) && !/\.test\./.test(name)) out.push(full)

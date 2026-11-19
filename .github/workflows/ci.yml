@@ -16,4 +16,6 @@ jobs:
           node-version: 22 # package.json engines: node >=20 (tests use --experimental-strip-types)
           cache: npm
       - run: npm ci
+      - run: node scripts/typecheck.mjs
+      - run: npm run build
       - run: npm test

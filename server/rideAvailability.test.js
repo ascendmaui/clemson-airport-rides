@@ -158,3 +158,34 @@ test('the signed-in rider is never counted as their own driver', async () => {
   assert.equal(guest.availableTierIds.length, 4)
   assert.equal(guest.viewerOnlineDriver, false)
 })
+
+test('loadRideAvailability scopes the trips query to active or scheduled statuses only', async () => {
+  const seenStatusFilters = []
+  function spyClient() {
+    const base = client({
+      applications: [{ profile_id: 'a', onboarding_status: 'approved' }],
+      vehicles: [{ driver_id: 'a', service_class: 'standard' }],
+      status: [{ driver_id: 'a', online: true }],
+      trips: [],
+    })
+    return {
+      from(name) {
+        const t = base.from(name)
+        if (name !== 'trips') return t
+        return {
+          ...t,
+          in(column, values) {
+            if (column === 'status') seenStatusFilters.push(values)
+            return this
+          },
+        }
+      },
+    }
+  }
+  await loadRideAvailability(spyClient(), { now: NOW })
+  await loadRideAvailability(spyClient(), { now: NOW, scheduledFor: LATER })
+  assert.deepEqual(seenStatusFilters, [
+    ['accepted', 'arriving', 'arrived', 'in_progress'],
+    ['scheduled', 'accepted', 'arriving', 'arrived', 'in_progress'],
+  ])
+})
