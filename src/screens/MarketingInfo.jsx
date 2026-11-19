@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { bookRideHref } from '../lib/bookRideLink'
 import { getHashRoute, navigate } from '../lib/navigation'
 import { MarketingChrome } from '../components/MarketingChrome'
 import { MarketingPhoto } from '../components/MarketingPhoto'
@@ -344,13 +345,17 @@ export function GetTheAppPage() {
                 >
                   Download on the App Store
                 </a>
-                <button
-                  type="button"
-                  className="mkt-text pressable"
-                  onClick={() => navigate(isDriver ? 'driver' : 'home')}
-                >
-                  {isDriver ? 'Open the driver desk' : 'Book a ride'}
-                </button>
+                {isDriver ? (
+                  <button
+                    type="button"
+                    className="mkt-text pressable"
+                    onClick={() => navigate('driver')}
+                  >
+                    Open the driver desk
+                  </button>
+                ) : (
+                  <a className="mkt-text pressable" href={bookRideHref()}>Book a ride</a>
+                )}
               </div>
               <QrMark value={offer.pageUrl} label={`QR code for the ${app.product} install page`} color={accent} />
             </article>

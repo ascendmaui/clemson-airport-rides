@@ -1,3 +1,4 @@
+import { bookRideHref } from '../lib/bookRideLink'
 import { navigate } from '../lib/navigation'
 import { MarketingChrome } from '../components/MarketingChrome'
 import { MarketingPhoto } from '../components/MarketingPhoto'
@@ -77,7 +78,7 @@ const LEARN = [
   {
     title: 'Where we ride',
     body: 'Clemson, downtown, and scheduled trips to Greenville-Spartanburg and Charlotte.',
-    action: () => navigate('home'),
+    book: true,
     label: 'Book a ride',
   },
   {
@@ -148,7 +149,11 @@ export function ServiceArea() {
           <article key={card.title} className="mkt-card mkt-feature">
             <h2>{card.title}</h2>
             <p>{card.body}</p>
-            <button type="button" className="mkt-text pressable" onClick={card.action}>{card.label}</button>
+            {card.book ? (
+              <a className="mkt-text pressable" href={bookRideHref()}>{card.label}</a>
+            ) : (
+              <button type="button" className="mkt-text pressable" onClick={card.action}>{card.label}</button>
+            )}
           </article>
         ))}
       </section>

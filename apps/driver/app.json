@@ -52,16 +52,10 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            {
-              "scheme": "https",
-              "host": "clemsonrides.com",
-              "pathPrefix": "/"
-            },
-            {
-              "scheme": "https",
-              "host": "www.clemsonrides.com",
-              "pathPrefix": "/"
-            }
+            { "scheme": "https", "host": "clemsonrides.com", "path": "/driver" },
+            { "scheme": "https", "host": "clemsonrides.com", "pathPrefix": "/driver/" },
+            { "scheme": "https", "host": "www.clemsonrides.com", "path": "/driver" },
+            { "scheme": "https", "host": "www.clemsonrides.com", "pathPrefix": "/driver/" }
           ],
           "category": [
             "BROWSABLE",

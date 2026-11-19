@@ -1,4 +1,12 @@
 {
+  "headers": [
+    {
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/promo/check",
@@ -177,7 +185,7 @@
       "destination": "/api/ads?action=qr&token=:token"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/|\\.well-known/).*)",
       "destination": "/index.html"
     }
   ],

@@ -118,6 +118,17 @@ test('getHashRoute parses routing paths and segment parameters under simulated b
     assert.equal(qsRoute.path, 'carpool')
     assert.equal(qsRoute.params.hub, '1')
     assert.equal(qsRoute.params.drive, '1')
+
+    setLocation('', '/book')
+    assert.equal(getHashRoute().path, 'home')
+    setLocation('', '/ride')
+    assert.equal(getHashRoute().path, 'home')
+    setLocation('', '/trip/trip_9')
+    const tripRoute = getHashRoute()
+    assert.equal(tripRoute.path, 'requested')
+    assert.equal(tripRoute.params.trip, 'trip_9')
+    setLocation('', '/drive')
+    assert.equal(getHashRoute().path, 'drive')
   } finally {
     globalThis.window = originalWindow
   }
