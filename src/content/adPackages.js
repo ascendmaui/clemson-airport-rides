@@ -16,10 +16,10 @@
  * draft pricing, and nothing is ever charged.
  */
 
-/** Pricing approval flag. Keep false until John approves the bundle prices. */
-export const ADS_PACKAGES_APPROVED = false
+/** Pricing approval flag. Approved by John on 2026-11-19. */
+export const ADS_PACKAGES_APPROVED = true
 
-export const PRICING_STATUS_COPY = 'Draft launch pricing, pending approval. Nothing is charged until your campaign is approved.'
+export const PRICING_STATUS_COPY = 'Approved launch pricing. Nothing is charged until your campaign is approved.'
 /** Kept for older copy and tests: shown where no bundles are available. */
 export const COMING_SOON_COPY = 'Packages and pricing coming soon, contact us for founding-partner rates.'
 
