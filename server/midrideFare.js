@@ -14,7 +14,11 @@
 
 export const MIDRIDE_STATUS = 'canceled_midride'
 
-/** Statuses that mean the rider is already on the trip (not waiting at pickup). */
+/**
+ * `in_progress` is mid-ride with no extra start check.
+ * Cancel also allows `arriving` and `arrived` after an `in_progress` event.
+ * Use `isMidrideEligible`, not this list.
+ */
 export const MIDRIDE_STATUSES = ['in_progress']
 
 export const FARE_RATES = {

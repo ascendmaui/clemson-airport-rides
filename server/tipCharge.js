@@ -117,7 +117,7 @@ export async function chargeSavedTip({
       payment_method: paymentMethodId,
       off_session: true,
       confirm: true,
-      description: `Clemson RIDES tip · trip ${trip.id}`,
+      description: `Clemson Rides tip · trip ${trip.id}`,
       metadata: {
         kind: 'tip',
         tripId: trip.id,

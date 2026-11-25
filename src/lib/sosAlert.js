@@ -17,7 +17,7 @@ export function buildSosText({ lat, lng, tripId }) {
     ? `${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}`
     : 'GPS unavailable'
   const lines = [
-    'SOS Clemson RIDES',
+    'SOS Clemson Rides',
     `Trip: ${tripId || 'unknown'}`,
     `Location: ${coordText}`,
   ]
@@ -37,7 +37,7 @@ export function sosChannelHref(channel, text) {
     case 'sms':
       return `sms:911?&body=${encodeURIComponent(text)}`
     case 'mailto':
-      return `mailto:${CUPD_EMAIL}?subject=${encodeURIComponent('SOS Clemson RIDES')}&body=${encodeURIComponent(text)}`
+      return `mailto:${CUPD_EMAIL}?subject=${encodeURIComponent('SOS Clemson Rides')}&body=${encodeURIComponent(text)}`
     case 'web_share':
     case 'banner':
       return null
@@ -93,7 +93,7 @@ export function sosChannelPhrase(channel) {
 export async function shareSosText(text) {
   if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
     try {
-      await navigator.share({ title: 'SOS Clemson RIDES', text })
+      await navigator.share({ title: 'SOS Clemson Rides', text })
       return 'shared'
     } catch (err) {
       if (err && err.name === 'AbortError') return 'dismissed'

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { AccessibilityInfo, Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import Constants from 'expo-constants'
@@ -6,10 +6,25 @@ import MapView, { Circle, Marker, Polyline, PROVIDER_DEFAULT, type MapStyleEleme
 import { ANDROID_MAP_UNAVAILABLE, googleMapStyle, nativeMapTilesReady } from 'rides-native/googleMapChrome.js'
 import { heatColor } from 'rides-native/heat.js'
 import { DOWNTOWN, ORANGE, PURPLE, STADIUM } from 'rides-native/places.js'
+import { color, shadowStyle } from 'rides-native/shared/theme.js'
 import type { BusySpot } from '@/lib/busySpots'
 import { describeCell, type DemandCell } from 'rides-native/demandHeat.js'
 import { DemandHeatLayer } from './DemandHeatLayer'
+import { StillMarker } from './StillMarker'
+import { markerLookKey } from '@/lib/markerRedraw'
+import { GLYPHS, Glyph, ION_ALIASES } from 'rides-native/icons'
 import type { MapPin } from './CampusMap'
+import { mapHeatColors, mapUnavailableColors } from '@/lib/palette'
+
+const FALLBACK_MARKERS: MapPin[] = [
+  { id: 'stadium', latitude: STADIUM.latitude, longitude: STADIUM.longitude, title: 'Memorial Stadium', pinColor: ORANGE },
+  { id: 'downtown', latitude: DOWNTOWN.latitude, longitude: DOWNTOWN.longitude, title: 'Downtown Clemson', pinColor: PURPLE },
+]
+
+/** Shared icon set when the marker glyph has one; Ionicons only for the few it lacks. */
+function hasSharedGlyph(name: string) {
+  return Boolean((GLYPHS as Record<string, unknown>)[name] || (ION_ALIASES as Record<string, string>)[name])
+}
 
 function rgba(hex: string, alpha: number) {
   const raw = hex.replace('#', '')
@@ -58,15 +73,13 @@ export function CampusMap({
   const centerRef = useRef(center)
   pinsRef.current = pins
   centerRef.current = center
-  const markers = pins?.length
-    ? pins
-    : [
-        { id: 'stadium', latitude: STADIUM.latitude, longitude: STADIUM.longitude, title: 'Memorial Stadium', pinColor: ORANGE },
-        { id: 'downtown', latitude: DOWNTOWN.latitude, longitude: DOWNTOWN.longitude, title: 'Downtown Clemson', pinColor: PURPLE },
-      ]
+  const pinKey = (pins || []).map((pin: MapPin) => `${pin.id}:${pin.latitude.toFixed(4)},${pin.longitude.toFixed(4)}`).join('|')
+  const pinLookKey = (pins || []).map((pin: MapPin) => markerLookKey([pin.id, pin.kind, pin.title, pin.pinColor, pin.marker?.fill, pin.marker?.accent, pin.marker?.pattern, pin.marker?.glyph])).join('||')
+  // Same pins (position to ~1 m and look) → same marker list, so the map does not rebuild markers each render.
+  const pinPlaceKey = (pins || []).map((pin: MapPin) => `${pin.id}:${pin.latitude.toFixed(5)},${pin.longitude.toFixed(5)}`).join('|')
+  const markers = useMemo(() => (pins?.length ? pins : FALLBACK_MARKERS), [pinPlaceKey, pinLookKey])
   const focus = center || markers[0]
 
-  const pinKey = (pins || []).map((pin: MapPin) => `${pin.id}:${pin.latitude.toFixed(4)},${pin.longitude.toFixed(4)}`).join('|')
   const centerKey = center ? `${center.latitude.toFixed(4)},${center.longitude.toFixed(4)}` : ''
   const heatKey = showHeat ? heatWindow : ''
 
@@ -79,6 +92,7 @@ export function CampusMap({
   const info = live ? describeCell(live, center ? { lat: center.latitude, lng: center.longitude } : null) : null
   const cardIn = useRef(new Animated.Value(0)).current
   const darkMap = colorScheme === 'dark'
+  const heat = darkMap ? mapHeatColors.dark : mapHeatColors.light
 
   useEffect(() => {
     if (!live) {
@@ -209,8 +223,9 @@ export function CampusMap({
           />
         ) : null}
         {markers.map((pin: MapPin) => pin.kind === 'request' ? (
-          <Marker
+          <StillMarker
             key={pin.id}
+            lookKey={markerLookKey([pin.pinColor])}
             coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
             title={pin.title}
             description="Tap to accept"
@@ -218,10 +233,11 @@ export function CampusMap({
             onPress={() => onPinPress?.(pin.id)}
           >
             <View style={[styles.requestDot, { backgroundColor: pin.pinColor || PURPLE }]} />
-          </Marker>
+          </StillMarker>
         ) : pin.kind === 'self' && pin.marker ? (
-          <Marker
+          <StillMarker
             key={pin.id}
+            lookKey={markerLookKey([pin.marker.fill, pin.marker.accent, pin.marker.pattern, pin.marker.glyph])}
             coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
             title={pin.title}
             anchor={{ x: 0.5, y: 0.5 }}
@@ -229,9 +245,11 @@ export function CampusMap({
           >
             <View style={[styles.carMarker, { backgroundColor: pin.marker.fill, borderColor: pin.marker.accent, borderStyle: pin.marker.pattern === 'check' ? 'dashed' : 'solid', borderWidth: pin.marker.pattern === 'ring' ? 4 : 2 }]}>
               {pin.marker.pattern === 'stripe' ? <View style={[styles.carStripe, { backgroundColor: pin.marker.accent }]} /> : null}
-              <Ionicons name={pin.marker.glyph as keyof typeof Ionicons.glyphMap} size={18} color={pin.marker.pattern === 'check' ? pin.marker.accent : '#FFFFFF'} />
+              {hasSharedGlyph(pin.marker.glyph)
+                ? <Glyph name={pin.marker.glyph} size={18} color={pin.marker.pattern === 'check' ? pin.marker.accent : color.white} />
+                : <Ionicons name={pin.marker.glyph as keyof typeof Ionicons.glyphMap} size={18} color={pin.marker.pattern === 'check' ? pin.marker.accent : color.white} />}
             </View>
-          </Marker>
+          </StillMarker>
         ) : (
           <Marker
             key={pin.id}
@@ -239,6 +257,7 @@ export function CampusMap({
             title={pin.title}
             pinColor={pin.pinColor || ORANGE}
             anchor={{ x: 0.5, y: 1 }}
+            tracksViewChanges={false}
             onPress={() => onPinPress?.(pin.id)}
           />
         ))}
@@ -253,8 +272,8 @@ export function CampusMap({
           style={[
             styles.heatCard,
             {
-              backgroundColor: darkMap ? '#16121F' : '#FFFFFF',
-              borderColor: darkMap ? 'rgba(255,255,255,0.14)' : 'rgba(82,45,128,0.12)',
+              backgroundColor: heat.surface,
+              borderColor: heat.border,
               opacity: cardIn,
               transform: [{ translateY: cardIn.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
             },
@@ -262,10 +281,10 @@ export function CampusMap({
           accessibilityRole="summary"
           accessibilityLabel={`${info.title}. ${info.estimate}. ${info.distance || ''}`}
         >
-          <Text style={[styles.heatCardTitle, { color: darkMap ? '#FFFFFF' : '#1B1B1F' }]}>{info.title}</Text>
-          <Text style={[styles.heatCardEstimate, { color: darkMap ? '#FFC9A3' : '#9A3F00' }]}>{info.estimate}</Text>
-          {info.detail ? <Text style={[styles.heatCardDetail, { color: darkMap ? '#D5D0DC' : '#3E4654' }]}>{info.detail}</Text> : null}
-          {info.distance ? <Text style={[styles.heatCardDetail, { color: darkMap ? '#D5D0DC' : '#3E4654' }]}>{info.distance}</Text> : null}
+          <Text style={[styles.heatCardTitle, { color: heat.title }]}>{info.title}</Text>
+          <Text style={[styles.heatCardEstimate, { color: heat.estimate }]}>{info.estimate}</Text>
+          {info.detail ? <Text style={[styles.heatCardDetail, { color: heat.body }]}>{info.detail}</Text> : null}
+          {info.distance ? <Text style={[styles.heatCardDetail, { color: heat.body }]}>{info.distance}</Text> : null}
           <Pressable
             onPress={() => setSelected(null)}
             style={styles.heatCardClose}
@@ -273,7 +292,7 @@ export function CampusMap({
             accessibilityLabel="Close demand details"
             hitSlop={8}
           >
-            <Text style={[styles.heatCardCloseText, { color: darkMap ? '#FFC9A3' : '#9A3F00' }]}>Close</Text>
+            <Text style={[styles.heatCardCloseText, { color: heat.estimate }]}>Close</Text>
           </Pressable>
         </Animated.View>
       ) : null}
@@ -293,17 +312,15 @@ const styles = StyleSheet.create({
   peakBadge: {
     position: 'absolute', top: 108, alignSelf: 'center',
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
-    backgroundColor: '#522D80',
+    backgroundColor: PURPLE,
     borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.28)',
-    shadowColor: '#522D80', shadowOpacity: 0.28, shadowRadius: 14, shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    ...shadowStyle(PURPLE, 'rest', 'dark'),
   },
-  peakText: { color: '#FFFFFF', fontWeight: '700', fontSize: 12, letterSpacing: 0.3 },
+  peakText: { color: color.white, fontWeight: '700', fontSize: 12, letterSpacing: 0.3 },
   heatCard: {
     position: 'absolute', left: 16, right: 16, top: 156,
     borderRadius: 22, padding: 16, paddingRight: 88, borderWidth: 1,
-    shadowColor: '#1A1033', shadowOpacity: 0.16, shadowRadius: 24, shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
+    ...shadowStyle(color.shadow, 'float'),
   },
   heatCardTitle: { fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
   heatCardEstimate: { fontSize: 14, fontWeight: '700', marginTop: 4, letterSpacing: -0.1 },
@@ -314,31 +331,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
-    backgroundColor: '#F4F5F8',
+    backgroundColor: mapUnavailableColors.surface,
   },
-  unavailableTitle: { fontSize: 16, fontWeight: '800', color: '#522D80', marginBottom: 8 },
-  unavailableBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', color: '#5B6472' },
+  unavailableTitle: { fontSize: 16, fontWeight: '800', color: PURPLE, marginBottom: 8 },
+  unavailableBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', color: mapUnavailableColors.body },
   tigerChip: {
-    backgroundColor: '#F56600',
-    borderColor: '#522D80',
+    backgroundColor: ORANGE,
+    borderColor: PURPLE,
     borderWidth: 2,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  tigerChipPreview: { backgroundColor: '#522D80' },
-  tigerChipText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  tigerChipPreview: { backgroundColor: PURPLE },
+  tigerChipText: { color: color.white, fontSize: 12, fontWeight: '800' },
   zone: { position: 'absolute', left: 16, top: 88, right: 16, alignItems: 'flex-start' },
   requestDot: {
     width: 14,
     height: 14,
     borderRadius: 7,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: color.white,
   },
   zoneText: {
     backgroundColor: ORANGE,
-    color: '#fff',
+    color: color.white,
     overflow: 'hidden',
     borderRadius: 999,
     paddingHorizontal: 10,

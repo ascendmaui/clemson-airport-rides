@@ -15,6 +15,9 @@ import { applyPaidCheckoutSession, recordDeposit } from '../server/checkoutRecon
 import { activateTigerPassFromCheckout, syncTigerPassFromStripe, tigerPassMeta } from '../server/riderPass.js'
 import { handleAffiliateConnectEvent, isAffiliateConnectEvent } from '../server/affiliateConnect.js'
 import { handleDriverConnectEvent, isDriverConnectEvent } from '../server/driverPayoutMethods.js'
+import { clientErrorMessage } from '../server/clientError.js'
+import { studentPlanMeta, syncStudentPlanFromStripe } from '../server/studentPlans.js'
+import { handleAdsStripeEvent, isAdsStripeEvent } from '../server/ads/billing.js'
 
 export { recordDeposit, applyPaidCheckoutSession }
 
@@ -172,8 +175,20 @@ export default async function handler(req, res, deps = {}) {
     if (whSecret && !whSecret.includes('placeholder')) {
       const sig = extractStripeSignature(req.headers)
       event = stripe.webhooks.constructEvent(rawBody, sig, whSecret)
-    } else {
+    } else if (deps.allowUnsigned === true) {
+      // Test-only injection. Production never accepts an unsigned event.
       event = JSON.parse(rawBody.toString('utf8'))
+    } else {
+      return sendWebhookJson(res, 400, { error: 'Webhook signing secret is not configured' })
+    }
+
+    if (isAdsStripeEvent(event)) {
+      // In-car tablet ad campaign paid (invoice.paid or Checkout). Activates the campaign.
+      const client = deps.serviceClient ? deps.serviceClient() : (activeServiceKey ? serviceClient() : null)
+      const adsFn = deps.handleAdsStripeEvent || handleAdsStripeEvent
+      const ads = await adsFn(client, event)
+      console.log('[stripe-webhook] ad_campaign', { type: event.type, id: event.data?.object?.id, ads })
+      return sendWebhookJson(res, ads?.ok === false && !ads?.skipped ? 500 : 200, { received: true, type: event.type, ads })
     }
 
     if (event.type === 'payment_intent.succeeded' && event.data?.object?.metadata?.kind === 'tip') {
@@ -271,6 +286,25 @@ export default async function handler(req, res, deps = {}) {
       })
     }
 
+    const studentMeta = studentPlanMeta(event.data?.object)
+    if (
+      studentMeta
+      && (event.type === 'customer.subscription.created'
+        || event.type === 'customer.subscription.updated'
+        || event.type === 'customer.subscription.deleted'
+        || event.type === 'invoice.paid'
+        || event.type === 'invoice.payment_failed')
+    ) {
+      let studentPlan = { skipped: true, reason: 'no_service_role' }
+      if (activeServiceKey || deps.serviceClient) {
+        const client = deps.serviceClient ? deps.serviceClient() : serviceClient()
+        const syncFn = deps.syncStudentPlanFromStripe || syncStudentPlanFromStripe
+        studentPlan = await syncFn(client, event.type, event.data.object)
+      }
+      const retryable = studentPlan?.ok === false
+      return sendWebhookJson(res, retryable ? 500 : 200, { received: true, type: event.type, studentPlan })
+    }
+
     const passMeta = tigerPassMeta(event.data?.object)
     if (
       passMeta
@@ -289,19 +323,23 @@ export default async function handler(req, res, deps = {}) {
     }
 
     if (isAffiliateConnectEvent(event.type) || isDriverConnectEvent(event.type)) {
-      if (event.livemode === true) {
+      // Driver payouts run live (behind admin approval). Affiliate Connect stays test-mode only.
+      const live = event.livemode === true
+      if (live && !isDriverConnectEvent(event.type)) {
         return sendWebhookJson(res, 200, {
           received: true,
           type: event.type,
           affiliate: { skipped: true, reason: 'live_mode' },
-          driver: { skipped: true, reason: 'live_mode' },
+          driver: { skipped: true, reason: 'not_driver_event' },
         })
       }
       const client = deps.serviceClient ? deps.serviceClient() : serviceClient(activeServiceKey)
       if (!client) {
         return sendWebhookJson(res, 200, { received: true, type: event.type, affiliate: { skipped: true, reason: 'no_service_role' } })
       }
-      const affiliate = isAffiliateConnectEvent(event.type)
+      const affiliate = live
+        ? { ok: true, skipped: true, reason: 'live_mode' }
+        : isAffiliateConnectEvent(event.type)
         ? await (deps.handleAffiliateConnectEvent || handleAffiliateConnectEvent)(client, event)
         : { ok: true, skipped: true, reason: 'not_affiliate' }
       const driver = isDriverConnectEvent(event.type)
@@ -321,6 +359,6 @@ export default async function handler(req, res, deps = {}) {
       : (typeof err?.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 600
         ? err.statusCode
         : 400)
-    return sendWebhookJson(res, status, { error: err.message || 'Webhook error' })
+    return sendWebhookJson(res, status, { error: clientErrorMessage(err, 'Webhook error') })
   }
 }

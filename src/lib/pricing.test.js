@@ -266,56 +266,50 @@ test('quoteWithSurge: weekday midday, no event → no surge; student gets 10% of
   assert.equal(student.quote.breakdown.student_discount_cents, 685)
 })
 
-test('quoteWithSurge: student discount is applied AFTER the game-day surge', async () => {
+const STADIUM_PICKUP = { lat: 34.6788, lng: -82.8432 }
+const FAR_PICKUP = { lat: 34.6854, lng: -82.9532 } // Seneca, ~6 mi from the stadium
+
+test('quoteWithSurge: student discount is applied AFTER the game-day surge (capped 1.25x)', async () => {
   setMockSupabase(fakeSupabase({ rows: [gameDayRow({ surge_multiplier: 1.5 })] }))
-  // Wednesday so neither weekend nor the Saturday fallback window can interfere.
-  const q = await quoteWithSurge({ at: WED_NOON_ET, miles: 48, minutes: 55, isStudent: true })
-  assert.equal(q.surge.multiplier, 1.5)
+  // Wednesday: only the live DB event opens the window; the stadium radius applies.
+  const q = await quoteWithSurge({ at: WED_NOON_ET, miles: 48, minutes: 55, isStudent: true, pickup: STADIUM_PICKUP })
+  assert.equal(q.surge.multiplier, 1.25)
   assert.equal(q.surge.rule.id, 'game_day')
-  const surged = Math.round(GSP_BASE * 1.5) // 10269
+  const surged = Math.round(GSP_BASE * 1.25) // 8558
   assert.equal(q.quote.breakdown.surged_cents, surged)
-  assert.equal(q.quote.breakdown.student_discount_cents, Math.round(surged * 0.1)) // 1027
-  assert.equal(q.quote.fareBeforeCreditsCents, surged - 1027) // 9242
+  assert.equal(q.quote.breakdown.student_discount_cents, Math.round(surged * 0.1))
+  assert.equal(q.quote.fareBeforeCreditsCents, surged - Math.round(surged * 0.1))
   assert.deepEqual(q.gameDay, {
     title: 'Clemson vs. South Carolina',
-    multiplier: 1.5,
+    multiplier: 1.25,
     zone: 'Lot 5 / Memorial Stadium',
   })
 })
 
-test('quoteWithSurge: Saturday fallback window (1.8) wins over a smaller DB event', async () => {
+test('quoteWithSurge: a live event outside the stadium radius is not game-day pricing', async () => {
   setMockSupabase(fakeSupabase({ rows: [gameDayRow({ surge_multiplier: 1.5 })] }))
-  const q = await quoteWithSurge({ at: SAT_NOON_ET, miles: 48, minutes: 55, isStudent: true })
-  assert.equal(q.surge.multiplier, 1.8)
-  assert.equal(q.surge.rule.id, 'game_day')
-  assert.equal(q.quote.breakdown.surged_cents, 12323) // round(6846 * 1.8)
-  assert.equal(q.quote.fareBeforeCreditsCents, 11091) // 12323 - round(1232.3)
-  // gameDay reports the multiplier actually charged, not the DB row's value.
-  assert.equal(q.gameDay.multiplier, 1.8)
+  const q = await quoteWithSurge({ at: WED_NOON_ET, miles: 48, minutes: 55, pickup: FAR_PICKUP })
+  assert.equal(q.surge.multiplier, 1)
+  const none = await quoteWithSurge({ at: WED_NOON_ET, miles: 48, minutes: 55 })
+  assert.equal(none.surge.multiplier, 1, 'no coordinates, no game-day pricing')
 })
 
-test('quoteWithSurge: a bigger DB event beats the fallback, and is capped at SURGE_MAX 2.5', async () => {
-  setMockSupabase(fakeSupabase({ rows: [gameDayRow({ surge_multiplier: 2 })] }))
-  assert.equal((await quoteWithSurge({ at: SAT_NOON_ET, miles: 48, minutes: 55 })).surge.multiplier, 2)
-
+test('quoteWithSurge: a big DB event is capped at SURGE_MAX 1.25', async () => {
   setMockSupabase(fakeSupabase({ rows: [gameDayRow({ surge_multiplier: 4 })] }))
-  const capped = await quoteWithSurge({ at: WED_NOON_ET, miles: 48, minutes: 55, isStudent: true })
-  assert.equal(capped.surge.multiplier, 2.5)
-  assert.equal(capped.quote.breakdown.surged_cents, Math.round(GSP_BASE * 2.5))
+  const capped = await quoteWithSurge({ at: WED_NOON_ET, miles: 48, minutes: 55, isStudent: true, pickup: STADIUM_PICKUP })
+  assert.equal(capped.surge.multiplier, 1.25)
+  assert.equal(capped.quote.breakdown.surged_cents, Math.round(GSP_BASE * 1.25))
 })
 
-test('quoteWithSurge: no DB client on a Saturday still applies the 1.8 fallback', async () => {
+test('quoteWithSurge: a non-game fall Saturday is the standard fare (no fallback, no weekend)', async () => {
   resetMockSupabase()
-  const q = await quoteWithSurge({ at: SAT_NOON_ET, miles: 48, minutes: 55 })
-  assert.equal(q.surge.multiplier, 1.8)
-  assert.equal(q.gameDay, null) // no event row, so no game-day banner data
-})
-
-test('quoteWithSurge: Saturday before 11:00 ET is weekend (1.2), not game day', async () => {
+  const q = await quoteWithSurge({ at: SAT_NOON_ET, miles: 48, minutes: 55, pickup: STADIUM_PICKUP })
+  assert.equal(q.surge.multiplier, 1)
+  assert.equal(q.gameDay, null)
   setMockSupabase(fakeSupabase({ rows: [] }))
-  const q = await quoteWithSurge({ at: SAT_1030AM_ET, miles: 48, minutes: 55 })
-  assert.equal(q.surge.multiplier, 1.2)
-  assert.equal(q.surge.rule.id, 'weekend')
+  const early = await quoteWithSurge({ at: SAT_1030AM_ET, miles: 48, minutes: 55 })
+  assert.equal(early.surge.multiplier, 1)
+  assert.equal(early.surge.rule, null)
 })
 
 test('quoteWithSurge: DB multiplier of 1 or less is not a game-day surge', async () => {
@@ -337,20 +331,20 @@ test('quoteWithSurge: carpool 15% comes off first, then student 10% off the rema
 
 test('quoteWithSurge: non-Standard tier gets surge but no student discount', async () => {
   setMockSupabase(fakeSupabase({ rows: [gameDayRow({ surge_multiplier: 1.5 })] }))
-  const q = await quoteWithSurge({ at: WED_NOON_ET, miles: 48, minutes: 55, isStudent: true, tier: 'xl' })
+  const q = await quoteWithSurge({ at: WED_NOON_ET, miles: 48, minutes: 55, isStudent: true, tier: 'xl', pickup: STADIUM_PICKUP })
   assert.equal(q.quote.breakdown.student_discount_cents, 0)
-  assert.equal(q.quote.fareBeforeCreditsCents, Math.round(GSP_BASE * 1.5))
+  assert.equal(q.quote.fareBeforeCreditsCents, Math.round(GSP_BASE * 1.25))
 })
 
-test('quoteWithSurge: airport rush only applies to airport trips; weekend starts Fri 17:00 ET', async () => {
+test('quoteWithSurge: airport rush and weekend are off (1.0x)', async () => {
   setMockSupabase(fakeSupabase({ rows: [] }))
   assert.equal((await quoteWithSurge({ at: WED_6AM_ET, miles: 3, minutes: 10 })).surge.multiplier, 1)
-  assert.equal((await quoteWithSurge({ at: WED_6AM_ET, airport: true, miles: 3, minutes: 10 })).surge.multiplier, 1.35)
+  assert.equal((await quoteWithSurge({ at: WED_6AM_ET, airport: true, miles: 3, minutes: 10 })).surge.multiplier, 1)
   const fri = await quoteWithSurge({ at: FRI_530PM_ET, miles: 3, minutes: 10 })
-  assert.equal(fri.surge.rule.id, 'weekend')
+  assert.equal(fri.surge.rule, null)
   const friAirport = await quoteWithSurge({ at: FRI_530PM_ET, airport: true, miles: 3, minutes: 10 })
-  assert.equal(friAirport.surge.multiplier, 1.35)
-  assert.deepEqual(friAirport.surge.matched.map((m) => m.id), ['airport_rush', 'weekend'])
+  assert.equal(friAirport.surge.multiplier, 1)
+  assert.deepEqual(friAirport.surge.matched, [])
 })
 
 // ---------------------------------------------------------------------------
@@ -404,21 +398,20 @@ test('priceAirportRide: CLT fallback route, student', async () => {
   assert.equal(r.depositCents, 0)
 })
 
-test('priceAirportRide: game day + airport rush + student stack as highest-surge-then-discount', async () => {
+test('priceAirportRide: game day from the stadium is 1.25x then student; airport rush is off', async () => {
   setMockSupabase(fakeSupabase({ rows: [gameDayRow({ surge_multiplier: 2 })] }))
-  const r = await priceAirportRide({ airport: 'GSP', isStudent: true, at: SAT_NOON_ET })
-  assert.equal(r.surge.multiplier, 2) // DB event 2.0 > fallback 1.8 > weekend 1.2
-  const surged = GSP_BASE * 2 // 13692
-  assert.equal(r.discountCents, Math.round(surged * 0.1)) // 1369
-  assert.equal(r.fareCents, surged - 1369) // 12323
-  assert.equal(r.depositCents, cardDepositCents(12323))
+  const r = await priceAirportRide({ airport: 'GSP', isStudent: true, at: SAT_NOON_ET, pickup: STADIUM_PICKUP })
+  assert.equal(r.surge.multiplier, 1.25) // DB event 2.0 is capped at 1.25
+  const surged = Math.round(GSP_BASE * 1.25)
+  assert.equal(r.discountCents, Math.round(surged * 0.1))
+  assert.equal(r.fareCents, surged - Math.round(surged * 0.1))
+  assert.equal(r.depositCents, cardDepositCents(r.fareCents))
   assert.equal(r.gameDay.zone, 'Lot 5 / Memorial Stadium')
 
-  // Weekday early morning: airport rush (1.35) applies to airport rides.
   setMockSupabase(fakeSupabase({ rows: [] }))
   const rush = await priceAirportRide({ airport: 'GSP', isStudent: true, at: WED_6AM_ET })
-  assert.equal(rush.surge.rule.id, 'airport_rush')
-  assert.equal(rush.fareCents, 9242 - 924) // round(6846*1.35)=9242, 10% = 924
+  assert.equal(rush.surge.rule, null)
+  assert.equal(rush.fareCents, 6161)
 })
 
 test('priceAirportRide: live route distance/duration override the fallback, each independently', async () => {

@@ -54,6 +54,7 @@ test('GA97: checkout.session.completed returns retryable 500 when deposit record
   const fakeDeps = {
     stripeSecret: 'sk_test_fake',
     webhookSecret: '',
+    allowUnsigned: true,
     serviceKey: 'svc_key_test',
     serviceClient: () => ({}),
     applyPaidCheckoutSession: async () => ({
@@ -89,6 +90,7 @@ test('GA97: checkout.session.async_payment_succeeded returns retryable 500 when 
   const fakeDeps = {
     stripeSecret: 'sk_test_fake',
     webhookSecret: '',
+    allowUnsigned: true,
     serviceKey: 'svc_key_test',
     serviceClient: () => ({}),
     applyPaidCheckoutSession: async () => ({
@@ -121,6 +123,7 @@ test('GA97: credit_purchase returns retryable 500 when recordCreditPurchase fail
   const fakeDeps = {
     stripeSecret: 'sk_test_fake',
     webhookSecret: '',
+    allowUnsigned: true,
     serviceKey: 'svc_key_test',
     recordCreditPurchase: async () => ({ ok: false, error: 'db lock failure' }),
   }
@@ -149,6 +152,7 @@ test('GA97: tip payment_intent.succeeded returns retryable 500 when recordTip fa
   const fakeDeps = {
     stripeSecret: 'sk_test_fake',
     webhookSecret: '',
+    allowUnsigned: true,
     serviceKey: 'svc_key_test',
     recordTip: async () => ({ ok: false, error: 'Payment constraint conflict' }),
   }
@@ -176,6 +180,7 @@ test('GA97: tiger_pass checkout session returns retryable 500 when activation fa
   const fakeDeps = {
     stripeSecret: 'sk_test_fake',
     webhookSecret: '',
+    allowUnsigned: true,
     serviceKey: 'svc_key_test',
     serviceClient: () => ({}),
     activateTigerPassFromCheckout: async () => ({ ok: false, error: 'subscription insert failure' }),
@@ -204,6 +209,7 @@ test('GA97: tiger pass subscription update returns retryable 500 when sync fails
   const fakeDeps = {
     stripeSecret: 'sk_test_fake',
     webhookSecret: '',
+    allowUnsigned: true,
     serviceKey: 'svc_key_test',
     serviceClient: () => ({}),
     syncTigerPassFromStripe: async () => ({ ok: false, error: 'profile update failed' }),
@@ -230,6 +236,7 @@ test('GA97: stream guards prevent exceptions when headersSent or writableEnded a
   const fakeDeps = {
     stripeSecret: 'sk_test_fake',
     webhookSecret: '',
+    allowUnsigned: true,
     applyPaidCheckoutSession: async () => ({ ok: true, recorded: { ok: true } }),
   }
 

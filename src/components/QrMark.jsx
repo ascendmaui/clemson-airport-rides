@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { qrMatrix } from '../lib/qrMatrix.js'
 
-export function QrMark({ value, label }) {
+export function QrMark({ value, label, color = '#522D80' }) {
   const matrix = useMemo(() => qrMatrix(value), [value])
   const quiet = 2
   const span = matrix.size + quiet * 2
@@ -20,7 +20,7 @@ export function QrMark({ value, label }) {
           y={y + quiet}
           width="1"
           height="1"
-          fill="#522D80"
+          fill={color}
         />
       ))}
     </svg>

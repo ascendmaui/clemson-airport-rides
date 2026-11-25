@@ -2,18 +2,21 @@ import { GlassBadge, Glyph } from 'rides-native/icons'
 import { MainTabs } from '@/components/MainTabs'
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { FlatList, Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { isShareableTripStatus } from 'rides-native/safety.js'
 import { formatCents } from 'rides-native/tripTags.js'
+import { riderStatusPhrase } from 'rides-native/liveTrip.js'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { RequireAuth } from '@/components/RequireAuth'
+import { caughtMessage, logCaught } from '@/lib/caught'
+import { RIDER_LIST_WINDOW } from '@/lib/virtualRows'
 
 type RideRow = {
   id: string
@@ -37,21 +40,29 @@ function HistoryScreen() {
   const styles = useThemedStyles(makeStyles)
 
   useEffect(() => {
-    if (!user || !supabase) return undefined
+    const client = supabase
+    if (!user || !client) return undefined
     let alive = true
     setLoading(true)
-    supabase
-      .from('trips')
-      .select('id, status, pickup_label, dropoff_label, fare_cents, deposit_cents, created_at, driver_id')
-      .eq('rider_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(20)
-      .then(({ data, error: queryError }) => {
+    void (async () => {
+      try {
+        const { data, error: queryError } = await client
+          .from('trips')
+          .select('id, status, pickup_label, dropoff_label, fare_cents, deposit_cents, created_at, driver_id')
+          .eq('rider_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(20)
         if (!alive) return
         if (queryError) setError(queryError.message)
         else setRows((data || []) as RideRow[])
-        setLoading(false)
-      })
+      } catch (err: unknown) {
+        if (!alive) return
+        logCaught('history', err)
+        setError(caughtMessage(err, 'Could not load your rides. Try again.'))
+      } finally {
+        if (alive) setLoading(false)
+      }
+    })()
     return () => {
       alive = false
     }
@@ -75,28 +86,37 @@ function HistoryScreen() {
           <Text style={[styles.segmentText, { color: colors.onAccent }]}>History</Text>
         </View>
       </View>
-      <ScrollView contentContainerStyle={styles.list}>
-        {!user ? (
+      <FlatList
+        style={{ flex: 1 }}
+        data={rows}
+        keyExtractor={(row: RideRow) => row.id}
+        contentContainerStyle={styles.list}
+        {...RIDER_LIST_WINDOW}
+        ListHeaderComponent={(
           <>
-            <Text style={styles.copy}>Sign in to see rides on this account.</Text>
-            <PrimaryButton label="Sign in" onPress={() => router.push('/sign-in')} />
+            {!user ? (
+              <>
+                <Text style={styles.copy}>Sign in to see rides on this account.</Text>
+                <PrimaryButton label="Sign in" onPress={() => router.push('/sign-in')} />
+              </>
+            ) : null}
+            {loading ? <Text style={styles.copy}>Loading…</Text> : null}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {user && !loading && !error && rows.length === 0 ? (
+              <View style={styles.empty}>
+                <GlassBadge name="empty" size={56} tone="purple" scheme={scheme} />
+                <Text style={styles.copy}>No rides yet. Campus → GSP starts from the map.</Text>
+              </View>
+            ) : null}
           </>
-        ) : null}
-        {loading ? <Text style={styles.copy}>Loading…</Text> : null}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {user && !loading && !error && rows.length === 0 ? (
-          <View style={styles.empty}>
-            <GlassBadge name="empty" size={56} tone="purple" scheme={scheme} />
-            <Text style={styles.copy}>No rides yet. Campus → GSP starts from the map.</Text>
-          </View>
-        ) : null}
-        {rows.map((row: RideRow) => (
-          <View key={row.id} style={[styles.card, lift(colors, 'rest')]}>
+        )}
+        renderItem={({ item: row }) => (
+          <View style={[styles.card, lift(colors, 'rest')]}>
             <View style={styles.cardHead}>
               <Glyph name={row.status === 'completed' ? 'complete' : row.status === 'canceled' || row.status === 'cancelled' ? 'close' : 'clock'} size={20} color={row.status === 'completed' ? colors.online : colors.purple} />
               <Text style={[styles.cardTitle, { flex: 1 }]}>{row.dropoff_label || 'Ride'}</Text>
             </View>
-            <Text style={styles.copy}>{row.pickup_label || 'Pickup'} · {row.status || 'requested'}</Text>
+            <Text style={styles.copy}>{row.pickup_label || 'Pickup'} · {riderStatusPhrase(row.status)}</Text>
             <Text style={styles.copy}>Fare {formatCents(row.fare_cents || 0)}{row.deposit_cents ? ` · already paid ${formatCents(row.deposit_cents)}` : ''}</Text>
             {row.status === 'completed' && row.driver_id ? (
               <Pressable
@@ -143,8 +163,8 @@ function HistoryScreen() {
               </Pressable>
             ) : null}
           </View>
-        ))}
-      </ScrollView>
+        )}
+      />
       <MainTabs active="rides" />
     </View>
   )

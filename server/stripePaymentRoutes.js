@@ -22,6 +22,7 @@ import {
   setupPaymentMethodTypes,
   summarizeSavedPaymentMethod,
 } from '../shared/ridePaymentMethods.js'
+import { clientErrorMessage } from './clientError.js'
 
 async function createWithAllowedTypes(types, create) {
   let attempt = types
@@ -176,7 +177,7 @@ export async function handleStripeSetupIntent(req, res) {
     })
   } catch (e) {
     console.error('[stripe-setup-intent]', e)
-    return json(res, 500, { error: e.message || 'Server error' })
+    return json(res, 500, { error: clientErrorMessage(e, 'Server error') })
   }
 }
 
@@ -289,7 +290,7 @@ export async function handleStripeSavePaymentMethod(req, res) {
       billingActivatedAt: now,
     })
   } catch (e) {
-    return json(res, 500, { error: e.message || 'Server error' })
+    return json(res, 500, { error: clientErrorMessage(e, 'Server error') })
   }
 }
 
@@ -343,7 +344,7 @@ export async function handleListSavedPaymentMethods(req, res) {
     return json(res, 200, { methods, defaultPmId })
   } catch (e) {
     console.error('[stripe-payment-methods]', e)
-    return json(res, 500, { error: e.message || 'Server error' })
+    return json(res, 500, { error: clientErrorMessage(e, 'Server error') })
   }
 }
 
@@ -421,6 +422,6 @@ export async function handleUpdateSavedPaymentMethod(req, res) {
     })
   } catch (e) {
     console.error('[stripe-payment-methods]', e)
-    return json(res, 500, { error: e.message || 'Server error' })
+    return json(res, 500, { error: clientErrorMessage(e, 'Server error') })
   }
 }

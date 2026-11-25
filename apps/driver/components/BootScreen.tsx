@@ -1,13 +1,19 @@
+import { useEffect } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { ORANGE, PURPLE } from 'rides-native/places.js'
+import { color, shadowStyle } from 'rides-native/shared/theme.js'
+import { hideDriverSplash } from '@/lib/hideSplash'
 
 export function BootScreen() {
+  useEffect(() => {
+    hideDriverSplash()
+  }, [])
   return (
     <View style={styles.screen}>
       <View style={styles.mark}>
         <Text style={styles.markLabel}>CD</Text>
       </View>
-      <Text style={styles.title}>Clemson RIDES Driver</Text>
+      <Text style={styles.title}>Clemson Rides Driver</Text>
       <ActivityIndicator color={ORANGE} style={styles.spinner} />
     </View>
   )
@@ -23,13 +29,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
-    shadowColor: '#1A1033',
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
+    ...shadowStyle(color.shadow, 'float'),
   },
-  markLabel: { color: '#fff', fontWeight: '800', fontSize: 20 },
-  title: { color: '#fff', fontWeight: '800', fontSize: 22, letterSpacing: -0.3 },
+  markLabel: { color: color.white, fontWeight: '800', fontSize: 20 },
+  title: { color: color.white, fontWeight: '800', fontSize: 22, letterSpacing: -0.3 },
   spinner: { marginTop: 18 },
 })

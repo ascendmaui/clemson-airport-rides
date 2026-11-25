@@ -58,6 +58,11 @@ const storageUrl = dataUrl(`
 
 const matchUrl = dataUrl(`export default ${MATCH}`)
 const wavUrl = dataUrl('export default 1')
+const caughtUrl = dataUrl(`
+  export function logCaught() {}
+  export function caughtMessage(_err, fallback) { return fallback }
+  export function toastCaught() {}
+`)
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -66,6 +71,7 @@ registerHooks({
     if (specifier === 'expo-audio') return { url: audioUrl, shortCircuit: true }
     if (specifier === 'expo-haptics') return { url: hapticsUrl, shortCircuit: true }
     if (specifier === '@/lib/storage') return { url: storageUrl, shortCircuit: true }
+    if (specifier === '@/lib/caught') return { url: caughtUrl, shortCircuit: true }
     if (specifier.endsWith('match-chime.m4a')) return { url: matchUrl, shortCircuit: true }
     if (specifier.endsWith('.wav')) return { url: wavUrl, shortCircuit: true }
     return nextResolve(specifier, context)

@@ -1,3 +1,5 @@
+import { reverseLabel } from './addressSearch.js'
+
 /** Number('') and Number('   ') are 0. A blank pin is missing, not the origin. */
 export function finiteCoordinate(value) {
   if (value == null) return null
@@ -70,31 +72,29 @@ export function readBrowserPosition(geolocation = (typeof navigator !== 'undefin
 
 const GEOCODE_WAIT_MS = 1500
 
-export function reverseGeocodeLabel(lat, lng) {
+/**
+ * Street label for a GPS fix. Geoapify when apiKey is set, else Photon
+ * (see addressSearch.js). A slow, failed, or missing provider falls back to
+ * the coordinates after GEOCODE_WAIT_MS so the pin still updates.
+ * `lookup` is injectable for tests.
+ */
+export function reverseGeocodeLabel(lat, lng, { apiKey, lookup } = {}) {
   const latitude = Number(lat)
   const longitude = Number(lng)
   const fallback = Number.isFinite(latitude) && Number.isFinite(longitude)
     ? `Current location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
     : 'Current location'
-  const lookup = new Promise((resolve) => {
-    try {
-      if (typeof window === 'undefined' || !window.google?.maps?.Geocoder) {
-        resolve(fallback)
-        return
-      }
-      const geocoder = new window.google.maps.Geocoder()
-      geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
-        if (status === 'OK' && results?.[0]?.formatted_address) resolve(results[0].formatted_address)
-        else resolve(fallback)
-      })
-    } catch {
-      resolve(fallback)
-    }
-  })
-  // An invalid or stalled Maps key never calls the geocoder callback. The
-  // pickup still has to update from the GPS fix.
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return Promise.resolve(fallback)
+  const find = typeof lookup === 'function'
+    ? lookup
+    : (la, ln) => reverseLabel(la, ln, apiKey == null ? {} : { apiKey })
+  const answer = Promise.resolve()
+    .then(() => find(latitude, longitude))
+    .then((label) => (typeof label === 'string' && label.trim() ? label.trim() : fallback))
+    .catch(() => fallback)
+  let timer
   const giveUp = new Promise((resolve) => {
-    setTimeout(() => resolve(fallback), GEOCODE_WAIT_MS)
+    timer = setTimeout(() => resolve(fallback), GEOCODE_WAIT_MS)
   })
-  return Promise.race([lookup, giveUp])
+  return Promise.race([answer, giveUp]).finally(() => clearTimeout(timer))
 }

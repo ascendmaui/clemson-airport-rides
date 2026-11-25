@@ -140,3 +140,52 @@ test('missing service class column does not treat tier comfort as Extra Comfort'
   const snapshot = await loadRideAvailability(sb, { now: NOW })
   assert.deepEqual(snapshot.availableTierIds, ['standard', 'wait', 'carpool'])
 })
+
+test('the signed-in rider is never counted as their own driver', async () => {
+  const sb = client({
+    applications: [{ profile_id: 'me', onboarding_status: 'approved' }],
+    vehicles: [{ driver_id: 'me', service_class: 'comfort', tier: 'comfort' }],
+    status: [{ driver_id: 'me', online: true }],
+    trips: [],
+  })
+  const self = await loadRideAvailability(sb, { now: NOW, viewerId: 'me' })
+  assert.deepEqual(self.availableTierIds, [])
+  assert.equal(self.viewerOnlineDriver, true)
+  const other = await loadRideAvailability(sb, { now: NOW, viewerId: 'rider' })
+  assert.deepEqual(other.availableTierIds, ['standard', 'wait', 'comfort', 'carpool'])
+  assert.equal(other.viewerOnlineDriver, false)
+  const guest = await loadRideAvailability(sb, { now: NOW })
+  assert.equal(guest.availableTierIds.length, 4)
+  assert.equal(guest.viewerOnlineDriver, false)
+})
+
+test('loadRideAvailability scopes the trips query to active or scheduled statuses only', async () => {
+  const seenStatusFilters = []
+  function spyClient() {
+    const base = client({
+      applications: [{ profile_id: 'a', onboarding_status: 'approved' }],
+      vehicles: [{ driver_id: 'a', service_class: 'standard' }],
+      status: [{ driver_id: 'a', online: true }],
+      trips: [],
+    })
+    return {
+      from(name) {
+        const t = base.from(name)
+        if (name !== 'trips') return t
+        return {
+          ...t,
+          in(column, values) {
+            if (column === 'status') seenStatusFilters.push(values)
+            return this
+          },
+        }
+      },
+    }
+  }
+  await loadRideAvailability(spyClient(), { now: NOW })
+  await loadRideAvailability(spyClient(), { now: NOW, scheduledFor: LATER })
+  assert.deepEqual(seenStatusFilters, [
+    ['accepted', 'arriving', 'arrived', 'in_progress'],
+    ['scheduled', 'accepted', 'arriving', 'arrived', 'in_progress'],
+  ])
+})

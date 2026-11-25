@@ -12,7 +12,7 @@ export function googleMapStyle(scheme) {
   ]
 }
 
-export const ANDROID_MAP_UNAVAILABLE = 'This Android build has no Google Maps key, so campus tiles cannot load. Pickup and drop-off still work from the list. Set EXPO_PUBLIC_GOOGLE_MAPS_API_KEY and rebuild.'
+export const ANDROID_MAP_UNAVAILABLE = 'Campus tiles cannot load on this iPhone. Pickup and drop-off still work from the list.'
 
 export function usableGoogleMapsKey({ env = {}, manifestKey = '' } = {}) {
   const raw = String(env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || env.GOOGLE_MAPS_ANDROID_API_KEY || manifestKey || '').trim()

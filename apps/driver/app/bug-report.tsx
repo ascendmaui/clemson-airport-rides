@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { supportEmail, supportMailto } from '../../../shared/productLinks.js'
 import { Card, ErrorText, Field, Primary } from '@/components/chrome'
 import { StackPage } from '@/components/shell'
 import { useAuth } from '@/lib/auth'
@@ -71,9 +72,15 @@ export default function BugReportScreen() {
 
   return (
     <StackPage title="Bug Reporter" onBack={() => router.back()}>
-      <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-        This files the existing support ticket. You can also email rides@clemsonrides.com.
-      </Text>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel={`Email support at ${supportEmail()}`}
+        onPress={() => { void Linking.openURL(supportMailto('Clemson Rides driver support')) }}
+      >
+        <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
+          This files the existing support ticket. You can also email {supportEmail()}.
+        </Text>
+      </Pressable>
       <View style={styles.chips}>
         {CATEGORIES.map((item) => {
           const on = item === category

@@ -24,7 +24,7 @@ export function comfortFleetNotice() {
 
 /** Same sentence the database raises when an accept of an unpaid airport deposit is rejected. */
 export const UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR =
-  'Airport deposit still unpaid. This ride is not claimable until the rider pays the deposit.'
+  'This airport ride still has an unpaid card hold. It is not claimable until the rider pays.'
 
 const QUEUE_FILTERS = ['all', 'student', 'game_day', 'weekend_party']
 
@@ -775,8 +775,8 @@ export function depositStatusLine(payments) {
   if (!rows.length) return null
   const cents = rows.reduce((sum, row) => sum + (Number(row.amountCents ?? row.amount_cents) || 0), 0)
   const open = rows.find((row) => !succeeded(row.status))
-  if (!open) return `Deposit ${formatCents(cents)} paid`
-  return `Deposit ${formatCents(cents)} · ${open.status || 'pending'}`
+  if (!open) return `Already paid ${formatCents(cents)}`
+  return `Card hold ${formatCents(cents)} · ${open.status || 'pending'}`
 }
 
 export function summarizeDepositAwareness(trips, paymentsByTrip, now = new Date()) {

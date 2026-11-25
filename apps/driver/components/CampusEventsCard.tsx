@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { Card } from '@/components/chrome'
 import { useTheme } from '@/lib/theme'
 import { supabase } from '@/lib/supabase'
+import { quiet } from '@/lib/softFail'
 import { loadCampusEvents, type CampusEventCard } from 'rides-native/campusEvents'
 
 /** Discover: upcoming Clemson calendar events that move rider demand. */
@@ -16,13 +17,13 @@ export function CampusEventsCard() {
       if (!alive) return
       setEvents(out.events.slice(0, 4))
       setBonus(out.bonus?.line || null)
-    })
+    }).catch(quiet('campus events'))
     return () => { alive = false }
   }, [])
   if (!events || events.length === 0) return null
   return (
     <Card accessibilityLabel="Upcoming campus events">
-      <Text style={[styles.kicker, { color: colors.purple }]}>CAMPUS CALENDAR</Text>
+      <Text style={[styles.kicker, { color: colors.link }]}>CAMPUS CALENDAR</Text>
       {bonus ? <Text style={{ color: colors.orange, fontWeight: '800' }}>Bonus live now: {bonus}</Text> : null}
       {events.map((e) => (
         <View key={e.id} style={styles.row}>

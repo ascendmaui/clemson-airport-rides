@@ -11,6 +11,13 @@ import { fetchNotificationPrefs } from '../lib/notificationPrefs'
 import { useToasts } from '../lib/toasts'
 import { riderStatusCue } from '../lib/riderStatusCue'
 import { reminderCopy, stampScheduledReminder, takeReminder } from '../lib/scheduledRides'
+import {
+  TOAST_BILL_COLUMNS,
+  TOAST_TRIP_COLUMNS,
+  TOAST_TRIP_POLL_COLUMNS,
+  billToastCents,
+  billToastStatus,
+} from '../lib/rideToastQueries'
 
 const TRIP_STATUS_KIND = {
   searching: 'ride_requested',
@@ -62,7 +69,7 @@ export function RideToastWatcher() {
       const [{ data: trips }, { data: rides }, { data: bills }] = await Promise.all([
         supabase
           .from('trips')
-          .select('id, status, pickup_label, dropoff_label, rider_id, driver_id, updated_at, pickup_at, scheduled_for, metadata')
+          .select(TOAST_TRIP_COLUMNS)
           .or(`rider_id.eq.${user.id},driver_id.eq.${user.id}`)
           .order('requested_at', { ascending: false })
           .limit(12),
@@ -74,7 +81,7 @@ export function RideToastWatcher() {
           .limit(8),
         supabase
           .from('ride_bills')
-          .select('id, status, amount_cents, created_at')
+          .select(TOAST_BILL_COLUMNS)
           .eq('participant_profile_id', user.id)
           .order('created_at', { ascending: false })
           .limit(8),
@@ -82,7 +89,7 @@ export function RideToastWatcher() {
       if (!alive) return
       ;(trips || []).forEach((t) => seenTrip.current.set(t.id, t.status))
       ;(rides || []).forEach((r) => seenFriend.current.set(r.id, r.status))
-      ;(bills || []).forEach((b) => seenBill.current.set(b.id, b.status))
+      ;(bills || []).forEach((b) => seenBill.current.set(b.id, billToastStatus(b)))
       try {
         const { data: payments } = await supabase
           .from('payments')
@@ -200,23 +207,19 @@ export function RideToastWatcher() {
 
     function onBillRow(row) {
       if (!row?.id) return
+      const status = billToastStatus(row)
       if (!primed.current) {
-        seenBill.current.set(row.id, row.status)
+        seenBill.current.set(row.id, status)
         return
       }
       const prev = seenBill.current.get(row.id)
-      if (prev === row.status) return
-      seenBill.current.set(row.id, row.status)
+      if (prev === status) return
+      seenBill.current.set(row.id, status)
       if (prev == null) return
-      const cents = Number(row.amount_cents) || 0
+      if (status !== 'charged') return
+      const cents = billToastCents(row)
       const dollars = (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-      if (/fail|error|unpaid/i.test(row.status || '')) {
-        pushToast({ kind: 'payment_failed', title: 'Payment failed', body: dollars })
-      } else if (/paid|succeeded|captured|charged/i.test(row.status || '')) {
-        pushToast({ kind: 'fare_charged', title: 'Fare charged', body: dollars })
-      } else if (/retry/i.test(row.status || '')) {
-        pushToast({ kind: 'payment_retry', title: 'Retry payment', body: dollars })
-      }
+      pushToast({ kind: 'fare_charged', title: 'Fare charged', body: dollars })
     }
 
     hydrate().catch(() => { primed.current = true })
@@ -256,7 +259,7 @@ export function RideToastWatcher() {
       try {
         const { data: trips } = await supabase
           .from('trips')
-          .select('id, status, pickup_label, dropoff_label, pickup_at, scheduled_for, metadata')
+          .select(TOAST_TRIP_POLL_COLUMNS)
           .or(`rider_id.eq.${user.id},driver_id.eq.${user.id}`)
           .order('requested_at', { ascending: false })
           .limit(8)
@@ -272,7 +275,7 @@ export function RideToastWatcher() {
 
         const { data: bills } = await supabase
           .from('ride_bills')
-          .select('id, status, amount_cents')
+          .select(TOAST_BILL_COLUMNS)
           .eq('participant_profile_id', user.id)
           .order('created_at', { ascending: false })
           .limit(5)

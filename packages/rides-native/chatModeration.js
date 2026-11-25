@@ -1,3 +1,5 @@
+import { supportEmail } from '../../shared/productLinks.js'
+
 export const CHAT_REPORT_REASONS = Object.freeze([
   'Harassment or abuse',
   'Inappropriate content',
@@ -5,7 +7,7 @@ export const CHAT_REPORT_REASONS = Object.freeze([
   'Other',
 ])
 export const CHAT_REPORT_CONFIRMATION = 'Reported. Our team reviews reports within 24 hours.'
-export const CHAT_SUPPORT_COPY = 'You can also contact support at rides@clemsonrides.com.'
+export const CHAT_SUPPORT_COPY = `You can also contact support at ${supportEmail()}.`
 export const CHAT_BLOCK_COPY = `Blocking hides this person's messages and prevents you from sending to them on this device. It does not cancel the trip. ${CHAT_SUPPORT_COPY}`
 
 function requiredId(value) {

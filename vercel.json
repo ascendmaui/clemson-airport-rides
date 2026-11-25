@@ -1,5 +1,25 @@
 {
+  "headers": [
+    {
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" }
+      ]
+    }
+  ],
   "rewrites": [
+    {
+      "source": "/api/promo/check",
+      "destination": "/api/weekly-coupon?action=promo-check"
+    },
+    {
+      "source": "/api/promo/claim",
+      "destination": "/api/weekly-coupon?action=promo-claim"
+    },
+    {
+      "source": "/api/promo/campaigns",
+      "destination": "/api/weekly-coupon?action=promo-campaigns"
+    },
     {
       "source": "/api/stripe/webhook",
       "destination": "/api/stripe-webhook"
@@ -161,7 +181,11 @@
       "destination": "/api/$1"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/q/:token",
+      "destination": "/api/ads?action=qr&token=:token"
+    },
+    {
+      "source": "/((?!api/|\\.well-known/).*)",
       "destination": "/index.html"
     }
   ],
@@ -177,6 +201,14 @@
     {
       "path": "/api/weekly-coupon?slot=est",
       "schedule": "0 17 * * 5"
+    },
+    {
+      "path": "/api/stripe-payment-methods?action=student-plans&op=nightly",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/ads?action=cron",
+      "schedule": "0 14 * * *"
     }
   ]
 }

@@ -1,7 +1,7 @@
 import { Glyph } from 'rides-native/icons'
 import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { Card, ErrorText, Primary, Tag } from '@/components/chrome'
+import { ErrorText, Primary, Tag } from '@/components/chrome'
 import { useAuth } from '@/lib/auth'
 import { useTheme } from '@/lib/theme'
 import { radius, type as typeScale } from 'rides-native/shared/theme.js'
@@ -61,10 +61,10 @@ export function DriverStatusCard({
       ? 'Application submitted! Our team is reviewing it. Approvals typically take 24–48 hours.'
       : status === 'rejected'
         ? 'Please update the flagged information above and resubmit for review.'
-        : 'Once all info and documents are submitted, Clemson RIDES admins will review your application.'
+        : 'Once all info and documents are submitted, Clemson Rides admins will review your application.'
 
   return (
-    <Card style={styles.card}>
+    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <Text
@@ -186,13 +186,16 @@ export function DriverStatusCard({
           </Text>
         </Pressable>
       ) : null}
-    </Card>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   card: {
     gap: 12,
+    borderWidth: 1,
+    borderRadius: radius.xl,
+    padding: 16,
   },
   header: {
     gap: 6,

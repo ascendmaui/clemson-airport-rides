@@ -424,7 +424,7 @@ function TaxSummary({ tax, yearEnd, yearly, years, year, onYear, onDownload, onP
 function TaxPrintSheet({ tax, yearEnd, timeZone }) {
   return (
     <article className="tax-print-sheet" aria-hidden="true">
-      <h1>Clemson RIDES · {tax.year} driver earnings and mileage summary</h1>
+      <h1>Clemson Rides · {tax.year} driver earnings and mileage summary</h1>
       <p>{TAX_NOT_ADVICE}</p>
       <p>{yearEnd.mileageEstimateNote} {yearEnd.rateLabel}</p>
       <p>{STRIPE_1099_NOTE} {STRIPE_CONNECT_1099_URL}</p>

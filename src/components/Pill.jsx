@@ -1,3 +1,5 @@
+import { SITE_ICON_NAMES, SiteIcon } from './SiteIcon.jsx'
+
 export function Pill({
   children,
   icon,
@@ -36,8 +38,8 @@ export function Pill({
       }}
     >
       {icon && (
-        <span style={{ fontSize: 16 }} aria-hidden="true">
-          {icon}
+        <span style={{ display: 'inline-flex', color: 'currentColor' }} aria-hidden="true">
+          {typeof icon === 'string' && SITE_ICON_NAMES.includes(icon) ? <SiteIcon name={icon} size={16} /> : icon}
         </span>
       )}
       {children}

@@ -28,6 +28,8 @@ export type CampusMapProps = {
   pins?: MapPin[]
   fitPins?: boolean
   showSimulatedFleet?: boolean
+  /** Home draws this pill in the map chrome so the sheet cannot clip it. */
+  showFleetBadge?: boolean
   route?: LatLng[]
 }
 

@@ -94,7 +94,7 @@ export function EmptyState({
   return (
     <Card>
       <View style={[styles.badge, { backgroundColor: colors.track }]}>
-        <Glyph name={icon} size={26} color={colors.purple} />
+        <Glyph name={icon} size={26} color={colors.link} />
       </View>
       <Text style={[styles.emptyTitle, { color: colors.title }]}>{title}</Text>
       <Text style={[styles.emptyBody, { color: colors.inkSecondary }]}>{body}</Text>

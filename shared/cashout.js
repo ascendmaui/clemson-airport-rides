@@ -86,6 +86,7 @@ export const CASHOUT_COPY = {
   already_today: 'You already cashed out today. Try again after midnight ET.',
   zero_balance: 'Nothing to cash out yet.',
   below_fee: 'Your balance is smaller than the instant fee.',
+  payouts_on_hold: 'Payouts are paused for now. Your earnings are safe and show as pending payout.',
 }
 
 /**

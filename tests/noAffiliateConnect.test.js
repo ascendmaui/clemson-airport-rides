@@ -100,8 +100,8 @@ test('option C plan is config, with bonuses labeled for John', () => {
   assert.equal(plan.rider_first_ride_cents, 400)
   assert.equal(plan.rider_min_fare_cents, 1500)
   assert.equal(plan.driver_first_trip_cents, 2000)
-  assert.equal(plan.multipliers_pending_confirmation, true)
-  assert.match(plan.multipliers_note, /John to confirm/)
+  assert.equal(plan.multipliers_pending_confirmation, false)
+  assert.match(plan.multipliers_note, /Confirmed Option C/)
   assert.equal(formatMultiplier(12500), '1.25×')
   assert.equal(formatMultiplier(15000), '1.5×')
   const campus = plan.partners.find((row) => row.type === 'campus_org')
@@ -434,7 +434,7 @@ test('connect webhooks record account, transfer, and payout events', async () =>
       id: 'evt_live', type: 'account.updated', livemode: true,
       data: { object: { id: 'acct_test_aff', payouts_enabled: false, details_submitted: false } },
     })),
-  }, res, { stripeSecret: 'sk_test_crimson', webhookSecret: '', serviceKey: 'service', serviceClient: () => sb })
+  }, res, { stripeSecret: 'sk_test_crimson', webhookSecret: '', allowUnsigned: true, serviceKey: 'service', serviceClient: () => sb })
   assert.equal(res.statusCode, 200)
   assert.equal(res.json.affiliate.reason, 'live_mode')
   assert.equal(tables.affiliates[0].stripe_connect_status, 'verified')

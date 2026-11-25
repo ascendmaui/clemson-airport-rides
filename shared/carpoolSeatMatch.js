@@ -3,7 +3,7 @@
  * Riders group when pickup and drop-off are each inside the radius and
  * departure times share a window. A group books at 3 riders and caps at 4.
  * Demo cars never count. Each rider is pre-authorized for their own seat.
- * There is no deposit.
+ * Each seat is a card hold captured at trip end.
  */
 import { haversineMeters } from '../src/lib/rideGeometry.js'
 import { isDemoDriverId } from './demoFleet.js'
@@ -150,7 +150,7 @@ export function carpoolDriverId(drivers) {
 }
 
 function seatHold(riderId, perSeat) {
-  const auth = fareAuthorizationCents(perSeat)
+  const auth = fareAuthorizationCents(perSeat, { bufferBps: 0 })
   return {
     riderId,
     estimatedFareCents: perSeat,

@@ -7,13 +7,14 @@ import { DRIVER_CANCEL_NOTICE, DRIVER_CANCEL_REASONS, DRIVER_CANCEL_SUCCESS, val
 import { useTheme } from '@/lib/theme'
 import { GlassSheet } from 'rides-native/glass'
 import { ErrorText, Primary } from '@/components/chrome'
+import { logSoft } from '@/lib/softFail'
 
 export function DriverCancelSheet({ supabase, tripId, scheduled, disabled, onCanceled }: {
   supabase: unknown; tripId: string; scheduled?: boolean; disabled?: boolean; onCanceled: () => void
 }) {
   const { colors, scheme } = useTheme()
   const light = colors.statusBar === 'dark'
-  const selectedColor = light ? '#522D80' : '#E6D4FF'
+  const selectedColor = light ? colors.purple : colors.link
   const insets = useSafeAreaInsets()
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
@@ -33,6 +34,7 @@ export function DriverCancelSheet({ supabase, tripId, scheduled, disabled, onCan
     try {
       await driverCancelTrip(supabase, tripId, reason, reason === 'other' ? note.trim() : undefined)
     } catch (err) {
+      logSoft('driver cancel trip', err)
       setError(err instanceof Error ? err.message : 'Could not cancel this trip. Try again.')
       sending.current = false
       setBusy(false)

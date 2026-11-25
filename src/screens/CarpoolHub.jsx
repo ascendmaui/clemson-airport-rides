@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BottomTabs } from '../components/BottomTabs'
+import { SiteIcon } from '../components/SiteIcon.jsx'
 import { PlacePicker } from '../components/PlacePicker'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { CarpoolCompare } from '../components/CarpoolCompare'
@@ -139,14 +140,15 @@ export function CarpoolHub() {
           background: 'linear-gradient(145deg, #F56600 0%, #522D80 72%)',
           color: '#fff',
         }}>
-          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.4 }}>CLEMSON RIDES</div>
+          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.4 }}>Clemson Rides</div>
           <h1 style={{ fontSize: 32, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1.05, margin: '8px 0 0' }}>
             Split the surge.
           </h1>
           <p style={{ margin: '10px 0 0', fontSize: 15, lineHeight: 1.45, maxWidth: 420 }}>
-            One person to Grand Marc or College Ave on a game night is about {pitch ? formatUsd(pitch.soloCents) : '$30–$40'}.
-            Four Tigers in one car pay about {pitch ? formatUsd(pitch.fullShareCents) : '$10–$15'} each.
-            The driver earns more than that solo trip.
+            {pitch
+              ? `Standard is about ${formatUsd(pitch.soloCents)}. A Carpool seat is ${formatUsd(pitch.fullShareCents)}, 50% of that Standard fare, when 3 or 4 riders share the trip.`
+              : 'A Carpool seat is 50% of the Standard fare when 3 or 4 riders share the trip.'}
+            {' '}The driver earns more than a solo trip.
           </p>
           <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ background: 'rgba(255,255,255,0.16)', borderRadius: 999, padding: '6px 10px', fontSize: 12, fontWeight: 700 }}>
@@ -267,7 +269,7 @@ export function CarpoolHub() {
 
           {result?.pool?.waiting && (
             <div style={{ ...card, textAlign: 'center' }} role="status" aria-live="polite">
-              <div style={{ fontSize: 24, marginBottom: 6 }} aria-hidden="true">⏳</div>
+              <div style={{ marginBottom: 6, color: 'var(--orange)' }} aria-hidden="true"><SiteIcon name="hourglass" size={24} /></div>
               <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--purple)' }}>You are in the queue</div>
               <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45, marginTop: 4 }}>
                 No one else is heading to {result.pool.neighborhoodLabel || 'that neighborhood'} inside the time window yet.
@@ -277,7 +279,7 @@ export function CarpoolHub() {
           )}
           {result?.code === 'queue_unavailable' && (
             <div style={{ ...card, textAlign: 'center' }} role="status" aria-live="polite">
-              <div style={{ fontSize: 24, marginBottom: 6 }} aria-hidden="true">ℹ️</div>
+              <div style={{ marginBottom: 6, color: 'var(--purple)' }} aria-hidden="true"><SiteIcon name="info" size={24} /></div>
               <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--purple)' }}>Prices are ready. The live queue is not.</div>
               <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45, marginTop: 4 }}>{result.message}</p>
             </div>

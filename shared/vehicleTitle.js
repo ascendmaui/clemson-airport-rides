@@ -2,7 +2,7 @@
 
 export const REBUILT_TITLE_HELPER = 'Unlike Uber and Lyft, we accept rebuilt titles.'
 
-export const SALVAGE_TITLE_MESSAGE = "We can't accept a salvage title. A salvage brand means an insurer declared the vehicle a total loss, so it isn't eligible to drive with Clemson RIDES. Clean titles are welcome, and unlike Uber and Lyft, we accept rebuilt titles."
+export const SALVAGE_TITLE_MESSAGE = "We can't accept a salvage title. A salvage brand means an insurer declared the vehicle a total loss, so it isn't eligible to drive with Clemson Rides. Clean titles are welcome, and unlike Uber and Lyft, we accept rebuilt titles."
 
 export const TITLE_STATUS_OPTIONS = [
   { id: 'clean', label: 'Clean', allowed: true },

@@ -43,3 +43,9 @@ export async function fetchTigerHeatMap(windowId = 'now', options = {}) {
     return localPreview(name)
   }
 }
+
+/** Peak-pricing status for the driver home. Disabled when the server is unreachable. */
+export async function fetchPeakStatus(options = {}) {
+  const map = await fetchTigerHeatMap('now', options)
+  return map?.peak && map.peak.enabled ? map.peak : { enabled: false, active: false }
+}

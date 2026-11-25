@@ -188,7 +188,7 @@ export default async function handler(req, res, deps = {}) {
           currency: 'usd',
           unit_amount: fareCents,
           product_data: {
-            name: 'Clemson RIDES · Clemson Miami game',
+            name: 'Clemson Rides · Clemson Miami game',
             description: 'Point-to-point ride inside Clemson, South Carolina. Fare $1.',
           },
         },

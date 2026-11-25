@@ -8,6 +8,7 @@ import { saveAmbassadorAttribution } from './ambassadorAttribution.js'
 import { firstRideEligible, firstRideWindowOpen } from '../src/lib/carpoolEngine.js'
 import { gameDayActive } from './carpoolSettle.js'
 import { WEB_ORIGIN } from '../shared/productLinks.js'
+import { clientErrorMessage } from './clientError.js'
 
 function missingTable(error) {
   return /relation|does not exist|schema cache/i.test(error?.message || '')
@@ -38,7 +39,7 @@ export async function handleCarpoolMatch(req, res) {
     return json(res, result.ok === false ? 400 : 200, result)
   } catch (err) {
     console.error('[carpool-match]', err)
-    return json(res, 500, { error: err.message || 'Match failed' })
+    return json(res, 500, { error: clientErrorMessage(err, 'Match failed') })
   }
 }
 
@@ -70,7 +71,7 @@ export async function handleCarpoolGroup(req, res) {
     return json(res, 200, result)
   } catch (err) {
     console.error('[carpool-group]', err)
-    return json(res, 500, { error: err.message || 'Could not create group link' })
+    return json(res, 500, { error: clientErrorMessage(err, 'Could not create group link') })
   }
 }
 
@@ -97,7 +98,7 @@ export async function handleCarpoolAttribute(req, res) {
     return json(res, status, result)
   } catch (err) {
     console.error('[carpool-attribute]', err)
-    return json(res, 500, { error: err.message || 'Could not save ambassador attribution' })
+    return json(res, 500, { error: clientErrorMessage(err, 'Could not save ambassador attribution') })
   }
 }
 
@@ -167,6 +168,6 @@ export async function handleCarpoolProgram(req, res) {
     })
   } catch (err) {
     console.error('[carpool-program]', err)
-    return json(res, 500, { error: err.message || 'Program lookup failed' })
+    return json(res, 500, { error: clientErrorMessage(err, 'Program lookup failed') })
   }
 }

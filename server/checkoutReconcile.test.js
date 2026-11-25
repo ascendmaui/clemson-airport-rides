@@ -545,6 +545,8 @@ test('webhook still works through the shared function', async () => {
     await webhookHandler(req, res, {
       serviceClient: () => db,
       serviceKey: 'mock_service_key',
+      webhookSecret: '',
+      allowUnsigned: true,
     })
 
     assert.equal(res.statusCode, 200)
@@ -566,6 +568,8 @@ test('webhook still works through the shared function', async () => {
     await webhookHandler(req2, res2, {
       serviceClient: () => db,
       serviceKey: 'mock_service_key',
+      webhookSecret: '',
+      allowUnsigned: true,
     })
 
     assert.equal(res2.statusCode, 200)

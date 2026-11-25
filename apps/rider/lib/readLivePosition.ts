@@ -1,4 +1,5 @@
 import * as Location from 'expo-location'
+import { logCaught } from '@/lib/caught'
 
 export async function readLivePosition(): Promise<{ lat: number; lng: number } | null> {
   try {
@@ -10,7 +11,8 @@ export async function readLivePosition(): Promise<{ lat: number; lng: number } |
     const lng = pos.coords.longitude
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
     return { lat, lng }
-  } catch {
+  } catch (err) {
+    logCaught('live-position', err)
     return null
   }
 }

@@ -1,6 +1,7 @@
 import { authStorage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
 import { friendlyApiError } from 'rides-native/apiErrors.js'
+import { logCaught } from '@/lib/caught'
 
 export const NOTIFICATION_CATEGORIES = [
   { id: 'ride', label: 'Ride updates', hint: 'Requested, accepted, arriving, completed' },
@@ -68,8 +69,8 @@ export async function loadAccount(userId: string) {
     if (stored) {
       localPrefs = asPrefs(JSON.parse(stored))
     }
-  } catch {
-    // leave localPrefs as default
+  } catch (err) {
+    logCaught('account-prefs', err)
   }
   if (!supabase) return { profile: null as RiderProfile | null, prefs: localPrefs, error: 'Supabase is not configured' }
   const queried = await supabase

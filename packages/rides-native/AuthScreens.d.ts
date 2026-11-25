@@ -30,6 +30,7 @@ export function SignInScreen(props: {
   onOpenLegal?: (doc: 'privacy' | 'terms') => void
   ownerRequest?: boolean
   embedded?: boolean
+  colors?: Record<string, any> | null
 }): ReactNode
 
 export function ForgotPasswordScreen(props: {
@@ -68,6 +69,8 @@ export function SignUpScreen(props: {
   subtitle?: string
   mark?: string
   showPromo?: boolean
+  promoPlaceholder?: string
+  promoNote?: string
   socialProviders?: SocialProvider[]
   onSocial?: (
     providerId: SocialProvider['id'],

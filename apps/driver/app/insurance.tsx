@@ -20,7 +20,7 @@ export default function InsuranceScreen() {
           icon="shield-checkmark"
           tag="Not a policy"
           title="Trip coverage"
-          body="A Clemson RIDES coverage summary is not published in the app yet. Nothing here confirms that an active trip is insured."
+          body="A Clemson Rides coverage summary is not published in the app yet. Nothing here confirms that an active trip is insured."
         />
         <InfoBlock
           icon="document-text"

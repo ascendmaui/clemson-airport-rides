@@ -4,6 +4,7 @@
  * for ride offers. Callers pass already-filtered driver ids.
  */
 import { sendExpoPush } from './expoPush.js'
+import { insertDriverNotification } from './driverNotifications.js'
 
 export async function pushDrivers(sb, driverIds, { title, body, data, channelId = 'driver-supply' } = {}, deps = {}) {
   const ids = [...new Set((driverIds || []).filter(Boolean))]
@@ -13,7 +14,17 @@ export async function pushDrivers(sb, driverIds, { title, body, data, channelId 
   if (error) throw new Error(error.message || 'Could not load driver push tokens')
   const send = deps.sendExpoPush || sendExpoPush
   for (const row of tokens || []) {
-    const out = await send({ to: row.token, title, body, data, channelId }, deps)
+    const kind = data && typeof data === 'object' ? (data.kind || data.type) : null
+    const recorded = await insertDriverNotification(sb, {
+      userId: row.driver_id,
+      type: kind || 'admin_alert',
+      title,
+      body,
+      data: data && typeof data === 'object' ? data : {},
+    })
+    const payload = data && typeof data === 'object' ? { ...data } : {}
+    if (recorded.id) payload.notificationId = recorded.id
+    const out = await send({ to: row.token, title, body, data: payload, channelId }, deps)
     if (out?.sent) result.sent += 1
     else result.failed += 1
   }

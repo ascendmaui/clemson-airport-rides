@@ -70,9 +70,9 @@ export function CarpoolCompare({
     >
       <Text style={styles.kicker}>{kicker(mode)}</Text>
       <View style={styles.row}>
-        <PriceBox label="Alone in surge" amount={formatUsd(delta.soloSurgeCents)} muted />
+        <PriceBox label="Standard" amount={formatUsd(delta.soloSurgeCents)} muted />
         <Text style={styles.arrow}>→</Text>
-        <PriceBox label="Your seat · 4 riders" amount={formatUsd(delta.fullCarShareCents)} />
+        <PriceBox label="Carpool seat" amount={formatUsd(delta.fullCarShareCents)} />
       </View>
       <View style={styles.save}>
         <Text style={styles.saveText}>You save {formatUsd(delta.savingsCents)}</Text>
@@ -107,7 +107,7 @@ function makeStyles(colors: Palette) {
       borderWidth: 1.5,
       borderColor: colors.orange,
     },
-    kicker: { color: colors.orange, fontSize: 11, fontWeight: '800' as const, letterSpacing: 0.8 },
+    kicker: { color: colors.orange, fontSize: 12, fontWeight: '800' as const, letterSpacing: 0.8 },
     row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginTop: 10 },
     arrow: { fontSize: 22, fontWeight: '800' as const, color: colors.orange },
     save: { marginTop: 12, backgroundColor: colors.orange, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
@@ -117,7 +117,7 @@ function makeStyles(colors: Palette) {
     box: { flex: 1, borderRadius: 14, padding: 12 },
     boxMuted: { backgroundColor: colors.purpleSoft },
     boxLive: { backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.orange },
-    boxLabel: { fontSize: 11, fontWeight: '800' as const, color: colors.orange },
+    boxLabel: { fontSize: 12, fontWeight: '800' as const, color: colors.orange },
     boxLabelMuted: { color: colors.placeholder },
     boxAmount: { marginTop: 4, fontSize: 26, fontWeight: '800' as const, letterSpacing: -0.5, color: colors.orange },
     boxAmountMuted: { color: colors.inkSecondary, textDecorationLine: 'line-through' as const },

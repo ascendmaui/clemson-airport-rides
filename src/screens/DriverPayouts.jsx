@@ -5,6 +5,7 @@ import { navigate } from '../lib/navigation'
 import { cashOutPayout, loadPayoutDesk, startPayoutSetup } from '../../packages/rides-native/driverPayoutsClient.js'
 import { payoutChipLabel } from '../../shared/driverPayoutMethods.js'
 import { CASHOUT_COPY } from '../../shared/cashout.js'
+import { PAYOUT_APPROVAL_COPY } from '../../shared/payoutApproval.js'
 
 function money(cents) {
   return `$${((cents || 0) / 100).toFixed(2)}`
@@ -50,7 +51,8 @@ export function DriverPayouts() {
     setError(null)
     try {
       const result = await cashOutPayout(supabase, { method, feeCents: quote.feeCents || 0 })
-      if (result?.ok) setNote(method === 'instant' ? 'Instant cash out sent.' : 'Standard cash out sent.')
+      if (result?.ok && result.pendingApproval) setNote(PAYOUT_APPROVAL_COPY.cashoutPending)
+      else if (result?.ok) setNote(method === 'instant' ? 'Instant cash out sent.' : 'Standard cash out sent.')
       else setError(CASHOUT_COPY[result?.error] || 'Cash out was not sent.')
     } catch (err) {
       setError(err.message || 'Cash out was not sent.')
@@ -69,6 +71,7 @@ export function DriverPayouts() {
         <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--purple)', marginTop: 2 }}>Payout methods</h1>
         {error ? <p role="alert" className="field-error-text">{error}</p> : null}
         {note ? <p style={{ fontWeight: 700, color: 'var(--purple)' }}>{note}</p> : null}
+        {desk?.needsReonboard ? <p role="alert" style={{ fontWeight: 700, color: 'var(--orange)' }} data-testid="payout-reonboard">{PAYOUT_APPROVAL_COPY.reonboard}</p> : null}
         <section className="glass-panel" style={{ marginTop: 16, padding: 16, borderRadius: 22 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-secondary)' }}>Available balance</div>
           <div style={{ fontSize: 32, fontWeight: 800 }}>{money(desk?.availableCents)}</div>
@@ -104,6 +107,16 @@ export function DriverPayouts() {
             </a>
           ) : null}
         </section>
+        {(desk?.approvals || []).length > 0 ? (
+          <section className="glass-panel" style={{ marginTop: 12, padding: 16, borderRadius: 22 }} data-testid="payout-requests">
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--purple)' }}>{PAYOUT_APPROVAL_COPY.sectionTitle}</h2>
+            {desk.approvals.map((row) => (
+              <p key={row.id} style={{ fontWeight: 700 }}>
+                {money(row.amountCents)} · {row.kindLabel} · {row.statusLabel}
+              </p>
+            ))}
+          </section>
+        ) : null}
         <section className="glass-panel" style={{ marginTop: 12, padding: 16, borderRadius: 22 }} data-testid="payout-history">
           <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--purple)' }}>Payout history</h2>
           {(desk?.history || []).length === 0 ? <p style={{ color: 'var(--ink-secondary)' }}>Payouts show up here after Stripe sends them.</p> : null}

@@ -1,3 +1,4 @@
+import { logCaught } from '@/lib/caught'
 import { supabase } from '@/lib/supabase'
 import { coordsFromRow, isLiveLocationStatus, liveFixFromReads } from 'rides-native/liveFix.js'
 import { riderDriverFirstName } from '../../../shared/riderDriverPrivacy.js'
@@ -75,7 +76,7 @@ export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
     .maybeSingle()
   if (error && missingHeartbeatColumn(error.message || '')) {
     const plain = await supabase.from('trips').select(TRIP_COLUMNS).eq('id', tripId).maybeSingle()
-    data = plain.data
+    data = plain.data ? { ...plain.data, driver_heartbeat_at: null } : null
     error = plain.error
   }
   if (error) throw new Error(error.message)
@@ -140,8 +141,8 @@ export async function loadLiveTrip(tripId: string): Promise<LiveTrip | null> {
         stops = ride.stops
         if (metadata && ride.kind && metadata.kind == null) metadata.kind = ride.kind
       }
-    } catch {
-      /* Pickup and drop-off pins remain if the friend ride row is not readable. */
+    } catch (err) {
+      logCaught('trip-friend-stops', err)
     }
   }
   return {

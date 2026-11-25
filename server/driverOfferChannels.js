@@ -1,4 +1,6 @@
 /** Server-only SMS/email delivery for driver offers. No push code lives here. */
+import { resendPayload } from './resendMail.js'
+
 const CHANNELS = ['sms', 'email']
 
 function enabled(channel) { return (process.env[`DRIVER_OFFER_ALERT_${channel.toUpperCase()}`] || '').trim() === 'send' }
@@ -58,7 +60,12 @@ export async function sendResendOfferEmail({ to, subject, text }, deps = {}) {
   const fetcher = deps.fetch || globalThis.fetch
   const res = await fetcher('https://api.resend.com/emails', {
     method: 'POST', headers: { Authorization: `Bearer ${(process.env.RESEND_API_KEY || '').trim()}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: (process.env.RESEND_FROM || '').trim(), to: [to], subject, text }),
+    body: JSON.stringify(resendPayload({
+      from: (process.env.RESEND_FROM || '').trim(),
+      to,
+      subject,
+      text,
+    })),
   })
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(`Resend failed (${res.status}): ${json.message || json.error || 'email not sent'}`)

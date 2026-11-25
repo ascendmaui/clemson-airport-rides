@@ -20,10 +20,10 @@ export const MAX_SERVER_RETRIES = 10
 export function isOfflineError(err) {
   if (!err) return false
   if (err.network === true) return true
-  if (err.name === 'AbortError' || err.name === 'TimeoutError') return true
+  if (err.name === 'AbortError' || err.name === 'TimeoutError' || err.name === 'FetchRequestCanceledException') return true
   const status = Number(err.status)
   if (status === 502 || status === 503 || status === 504) return true
-  return /network request failed|failed to fetch|network error|offline|timed out/i.test(String(err.message || ''))
+  return /network request failed|failed to fetch|network error|offline|timed out|fetchrequestcanceledexception|request has been cancel+ed|aborted/i.test(String(err.message || ''))
 }
 
 /** Server-side transient failure: keep the tap and retry (bounded). */

@@ -6,13 +6,20 @@
  *
  * Integration (do not fork these):
  * - friend_rides kind=carpool + lobby token links (existing FriendRide)
- * - Metered base fare matches server/friendRideLib.computeFriendFareCents
+ * - Charged seats are 50% of quoteFare Standard. The older friend-ride meter
+ *   in computeFriendFareCents is not the Carpool charge.
  * - Surge windows are carpool-local. Airport/tier surge stays in pricing.js
  *   (rates agent). This file does not replace getGameDayMultiplier.
  * - Driver bonus id `driver_carpool_bonus` is the incentives-agent name.
  * - Ambassador code_type is `ambassador`, not rider promo codes.
  */
 import { riderDriverFirstName } from '../../shared/riderDriverPrivacy.js'
+import {
+  CARPOOL_SEAT_FRACTION_BPS,
+  quoteFare,
+  resolveSurge,
+  scaleCents,
+} from './fareRates.js'
 
 export const MAX_RIDERS = 4
 export const PLATFORM_FEE_RATE = 0.2
@@ -24,7 +31,11 @@ export const SAME_PICKUP_M = 900
 export const ROUTE_MATCH_M = 400
 export const NEIGHBORHOOD_MATCH_M = 700
 
-/** Fraction of that rider's own solo surge price. Not solo/n. */
+/**
+ * Older marketplace fractions. The charged Carpool seat no longer uses these.
+ * Each seat is CARPOOL_SEAT_FRACTION_BPS of that rider's Standard fare.
+ * Pools still form from 2 riders and cap at MAX_RIDERS (4); tailgate can hold 6.
+ */
 export const SHARE_OF_SOLO = {
   1: 1,
   2: 0.55,
@@ -270,8 +281,8 @@ export function estimateDurationSeconds(distanceM) {
 }
 
 /**
- * Short campus hops during game day / Thu–Sat night are priced in the
- * $30–$40 solo band the product promises. Longer trips keep the meter × surge.
+ * Older marketplace anchor for a short peak hop.
+ * Charged Carpool seats use standardFareCents, half of quoteFare Standard.
  */
 export function soloSurgeCents({ distanceM, durationS, window }) {
   const w = assertWindow(window)
@@ -593,14 +604,26 @@ function sumShares(shares) {
   return shares.reduce((total, share) => total + share.shareCents, 0)
 }
 
+function standardFareCents({ distanceM, durationS, at }) {
+  const when = at instanceof Date && !Number.isNaN(at.getTime()) ? at : new Date()
+  const surge = resolveSurge({ at: when, airport: false })
+  const quote = quoteFare({
+    distanceM,
+    durationS,
+    surgeMultiplier: surge.multiplier,
+    tier: 'standard',
+    isStudent: false,
+    isCarpool: false,
+  })
+  return quote.fareBeforeCreditsCents
+}
+
 /**
  * Quote a pool.
- * Each rider pays a fraction of their own solo surge price.
- * Full car (4) on a $30–$40 solo lands at about $10.50–$14.
- * Driver payout is 80% of the pool and is raised (by easing the
- * discount, never above solo) until it beats a solo trip by the
- * named carpool bonus. Platform keeps 20% unless a first-ride
- * comp has to be funded.
+ * Each rider pays 50% of their own Standard fare for that hop.
+ * The seat price does not change with headcount and is not raised
+ * to fund the driver bonus. If 80% of the pool misses solo net plus
+ * the named bonus, the platform subsidizes the difference.
  */
 export function quoteCarpool({
   riders,
@@ -622,7 +645,7 @@ export function quoteCarpool({
       : estimateDurationSeconds(hopM)
     const depart = new Date(rider.departAt || when)
     const window = rider.window || demandWindow(depart, { gameDay: Boolean(gameDay || rider.gameDay) })
-    const soloCents = soloSurgeCents({ distanceM: hopM, durationS: hopS, window })
+    const soloCents = standardFareCents({ distanceM: hopM, durationS: hopS, at: depart })
     return {
       id: String(rider.id || `rider-${index}`),
       firstName: firstName(rider.displayName || rider.display_name),
@@ -634,10 +657,9 @@ export function quoteCarpool({
   })
 
   const count = Math.min(6, Math.max(1, priced.length))
-  const rate = SHARE_OF_SOLO[count] ?? SHARE_OF_SOLO[6]
-  let shares = priced.map((row) => {
-    const raw = Math.round(row.soloCents * rate)
-    const shareCents = Math.min(row.soloCents, Math.max(count === 1 ? row.soloCents : 50, raw))
+  const rate = CARPOOL_SEAT_FRACTION_BPS / 10000
+  const shares = priced.map((row) => {
+    const shareCents = scaleCents(row.soloCents, CARPOOL_SEAT_FRACTION_BPS)
     return {
       id: row.id,
       firstName: row.firstName,
@@ -658,24 +680,6 @@ export function quoteCarpool({
   const extras = Math.max(0, count - 1)
   const namedBonusCents = extras === 0 ? 0 : extras * BONUS_CENTS_PER_EXTRA_RIDER + Math.round(miles * BONUS_CENTS_PER_MILE)
   const targetDriver = count === 1 ? soloSplit.driverCents : soloSplit.driverCents + namedBonusCents
-
-  const driverOf = (list) => platformSplit(sumShares(list)).driverCents
-
-  if (count > 1 && driverOf(shares) < targetDriver) {
-    const scaleNeed = targetDriver / 0.8 / Math.max(1, sumShares(shares))
-    shares = shares.map((share) => {
-      const scaled = Math.min(share.soloCents, Math.max(share.shareCents, Math.round(share.shareCents * scaleNeed)))
-      return { ...share, shareCents: scaled, savingsCents: share.soloCents - scaled }
-    })
-    let guard = 0
-    while (driverOf(shares) < targetDriver && guard < 200000) {
-      const room = shares.find((share) => share.shareCents < share.soloCents)
-      if (!room) break
-      room.shareCents += 1
-      room.savingsCents = room.soloCents - room.shareCents
-      guard += 1
-    }
-  }
 
   let grossCents = sumShares(shares)
   let { platformFeeCents, driverCents } = platformSplit(grossCents)
@@ -942,17 +946,13 @@ export function confirmChargeNote({
   fullCarShareCents = null,
   fullCarNow = false,
 } = {}) {
+  void fullCarShareCents
+  void fullCarNow
   if (firstRideFree) return 'First ride free. This confirm charges $0 for your seat.'
   if (shareCents == null) return null
-  if (fullCarNow) {
-    return `This confirm charges ${formatUsd(shareCents)} each. That is the full-car price above.`
-  }
   const count = Number(riderCount) || 0
   const riders = count ? ` for ${count} rider${count === 1 ? '' : 's'}` : ''
-  const full = fullCarShareCents != null
-    ? ` A full car on a surge night is ${formatUsd(fullCarShareCents)}.`
-    : ''
-  return `This confirm charges ${formatUsd(shareCents)} each${riders}.${full}`
+  return `This confirm charges ${formatUsd(shareCents)} each${riders}. Carpool is 50% of the Standard fare per seat.`
 }
 
 /** First names of comped seats, skipping the seat already called out as yours. */

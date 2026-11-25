@@ -1,6 +1,6 @@
 /**
  * Driver payout methods. Stripe Connect Express, test keys only.
- * The secret is STRIPE_SECRET_KEY. A live key is refused with no override.
+ * The secret is STRIPE_SECRET_KEY (test or live). Live transfers and payouts need admin approval first.
  * Linked accounts are shown as last 4 only.
  */
 
@@ -11,6 +11,15 @@ export function expressTestKeyAllowed(secretKey) {
   const key = String(secretKey || '')
   if (key.startsWith('sk_live_') || key.startsWith('rk_live_')) return false
   return key.startsWith('sk_test_') || key.startsWith('rk_test_')
+}
+
+/**
+ * Connect Express payout setup works with a test or a live secret.
+ * Live money still waits for admin approval (server/payoutApproval.js).
+ */
+export function expressKeyAllowed(secretKey) {
+  const key = String(secretKey || '')
+  return key.startsWith('sk_test_') || key.startsWith('rk_test_') || key.startsWith('sk_live_') || key.startsWith('rk_live_')
 }
 
 export function payoutStatusChip(status) {

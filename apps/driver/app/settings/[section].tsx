@@ -9,10 +9,11 @@ import { oneParam } from '@/lib/oneParam'
 import { useAuth } from '@/lib/auth'
 import { registerDriverPush, type PushState } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
-import { useTheme, type NavApp, type RideAlertMode, type RideAlertTier } from '@/lib/theme'
+import { useTheme, type DisplayMode, type NavApp, type RideAlertMode, type RideAlertTier } from '@/lib/theme'
 import { loadDriverDesk, loadDriverProfile, setPriorityMode } from 'rides-native/driverDesk'
 import { riderDriverFirstName } from '../../../../shared/riderDriverPrivacy.js'
 import { QuietHoursChoices } from '@/components/QuietHoursChoices'
+import { quietly } from '@/lib/softFail'
 
 const SECTIONS = ['display', 'privacy', 'address', 'accessibility', 'communication', 'navigation', 'sounds', 'auto-accept', 'quiet-hours', 'priority'] as const
 type Section = (typeof SECTIONS)[number]
@@ -48,6 +49,35 @@ function sectionTitle(section: Section): string {
       return unknown
     }
   }
+}
+
+const APPEARANCE_CHOICES: { mode: DisplayMode; label: string }[] = [
+  { mode: 'auto', label: 'System' },
+  { mode: 'light', label: 'Light' },
+  { mode: 'dark', label: 'Dark' },
+]
+
+function AppearanceChoices({ mode, onChange }: { mode: DisplayMode; onChange: (mode: DisplayMode) => void }) {
+  const { colors } = useTheme()
+  return (
+    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', backgroundColor: colors.segment, borderRadius: 999, padding: 3 }}>
+      {APPEARANCE_CHOICES.map((choice) => {
+        const selected = mode === choice.mode
+        return (
+          <Pressable
+            key={choice.mode}
+            onPress={() => onChange(choice.mode)}
+            accessibilityRole="radio"
+            accessibilityLabel={`${choice.label} appearance`}
+            accessibilityState={{ selected }}
+            style={{ flex: 1, borderRadius: 999, paddingVertical: 8, alignItems: 'center', backgroundColor: selected ? colors.segmentOn : 'transparent' }}
+          >
+            <Text maxFontSizeMultiplier={1.4} style={{ color: selected ? colors.segmentTextOn : colors.segmentText, fontWeight: '700', fontSize: 13 }}>{choice.label}</Text>
+          </Pressable>
+        )
+      })}
+    </View>
+  )
 }
 
 export default function SettingsSection() {
@@ -114,11 +144,11 @@ export default function SettingsSection() {
           <Card>
             <View style={styles.row}>
               <Glyph name={theme.scheme === 'dark' ? 'moon' : 'sun'} size={22} color={colors.orange} active={theme.scheme === 'dark'} scheme={theme.scheme} knockout={colors.card} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.ink, fontWeight: '800' }}>Night mode</Text>
-                <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>The app opens in light mode. Turn this on for a dark map, screens, and icons. Saved on this phone.</Text>
+              <View style={{ flex: 1, gap: 8 }}>
+                <Text style={{ color: colors.ink, fontWeight: '800' }}>Appearance</Text>
+                <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>System follows this phone’s color scheme. Light and Dark stay on until you change them.</Text>
+                <AppearanceChoices mode={theme.displayMode} onChange={theme.setDisplayMode} />
               </View>
-              <Toggle on={theme.scheme === 'dark'} onPress={() => theme.setDisplayMode(theme.scheme === 'dark' ? 'light' : 'dark')} label="Night mode" />
             </View>
           </Card>
         ) : null}
@@ -155,7 +185,7 @@ export default function SettingsSection() {
               {push?.detail || 'Checking notification permission…'}
             </Text>
             <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-              While you are online with the app open, a new request plays in the app with sound and vibration. Asleep, locked, or signed out, the same request is a system notification. That lock-screen path needs an Expo access token on the server plus APNs for iPhone and FCM for Android on the Expo project. Those keys are not in the app, so a saved push token does not by itself prove a locked phone will toast.
+              While you are online with the app open, a new request plays in the app with sound and vibration. When the phone is asleep, locked, or you are signed out, the same request arrives as a notification. Turn notifications on for Clemson Rides in iPhone Settings if a locked phone should alert you.
             </Text>
           </Card>
         ) : null}
@@ -243,7 +273,7 @@ function usePersistDriverAlerts() {
       if (cancel || res.error) return null
       const next = { ...(res.data?.notification_prefs || {}), ride_alerts: rideAlerts, auto_accept: autoAccept }
       return client.from('profiles').update({ notification_prefs: next }).eq('id', user.id)
-    }).catch(() => null)
+    }).catch(quietly('settings load', null))
     return () => {
       cancel = true
     }
@@ -267,7 +297,7 @@ function SoundChoices() {
       </Card>
       {ALERT_TIERS.map((tier) => (
         <View key={tier.id} style={{ gap: 8 }}>
-          <Text style={{ color: colors.purple, fontWeight: '800' }}>{tier.label}</Text>
+          <Text style={{ color: colors.link, fontWeight: '800' }}>{tier.label}</Text>
           <ChoiceCards
             options={ALERT_MODES}
             value={theme.rideAlerts[tier.id]}
@@ -308,7 +338,7 @@ function AutoAcceptChoices() {
                 accessibilityState={{ selected: on }}
                 style={[styles.chip, { backgroundColor: on ? colors.orange : colors.segment }]}
               >
-                <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800' }}>{miles} mi</Text>
+                <Text style={{ color: on ? colors.onAccent : colors.title, fontWeight: '800' }}>{miles} mi</Text>
               </Pressable>
             )
           })}
@@ -331,7 +361,7 @@ function AutoAcceptChoices() {
                 accessibilityState={{ selected: on }}
                 style={[styles.chip, { backgroundColor: on ? colors.purple : colors.segment }]}
               >
-                <Text style={{ color: on ? '#fff' : colors.title, fontWeight: '800' }}>${dollars}/hr</Text>
+                <Text style={{ color: on ? colors.onAccent : colors.title, fontWeight: '800' }}>${dollars}/hr</Text>
               </Pressable>
             )
           })}

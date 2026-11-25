@@ -152,15 +152,7 @@ export function GoogleFleetMotion({ map, enabled, onSelect }) {
         const position = track ? lerp(track.from, track.to, t) : { lat: 0, lng: 0 }
         return { ...row, position, lat: position.lat, lng: position.lng, heading: track?.heading || 0 }
       }).filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng))
-      const demo = demoCarsNearReal(simulatedFleetAt(now), real).map((car) => ({
-        ...car,
-        position: { lat: car.lat, lng: car.lng },
-      }))
       const seen = new Set()
-      for (const car of demo) {
-        seen.add(car.id)
-        paint(car.id, car, 6)
-      }
       for (const car of real) {
         seen.add(car.id)
         paint(car.id, car, 30)
@@ -204,8 +196,7 @@ export function PreviewFleetMotion({ enabled, onSelect }) {
         const position = track ? lerp(track.from, track.to, t) : null
         return position ? { ...row, ...position, heading: track.heading } : null
       }).filter(Boolean)
-      const demo = demoCarsNearReal(simulatedFleetAt(now), real)
-      const cars = [...demo, ...real]
+      const cars = [...real]
       const seen = new Set()
       for (const car of cars) {
         seen.add(car.id)

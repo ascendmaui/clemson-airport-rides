@@ -21,7 +21,7 @@ export const GAME_DAY_PICKUP_HINT =
 
 /** Clock windows only. No prices. Hours match the published surge rules. */
 export const CAMPUS_EVENT_SURGE_WINDOW_COPY =
-  'Campus event surge window. A listed campus event uses the event start and end. With no listed event, fall Saturdays run from 11:00 AM until 11:00 PM Eastern.'
+  'Game-day pricing window. On Clemson home football days, trips to or from the Memorial Stadium area (about 2 miles) use game-day pricing from 4 hours before kickoff until 3 hours after, Eastern.'
 
 export const WEEKEND_SURGE_WINDOW_COPY =
   'Weekend surge window. Friday 5:00 PM through Sunday, Eastern.'
@@ -33,7 +33,7 @@ export const SURGE_WINDOW_GENERIC_COPY =
   'A surge window is on for this pickup time.'
 
 export const CAMPUS_EVENT_WINDOW_OFF_COPY =
-  'No campus event surge window is on for this pickup time. A listed event uses its own start and end. Fall Saturdays run from 11:00 AM until 11:00 PM Eastern.'
+  'No game-day pricing at this pickup time. Game-day pricing runs only on Clemson home football days near Memorial Stadium, from 4 hours before kickoff until 3 hours after, Eastern.'
 
 export const GAME_DAY_PICKUP_POINTS = [
   {

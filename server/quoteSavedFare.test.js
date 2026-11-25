@@ -182,10 +182,11 @@ test('a game-day schedule quote matches the surged fare that is saved', () => {
     isStudent: false,
     gameDayMultiplier: 1.8,
   })
-  assert.equal(saved.surge.multiplier, 1.8)
+  assert.equal(saved.surge.multiplier, 1.25) // live event, stadium-area trip, capped at 1.25x
   assert.equal(quotes.fareCents, saved.fareCents)
   assert.notEqual(quotes.fareCents, oldEstimate)
-  assert.ok(quotes.fareCents > oldEstimate)
+  const plain = priceScheduledRequest({ pickup: DOWNTOWN, dropoff: COOPER, at: GAME_DAY, isStudent: false, gameDayMultiplier: null })
+  assert.ok(quotes.fareCents > plain.fareCents, 'game-day quote is above the plain fare')
 })
 
 test('quote and confirm ignore client fare, miles, and isStudent', async () => {

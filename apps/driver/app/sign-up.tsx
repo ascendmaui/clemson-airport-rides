@@ -77,8 +77,10 @@ export default function SignUpRoute() {
       }}
       storage={authStorage}
       mark="CD"
-      showPromo={false}
-      subtitle="Drive with Clemson RIDES. You keep 80% of the fare. Boosts and backup pay on scheduled rides are extra. New drivers are never auto-approved."
+      showPromo
+      promoPlaceholder="Driver promo code"
+      promoNote="Optional. A driver promo code is saved to your application when you create the account. Any driver bonus is reviewed and approved before it is paid; it never reduces your fare earnings."
+      subtitle="Drive with Clemson Rides. You keep 80% of the fare. Boosts and backup pay on scheduled rides are extra. New drivers are never auto-approved."
       socialProviders={socialProviders}
       onSocial={async (providerId, extra) => {
         if (!mayCreateDriverAccount(agreed)) {

@@ -38,8 +38,19 @@ function ScheduleAuthGuard() {
 }
 
 function RiderNativeTabs() {
+  const { colors, scheme } = useTheme()
   return (
-    <NativeTabs minimizeBehavior="never" tintColor="#F56600">
+    <NativeTabs
+      minimizeBehavior="never"
+      tintColor={colors.orange}
+      backgroundColor={colors.tabBar}
+      iconColor={{ default: colors.tabInactive, selected: colors.orange }}
+      blurEffect={scheme === 'dark' ? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'}
+      labelStyle={{
+        default: { color: colors.tabInactive },
+        selected: { color: colors.orange },
+      }}
+    >
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Rides</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="car.fill" md="directions_car" />

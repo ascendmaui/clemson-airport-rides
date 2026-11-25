@@ -99,7 +99,7 @@ export async function recomputeRideFares(sb, token, { splitMode } = {}) {
     const when = new Date()
     const airport = rideTouchesAirport(participants)
     const game = await loadGameDayMultiplier(sb, when)
-    const surge = resolveSurge({ at: when, airport, gameDayMultiplier: game.multiplier })
+    const surge = resolveSurge({ at: when, airport, gameDayMultiplier: game.multiplier, pickup: wp.origin, dropoff: wp.destination })
     const baseFare = quoteFare({
       distanceM: route.distanceM,
       durationS: route.durationS,

@@ -125,3 +125,36 @@ export function shadowStyle(shadowColor, level = 'rest', scheme = 'light') {
     elevation: recipe.elevation,
   }
 }
+
+/** The one brand glow (Driver GO button, offer gauge tiers). */
+export const glow = {
+  shadowOpacity: 0.35,
+  shadowRadius: 16,
+  shadowOffset: { width: 0, height: 8 },
+  elevation: 8,
+}
+
+function hexAlpha(hex, alpha) {
+  const raw = String(hex || '').replace('#', '')
+  if (!/^[0-9a-f]{6}$/i.test(raw)) return hex
+  const r = parseInt(raw.slice(0, 2), 16)
+  const g = parseInt(raw.slice(2, 4), 16)
+  const b = parseInt(raw.slice(4, 6), 16)
+  return `rgba(${r},${g},${b},${alpha})`
+}
+
+/**
+ * Coloured glow. iOS draws a tinted shadow. Android elevation shadows are grey
+ * (tinted only on API 28+), so Android also gets a soft ring in the glow colour.
+ */
+export function glowStyle(glowColor, platform = 'ios') {
+  const base = {
+    shadowColor: glowColor,
+    shadowOpacity: glow.shadowOpacity,
+    shadowRadius: glow.shadowRadius,
+    shadowOffset: { width: glow.shadowOffset.width, height: glow.shadowOffset.height },
+    elevation: glow.elevation,
+  }
+  if (platform !== 'android') return base
+  return { ...base, borderWidth: 3, borderColor: hexAlpha(glowColor, 0.55) }
+}

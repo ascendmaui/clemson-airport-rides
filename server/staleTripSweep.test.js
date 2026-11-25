@@ -190,6 +190,7 @@ test('scheduled dispatch tick runs the stale sweep', async () => {
   const body = JSON.parse(res.body)
   assert.equal(res.statusCode, 200)
   assert.equal(body.staleTrips.canceled, 1)
+  assert.deepEqual(body.promoEmails, { ok: true, skipped: true, reason: 'flag_off' }, 'promo emails stay off by default')
   assert.equal(row.status, 'canceled')
   assert.equal(row.payment_status, 'no_charge')
   assert.equal(stripe.calls.some((call) => call.op === 'capture'), false)

@@ -13,6 +13,7 @@
  * No payments between partners and drivers in v1 (off-platform).
  */
 import { admin, cors, json, parseBody, userFromAuth } from '../server/friendRideLib.js'
+import { clientErrorMessage } from '../server/clientError.js'
 import { serverIsAdmin } from '../server/adminRoster.js'
 import { notify, adminRecipients } from '../server/rentalNotify.js'
 import {
@@ -88,7 +89,8 @@ export default async function handler(req, res) {
         return await adminListing(sb, res, body)
     }
   } catch (err) {
-    return json(res, 500, { error: err.message || String(err) })
+    console.error('[partners]', err?.message || err)
+    return json(res, 500, { error: clientErrorMessage(err, 'Could not update the partner portal') })
   }
 }
 
@@ -113,7 +115,7 @@ async function signup(sb, res, user, b) {
     terms_version: PARTNER_TERMS_VERSION, terms_accepted_at: new Date().toISOString(), status: 'pending',
   }
   const { data, error } = await sb.from('rental_partners').insert(row).select('*').single()
-  if (error) return json(res, 400, { error: error.message })
+  if (error) return json(res, 400, { error: clientErrorMessage(error, 'Could not save that') })
   await notify('partner_applied', adminRecipients(), { businessName: row.business_name, city: row.city })
   return json(res, 200, { partner: data })
 }
@@ -134,11 +136,11 @@ async function saveListing(sb, res, user, b) {
       && JSON.stringify(existing.condition_photos) === JSON.stringify(row.condition_photos)
     if (same && result.reviewStatus !== 'rejected') row.review_status = existing.review_status
     const { data, error } = await sb.from('rental_listings').update(row).eq('id', b.id).select('*').single()
-    if (error) return json(res, 400, { error: error.message })
+    if (error) return json(res, 400, { error: clientErrorMessage(error, 'Could not save that') })
     return json(res, 200, { listing: data, reasons: result.reasons })
   }
   const { data, error } = await sb.from('rental_listings').insert(row).select('*').single()
-  if (error) return json(res, 400, { error: error.message })
+  if (error) return json(res, 400, { error: clientErrorMessage(error, 'Could not save that') })
   return json(res, 200, { listing: data, reasons: result.reasons })
 }
 
@@ -148,7 +150,7 @@ async function listingStatus(sb, res, user, b) {
   if (!['active', 'paused'].includes(b.status)) return json(res, 400, { error: 'status must be active or paused' })
   const { data, error } = await sb.from('rental_listings').update({ status: b.status })
     .eq('id', b.id).eq('partner_id', partner.id).select('id, status').maybeSingle()
-  if (error) return json(res, 400, { error: error.message })
+  if (error) return json(res, 400, { error: clientErrorMessage(error, 'Could not save that') })
   if (!data) return json(res, 404, { error: 'Listing not found' })
   return json(res, 200, { listing: data })
 }
@@ -163,10 +165,10 @@ async function transition(sb, res, user, b) {
   try {
     patch = applyTransition(r, b.to, actor, { startDate: b.startDate, endDate: b.endDate })
   } catch (err) {
-    return json(res, 400, { error: err.message })
+    return json(res, 400, { error: clientErrorMessage(err, 'That change is not allowed') })
   }
   const { data, error } = await sb.from('rental_requests').update(patch).eq('id', r.id).eq('status', r.status).select('*').maybeSingle()
-  if (error) return json(res, 400, { error: error.message })
+  if (error) return json(res, 400, { error: clientErrorMessage(error, 'Could not save that') })
   if (!data) return json(res, 409, { error: 'Request changed, reload.' })
   if (b.to === 'accepted' || b.to === 'declined') {
     const { data: l } = await sb.from('rental_listings').select('year, make, model').eq('id', r.listing_id).maybeSingle()
@@ -186,7 +188,10 @@ async function browse(sb, res, user) {
   const { data: listings, error } = await sb.from('rental_listings').select(BROWSE_COLS)
     .eq('status', 'active').eq('review_status', 'approved').eq('rental_partners.status', 'approved')
     .order('weekly_price_cents', { ascending: true })
-  if (error) return json(res, 500, { error: error.message })
+  if (error) {
+    console.error('[partners] browse', error.message)
+    return json(res, 500, { error: clientErrorMessage(error, 'Could not load rentals') })
+  }
   const visible = (listings || []).filter((l) => l.rental_partners && (!l.available_until || l.available_until >= today))
   const { data: requests } = await sb.from('rental_requests').select('id, listing_id, status, start_date, end_date, created_at').eq('driver_id', user.id)
   return json(res, 200, { eligible: true, listings: visible, requests: requests || [] })
@@ -206,7 +211,7 @@ async function interest(sb, res, user, b) {
   }).select('*').single()
   if (error) {
     if (/duplicate|unique/i.test(error.message)) return json(res, 409, { error: 'You already have an open request for this vehicle.' })
-    return json(res, 400, { error: error.message })
+    return json(res, 400, { error: clientErrorMessage(error, 'Could not save that') })
   }
   await notify('driver_interested', l.rental_partners?.email, { vehicle: vehicleName(l) })
   return json(res, 200, { request: data })
@@ -222,7 +227,7 @@ async function adminPartner(sb, res, b) {
   const status = { approve: 'approved', reject: 'rejected', suspend: 'suspended' }[b.decision]
   if (!status) return json(res, 400, { error: 'decision must be approve, reject or suspend' })
   const { data, error } = await sb.from('rental_partners').update({ status, review_note: b.note || null }).eq('id', b.id).select('*').maybeSingle()
-  if (error) return json(res, 400, { error: error.message })
+  if (error) return json(res, 400, { error: clientErrorMessage(error, 'Could not save that') })
   if (!data) return json(res, 404, { error: 'Partner not found' })
   if (status !== 'suspended') {
     await notify(status === 'approved' ? 'partner_approved' : 'partner_rejected', data.email, { contactName: data.contact_name, businessName: data.business_name, note: b.note })
@@ -235,7 +240,7 @@ async function adminListing(sb, res, b) {
   if (!review) return json(res, 400, { error: 'decision must be approve or reject' })
   const { data, error } = await sb.from('rental_listings').update({ review_status: review, review_note: b.note || null })
     .eq('id', b.id).select('*, rental_partners(email)').maybeSingle()
-  if (error) return json(res, 400, { error: error.message })
+  if (error) return json(res, 400, { error: clientErrorMessage(error, 'Could not save that') })
   if (!data) return json(res, 404, { error: 'Listing not found' })
   await notify('listing_reviewed', data.rental_partners?.email, { decision: review, vehicle: vehicleName(data), note: b.note })
   return json(res, 200, { listing: data })

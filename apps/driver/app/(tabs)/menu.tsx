@@ -1,7 +1,8 @@
 import { Glyph } from 'rides-native/icons'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { supportEmail, supportMailto } from '../../../../shared/productLinks.js'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Primary, useCardShadow } from '@/components/chrome'
 import { EmptyState, FadeIn, type MenuRow, RowGroup } from '@/components/day'
@@ -15,6 +16,8 @@ import { loadDriverPerks, loadVehicle, setLeaderboardOptOut, type Leaderboard, t
 import { knowledgeQuizStatus, knowledgeQuizStatusLabel, loadKnowledgeQuiz } from 'rides-native/driverKnowledgeQuiz'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
 import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
+import { quietly } from '@/lib/softFail'
+import { offerSheetBottomInset } from 'rides-native/offerStack.js'
 
 function vehicleSubtitle(vehicle: VehicleRow | null): string {
   if (!vehicle) return 'Add the car riders will see'
@@ -48,8 +51,8 @@ export default function MenuScreen() {
     if (!user || !supabase) return
     const [nextVehicle, summary, quiz] = await Promise.all([
       loadVehicle(supabase, user.id),
-      loadRatingSummary(supabase, user.id).catch(() => null),
-      loadKnowledgeQuiz(supabase, user.id).catch(() => null),
+      loadRatingSummary(supabase, user.id).catch(quietly('menu rating', null)),
+      loadKnowledgeQuiz(supabase, user.id).catch(quietly('menu quiz', null)),
     ])
     setVehicle(nextVehicle)
     loadDriverPerks(supabase).then((p) => {
@@ -95,11 +98,15 @@ export default function MenuScreen() {
     { icon: 'speedometer', title: 'Safety score', subtitle: 'Estimate and tips', onPress: () => router.push('/safety-score') },
   ]
   const inbox: MenuRow[] = [
-    { icon: 'inbox', title: 'Inbox', subtitle: 'Messages from Clemson RIDES and riders', onPress: () => router.push('/inbox') },
+    { icon: 'inbox', title: 'Inbox', subtitle: 'Messages from Clemson Rides and riders', onPress: () => router.push('/inbox') },
     { icon: 'discover', title: 'Discover', subtitle: 'Busy spots, game days, and boosts', onPress: () => router.push('/discover') },
   ]
   const money: MenuRow[] = [
     { icon: 'calculator', title: 'Tax info', subtitle: 'Year-end mileage and earnings', onPress: () => router.push('/tax') },
+  ]
+  const supportRows: MenuRow[] = [
+    { icon: 'help', title: 'Help', subtitle: supportEmail(), onPress: () => { void Linking.openURL(supportMailto('Clemson Rides help')) } },
+    { icon: 'chat', title: 'Support', subtitle: supportEmail(), onPress: () => { void Linking.openURL(supportMailto('Clemson Rides support')) } },
   ]
   const resources: MenuRow[] = [
     { icon: 'school', title: 'Learning Center', subtitle: quizLabel, onPress: () => router.push('/learning') },
@@ -113,7 +120,7 @@ export default function MenuScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top + 12 }]}>
-      <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: offerSheetBottomInset(insets.bottom) + 24 }]} showsVerticalScrollIndicator={false}>
         <FadeIn style={styles.stack}>
           <View style={styles.profile}>
             <View style={[styles.avatar, shadow, { backgroundColor: colors.fill }]}>
@@ -145,6 +152,8 @@ export default function MenuScreen() {
           <RowGroup rows={manage} />
           <SectionLabel>Tax</SectionLabel>
           <RowGroup rows={money} />
+          <SectionLabel>Help and support</SectionLabel>
+          <RowGroup rows={supportRows} />
           <SectionLabel>Resources</SectionLabel>
           <RowGroup rows={resources} />
           <SectionLabel>Settings</SectionLabel>
@@ -166,19 +175,21 @@ export default function MenuScreen() {
               />
             </View>
           ) : null}
+          {user ? (
           <Pressable
             onPress={() => router.push('/delete-account')}
             accessibilityRole="button"
             accessibilityLabel="Delete account"
-            accessibilityHint="Opens the account deletion request screen"
+            accessibilityHint="Opens the account deletion screen. Deletion is immediate."
             style={[styles.deleteRow, { backgroundColor: colors.card, borderColor: colors.danger }]}
           >
             <Glyph name="trash-outline" size={20} color={colors.danger} />
             <View style={styles.deleteCopy}>
               <Text style={[styles.deleteTitle, { color: colors.danger }]}>Delete account</Text>
-              <Text style={{ color: colors.inkSecondary }}>Request deletion of your account and trip history</Text>
+              <Text style={{ color: colors.inkSecondary }}>Deletes this account immediately</Text>
             </View>
           </Pressable>
+          ) : null}
         </FadeIn>
       </ScrollView>
     </View>

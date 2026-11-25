@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router'
 import * as Linking from 'expo-linking'
 import { useEffect } from 'react'
 import { parseSupabaseAuthUrl } from 'rides-native/authUrl'
+import { logCaught } from '@/lib/caught'
 import { bindPasswordRecovery } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 
@@ -44,6 +45,8 @@ export function PasswordRecoveryListener() {
     }
     Linking.getInitialURL().then((url: string | null) => {
       if (alive) open(url)
+    }).catch((err: unknown) => {
+      logCaught('password-recovery', err)
     })
     const sub = Linking.addEventListener('url', ({ url }: { url: string }) => {
       open(url)

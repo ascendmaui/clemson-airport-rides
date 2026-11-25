@@ -119,3 +119,14 @@ test('non-drivers get no rows and anon cannot execute', async () => {
     assert.deepEqual(grants.rows[0], { anon: false, auth: true })
   } finally { await db.close() }
 })
+
+test('driver home map shows the live demand heat layer with a legend and a toggle', () => {
+  const map = readFileSync(new URL('../apps/driver/components/CampusMap.native.tsx', import.meta.url), 'utf8')
+  const home = readFileSync(new URL('../apps/driver/app/(tabs)/index.tsx', import.meta.url), 'utf8')
+  assert.match(map, /<DemandHeatLayer cells=\{demandCells\}/)
+  assert.match(home, /heatRgb\(stop, scheme\)/)
+  assert.match(home, />Demand</)
+  assert.match(home, /Low · High/)
+  assert.match(home, /useDemandHeat\(/)
+  assert.match(home, /setShowHeat\(/)
+})

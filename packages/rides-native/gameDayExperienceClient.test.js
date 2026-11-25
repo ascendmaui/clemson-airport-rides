@@ -78,7 +78,7 @@ test('loadGameDayExperience reads the schedule, zones, queue, prep, and optional
   const live = await loadGameDayExperience(supabase, { driverId: 'driver-1', now: LIVE })
   assert.equal(live.model.eventId, 'game-1')
   assert.equal(live.model.phase, 'live')
-  assert.equal(live.model.surge.multiplierLabel, '2×')
+  assert.equal(live.model.surge.multiplierLabel, '1.25×') // event 2x is capped at 1.25x
   assert.equal(live.model.zones.pickups[0].name, 'North plaza')
   assert.equal(live.model.prep.items[0].checked, true)
   assert.equal(live.model.queue.status, 'closed')

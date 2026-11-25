@@ -25,26 +25,17 @@ Student drivers who offer their own car still use `match_mode = student_driver`.
 
 ## Fare split
 
-The metered base matches `computeFriendFareCents`: $2.50 + $1.75/mi + $0.35/min, $8 minimum.
+Each charged seat is **50% of that rider's Standard fare** (`quoteFare` with `CARPOOL_SEAT_FRACTION_BPS` = 5000). Headcount does not change the seat price, and shares are not raised to fund the driver bonus.
 
-On game day and Thu/Fri/Sat night, a short hop (≤15 min and ≤5 miles) is anchored in the **$30–$40 solo** band ($30 at 1 mile through $40 at 5 miles), using whichever is higher of that anchor and meter × surge (2.8× game day, 2.6× peak night).
+A rider booking the Carpool ride type can request 1 or 2 seats. Two seats cost twice the half-fare seat. The ride-tier matcher books a shared trip at 3 riders and caps it at 4, which is the "3 or 4 riders" condition. Marketplace pools still form from 2 riders and cap at 4. A tailgate lobby driven by a student can hold 6. Those match sizes are not a second price.
 
-Riders do **not** divide that solo price by headcount. Each pays a fraction of their own solo price:
+The confirm card shows Standard next to the Carpool seat and **You save $X**. `POST /api/friend-rides?action=confirm-charges` refreshes that quote, then creates **one PaymentIntent per rider** for `fare_cents` (saved card off-session, or Payment Element). That amount is the seat fare, so the card hold equals the quote. The trip is booked only when every rider is paid.
 
-| Riders | Share of own solo | On a $30–$40 solo |
-| --- | --- | --- |
-| 1 | 100% | $30–$40 |
-| 2 | 55% | still under solo |
-| 3 | 42% | |
-| 4 | 35% | about **$10.50–$14** |
-
-The confirm control sits under a delta card: struck-through solo surge price, the 4-rider seat, **You save $X**, and how much more the driver earns than a one-rider trip. If the party is not full yet, the card also states the amount this confirm will charge. `POST /api/friend-rides?action=confirm-charges` refreshes that quote, then creates **one PaymentIntent per rider** for `fare_cents` (saved card off-session, or Payment Element). The trip is booked only when every rider is paid.
-
-Platform fee is **20%** of cash collected (`platformFeeCents + driver payout = gross`), except when a first-ride comp has to be funded.
+Platform fee is **20%** of cash collected when that covers the driver. A first-ride comp is funded by the platform.
 
 ## Driver earns more than a solo
 
-Driver payout is 80% of the pool. Named bonus id `driver_carpool_bonus` (for the incentives work): **$2.00 per extra rider + $0.40 per mile**. If 80% would miss `solo driver net + that bonus`, shares are raised one cent at a time but never above that rider's solo price. The driver home offer shows **you net**, not the rider gross, plus how much more that is than a solo trip.
+Named bonus id `driver_carpool_bonus`: **$2.00 per extra rider + $0.40 per mile**. Driver payout is at least solo net plus that bonus. If 80% of the pool misses that target, `subsidyCents` covers the gap. The driver home offer shows **you net**, not the rider gross, plus how much more that is than a solo trip.
 
 `trips.metadata.driver_payout_cents` is what recent earnings use for these rides.
 
@@ -73,6 +64,6 @@ Apply `supabase/carpool_flagship.sql` before the live queue, first-ride ledger, 
 
 ## QA
 
-`npm test` covers the engine: 4-rider pool, 5th rider waits, airport dropoff excluded, time window, duplicate user, game-day rank, $30–$40 vs $10–$15, driver net ≥ solo + bonus, 20% platform fee, per-rider charge plan, first-ride comp, geohash, seat caps.
+`npm test` covers the engine: 4-rider pool, 5th rider waits, airport dropoff excluded, time window, duplicate user, game-day rank, each seat at 50% of Standard, driver net ≥ solo + bonus, per-rider charge plan, first-ride comp, geohash, seat caps.
 
 Manual: hub comparison, group link into the lobby, confirm button stays disabled until the split is visible, driver offer shows net pay.

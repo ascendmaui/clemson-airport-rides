@@ -7,12 +7,13 @@ import { emailsFromList, normalizeEmail } from '../shared/adminAccess.js'
 export const DENIED_ADMIN_EMAILS = [
   'john@gmail.com',
   'johnmatveev@gmail.com',
+  // Demoted 2026-10-14: johnmatveyev@gmail.com is the sole admin.
+  'ascendmaui@gmail.com',
+  'jmat2019@icloud.com',
 ]
 
 export const KNOWN_OWNER_EMAILS = [
   'johnmatveyev@gmail.com',
-  'ascendmaui@gmail.com',
-  'jmat2019@icloud.com',
 ]
 
 const DENIED = new Set(DENIED_ADMIN_EMAILS)

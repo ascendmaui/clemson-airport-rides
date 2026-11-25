@@ -76,7 +76,7 @@ export function LiveShareCard({
       const next = await ensureShare()
       if (!next) return
       await Share.share({
-        title: 'My Clemson RIDES location',
+        title: 'My Clemson Rides location',
         message: tripShareMessage({
           pickup: trip?.pickup_label,
           dropoff: trip?.dropoff_label,
@@ -105,7 +105,7 @@ export function LiveShareCard({
         status: trip?.status,
         url: next.url,
       })
-      await Share.share({ title: 'My Clemson RIDES trip', message, url: next.url })
+      await Share.share({ title: 'My Clemson Rides trip', message, url: next.url })
       setCopiedNote('Trip link ready to send')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not share the trip'
@@ -209,7 +209,7 @@ function makeStyles(colors: Palette) {
       borderWidth: 1,
       borderColor: colors.border,
     },
-    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
+    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12 },
     title: { color: colors.title, fontSize: 20, fontWeight: '800' as const, marginTop: 4, marginBottom: 8 },
     body: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20, marginBottom: 12 },
     empty: {

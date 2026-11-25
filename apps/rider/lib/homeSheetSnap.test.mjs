@@ -3,6 +3,7 @@ import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { migrateAppearance, nativeColorScheme, readDisplayMode, resolveScheme } from './appearance.ts'
 import {
   HOME_SHEET_BOTTOM_PADDING,
   HOME_SHEET_HANDLE_FALLBACK,
@@ -32,7 +33,7 @@ test('native tabs keep the home sheet above the tab bar and the home indicator',
   assert.equal(homeTabClearance(Number.NaN), 56)
   const home = read('apps/rider/app/(tabs)/index.tsx')
   assert.match(home, /homeTabClearance\(insets\.bottom\)/)
-  assert.match(home, /nativeTabs \? \{ paddingBottom: homeTabClearance\(insets\.bottom\) \}/)
+  assert.match(home, /paddingBottom: homeTabClearance\(insets\.bottom\) \+ 28/)
   assert.match(home, /liveTrip \? liveCardH \+ 12 : 0/)
 })
 
@@ -145,4 +146,69 @@ test('rider home wires the snap helper through gesture-handler and does not touc
   assert.match(hook, /collapsedSheetHeight|buildHomeSheetSnapPoints/)
   assert.match(swipe, /PanResponder/)
   assert.doesNotMatch(swipe, /homeSheetSnap|useHomeSheetSnap/)
+})
+
+test('appearance defaults to the system scheme and keeps explicit overrides', () => {
+  assert.equal(readDisplayMode(undefined), 'auto')
+  assert.equal(readDisplayMode('nope'), 'auto')
+  assert.equal(readDisplayMode('auto'), 'auto')
+  assert.equal(readDisplayMode('light'), 'light')
+  assert.equal(readDisplayMode('dark'), 'dark')
+  assert.equal(resolveScheme('auto', 'dark'), 'dark')
+  assert.equal(resolveScheme('auto', 'light'), 'light')
+  assert.equal(resolveScheme('auto', null), 'light')
+  assert.equal(resolveScheme('auto', undefined), 'light')
+  assert.equal(resolveScheme('light', 'dark'), 'light')
+  assert.equal(resolveScheme('dark', 'light'), 'dark')
+  const theme = read('apps/rider/lib/theme.tsx')
+  assert.match(theme, /useColorScheme/)
+  assert.match(theme, /displayMode: 'auto'/)
+  assert.match(theme, /migrateAppearance\(parsed\)/)
+  assert.match(theme, /appearanceMigrated: true/)
+  assert.match(theme, /Appearance\.setColorScheme\(nativeColorScheme\(prefs\.displayMode\)\)/)
+  assert.doesNotMatch(theme, /it now opens light/)
+  assert.equal(nativeColorScheme('auto'), 'unspecified')
+  assert.equal(nativeColorScheme('light'), 'light')
+  assert.equal(nativeColorScheme('dark'), 'dark')
+  const tabs = read('apps/rider/app/(tabs)/_layout.tsx')
+  assert.match(tabs, /backgroundColor=\{colors\.tabBar\}/)
+  assert.match(tabs, /blurEffect=\{scheme === 'dark' \? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'\}/)
+})
+
+test('saved Night mode resets to System once', () => {
+  assert.deepEqual(migrateAppearance({ displayMode: 'dark' }), { displayMode: 'auto', appearanceMigrated: true })
+  assert.deepEqual(migrateAppearance({ displayMode: 'light' }), { displayMode: 'auto', appearanceMigrated: true })
+  assert.deepEqual(migrateAppearance({ displayMode: 'dark', appearanceMigrated: true }), { displayMode: 'dark', appearanceMigrated: true })
+  assert.deepEqual(migrateAppearance({ displayMode: 'auto', appearanceMigrated: true }), { displayMode: 'auto', appearanceMigrated: true })
+  assert.deepEqual(migrateAppearance(null), { displayMode: 'auto', appearanceMigrated: true })
+  assert.deepEqual(migrateAppearance(undefined), { displayMode: 'auto', appearanceMigrated: true })
+})
+
+test('xxx large type keeps the home headline inside the scrolling sheet', () => {
+  const home = read('apps/rider/app/(tabs)/index.tsx')
+  const scrollAt = home.indexOf('<ScrollView')
+  const promptAt = home.indexOf('Where are you headed, Tiger?')
+  assert.ok(scrollAt > 0 && promptAt > scrollAt, 'headline scrolls with the sheet')
+  assert.match(home, /maxFontSizeMultiplier=\{DENSE_FONT_SCALE\}/)
+  assert.match(home, /numberOfLines=\{3\}/)
+  assert.match(home, /numberOfLines=\{2\}/)
+  assert.match(home, /height: insets\.top/)
+  assert.match(home, /minWidth: 0/)
+  const hintAt = home.indexOf('Drag down to expand the map')
+  assert.ok(hintAt > scrollAt && promptAt > hintAt, 'drag hint sits in the sheet above the headline')
+  assert.match(home, /maxFontSizeMultiplier=\{1\.15\}/)
+  assert.match(home, /adjustsFontSizeToFit/)
+  assert.match(home, /shortcutLabel\} numberOfLines=\{2\} adjustsFontSizeToFit/)
+  assert.match(home, /maxFontSizeMultiplier=\{DENSE_FONT_SCALE\} style=\{styles\.busyDays\}/)
+  assert.match(home, /maxFontSizeMultiplier=\{DENSE_FONT_SCALE\} style=\{styles\.live\}/)
+  assert.match(home, /maxFontSizeMultiplier=\{DENSE_FONT_SCALE\} style=\{styles\.sectionLabel\}>Get around/)
+  assert.match(home, /maxFontSizeMultiplier=\{DENSE_FONT_SCALE\} style=\{styles\.sectionLabel\}>Places/)
+  assert.match(home, /maxFontSizeMultiplier=\{DENSE_FONT_SCALE\} style=\{styles\.mapTitle\}>Campus map/)
+  assert.match(home, /numberOfLines=\{4\} adjustsFontSizeToFit minimumFontScale=\{0\.75\} style=\{styles\.gamedayBody\}>\{studentOffer\.detail\}/)
+  assert.match(home, /showFleetBadge=\{false\}/)
+  assert.match(home, /SIMULATED_FLEET_BADGE/)
+  assert.match(home, /name \? `Welcome, \$\{name\}` : 'Welcome'/)
+  assert.doesNotMatch(home, /: 'Tiger'/)
+  const map = read('apps/rider/components/CampusMap.native.tsx')
+  assert.match(map, /mapPadding=\{\{ top: insets\.top/)
 })

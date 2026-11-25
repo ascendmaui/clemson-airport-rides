@@ -12,8 +12,8 @@ test('money: formats dollar amounts correctly from cents', () => {
 })
 
 test('buildReceiptText: returns header only for null or omitted trip', () => {
-  assert.equal(buildReceiptText(null), 'Clemson RIDES receipt')
-  assert.equal(buildReceiptText(undefined), 'Clemson RIDES receipt')
+  assert.equal(buildReceiptText(null), 'Clemson Rides receipt')
+  assert.equal(buildReceiptText(undefined), 'Clemson Rides receipt')
 })
 
 test('buildReceiptText: formats complete rider receipt without deposit', () => {
@@ -26,7 +26,7 @@ test('buildReceiptText: formats complete rider receipt without deposit', () => {
     completed_at: '2026-09-25T16:00:00Z',
   }
   const text = buildReceiptText(trip)
-  assert.ok(text.includes('Clemson RIDES receipt'))
+  assert.ok(text.includes('Clemson Rides receipt'))
   assert.ok(text.includes('Trip trip-abc-123'))
   assert.ok(text.includes('From: Tillman Hall'))
   assert.ok(text.includes('To: Memorial Stadium'))
@@ -87,7 +87,7 @@ test('shareReceipt: uses navigator.share when available', async () => {
     const res = await shareReceipt({ id: 'trip-nav' }, { url: 'https://rides.clemson.edu/trip-nav' })
     assert.equal(res, 'shared')
     assert.ok(sharedPayload)
-    assert.equal(sharedPayload.title, 'Clemson RIDES receipt')
+    assert.equal(sharedPayload.title, 'Clemson Rides receipt')
     assert.equal(sharedPayload.url, 'https://rides.clemson.edu/trip-nav')
   } finally {
     if (orig) Object.defineProperty(globalThis, 'navigator', orig)
@@ -132,7 +132,7 @@ test('shareReceipt: falls back to clipboard when share is unavailable', async ()
   try {
     const res = await shareReceipt({ id: 'trip-clip' }, { url: 'https://rides.clemson.edu' })
     assert.equal(res, 'copied')
-    assert.ok(clipboardText.includes('Clemson RIDES receipt'))
+    assert.ok(clipboardText.includes('Clemson Rides receipt'))
     assert.ok(clipboardText.includes('https://rides.clemson.edu'))
   } finally {
     if (orig) Object.defineProperty(globalThis, 'navigator', orig)
@@ -152,7 +152,7 @@ test('shareReceipt: falls back to mailto when navigator is absent but window exi
   try {
     const res = await shareReceipt({ id: 'trip-mail' })
     assert.equal(res, 'mailto')
-    assert.ok(globalThis.window.location.href.startsWith('mailto:?subject=Clemson%20RIDES%20receipt'))
+    assert.ok(globalThis.window.location.href.startsWith('mailto:?subject=Clemson%20Rides%20receipt'))
   } finally {
     delete globalThis.window
     if (origNav) Object.defineProperty(globalThis, 'navigator', origNav)

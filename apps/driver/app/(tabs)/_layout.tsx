@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GlassTabBar } from 'rides-native/icons'
 import { nativeGlassAvailable } from 'rides-native/glass'
 import { useTheme } from '@/lib/theme'
+import { color as brand } from 'rides-native/shared/theme.js'
 
 const DRIVER_TABS = [
   { id: 'index', label: 'Home', icon: 'home' },
@@ -55,7 +56,7 @@ function DriverJsTabs() {
 
 function DriverNativeTabs() {
   return (
-    <NativeTabs minimizeBehavior="never" tintColor="#F56600">
+    <NativeTabs minimizeBehavior="never" tintColor={brand.orange}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="house.fill" md="home" />

@@ -1,15 +1,18 @@
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native'
+import { Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native'
+import { supportEmail, supportMailto } from '../../../../shared/productLinks.js'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, PrimaryButton } from '@/components/Button'
 import { TabSwipeRegion, useTabSwipeRemeasure } from '@/components/MainTabPager'
 import { loadAccount, saveProfile } from '@/lib/accountApi'
+import { caughtMessage, logCaught } from '@/lib/caught'
 import { useAuth } from '@/lib/auth'
 import { hapticsEnabled, playMatchChime, setHapticsEnabled, setSoundsEnabled, soundsEnabled, tapHaptic } from '@/lib/feedback'
 import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
-import { useTheme } from '@/lib/theme'
+import { useTheme, type DisplayMode } from '@/lib/theme'
+import { DENSE_FONT_SCALE } from '@/lib/denseType'
 import { nativeGlassAvailable } from 'rides-native/glass'
 import { Glyph } from 'rides-native/icons'
 import { useThemedStyles } from '@/lib/useThemedStyles'
@@ -17,15 +20,27 @@ import { displayFirstName } from 'rides-native/authErrors'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { FAVORITE_SPOTS } from 'rides-native/riderShell.js'
 import { TIGER_PASS_NAME } from 'rides-native/tigerPassClient'
+import { PLAN_BADGE_COLOR, loadStudentPlans } from 'rides-native/studentPlansClient.js'
 import { loadRatingSummary } from 'rides-native/PartyScreens'
 import { WomenOnlyCard } from 'rides-native/WomenOnlyCard'
 import { loadComfortPreference, saveComfortPreference } from 'rides-native/comfortPreference.js'
 import { supabase } from '@/lib/supabase'
-import { AdminAccountRow } from 'rides-native/AdminAccountRow.jsx'
+import { homeTabClearance } from '@/lib/homeSheetSnap'
 import { SignInScreen } from 'rides-native/AuthScreens'
 
-type AccountHref = '/tiger-pass' | '/student' | '/community' | '/billing' | '/notifications' | '/help' | '/support' | '/lost-found' | '/safety'
-type AccountLink = { href: AccountHref; label: string; hint: string; icon: string }
+type AccountHref = '/tiger-pass' | '/student' | '/student-plans' | '/community' | '/billing' | '/notifications' | '/help' | '/support' | '/lost-found' | '/safety'
+type AccountLink = { href?: AccountHref; label: string; hint: string; icon: string; mailSubject?: string; badge?: string }
+
+const STUDENT_PLANS_LINK: AccountLink = { href: '/student-plans', label: 'Student plans', hint: 'Weekend Carpool Plan and your personalized plan', icon: 'pass', badge: 'NEW' }
+
+/** Inserts Student plans right after Student in Membership, only when the flag is on. */
+function withStudentPlans(groups: typeof GROUPS, on: boolean) {
+  if (!on) return groups
+  return groups.map((g) => (g.title !== 'Membership' ? g : {
+    ...g,
+    links: g.links.flatMap((l) => (l.href === '/student' ? [l, STUDENT_PLANS_LINK] : [l])),
+  }))
+}
 
 const GROUPS: { title: string; links: AccountLink[] }[] = [
   {
@@ -39,7 +54,7 @@ const GROUPS: { title: string; links: AccountLink[] }[] = [
   {
     title: 'Payments',
     links: [
-      { href: '/billing', label: 'Billing', hint: 'Card, deposits, and ride fares', icon: 'money' },
+      { href: '/billing', label: 'Billing', hint: 'Card, fare holds, and ride fares', icon: 'money' },
     ],
   },
   {
@@ -53,6 +68,8 @@ const GROUPS: { title: string; links: AccountLink[] }[] = [
     links: [
       { href: '/help', label: 'Help', hint: 'How booking, Schedule, friends, and billing work', icon: 'help' },
       { href: '/support', label: 'Support', hint: 'Charge, ride, bug, or safety tickets', icon: 'chat' },
+      { label: 'Email help', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson Rides help' },
+      { label: 'Email support', hint: 'Mailto the support mailbox', icon: 'mail', mailSubject: 'Clemson Rides support' },
       { href: '/lost-found', label: 'Lost & found', hint: 'An item left in the car after a ride', icon: 'lostFound' },
     ],
   },
@@ -64,7 +81,7 @@ export function AccountScreen() {
   const insets = useSafeAreaInsets()
   const { user, configured, signOut, signIn, resetPassword } = useAuth()
   const student = useStudentStatus()
-  const { colors, scheme, setDisplayMode } = useTheme()
+  const { colors, scheme, displayMode, setDisplayMode } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
@@ -80,13 +97,18 @@ export function AccountScreen() {
   const [womenOnly, setWomenOnly] = useState(false)
   const [comfortAvailable, setComfortAvailable] = useState(false)
   const [comfortNote, setComfortNote] = useState<string | null>(null)
+  const [studentPlansOn, setStudentPlansOn] = useState(false)
   const name = user ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Rider') : null
 
   useEffect(() => {
     let alive = true
-    hapticsEnabled().then(setHapticsOn).catch(() => {})
+    hapticsEnabled().then(setHapticsOn).catch((err: unknown) => {
+      logCaught('account-haptics', err)
+    })
     soundsEnabled().then((on) => {
       if (alive) setSoundsOn(on)
+    }).catch((err: unknown) => {
+      logCaught('account-sounds', err)
     })
     if (!user?.id) {
       setSpots([])
@@ -94,12 +116,23 @@ export function AccountScreen() {
         alive = false
       }
     }
+    if (supabase) {
+      loadStudentPlans(supabase).then((d: { enabled?: boolean }) => {
+        if (alive) setStudentPlansOn(d?.enabled === true)
+      }).catch((err: unknown) => {
+        logCaught('account-student-plans', err)
+      })
+    }
     loadAccount(user.id).then((account) => {
       if (!alive) return
       setSpots(account.profile?.favorite_spots || [])
       setFullName(account.profile?.full_name || user.user_metadata?.full_name || '')
       setBio(account.profile?.bio || '')
       if (account.error) setError(account.error)
+    }).catch((err: unknown) => {
+      if (!alive) return
+      logCaught('account-load', err)
+      setError(caughtMessage(err, 'Could not load your account. Try again.'))
     })
     if (supabase) {
       loadComfortPreference(supabase, user.id).then((comfort) => {
@@ -107,12 +140,18 @@ export function AccountScreen() {
         setGenderIdentity(comfort.genderIdentity)
         setWomenOnly(comfort.womenOnlyMatching)
         setComfortAvailable(comfort.available)
-      }).catch(() => {})
+      }).catch((err: unknown) => {
+        if (!alive) return
+        logCaught('account-comfort', err)
+        setComfortNote('Could not load the comfort preference.')
+      })
       loadRatingSummary(supabase, user.id).then((summary) => {
         if (!alive) return
         setRatingLine(summary.line)
         setPendingTrip(summary.pending?.id || null)
-      }).catch(() => {})
+      }).catch((err: unknown) => {
+        logCaught('account-rating', err)
+      })
     }
     return () => {
       alive = false
@@ -177,12 +216,13 @@ export function AccountScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
-      <ScrollView contentContainerStyle={styles.body} onScroll={remeasureTabs} scrollEventThrottle={32}>
+      <ScrollView contentContainerStyle={[styles.body, { paddingBottom: homeTabClearance(insets.bottom) + 24 }]} onScroll={remeasureTabs} scrollEventThrottle={32}>
         <Text style={styles.kicker}>ACCOUNT</Text>
         <Text style={styles.title}>{name || 'Guest'}</Text>
         {!user ? (
           <SignInScreen
             embedded
+            colors={colors}
             signIn={signIn}
             resetPassword={resetPassword}
             onSuccess={() => setNote('Signed in')}
@@ -223,16 +263,31 @@ export function AccountScreen() {
             ? 'Payments, student pricing, promos, and alerts use the same account as the web app.'
             : 'Supabase anon key is missing. Add EXPO_PUBLIC_SUPABASE_ANON_KEY as an EAS environment variable, then rebuild.'}
         </Text>
-        {GROUPS.map((group) => (
+        {withStudentPlans(GROUPS, studentPlansOn).map((group) => (
           <View key={group.title} style={styles.group}>
             <Text style={styles.groupTitle}>{group.title}</Text>
             {group.links.map((link) => (
-              <Pressable key={link.href} onPress={() => router.push(link.href)} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
+              <Pressable
+                key={link.href || link.mailSubject || link.label}
+                onPress={() => {
+                  if (link.mailSubject) {
+                    void Linking.openURL(supportMailto(link.mailSubject))
+                    return
+                  }
+                  if (link.href) router.push(link.href)
+                }}
+                style={[styles.row, lift(colors, 'rest')]}
+                accessibilityRole={link.mailSubject ? 'link' : 'button'}
+                accessibilityLabel={link.mailSubject ? `${link.label}, ${supportEmail()}` : link.label}
+              >
                 <View style={styles.settingLine}>
-                  <Glyph name={link.icon} size={22} color={colors.purple} scheme={scheme} />
+                  <Glyph name={link.icon} size={22} color={accountIconColor(link.icon, colors)} scheme={scheme} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.rowTitle}>{link.label}</Text>
-                    <Text style={styles.copy}>{link.hint}</Text>
+                    {link.badge ? (
+                      <Text style={{ alignSelf: 'flex-start', backgroundColor: PLAN_BADGE_COLOR, color: colors.onAccent, fontSize: 12, fontWeight: '800', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, overflow: 'hidden' }}>{link.badge}</Text>
+                    ) : null}
+                    <Text style={styles.copy}>{link.mailSubject ? supportEmail() : link.hint}</Text>
                   </View>
                   <Glyph name="forward" size={16} color={colors.inkSecondary} />
                 </View>
@@ -241,23 +296,17 @@ export function AccountScreen() {
           </View>
         ))}
         <Text style={styles.groupTitle}>Settings</Text>
-        <AdminAccountRow supabase={supabase} colors={colors} onPress={() => router.push('/admin')} />
         <View style={[styles.row, lift(colors, 'rest')]}>
           <View style={styles.settingLine}>
             <Glyph name={scheme === 'dark' ? 'moon' : 'sun'} size={22} color={colors.orange} active={scheme === 'dark'} scheme={scheme} knockout={colors.card} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>Night mode</Text>
-              <Text style={styles.copy}>Opens in light mode. Turn on for dark screens and icons. Saved on this phone.</Text>
-            </View>
-            <Switch
-              value={scheme === 'dark'}
-              onValueChange={(on: boolean) => {
+              <Text style={styles.rowTitle}>Appearance</Text>
+              <Text style={styles.copy}>System follows this phone’s color scheme. Light and Dark stay on until you change them.</Text>
+              <AppearanceChoices mode={displayMode} colors={colors} onChange={(mode) => {
                 void tapHaptic()
-                setDisplayMode(on ? 'dark' : 'light')
-              }}
-              trackColor={{ true: colors.orange, false: colors.track }}
-              accessibilityLabel="Night mode"
-            />
+                setDisplayMode(mode)
+              }} />
+            </View>
           </View>
         </View>
         <View style={[styles.row, lift(colors, 'rest')]}>
@@ -308,10 +357,12 @@ export function AccountScreen() {
           <Text style={styles.rowTitle}>Terms of service</Text>
           <Text style={styles.copy}>Fares, wait fees, and driver duties.</Text>
         </Pressable>
-        <Pressable onPress={() => router.push('/delete-account')} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
-          <Text style={styles.rowTitle}>Delete account</Text>
-          <Text style={styles.copy}>Files a confirmed support request. The account stays until that request is processed.</Text>
-        </Pressable>
+        {user ? (
+          <Pressable onPress={() => router.push('/delete-account')} style={[styles.row, lift(colors, 'rest')]} accessibilityRole="button">
+            <Text style={styles.rowTitle}>Delete account</Text>
+            <Text style={styles.copy}>Deletes this account immediately. Open rides are canceled.</Text>
+          </Pressable>
+        ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {note ? <Text style={styles.note}>{note}</Text> : null}
         {user ? (
@@ -320,6 +371,52 @@ export function AccountScreen() {
           <PrimaryButton label="Create account" onPress={() => router.push('/sign-up')} tone="ghost" />
         )}
       </ScrollView>
+    </View>
+  )
+}
+
+function accountIconColor(icon: string, colors: Palette): string {
+  switch (icon) {
+    case 'chat':
+    case 'mail':
+    case 'help':
+    case 'lostFound':
+    case 'money':
+    case 'bell':
+    case 'student':
+      return colors.link
+    default:
+      return colors.purple
+  }
+}
+
+const APPEARANCE_CHOICES: { mode: DisplayMode; label: string }[] = [
+  { mode: 'auto', label: 'System' },
+  { mode: 'light', label: 'Light' },
+  { mode: 'dark', label: 'Dark' },
+]
+
+function AppearanceChoices({ mode, colors, onChange }: { mode: DisplayMode; colors: Palette; onChange: (mode: DisplayMode) => void }) {
+  return (
+    <View
+      accessibilityRole="radiogroup"
+      style={{ flexDirection: 'row', backgroundColor: colors.segment, borderRadius: 999, padding: 3, marginTop: 10 }}
+    >
+      {APPEARANCE_CHOICES.map((choice) => {
+        const selected = mode === choice.mode
+        return (
+          <Pressable
+            key={choice.mode}
+            onPress={() => onChange(choice.mode)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            accessibilityLabel={`${choice.label} appearance`}
+            style={{ flex: 1, borderRadius: 999, paddingVertical: 8, alignItems: 'center', backgroundColor: selected ? colors.segmentOn : 'transparent' }}
+          >
+            <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={{ color: selected ? colors.segmentTextOn : colors.segmentText, fontWeight: '700', fontSize: 13 }}>{choice.label}</Text>
+          </Pressable>
+        )
+      })}
     </View>
   )
 }
@@ -339,7 +436,7 @@ function makeStyles(colors: Palette) {
       borderWidth: 1,
       borderColor: colors.border,
     },
-    safetyKicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
+    safetyKicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12 },
     safetyTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16, marginTop: 4 },
     safetyBody: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 },
     row: {
@@ -354,7 +451,7 @@ function makeStyles(colors: Palette) {
     group: { gap: 8 },
     groupTitle: { color: colors.inkSecondary, fontWeight: '800' as const, fontSize: 12, letterSpacing: 1, textTransform: 'uppercase' as const, marginTop: 8 },
     settingLine: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
-    pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 8 },
+    pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 8, alignItems: 'flex-start' as const, flexGrow: 0 },
     note: { color: colors.link, fontWeight: '700' as const, fontSize: 13 },
     error: { color: colors.danger, fontSize: 13 },
   }

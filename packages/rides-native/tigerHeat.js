@@ -298,6 +298,22 @@ export function tigerHeatAnchor(windowId, now = new Date()) {
   return now
 }
 
+/** Peak-pricing status from /api/tiger-heat. Disabled unless the server says so. */
+export function normalizePeakStatus(raw) {
+  if (!raw || typeof raw !== 'object' || raw.enabled !== true) return { enabled: false, active: false }
+  const bps = (v) => Math.max(0, Math.round(Number(v) || 0))
+  return {
+    enabled: true,
+    active: raw.active === true,
+    reason: typeof raw.reason === 'string' ? raw.reason : null,
+    reasonLabel: typeof raw.reasonLabel === 'string' ? raw.reasonLabel : null,
+    campusSurchargeBps: bps(raw.campusSurchargeBps),
+    airportSurchargeBps: bps(raw.airportSurchargeBps),
+    reasons: Array.isArray(raw.reasons) ? raw.reasons.filter((r) => typeof r === 'string') : [],
+    driverLine: typeof raw.driverLine === 'string' ? raw.driverLine : null,
+  }
+}
+
 export function normalizeTigerHeatMap(body) {
   const zones = Array.isArray(body?.zones)
     ? body.zones.filter((zone) => Number.isFinite(Number(zone?.lat)) && Number.isFinite(Number(zone?.lng)) && Number(zone?.bonusCents) > 0)
@@ -310,6 +326,7 @@ export function normalizeTigerHeatMap(body) {
     deactivated: Array.isArray(body?.deactivated) ? body.deactivated : [],
     solvency: body?.solvency || null,
     durationPolicy: body?.durationPolicy || null,
+    peak: normalizePeakStatus(body?.peak),
     error: body?.error || null,
   }
 }

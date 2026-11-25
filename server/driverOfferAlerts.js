@@ -14,6 +14,8 @@
 import { readDriverPushToken } from './driverPushToken.js'
 import { dispatchDriverOfferChannels } from './driverOfferChannels.js'
 import { sendExpoPush, PUSH_CREDENTIAL_GAP } from './expoPush.js'
+import { insertDriverNotification } from './driverNotifications.js'
+import { noteExpoPushResult } from './expoPushReceipts.js'
 import { quietFromPrefs } from '../src/lib/quietHours.js'
 import { isQuietAt } from '../shared/quietWindow.js'
 
@@ -152,14 +154,30 @@ export async function dispatchDriverOfferAlert(sb, {
     const prefs = contact.prefs?.ride_alerts
     const mode = prefs && typeof prefs === 'object' ? prefs[tier] || prefs.standard : null
     const sound = mode === 'silent' || mode === 'vibrate' ? null : 'default'
+    const copy = offerAlertCopy(trip)
+    const recorded = await insertDriverNotification(sb, {
+      userId: driverId,
+      type: 'ride_offer',
+      title: copy.title,
+      body: copy.body,
+      data: { tripId, tier, kind: 'ride_offer' },
+    })
+    const offerData = { tripId, tier, kind: 'ride_offer' }
+    if (recorded.id) offerData.notificationId = recorded.id
     const pushed = tokenKind === 'raw'
       ? { sent: false, reason: 'raw_device_token_unsupported' }
       : await sendExpoPush({
         to: contact.pushToken,
-        title: offerAlertCopy(trip).title,
-        body: offerAlertCopy(trip).body,
-        sound,
-        data: { tripId, tier },
+        title: copy.title,
+        body: copy.body,
+        // Remote ride offers use sound 'default', priority 'high' (set in
+        // sendExpoPush), and interruptionLevel 'time-sensitive'. Silent and
+        // vibrate prefs still omit the sound. Do not add the
+        // com.apple.developer.usernotifications.time-sensitive entitlement:
+        // the current Driver provisioning profile does not include it.
+        sound: sound == null ? null : 'default',
+        interruptionLevel: 'time-sensitive',
+        data: offerData,
       }, deps)
     channels.push = {
       sent: Boolean(pushed.sent),
@@ -168,12 +186,13 @@ export async function dispatchDriverOfferAlert(sb, {
       tokenKind,
       ...(pushed.gap ? { gap: pushed.gap } : {}),
     }
-  }
-
-  if (channels.push.reason === 'device_not_registered') {
-    try {
-      await sb.from('driver_push_tokens').delete().eq('driver_id', driverId).eq('token', contact.pushToken)
-    } catch { /* Best effort; avoid removing a concurrently refreshed token. */ }
+    // Delete only the rejected token. A refresh that landed during the send keeps its row.
+    await noteExpoPushResult(sb, {
+      push: pushed,
+      token: contact.pushToken,
+      ownerId: driverId,
+      ownerRole: 'driver',
+    })
   }
 
   if (!inserted?.error && !suppressed) {

@@ -100,7 +100,7 @@ function makeStyles(colors: Palette) {
     back: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.card, alignItems: 'center' as const, justifyContent: 'center' as const },
     backLabel: { fontSize: 18, color: colors.title, fontWeight: '700' as const },
     headerCopy: { flex: 1 },
-    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 11 },
+    kicker: { color: colors.orange, fontWeight: '800' as const, letterSpacing: 1.1, fontSize: 12 },
     title: { color: colors.title, fontSize: 22, fontWeight: '800' as const, letterSpacing: -0.3 },
     lead: { color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     list: { padding: 16, gap: 14, paddingBottom: 32 },

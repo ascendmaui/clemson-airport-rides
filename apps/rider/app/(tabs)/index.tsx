@@ -16,6 +16,9 @@ import { GestureDetector } from 'react-native-gesture-handler'
 import Reanimated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Pill, SheetHandle } from '@/components/Button'
+import { DenseText } from '@/components/DenseText'
+import { DENSE_FONT_SCALE } from '@/lib/denseType'
+import { RetryAction } from '@/components/RetryAction'
 import { pressStyle, useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
 import type { CampusMapHandle, LatLng, MapKind } from '@/components/mapTypes'
@@ -23,12 +26,14 @@ import { mapKindLabel } from '@/components/mapTypes'
 import { TabSwipeRegion, useTabSwipeMeasure, useTabSwipeRemeasure } from '@/components/MainTabPager'
 import { Skeleton } from '@/components/Skeleton'
 import { loadBusySpots, type BusySpot } from '@/lib/busySpots'
+import { logCaught, toastCaught } from '@/lib/caught'
 import { useAuth } from '@/lib/auth'
 import { setAuthNext } from '@/lib/authNext'
 import { listScheduledTrips, type ScheduledRow } from '@/lib/scheduleApi'
 import { playMatchChime, tapHaptic } from '@/lib/feedback'
 import { oneParam } from '@/lib/oneParam'
 import { displayFirstName } from 'rides-native/authErrors'
+import { SIMULATED_FLEET_BADGE } from 'rides-native/simulatedDrivers.js'
 import { nativeGlassAvailable } from 'rides-native/glass'
 import { campusOverlays } from 'rides-native/riderShell.js'
 import { loadGameDay } from 'rides-native/driverDesk'
@@ -41,11 +46,12 @@ import { supabase } from '@/lib/supabase'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import { liveRideDistanceLine, riderLiveView } from 'rides-native/liveTrip'
 import { useHomeLiveTrip } from '@/lib/useHomeLiveTrip'
-import { HEAT_WINDOWS, SHORTCUTS } from 'rides-native/places.js'
+import { SHORTCUTS } from 'rides-native/places.js'
 import { hotCatalogPlaces, lookupCatalogPlace, searchCatalogPlaces } from 'rides-native/shared/carpool.js'
 import { lift } from '@/lib/elevation'
 import { HOME_SHEET_BOTTOM_PADDING, homeTabClearance } from '@/lib/homeSheetSnap'
 import { useHomeSheetSnap } from '@/lib/useHomeSheetSnap'
+import { useReconnectRetry } from '@/lib/useReconnectRetry'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
@@ -97,12 +103,11 @@ export function RiderHome() {
     if (query.trim().length >= 2) return found.slice(0, 6)
     return hotCatalogPlaces()
   }, [query])
-  const [showBusy, setShowBusy] = useState(true)
-  const [heatWindow, setHeatWindow] = useState('now')
   const [spots, setSpots] = useState<BusySpot[]>([])
   const [caption, setCaption] = useState('Popular campus spots from ride requests — dorms, downtown, stadium.')
   const [blended, setBlended] = useState(false)
   const [spotsLoading, setSpotsLoading] = useState(true)
+  const [homeRetry, setHomeRetry] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [mapType, setMapType] = useState<MapKind>('standard')
   const [userCoord, setUserCoord] = useState<LatLng | null>(null)
@@ -137,11 +142,11 @@ export function RiderHome() {
 
   const name = user
     ? displayFirstName(user.user_metadata?.full_name || user.email?.split('@')[0], 'Tiger')
-    : 'Tiger'
-  const initial = name.slice(0, 1).toUpperCase()
+    : null
+  const initial = name ? name.slice(0, 1).toUpperCase() : ''
 
-  async function reloadSpots(windowId: string) {
-    const result = await loadBusySpots(windowId)
+  async function reloadSpots() {
+    const result = await loadBusySpots('now')
     setSpots(result.spots)
     setCaption(result.caption)
     setBlended(result.blended)
@@ -151,27 +156,44 @@ export function RiderHome() {
   async function loadGameNotice() {
     if (!supabase) {
       setGameNotice(gameDayNotice(null))
-      return
+      return true
     }
     try {
       const row = await loadGameDay(supabase)
       setGameNotice(gameDayNotice(row))
-    } catch {
+      return true
+    } catch (err) {
+      logCaught('home-game-day', err)
       setGameNotice(gameDayNotice(null))
+      return false
     }
   }
 
   async function loadScheduledReminders() {
     if (!user?.id) {
       setScheduledRows([])
-      return
+      return true
     }
     try {
       setScheduledRows(await listScheduledTrips(user.id))
       setClock(new Date())
-    } catch {
+      return true
+    } catch (err) {
+      toastCaught('home-scheduled', err, 'Could not load scheduled rides')
       setScheduledRows([])
+      return false
     }
+  }
+
+  async function refreshBooking() {
+    const spotsOk = await reloadSpots().then(() => true).catch((err: unknown) => {
+      logCaught('home-busy-spots', err)
+      setSpotsLoading(false)
+      return false
+    })
+    const gameOk = await loadGameNotice()
+    const ridesOk = await loadScheduledReminders()
+    setHomeRetry(spotsOk && gameOk && ridesOk ? null : 'Could not refresh rides. Retry when you reconnect.')
   }
 
   useEffect(() => {
@@ -184,8 +206,12 @@ export function RiderHome() {
       try {
         const row = await loadGameDay(supabase)
         if (alive) setGameNotice(gameDayNotice(row))
-      } catch {
-        if (alive) setGameNotice(gameDayNotice(null))
+      } catch (err) {
+        logCaught('home-game-day', err)
+        if (alive) {
+          setGameNotice(gameDayNotice(null))
+          setHomeRetry('Could not refresh rides. Retry when you reconnect.')
+        }
       }
     })()
     return () => {
@@ -208,8 +234,12 @@ export function RiderHome() {
       if (!alive) return
       setScheduledRows(rows)
       setClock(new Date())
-    }).catch(() => {
-      if (alive) setScheduledRows([])
+    }).catch((err: unknown) => {
+      toastCaught('home-scheduled', err, 'Could not load scheduled rides')
+      if (alive) {
+        setScheduledRows([])
+        setHomeRetry('Could not refresh rides. Retry when you reconnect.')
+      }
     })
     return () => {
       alive = false
@@ -219,19 +249,25 @@ export function RiderHome() {
   useEffect(() => {
     let alive = true
     setSpotsLoading(true)
-    loadBusySpots(heatWindow).then((result) => {
+    loadBusySpots('now').then((result) => {
       if (!alive) return
       setSpots(result.spots)
       setCaption(result.caption)
       setBlended(result.blended)
       setSpotsLoading(false)
-    }).catch(() => {
-      if (alive) setSpotsLoading(false)
+    }).catch((err: unknown) => {
+      logCaught('home-busy-spots', err)
+      if (alive) {
+        setSpotsLoading(false)
+        setHomeRetry('Could not refresh rides. Retry when you reconnect.')
+      }
     })
     return () => {
       alive = false
     }
-  }, [heatWindow])
+  }, [])
+
+  useReconnectRetry('booking-home', () => refreshBooking(), homeRetry != null)
 
   const goSearch = (dest?: string) => {
     if (dest) {
@@ -272,37 +308,42 @@ export function RiderHome() {
   }
 
   return (
-    <View style={[styles.screen, nativeTabs ? { paddingBottom: homeTabClearance(insets.bottom) } : null]}>
+    <View style={styles.screen}>
       <View
         ref={(node) => {
           mapSwipe.ref.current = node
         }}
         onLayout={mapSwipe.onLayout}
         collapsable={false}
-        style={styles.mapSlot}
+        style={[styles.mapSlot, { minHeight: insets.top + 176 }]}
       >
+        <View style={{ height: insets.top }} />
+        <View style={styles.mapFill}>
         <CampusMap
           ref={mapRef}
           spots={spots}
-          showHeat={showBusy}
-          heatWindow={heatWindow}
+          showHeat
+          heatWindow="now"
           mapType={mapType}
           gameDay={gameDay}
           gameDayLabel={gameNotice?.live ? gameNotice.headline : null}
           surge={surge}
           userCoordinate={userCoord}
-          showSimulatedFleet
+          showSimulatedFleet={false}
+          showFleetBadge={false}
         />
-        <Animated.View pointerEvents="box-none" style={[styles.mapChrome, { paddingTop: insets.top + 10 }, chromeMotion]}>
+        </View>
+        <Animated.View pointerEvents="box-none" style={[styles.mapChrome, { paddingTop: insets.top + 8 }, chromeMotion]}>
+          <View pointerEvents="box-none" style={styles.chromeTop}>
           <View style={styles.topBar}>
             <View style={[styles.brand, lift(colors, 'float')]}>
               <View style={styles.brandMark}>
-                <Text style={styles.brandMarkText}>CR</Text>
+                <Text style={styles.brandMarkText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1}>CR</Text>
               </View>
               <View style={styles.brandCopy}>
-                <Text style={styles.brandKicker}>RIDE • GAME • REPEAT</Text>
-                <Text style={styles.brandTitle}>Clemson <Text style={styles.brandSoft}>RIDES</Text></Text>
-                <Text style={styles.brandPillText}>TIGERS GET YOU THERE</Text>
+                <DenseText style={styles.brandKicker}>RIDE • GAME • REPEAT</DenseText>
+                <Text style={styles.brandTitle} numberOfLines={2} maxFontSizeMultiplier={DENSE_FONT_SCALE}>Clemson <Text style={styles.brandSoft}>Rides</Text></Text>
+                <DenseText style={styles.brandPillText}>TIGERS GET YOU THERE</DenseText>
               </View>
             </View>
             <Pressable
@@ -321,8 +362,18 @@ export function RiderHome() {
               }}
               style={({ pressed }) => [styles.avatar, lift(colors, 'rest'), pressStyle(pressed)]}
             >
-              <Text style={styles.avatarText}>{initial}</Text>
+              {initial ? (
+                <Text style={styles.avatarText} maxFontSizeMultiplier={1}>{initial}</Text>
+              ) : (
+                <Glyph name="account" size={22} color={colors.onAccent} />
+              )}
             </Pressable>
+          </View>
+          {false ? (
+          <View pointerEvents="none" style={styles.previewRow}>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1} style={styles.previewPill}>{SIMULATED_FLEET_BADGE}</Text>
+          </View>
+          ) : null}
           </View>
           <View style={styles.mapControls}>
             <View style={[styles.kindRow, lift(colors, 'rest')]}>
@@ -339,7 +390,7 @@ export function RiderHome() {
                     accessibilityState={{ selected: on }}
                     hitSlop={10}
                   >
-                    <Text style={[styles.kindText, on && styles.kindTextOn]}>{mapKindLabel(kind)}</Text>
+                    <DenseText style={[styles.kindText, on && styles.kindTextOn]}>{mapKindLabel(kind)}</DenseText>
                   </Pressable>
                 )
               })}
@@ -359,9 +410,7 @@ export function RiderHome() {
       </View>
 
       <Animated.View
-        ref={(node) => {
-          sheetSwipe.ref.current = node
-        }}
+        ref={sheetSwipe.setRef}
         onLayout={sheetSwipe.onLayout}
         style={[styles.sheetWrap, lift(colors, 'float'), sheetMotion]}
       >
@@ -387,15 +436,35 @@ export function RiderHome() {
             <SheetHandle />
           </View>
         </GestureDetector>
-        <Reanimated.View
-          pointerEvents="none"
-          style={sheet.hintStyle}
-          accessibilityElementsHidden={sheet.detent === 'collapsed'}
+        <ScrollView
+          ref={scrollRef}
+          style={styles.sheetScroll}
+          contentContainerStyle={[
+            styles.sheetContent,
+            nativeTabs ? { paddingBottom: homeTabClearance(insets.bottom) + 28 } : null,
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          onScroll={remeasureTabs}
+          scrollEventThrottle={32}
+          scrollEnabled={sheet.scrollEnabled}
+          pointerEvents={sheet.scrollEnabled ? 'auto' : 'box-none'}
+          refreshControl={(
+            <RefreshControl
+              refreshing={refreshing}
+              tintColor={colors.orange}
+              onRefresh={() => {
+                setRefreshing(true)
+                refreshBooking().finally(() => setRefreshing(false))
+              }}
+            />
+          )}
         >
-          <Text style={styles.dragHint}>Drag down to expand the map</Text>
-        </Reanimated.View>
+        {sheet.detent !== 'collapsed' ? (
+          <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} numberOfLines={2} style={styles.dragHint}>Drag down to expand the map</Text>
+        ) : null}
         <View onLayout={sheet.onSearchLayout} style={styles.searchBlock}>
-          <Text style={styles.prompt} accessibilityElementsHidden={sheet.detent === 'collapsed'}>Where are you headed, Tiger?</Text>
+          <Text style={styles.prompt} numberOfLines={3} maxFontSizeMultiplier={DENSE_FONT_SCALE} accessibilityElementsHidden={sheet.detent === 'collapsed'}>Where are you headed, Tiger?</Text>
           <View
             style={[styles.search, lift(colors, 'rest')]}
             accessibilityElementsHidden={sheet.detent === 'collapsed'}
@@ -408,6 +477,7 @@ export function RiderHome() {
               onChangeText={setQuery}
               placeholder="Campus, GSP, CLT…"
               placeholderTextColor={colors.placeholder}
+              maxFontSizeMultiplier={DENSE_FONT_SCALE}
               style={styles.searchInput}
               autoCorrect={false}
               editable={sheet.detent !== 'collapsed'}
@@ -447,31 +517,6 @@ export function RiderHome() {
             <Text style={styles.liveBody}>{liveDistance || `Open tracking for ${liveTrip.dropoff_label || 'this trip'}.`}</Text>
           </Pressable>
         ) : null}
-        <ScrollView
-          ref={scrollRef}
-          style={styles.sheetScroll}
-          contentContainerStyle={styles.sheetContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          onScroll={remeasureTabs}
-          scrollEventThrottle={32}
-          scrollEnabled={sheet.scrollEnabled}
-          pointerEvents={sheet.scrollEnabled ? 'auto' : 'none'}
-          refreshControl={(
-            <RefreshControl
-              refreshing={refreshing}
-              tintColor={colors.orange}
-              onRefresh={() => {
-                setRefreshing(true)
-                Promise.all([
-                  reloadSpots(heatWindow),
-                  loadGameNotice(),
-                  loadScheduledReminders(),
-                ]).finally(() => setRefreshing(false))
-              }}
-            />
-          )}
-        >
           {spotsLoading ? (
             <View style={styles.skeletonBlock}>
               <Skeleton height={18} width="36%" />
@@ -479,8 +524,17 @@ export function RiderHome() {
               <Skeleton height={56} />
             </View>
           ) : (
-            <Text style={styles.welcome}>Welcome, {name}</Text>
+            <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={styles.welcome}>{name ? `Welcome, ${name}` : 'Welcome'}</Text>
           )}
+          {homeRetry ? (
+            <View accessibilityLiveRegion="polite">
+              <Text style={styles.locateNote}>{homeRetry}</Text>
+              <RetryAction
+                hint="Loads campus spots, game day, and scheduled rides again"
+                onPress={() => { void refreshBooking() }}
+              />
+            </View>
+          ) : null}
           {gameDayExperience.ready && gameDayExperience.model.phase !== 'off' ? (
             <GameDayBanner model={gameDayExperience.model} onPress={() => router.push('/game-day')} />
           ) : !gameDayExperience.ready && gameNotice?.live ? (
@@ -529,7 +583,7 @@ export function RiderHome() {
                 }}
                 style={({ pressed }) => [styles.destChip, query === stop.label && styles.destChipOn, pressStyle(pressed)]}
               >
-                <Text style={[styles.destChipText, query === stop.label && styles.destChipTextOn]}>{stop.label}</Text>
+                <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} numberOfLines={1} style={[styles.destChipText, query === stop.label && styles.destChipTextOn]}>{stop.label}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -547,13 +601,13 @@ export function RiderHome() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Glyph name="search" size={18} color={colors.link} />
-              <Text style={styles.searchLinkText}>Search destination</Text>
+              <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} numberOfLines={1} style={styles.searchLinkText}>Search destination</Text>
               <Glyph name="forward" size={16} color={colors.link} />
             </View>
           </Pressable>
           {destError ? <Text style={styles.locateNote}>{destError}</Text> : null}
 
-          <Text style={styles.sectionLabel}>Get around</Text>
+          <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={styles.sectionLabel}>Get around</Text>
           <View style={styles.actions}>
             {[0, 1].map((column) => (
               <View key={column} style={styles.actionCol}>
@@ -570,15 +624,15 @@ export function RiderHome() {
                     style={({ pressed }) => [styles.action, lift(colors, 'rest'), pressStyle(pressed)]}
                   >
                     <GlassBadge name={action.icon} size={40} tone={action.id === 'safety' ? 'purple' : 'orange'} scheme={scheme} style={styles.actionIcon} />
-                    <Text style={styles.actionLabel}>{action.label}</Text>
-                    <Text style={styles.actionDetail}>{action.detail}</Text>
+                    <Text style={styles.actionLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={1.15}>{action.label}</Text>
+                    <Text style={styles.actionDetail} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={1.15}>{action.detail}</Text>
                   </Pressable>
                 ))}
               </View>
             ))}
           </View>
 
-          <Text style={styles.sectionLabel}>Places</Text>
+          <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={styles.sectionLabel}>Places</Text>
           <TabSwipeRegion>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcuts}>
             {PLACES.map((shortcut) => (
@@ -591,8 +645,8 @@ export function RiderHome() {
                 accessibilityHint="Requests a ride to this place"
               >
                 <Glyph name={shortcut.glyph} size={22} color={colors.purple} style={styles.shortcutIcon} />
-                <Text style={styles.shortcutLabel}>{shortcut.label}</Text>
-                <Text style={styles.shortcutSub}>{shortcut.sub}</Text>
+                <Text style={styles.shortcutLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1.15}>{shortcut.label}</Text>
+                <Text style={styles.shortcutSub} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1.15}>{shortcut.sub}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -601,49 +655,23 @@ export function RiderHome() {
           <View style={[styles.campusCard, lift(colors, 'rest')]}>
             <View style={styles.mapHead}>
               <View style={styles.campusCopy}>
-                <Text style={styles.mapTitle}>Campus map</Text>
-                <Text style={styles.busyDays}>Busy days</Text>
+                <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={styles.mapTitle}>Campus map</Text>
+                <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={styles.busyDays}>Busy days</Text>
               </View>
-              <Pressable
-                onPress={() => {
-                  void tapHaptic()
-                  setShowBusy((value: boolean) => !value)
-                }}
-                style={[styles.busy, showBusy && styles.busyOn]}
-                accessibilityRole="button"
-                accessibilityLabel={showBusy ? 'Busy areas on' : 'Busy areas off'}
-                accessibilityHint="Shows or hides busy areas on the campus map"
-                accessibilityState={{ selected: showBusy }}
-                hitSlop={8}
-              >
-                <Text style={[styles.busyText, showBusy && styles.busyTextOn]}>
-                  {showBusy ? 'Busy Areas · On' : 'Busy Areas · Off'}
-                </Text>
-              </Pressable>
             </View>
             {spotsLoading ? (
               <Skeleton height={32} width="70%" />
             ) : (
               <>
                 <TabSwipeRegion>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-                  {showBusy
-                    ? HEAT_WINDOWS.map((window) => (
-                        <Pill
-                          key={window.id}
-                          label={window.label}
-                          active={heatWindow === window.id}
-                          onPress={() => setHeatWindow(window.id)}
-                        />
-                      ))
-                    : null}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroller} contentContainerStyle={[styles.row, styles.chipRow]}>
                   <Pill label={gameNotice == null ? 'Game day…' : gameNotice.headline} active={gameDay} />
                   <Pill label={surge ? 'Surge · On' : 'Surge'} active={surge} onPress={() => setSurge((value: boolean) => !value)} />
                 </ScrollView>
                 </TabSwipeRegion>
-                <Text style={styles.caption}>
-                  {showBusy ? caption : 'Busy areas are hidden.'}
-                  {showBusy && blended ? <Text style={styles.live}>  Live + typical</Text> : null}
+                <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={styles.caption}>
+                  {caption}
+                  {blended ? <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} style={styles.live}>  Live + typical</Text> : null}
                   {gameNotice ? `  ${gameNotice.live ? gameNotice.detail : gameNotice.body}` : '  Checking game day…'}
                   {surge ? `  ${overlays.surgeLabel || 'Surge overlay'}` : ''}
                 </Text>
@@ -669,11 +697,11 @@ export function RiderHome() {
             accessibilityHint={user ? 'Opens student pricing' : 'Sign in to check student pricing'}
           >
             <View style={styles.offerIcon}>
-              <Text style={styles.gamedayIcon}>🎓</Text>
+              <Glyph name="learning" size={24} color={colors.purple} />
             </View>
-            <View style={styles.gamedayCopy}>
-              <Text style={styles.gamedayTitle}>{studentOffer.title}</Text>
-              <Text style={styles.gamedayBody}>{studentOffer.detail}</Text>
+            <View style={[styles.gamedayCopy, styles.studentCopy]}>
+              <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} numberOfLines={2} style={styles.gamedayTitle}>{studentOffer.title}</Text>
+              <Text maxFontSizeMultiplier={DENSE_FONT_SCALE} numberOfLines={4} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.gamedayBody}>{studentOffer.detail}</Text>
             </View>
           </Pressable>
 
@@ -684,15 +712,15 @@ export function RiderHome() {
             }}
             style={({ pressed }) => [styles.gameday, lift(colors, 'rest'), pressStyle(pressed)]}
             accessibilityRole="button"
-            accessibilityLabel="Game day carpool. About 10 to 15 dollars each instead of 30 to 40."
+            accessibilityLabel="Game day carpool. 50 percent of the Standard fare per seat when 3 or 4 riders share the trip."
             accessibilityHint="Opens carpools"
           >
             <View style={styles.offerIcon}>
-              <Text style={styles.gamedayIcon}>🏈</Text>
+              <Glyph name="dropoff" size={24} color={colors.orange} />
             </View>
             <View style={styles.gamedayCopy}>
               <Text style={styles.gamedayTitle}>Game day carpool</Text>
-              <Text style={styles.gamedayBody}>About $10–$15 each instead of $30–$40.</Text>
+              <Text style={styles.gamedayBody}>50% of the Standard fare per seat when 3 or 4 riders share the trip.</Text>
             </View>
             <View style={styles.gamedayBtn}>
               <Text style={styles.gamedayBtnText}>Find a carpool</Text>
@@ -714,6 +742,7 @@ function makeStyles(colors: Palette) {
   return {
     screen: { flex: 1, backgroundColor: colors.background },
     mapSlot: { flex: 1, minHeight: 0, backgroundColor: colors.mapFallback, overflow: 'hidden' as const },
+    mapFill: { flex: 1, minHeight: 0 },
     mapChrome: {
       position: 'absolute' as const,
       top: 0,
@@ -723,6 +752,7 @@ function makeStyles(colors: Palette) {
       justifyContent: 'space-between' as const,
       paddingBottom: 28,
     },
+    chromeTop: { alignItems: 'flex-start' as const },
     topBar: {
       paddingHorizontal: 16,
       flexDirection: 'row' as const,
@@ -732,9 +762,10 @@ function makeStyles(colors: Palette) {
     },
     brand: {
       flex: 1,
+      minWidth: 0,
       maxWidth: 280,
       flexDirection: 'row' as const,
-      alignItems: 'center' as const,
+      alignItems: 'flex-start' as const,
       gap: 10,
       borderRadius: 18,
       backgroundColor: colors.card,
@@ -744,20 +775,23 @@ function makeStyles(colors: Palette) {
     brandMark: {
       width: 36,
       height: 36,
+      flexShrink: 0,
       borderRadius: 12,
       backgroundColor: colors.orange,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
+      overflow: 'hidden' as const,
     },
     brandMarkText: { color: colors.onAccent, fontSize: 12, fontWeight: '800' as const, letterSpacing: 0.4 },
-    brandCopy: { flex: 1 },
-    brandKicker: { color: colors.orange, fontSize: 9, fontWeight: '700' as const, letterSpacing: 1.1 },
+    brandCopy: { flex: 1, minWidth: 0 },
+    brandKicker: { color: colors.orange, fontSize: 12, fontWeight: '700' as const, letterSpacing: 1.1 },
     brandTitle: { color: colors.title, fontSize: 16, fontWeight: '800' as const, letterSpacing: -0.3, marginTop: 1 },
     brandSoft: { fontWeight: '600' as const, color: colors.ink },
-    brandPillText: { color: colors.inkSecondary, fontSize: 9, fontWeight: '700' as const, letterSpacing: 0.6, marginTop: 2 },
+    brandPillText: { color: colors.inkSecondary, fontSize: 12, fontWeight: '700' as const, letterSpacing: 0.6, marginTop: 2 },
     avatar: {
       width: 44,
       height: 44,
+      flexShrink: 0,
       borderRadius: 22,
       backgroundColor: colors.purple,
       alignItems: 'center' as const,
@@ -766,6 +800,17 @@ function makeStyles(colors: Palette) {
       borderColor: colors.onAccent,
     },
     avatarText: { color: colors.onAccent, fontWeight: '800' as const, fontSize: 17 },
+    previewRow: { paddingHorizontal: 16, marginTop: 8, alignItems: 'flex-start' as const, maxWidth: '80%' as const },
+    previewPill: {
+      overflow: 'hidden' as const,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      fontSize: 12,
+      fontWeight: '800' as const,
+      backgroundColor: colors.purple,
+      color: colors.onAccent,
+    },
     mapControls: {
       flexDirection: 'row' as const,
       justifyContent: 'space-between' as const,
@@ -781,7 +826,7 @@ function makeStyles(colors: Palette) {
     },
     kindChip: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
     kindOn: { backgroundColor: colors.purple },
-    kindText: { color: colors.link, fontSize: 11, fontWeight: '700' as const },
+    kindText: { color: colors.link, fontSize: 12, fontWeight: '700' as const },
     kindTextOn: { color: colors.onAccent },
     locate: {
       width: 44,
@@ -805,11 +850,9 @@ function makeStyles(colors: Palette) {
     campusCopy: { flex: 1 },
     mapTitle: { fontWeight: '700' as const, fontSize: 15, letterSpacing: -0.2, color: colors.ink },
     busyDays: { color: colors.inkSecondary, fontSize: 12, fontWeight: '600' as const, marginTop: 2 },
-    busy: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: colors.purpleSoft },
-    busyOn: { backgroundColor: colors.orange },
-    busyText: { color: colors.link, fontSize: 12, fontWeight: '700' as const },
-    busyTextOn: { color: colors.onAccent },
     row: { gap: 8, paddingVertical: 2 },
+    chipScroller: { flexGrow: 0, alignSelf: 'stretch' as const },
+    chipRow: { alignItems: 'flex-start' as const, flexGrow: 0 },
     caption: { color: colors.inkSecondary, fontSize: 12, lineHeight: 18 },
     live: { color: colors.link, fontWeight: '700' as const },
     destChip: {
@@ -843,10 +886,11 @@ function makeStyles(colors: Palette) {
     dragHint: {
       textAlign: 'center' as const,
       color: colors.placeholder,
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: '600' as const,
       letterSpacing: 0.2,
       lineHeight: 16,
+      marginBottom: 8,
     },
     sheetScroll: { flex: 1, minHeight: 0 },
     sheetContent: { paddingBottom: 28 },
@@ -876,7 +920,7 @@ function makeStyles(colors: Palette) {
       borderLeftWidth: 3,
       borderLeftColor: colors.orange,
     },
-    liveKicker: { color: colors.orange, fontSize: 11, fontWeight: '800' as const, letterSpacing: 1.1 },
+    liveKicker: { color: colors.orange, fontSize: 12, fontWeight: '800' as const, letterSpacing: 1.1 },
     liveTitle: { color: colors.title, fontSize: 17, fontWeight: '700' as const, letterSpacing: -0.2, marginTop: 4 },
     liveBody: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 },
     gameCard: { backgroundColor: colors.orangeSoft, borderLeftColor: colors.purple },
@@ -892,8 +936,8 @@ function makeStyles(colors: Palette) {
       minHeight: 56,
       backgroundColor: colors.input,
     },
-    searchMark: { width: 10, height: 10, borderRadius: 3, backgroundColor: colors.orange },
-    searchInput: { flex: 1, minWidth: 0, fontSize: 17, fontWeight: '600' as const, color: colors.ink, paddingVertical: 14 },
+    searchMark: { width: 10, height: 10, borderRadius: 3, backgroundColor: colors.orange, flexShrink: 0 },
+    searchInput: { flex: 1, minWidth: 0, fontSize: 17, fontWeight: '600' as const, color: colors.ink, paddingVertical: 8 },
     searchLink: { alignSelf: 'flex-start' as const, paddingVertical: 10, marginTop: 2 },
     searchLinkText: { color: colors.orange, fontWeight: '700' as const, fontSize: 14, letterSpacing: -0.1 },
     sectionLabel: {
@@ -927,8 +971,8 @@ function makeStyles(colors: Palette) {
       borderColor: colors.border,
     },
     shortcutIcon: { fontSize: 20, marginBottom: 10 },
-    shortcutLabel: { fontWeight: '700' as const, fontSize: 14, letterSpacing: -0.2, color: colors.ink },
-    shortcutSub: { fontSize: 12, color: colors.inkSecondary, marginTop: 3 },
+    shortcutLabel: { fontWeight: '700' as const, fontSize: 14, letterSpacing: -0.2, color: colors.ink, width: '100%' as const },
+    shortcutSub: { fontSize: 12, color: colors.inkSecondary, marginTop: 3, width: '100%' as const },
     keys: { color: colors.danger, fontSize: 12, marginTop: 12, lineHeight: 17 },
     studentCard: {
       marginTop: 18,
@@ -960,8 +1004,8 @@ function makeStyles(colors: Palette) {
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
     },
-    gamedayIcon: { fontSize: 20 },
     gamedayCopy: { flex: 1 },
+    studentCopy: { minWidth: 0 },
     gamedayTitle: { fontWeight: '700' as const, fontSize: 15, letterSpacing: -0.2, color: colors.ink },
     gamedayBody: { fontSize: 13, lineHeight: 18, color: colors.inkSecondary, marginTop: 2 },
     gamedayBtn: { backgroundColor: colors.purple, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8 },

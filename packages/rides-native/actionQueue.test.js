@@ -18,6 +18,8 @@ function manualTimers() {
 test('offline detection and backoff', () => {
   assert.equal(isOfflineError(offlineErr()), true)
   assert.equal(isOfflineError({ name: 'AbortError' }), true)
+  assert.equal(isOfflineError({ name: 'FetchRequestCanceledException' }), true)
+  assert.equal(isOfflineError(new Error('FetchRequestCanceledException: Fetch request has been canceled')), true)
   assert.equal(isOfflineError({ status: 503 }), true)
   assert.equal(isOfflineError({ status: 409, message: 'invalid_transition' }), false)
   assert.equal(isOfflineError(null), false)

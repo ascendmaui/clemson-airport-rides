@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
 import { Alert, Text } from 'react-native'
 import { Card, Primary } from '@/components/chrome'
 import { useTheme } from '@/lib/theme'
+import { useSecondClock } from '@/lib/useSecondClock'
 import { formatCents } from 'rides-native/tripTags'
 import { waitTimerView, type WaitAnchor } from 'rides-native/waitTimer'
 
@@ -9,11 +9,7 @@ export function WaitTimer({ arrivedAt, anchor, busy, onCancel }: {
   arrivedAt: string | null; anchor: WaitAnchor | null; busy: boolean; onCancel: () => void
 }) {
   const { colors } = useTheme()
-  const [now, setNow] = useState(Date.now)
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [])
+  const now = useSecondClock()
   const view = waitTimerView(arrivedAt, now, anchor)
   function confirmCancel() {
     const current = waitTimerView(arrivedAt, Date.now(), anchor)

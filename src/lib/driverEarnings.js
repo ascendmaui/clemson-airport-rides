@@ -542,7 +542,7 @@ export function buildAnnualTaxCsv(summary) {
   const waitCell = summary.waitFeeCents == null ? 'not tracked' : csvMoney(summary.waitFeeCents)
   const cancelCell = summary.cancelFeeCents == null ? 'not tracked' : csvMoney(summary.cancelFeeCents)
   const rows = [
-    ['Clemson RIDES', 'Driver annual earnings summary'],
+    ['Clemson Rides', 'Driver annual earnings summary'],
     ['Disclaimer', summary.disclaimer],
     ['Year', summary.year],
     ['Timezone', summary.timeZone],

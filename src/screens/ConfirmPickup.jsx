@@ -7,7 +7,11 @@ import { navigate } from '../lib/navigation'
 import { SignInToBookModal, useRequireAuthForAction } from '../components/SignInToBookModal'
 import { useAuth } from '../lib/auth'
 import { useStudentStatus } from '../lib/useStudentStatus'
-import { fetchBillingQuote } from '../lib/rideBilling'
+import { fetchBillingQuote, fetchRideQuote } from '../lib/rideBilling'
+import { formatCents } from '../lib/riderPromo'
+import { SiteIcon } from '../components/SiteIcon'
+import { RIDE_TYPE_GUIDE } from '../../shared/copy/rideTypes.js'
+import { useWideLayout } from '../lib/useWideLayout'
 import { lookupCatalogPlace, placeFromStop } from '../lib/placeCatalog'
 import { finiteCoordinate, placeFromCoordinates, readBrowserPosition, reverseGeocodeLabel } from '../lib/currentPlace'
 import { destPoint } from '../../packages/rides-native/places.js'
@@ -24,6 +28,16 @@ function placeForLabel(label, fallbackPoint) {
   }
 }
 
+/** Same spot: matching labels, or pins within about 40 m. */
+function samePlace(a, b) {
+  if (!a || !b) return false
+  const left = String(a.label || '').trim().toLowerCase()
+  const right = String(b.label || '').trim().toLowerCase()
+  if (left && left === right) return true
+  if (a.lat == null || b.lat == null || a.lng == null || b.lng == null) return false
+  return Math.abs(a.lat - b.lat) < 0.0004 && Math.abs(a.lng - b.lng) < 0.0004
+}
+
 export function ConfirmPickup({
   dest = 'GSP Airport',
   pickup: initialPickup = '',
@@ -31,15 +45,19 @@ export function ConfirmPickup({
   pickupLng = '',
   tier = '',
 }) {
+  const [dropoff, setDropoff] = useState(() => placeForLabel(dest, destPoint(dest)))
+  // Pickup never defaults to the drop-off. Without a passed pickup the field starts empty
+  // and the map waits on campus until the rider types a spot, drags the pin, or uses location.
   const [pickup, setPickup] = useState(() => {
     const lat = finiteCoordinate(pickupLat)
     const lng = finiteCoordinate(pickupLng)
     if (initialPickup && lat != null && lng != null) {
       return { label: initialPickup, lat, lng }
     }
-    return { label: 'Memorial Stadium', lat: STADIUM[0], lng: STADIUM[1] }
+    return { label: '', lat: STADIUM[0], lng: STADIUM[1] }
   })
-  const [dropoff, setDropoff] = useState(() => placeForLabel(dest, destPoint(dest)))
+  const [quote, setQuote] = useState(null)
+  const [quoteState, setQuoteState] = useState('idle')
   const [note, setNote] = useState('')
   const [locating, setLocating] = useState(false)
   const [locateNote, setLocateNote] = useState(null)
@@ -53,6 +71,7 @@ export function ConfirmPickup({
   const { runOrPrompt } = useRequireAuthForAction()
   const student = useStudentStatus()
   const studentOffer = studentSurfaceCopy(student, 'confirm')
+  const wide = useWideLayout()
 
   useEffect(() => {
     if (!user?.id) {
@@ -89,6 +108,64 @@ export function ConfirmPickup({
     }
   }, [user?.id, pickup.label, pickup.lat, pickup.lng, dropoff.label, dropoff.lat, dropoff.lng])
 
+  const pickupReady = Boolean(String(pickup.label || '').trim())
+  const sameSpot = pickupReady && samePlace(pickup, dropoff)
+  const canConfirm = pickupReady && !sameSpot
+
+  // Server quote for the chosen places, shown before the rider continues. Display only.
+  useEffect(() => {
+    if (!canConfirm) {
+      setQuote(null)
+      setQuoteState('idle')
+      return undefined
+    }
+    let alive = true
+    setQuoteState('loading')
+    fetchRideQuote({
+      pickupLabel: pickup.label,
+      pickupLat: pickup.lat,
+      pickupLng: pickup.lng,
+      dest: dropoff.label,
+      destLat: dropoff.lat,
+      destLng: dropoff.lng,
+    })
+      .then((data) => {
+        if (!alive) return
+        setQuote(data)
+        setQuoteState('ready')
+      })
+      .catch(() => {
+        if (!alive) return
+        setQuote(null)
+        setQuoteState('error')
+      })
+    return () => {
+      alive = false
+    }
+  }, [canConfirm, pickup.label, pickup.lat, pickup.lng, dropoff.label, dropoff.lat, dropoff.lng])
+
+  // If the browser already allows location, fill an empty pickup from it. Never prompts.
+  useEffect(() => {
+    if (initialPickup || typeof navigator === 'undefined' || !navigator.permissions?.query) return undefined
+    let alive = true
+    navigator.permissions.query({ name: 'geolocation' })
+      .then((status) => {
+        if (alive && status?.state === 'granted') onLocate()
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const quoteRows = RIDE_TYPE_GUIDE.types
+    .map((type) => {
+      const row = (quote?.tiers || []).find((tierRow) => tierRow?.id === type.id)
+      return row && Number.isFinite(row.fareCents) ? { ...type, fareCents: row.fareCents } : null
+    })
+    .filter(Boolean)
+
   const nextParams = {
     dest: dropoff.label,
     destLat: String(dropoff.lat),
@@ -103,6 +180,7 @@ export function ConfirmPickup({
   const goTiers = () => navigate('tiers', nextParams)
 
   const onConfirm = () => {
+    if (!canConfirm) return
     runOrPrompt(goTiers, {
       setPromptOpen,
       nextPath: 'tiers',
@@ -133,16 +211,18 @@ export function ConfirmPickup({
   }
 
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'transparent' }}>
-      <div style={{ padding: '16px 20px 8px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to home" onClick={() => navigate('home')}>←</button>
+    <div className="fade-in booking-confirm" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'transparent' }}>
+      <div className="booking-confirm-head" style={{ padding: '16px 20px 8px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to home" onClick={() => navigate('home')}>
+          <SiteIcon name="arrow-left" size={20} />
+        </button>
         <h1 style={{ fontSize: 20, fontWeight: 600, letterSpacing: -0.3 }}>Confirm pickup spot</h1>
       </div>
 
-      <div style={{ padding: '0 16px' }}>
-        <div className="glass-panel" style={{ borderRadius: 18, overflow: 'hidden', padding: 4, position: 'relative' }}>
+      <div className="booking-confirm-map" style={{ padding: '0 16px' }}>
+        <div className="glass-panel booking-confirm-frame" style={{ borderRadius: 18, overflow: 'hidden', padding: 4, position: 'relative' }}>
           <CampusMap
-            height={260}
+            height={wide ? '100%' : 260}
             interactive
             dragPin={dragPickup}
             center={focus}
@@ -150,7 +230,7 @@ export function ConfirmPickup({
             pickupPosition={[pickup.lat, pickup.lng]}
             dropoffPosition={[dropoff.lat, dropoff.lng]}
             onPinMove={(next) => {
-              const place = placeFromCoordinates(next?.[0], next?.[1], pickup.label === 'Memorial Stadium' ? 'Dropped pin' : pickup.label)
+              const place = placeFromCoordinates(next?.[0], next?.[1], pickup.label || 'Dropped pin')
               pinPlace(place, setPickup, 'pickup')
             }}
           />
@@ -170,16 +250,16 @@ export function ConfirmPickup({
               borderRadius: 22,
               background: '#fff',
               color: 'var(--orange)',
-              fontWeight: 800,
-              fontSize: 20,
+              display: 'grid',
+              placeItems: 'center',
               boxShadow: '0 2px 10px rgba(11,18,32,0.22)',
             }}
           >
-            {locating ? '…' : '◎'}
+            <SiteIcon name="locate" size={20} className={locating ? 'site-icon--busy' : undefined} />
           </button>
         </div>
         <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 8, textAlign: 'center' }}>
-          Drag the pin to your exact pickup spot, or tap ◎ to use your location.
+          Drag the pin to your exact pickup spot, or tap the location button to use where you are.
         </p>
         {locateNote ? (
           <p style={{ fontSize: 12, color: 'var(--danger, #b00020)', marginTop: 4, textAlign: 'center' }}>{locateNote}</p>
@@ -187,7 +267,7 @@ export function ConfirmPickup({
       </div>
 
       <div
-        className="sheet glass-panel--elevated"
+        className="sheet glass-panel--elevated booking-confirm-sheet"
         style={{
           marginTop: 'auto',
           padding: '12px 20px calc(28px + var(--safe-bottom))',
@@ -201,6 +281,11 @@ export function ConfirmPickup({
           onChange={(place) => pinPlace(place, setPickup, 'pickup')}
           placeholder="Type a pickup — Grand Marc, stadium, or a street"
         />
+        {sameSpot ? (
+          <p role="alert" style={{ fontSize: 13, fontWeight: 600, color: '#B34A00', margin: '-4px 0 10px' }}>
+            Pickup and drop-off are the same place. Choose a different pickup.
+          </p>
+        ) : null}
         <AddressSuggest
           label="Drop-off address"
           value={dropoff}
@@ -267,7 +352,50 @@ export function ConfirmPickup({
         >
           {SCHEDULE_AHEAD_LABEL}
         </button>
-        <PrimaryButton className="primary-cta" onClick={onConfirm}>
+        <section
+          className="confirm-quote"
+          data-testid="confirm-quote"
+          aria-live="polite"
+          aria-label="Fare quote"
+          style={{
+            marginBottom: 12,
+            padding: '12px 14px',
+            borderRadius: 16,
+            background: '#fff',
+            border: '1px solid rgba(23,17,31,0.08)',
+            boxShadow: '0 10px 24px -14px rgba(23,17,31,0.3)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: quoteRows.length ? 8 : 0 }}>
+            <span style={{ display: "inline-grid", color: "#F56600" }}><SiteIcon name="car" size={18} /></span>
+            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>
+              {!pickupReady ? 'Add a pickup to see the fare'
+                : sameSpot ? 'Choose a different pickup to see the fare'
+                  : quoteState === 'loading' ? 'Getting your fare…'
+                    : quoteState === 'error' || !quoteRows.length ? 'Fare unavailable right now. You will see it on the next step.'
+                      : 'Fare for this trip'}
+            </p>
+          </div>
+          {quoteState === 'ready' && quoteRows.length ? (
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }}>
+              {quoteRows.map((row) => (
+                <li key={row.id} data-tier={row.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, fontSize: 14 }}>
+                  <span style={{ color: 'var(--ink-secondary)' }}>
+                    {row.name}
+                    {row.id === 'carpool' ? ' (per seat)' : ''}
+                  </span>
+                  <strong style={{ color: row.id === 'standard' ? '#F56600' : 'var(--ink)', fontWeight: 700 }}>{formatCents(row.fareCents)}</strong>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {quoteState === 'ready' && quoteRows.length ? (
+            <p style={{ fontSize: 12, color: 'var(--ink-tertiary)', marginTop: 8 }}>
+              This is the server quote. Pick your ride type next.
+            </p>
+          ) : null}
+        </section>
+        <PrimaryButton className="primary-cta" onClick={onConfirm} disabled={!canConfirm}>
           Confirm and request
         </PrimaryButton>
       </div>

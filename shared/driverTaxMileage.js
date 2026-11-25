@@ -391,7 +391,7 @@ export function buildYearEndCsv(packet) {
   const tips = packet.tipsCents == null ? 'not tracked' : csvMoney(packet.tipsCents)
   const deduction = packet.estimatedDeductionCents == null ? 'rate not configured' : csvMoney(packet.estimatedDeductionCents)
   const rows = [
-    ['Clemson RIDES', 'Driver year-end earnings and mileage log'],
+    ['Clemson Rides', 'Driver year-end earnings and mileage log'],
     ['Disclaimer', packet.disclaimer],
     ['Mileage estimate', packet.mileageEstimateNote],
     ['1099', packet.stripe1099Note],
@@ -510,7 +510,7 @@ export function bytesToBase64(bytes) {
 export function buildYearEndPdf(packet) {
   const money = (cents) => (cents == null ? 'Not tracked' : `$${(Number(cents) / 100).toFixed(2)}`)
   const blocks = [
-    { text: 'Clemson RIDES', size: 20, font: 'F2', color: '0.322 0.176 0.502' },
+    { text: 'Clemson Rides', size: 20, font: 'F2', color: '0.322 0.176 0.502' },
     { text: `${packet.year} year-end earnings and mileage log`, size: 14, font: 'F2', color: '0.961 0.400 0.000' },
     { text: packet.disclaimer, size: 9, font: 'F1', color: '0.15 0.15 0.18' },
     { text: packet.mileageEstimateNote, size: 9, font: 'F1', color: '0.15 0.15 0.18' },

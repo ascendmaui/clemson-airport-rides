@@ -3,12 +3,18 @@
  * Neighborhood coordinates stay in carpoolEngine (same list as CAMPUS_SPOTS).
  * Airport coordinates stay in scheduledRideModel.
  *
- * TODO: free-form street geocoding and friend-ride route miles still need a billed
- * Google Maps key (Places in the browser, Routes on the server). Do not invent a key.
- * This catalog is the offline path.
+ * Common Clemson-area stops (apartments, Greek housing, lots, hotels, hospitals,
+ * nearby towns) live in clemsonStops.js and come after the rows above, so the
+ * older pricing rows still win every exact and prefix lookup.
+ *
+ * Free-form street search uses addressSearch.js (Geoapify, then Photon) after
+ * this catalog. Friend-ride route miles still need the server Maps key.
  */
 import { NEIGHBORHOODS } from './carpoolEngine.js'
 import { AIRPORT_PLACES } from './scheduledRideModel.js'
+import { CLEMSON_STOPS } from './clemsonStops.js'
+
+export { catalogKindLabel } from './clemsonStops.js'
 
 const AIRPORT_ALIASES = {
   GSP: ['gsp', 'gsp airport', 'greenville', 'greenville-spartanburg', 'greenville-spartanburg international (gsp)'],
@@ -62,7 +68,7 @@ export function catalogStops() {
     kind: 'campus',
     aliases: row.aliases,
   }))
-  return [...campus, ...EXTRA_STOPS, ...airportStops()]
+  return [...campus, ...EXTRA_STOPS, ...airportStops(), ...CLEMSON_STOPS]
 }
 
 function norm(value) {
@@ -72,7 +78,10 @@ function norm(value) {
 function matchesQuery(row, query) {
   const label = norm(row.label)
   if (label === query || label.startsWith(query) || label.includes(query)) return true
-  return row.aliases.some((alias) => alias === query || alias.startsWith(query) || alias.includes(query) || query.includes(alias))
+  // "Query contains the alias" helps lot codes and landmarks, but an airport
+  // must not match a street that merely names its city ("Old Greenville Hwy").
+  const containsAlias = row.kind !== 'airport'
+  return row.aliases.some((alias) => alias === query || alias.startsWith(query) || alias.includes(query) || (containsAlias && query.includes(alias)))
 }
 
 function rank(row, query) {

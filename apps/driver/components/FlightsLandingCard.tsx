@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { Card } from '@/components/chrome'
 import { useTheme } from '@/lib/theme'
 import { supabase } from '@/lib/supabase'
+import { quiet } from '@/lib/softFail'
 import { loadArrivalWaves, waveCardLine, type ArrivalWave } from 'rides-native/flightStatus'
 
 /** Discover: "Flights landing" at GSP, next 3 hours, refreshed every 2 minutes. */
@@ -11,7 +12,8 @@ export function FlightsLandingCard({ airport = 'GSP' }: { airport?: string }) {
   const [waves, setWaves] = useState<ArrivalWave[] | null>(null)
   useEffect(() => {
     let alive = true
-    const load = () => loadArrivalWaves(supabase, airport, 3).then((rows) => { if (alive) setWaves(rows) })
+    // Optional card: on failure it keeps the last waves (or stays hidden) and retries on the next tick.
+    const load = () => loadArrivalWaves(supabase, airport, 3).then((rows) => { if (alive) setWaves(rows) }).catch(quiet('flights landing'))
     load()
     const timer = setInterval(load, 120000)
     return () => { alive = false; clearInterval(timer) }

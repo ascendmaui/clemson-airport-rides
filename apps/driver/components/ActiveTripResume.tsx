@@ -4,6 +4,7 @@ import { AccessibilityInfo } from 'react-native'
 import { RESUMABLE_STATUSES, pickResumableTrip, resumeAnnouncement, shouldAutoResume } from 'rides-native/tripResume'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { takeTripResume } from '@/lib/crashReport'
 
 // Module scope: resets on every app launch, so each live trip reopens once per launch.
 const handled = new Set<string>()
@@ -15,6 +16,21 @@ export function ActiveTripResume() {
   const pathname = usePathname()
   const pathRef = useRef(pathname)
   pathRef.current = pathname
+
+  // After a crash recovery ("Back to my trip"), reopen that trip once the stack is mounted.
+  useEffect(() => {
+    const tripId = takeTripResume()
+    if (!tripId) return undefined
+    handled.add(tripId)
+    const timer = setTimeout(() => {
+      try {
+        router.push({ pathname: '/trip', params: { id: tripId } })
+      } catch (err) {
+        console.warn('[driver-crash] trip resume', err instanceof Error ? err.message : err)
+      }
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [router])
 
   useEffect(() => {
     if (!supabase || !user?.id) return undefined
@@ -37,7 +53,10 @@ export function ActiveTripResume() {
       handled.add(trip.id)
       router.push({ pathname: '/trip', params: { id: trip.id } })
       AccessibilityInfo.announceForAccessibility(resumeAnnouncement(trip.status))
-    })().catch(() => {})
+    })().catch((err: unknown) => {
+      // Not fatal: the Home card still links to the trip.
+      console.warn('[trip resume]', err instanceof Error ? err.message : err)
+    })
     return () => {
       alive = false
     }

@@ -85,7 +85,7 @@ export async function respondWithAgent(res, { name, turn, roleVariant, context }
     }
     return json(res, 200, {
       ...offline,
-      notice: 'The model request failed. Showing guidance from your account and the Clemson RIDES knowledge base.',
+      notice: 'The model request failed. Showing guidance from your account and the Clemson Rides knowledge base.',
     })
   }
 }

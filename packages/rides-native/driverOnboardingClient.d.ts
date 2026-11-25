@@ -60,7 +60,7 @@ export type OnboardingBundle = {
 }
 
 export function fetchMyDriverApplication(supabase: unknown, userId: string): Promise<Record<string, unknown> | null>
-export function fetchMyDriverDocuments(supabase: unknown, userId: string): Promise<{ id?: string; doc_type: string; storage_path?: string; review_status?: string | null; match_status?: string | null; review_note?: string | null; inspection_source?: string | null; ai_reason?: string | null; ai_verdict?: string | null }[]>
+export function fetchMyDriverDocuments(supabase: unknown, userId: string): Promise<{ id?: string; doc_type: string; type?: string | null; storage_path?: string; review_status?: string | null; match_status?: string | null; review_note?: string | null; inspection_source?: string | null; ai_reason?: string | null; ai_verdict?: string | null }[]>
 export function fetchInspectionDeadline(supabase: unknown, userId: string): Promise<{ first_approved_at?: string; inspection_due_at?: string } | null>
 export function fetchMyTaxProfile(supabase: unknown, userId: string): Promise<{ legal_name?: string; tin_last4?: string; tax_classification?: string } | null>
 export function fetchMyAgreement(supabase: unknown, userId: string): Promise<{ signature_name?: string; signed_at?: string; agreement_version?: string } | null>

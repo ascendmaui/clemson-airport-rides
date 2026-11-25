@@ -2,7 +2,7 @@
  * Rider party-night scheduling.
  * The late-night return queue uses the same College Ave window as the driver
  * party-ride queue: Thu–Sat, 10pm–3am Eastern, 0.6 km around College Ave.
- * Shares are a pre-authorization hold, not a deposit.
+ * Shares are a pre-authorization hold, captured at trip end.
  */
 import { fareAuthorizationCents } from './fareAuthorization.js'
 import { RIDE_TIME_ZONE, zonedCivilToUtc } from './rideTime.js'
@@ -42,7 +42,7 @@ const SAME_PLACE_METERS = 40
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const WEEKDAY = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
 
-export const HOLD_NOTE = 'Each share is a pre-authorization hold: that person\'s part of the fare plus a 20% buffer (at least $2). The hold is placed when the ride is released to drivers, about 45 minutes before pickup. Nothing is captured when you schedule or when a friend joins. The final fare is captured when the trip ends. This is not a deposit.'
+export const HOLD_NOTE = 'Each share is a pre-authorization hold: that person\'s part of the fare plus a 20% buffer (at least $2). The hold is placed when the ride is released to drivers, about 45 minutes before pickup. Nothing is captured when you schedule or when a friend joins. The final fare is captured when the trip ends, and the hold is released if the ride is canceled within policy.'
 
 export const SPLIT_NOTE = 'The estimated fare is split evenly across the people who have joined. Extra pennies stay with the person who scheduled the ride. The split updates when someone joins.'
 
@@ -279,7 +279,7 @@ export function partyNightExplainer() {
   const hours = partyWindowLabel()
   return {
     title: 'Party night',
-    lede: 'Schedule the ride out with your group before the night starts. Friends join from one link, the fare is split, and each card gets a pre-authorization hold — not a deposit.',
+    lede: 'Schedule the ride out with your group before the night starts. Friends join from one link, the fare is split, and each card gets a hold that is captured only when the trip ends.',
     sections: [
       {
         id: 'schedule',
@@ -289,7 +289,7 @@ export function partyNightExplainer() {
       {
         id: 'invite',
         title: 'Invite friends with a link',
-        body: `Share one link. Friends with a Clemson RIDES account join the same ride, up to ${MAX_PARTY_SIZE} people. The group sees first names.`,
+        body: `Share one link. Friends with a Clemson Rides account join the same ride, up to ${MAX_PARTY_SIZE} people. The group sees first names.`,
       },
       {
         id: 'split',
@@ -298,7 +298,7 @@ export function partyNightExplainer() {
       },
       {
         id: 'hold',
-        title: 'A pre-authorization hold, not a deposit',
+        title: 'A card hold, charged at trip end',
         body: HOLD_NOTE,
       },
       {

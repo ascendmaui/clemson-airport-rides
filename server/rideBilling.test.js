@@ -123,6 +123,13 @@ function createSb({ balance = 0, balanceMode = 'row', paymentMethodId = 'pm_test
         return done
       },
       then(resolve) {
+        if (table === 'rider_credit_lots') {
+          if (balanceMode === 'error') { resolve({ data: null, error: { message: 'timeout' } }); return }
+          if (balanceMode === 'missing-table') { resolve({ data: null, error: { message: 'relation "rider_credit_lots" does not exist' } }); return }
+          if (balanceMode === 'empty') { resolve({ data: [], error: null }); return }
+          resolve({ data: state.balance > 0 ? [{ remaining_cents: state.balance }] : [], error: null })
+          return
+        }
         if (table === 'profiles') {
           resolve({ data: [{ id: 'driver-1', email: 'driver@example.com' }], error: null })
           return
@@ -176,7 +183,7 @@ const campus = {
   destLng: -82.8374,
 }
 
-test('a missing credit account starts at zero and does not grant a balance', async () => {
+test('no credit lots starts at zero and does not grant a balance', async () => {
   const empty = createSb({ balanceMode: 'empty' })
   const none = await readRideCreditBalance(empty, 'rider-1')
   assert.equal(none.known, true)
@@ -443,7 +450,8 @@ test('the billing handler does not call Stripe or write a credit debit', () => {
   assert.doesNotMatch(src, /credit_ledger/)
   assert.doesNotMatch(lib, /credit_ledger/)
   assert.doesNotMatch(lib, /credit_balance_cents/)
-  assert.match(lib, /from\('credit_accounts'\)\.select\('balance_cents'\)/)
+  assert.doesNotMatch(lib, /credit_accounts/)
+  assert.match(lib, /from\('rider_credit_lots'\)/)
   assert.match(sql, /credit_ledger already exists/)
   assert.equal(sql.replace(/--[^\n]*/g, '').trim(), '')
 })

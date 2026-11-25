@@ -8,6 +8,7 @@ import { NeighborhoodPicker } from '@/components/carpool/NeighborhoodPicker'
 import { BackButton, Card, ErrorText, Field, SkeletonBlock, SplitModePicker } from '@/components/carpool/ui'
 import { MainTabs } from '@/components/MainTabs'
 import { loadAmbassadorCode } from '@/lib/ambassadorCode'
+import { toastCaught } from '@/lib/caught'
 import { setAuthNext } from '@/lib/authNext'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
@@ -76,8 +77,8 @@ export default function OfferCarpoolScreen() {
       })
       try {
         await recomputeFriendRide(supabase, created.token, splitMode)
-      } catch {
-        /* Lobby still opens. Confirm retries the fare split. */
+      } catch (err) {
+        toastCaught('carpool-offer-split', err, 'Fare split will retry', 'The lobby is open. Confirm will try the split again.')
       }
       router.replace(`/carpool/${created.token}`)
     } catch (err) {

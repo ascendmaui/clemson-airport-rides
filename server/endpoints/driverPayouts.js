@@ -13,6 +13,7 @@
  * DISABLE_CRON_ENDPOINTS=1 refuses the sweep and a signed-in retry POST.
  * Dry-run of the sweep is allowed only when ALLOW_STAGING_DRY_RUN=1.
  */
+import { timingSafeEqual } from 'node:crypto'
 import {
   admin, cors, json, userFromAuth, stripeClient,
 } from '../friendRideLib.js'
@@ -20,6 +21,7 @@ import { stagingCronBlock } from '../cronGuard.js'
 import { buildPayoutRecord, buildWaitCancelPayoutRecord, attemptDriverPayout, attemptStandbyBackupPayout, attemptSwitchFeePayout, attemptTipPayout, loadConnectAccount, writePayout } from '../payouts.js'
 import { payoutIsDue, summarizeDriverEarnings } from '../../shared/paymentFailure.js'
 import { payBonusLedger } from '../perks.js'
+import { PAYOUT_HOLD_ERROR, payoutsHeld } from '../payoutHold.js'
 
 export function cronAuthorized(req, secretOverride) {
   const secret = (secretOverride !== undefined ? secretOverride : (process.env.CRON_SECRET || '')).trim()
@@ -28,7 +30,11 @@ export function cronAuthorized(req, secretOverride) {
   const trimmed = String(header).trim()
   const match = trimmed.match(/^Bearer\s+(.+)$/i)
   if (!match) return false
-  return match[1].trim() === secret
+  const token = match[1].trim()
+  const left = Buffer.from(token)
+  const right = Buffer.from(secret)
+  if (left.length === 0 || left.length !== right.length) return false
+  return timingSafeEqual(left, right)
 }
 
 /** Documented Vercel Cron user-agent. https://vercel.com/docs/cron-jobs */
@@ -197,7 +203,7 @@ export async function runDuePayouts(sb, trips, connectAccountId, deps = {}) {
     // A driver may have claimed this payout for instant cash-out since the list was read.
     if (await claimedByCashout(sb, trip.id)) continue
     const account = connectAccountId || await loadAccountFn(sb, trip.driver_id)
-    const attempt = await attemptFn({ trip, stripe, connectAccountId: account, now })
+    const attempt = await attemptFn({ trip, stripe, connectAccountId: account, now, sb, env: deps.env || process.env })
     await writeFn(sb, trip, attempt.payout)
     results.push({
       tripId: trip.id,
@@ -258,6 +264,11 @@ export default async function handler(req, res, deps = {}) {
       res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
       return json(res, blocked.status, blocked.body)
     }
+    // Payouts hold (docs/PAYOUTS_HOLD.md): the sweep moves no money and leaves rows pending.
+    if (!dryRun && await payoutsHeld({ sb, env })) {
+      res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+      return json(res, 200, { ok: true, held: true, reason: PAYOUT_HOLD_ERROR, results: [] })
+    }
     const limit = Math.min(Math.max(Number(deps.limit) || 80, 1), 200)
     const listed = await sb
       .from('trips')
@@ -314,6 +325,10 @@ export default async function handler(req, res, deps = {}) {
     if (blocked) {
       res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
       return json(res, blocked.status, blocked.body)
+    }
+    if (await payoutsHeld({ sb, env })) {
+      res.setHeader?.('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+      return json(res, 200, { held: true, reason: PAYOUT_HOLD_ERROR, results: [], summary: summarize(trips) })
     }
     const loadAccountFn = deps.loadConnectAccount || loadConnectAccount
     const connectAccountId = await loadAccountFn(sb, user.id)

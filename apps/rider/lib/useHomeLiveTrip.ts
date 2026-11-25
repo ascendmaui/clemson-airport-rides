@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { RIDER_TRACK_STATUSES } from 'rides-native/liveTrip'
 import { supabase } from '@/lib/supabase'
+import { logCaught } from '@/lib/caught'
 import { loadLiveTrip, subscribeLiveTrip, type LiveTrip } from '@/lib/tripWatch'
 
 /**
@@ -63,8 +64,8 @@ export function useHomeLiveTrip(userId: string | null | undefined) {
         setLive(next)
         const nextDriver = next?.driver_id || null
         setDriverId((current) => (current === nextDriver ? current : nextDriver))
-      } catch {
-        /* The next poll or realtime event retries. */
+      } catch (err) {
+        logCaught('home-live-trip', err)
       }
     }
     void load()

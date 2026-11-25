@@ -9,6 +9,8 @@ import { riderDriverFirstName } from '../shared/riderDriverPrivacy.js'
 import { unchangedOfferQuery } from '../shared/driverOrder.js'
 import { insertTripEvent } from './tripEvents.js'
 import { sendExpoPush } from './expoPush.js'
+import { insertDriverNotification } from './driverNotifications.js'
+import { noteExpoPushResult } from './expoPushReceipts.js'
 import {
   acceptBackupRole,
   backupNumberTwoCopy,
@@ -81,32 +83,53 @@ async function pushToDriver(sb, driverId, { title, body, tripId, kind }) {
   if (!driverId) return { sent: false, reason: 'no_driver' }
   const { token } = await readDriverPushToken(sb, driverId)
   if (!token) return { sent: false, reason: 'push_token_missing' }
-  return sendExpoPush({
+  const data = { tripId, kind }
+  const recorded = await insertDriverNotification(sb, {
+    userId: driverId,
+    type: kind || 'trip_update',
+    title,
+    body,
+    data,
+  })
+  if (recorded.id) data.notificationId = recorded.id
+  const pushed = await sendExpoPush({
     to: token,
     title,
     body,
-    data: { tripId, kind },
+    data,
     channelId: 'ride-requests',
   })
+  await noteExpoPushResult(sb, { push: pushed, token, ownerId: driverId, ownerRole: 'driver' })
+  return pushed
 }
 
 async function pushToRider(sb, riderId, { title, body, tripId }) {
   if (!riderId) return { sent: false, reason: 'no_rider' }
   let token = null
   try {
-    const profile = await sb.from('profiles').select('expo_push_token').eq('id', riderId).maybeSingle()
-    token = profile.data?.expo_push_token || null
+    const stored = await sb.from('rider_push_tokens').select('token').eq('rider_id', riderId).maybeSingle()
+    token = stored.data?.token || null
   } catch {
     token = null
   }
+  if (!token) {
+    try {
+      const profile = await sb.from('profiles').select('expo_push_token').eq('id', riderId).maybeSingle()
+      token = profile.data?.expo_push_token || null
+    } catch {
+      token = null
+    }
+  }
   if (!token) return { sent: false, reason: 'push_token_missing' }
-  return sendExpoPush({
+  const pushed = await sendExpoPush({
     to: token,
     title,
     body,
     data: { tripId, kind: 'driver_enroute' },
     channelId: 'trip-updates',
   })
+  await noteExpoPushResult(sb, { push: pushed, token, ownerId: riderId, ownerRole: 'rider' })
+  return pushed
 }
 
 async function notifyAdmin(sb, { tripId, title, body }) {

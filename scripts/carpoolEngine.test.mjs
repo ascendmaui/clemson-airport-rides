@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { computeFriendFareCents } from '../server/friendRideLib.js'
+import { CARPOOL_SEAT_FRACTION_BPS, scaleCents } from '../src/lib/fareRates.js'
 import {
   MAX_RIDERS,
-  PLATFORM_FEE_RATE,
   matchCarpoolRequests,
   quoteCarpool,
   pitchQuote,
@@ -166,7 +166,7 @@ test('game-day pools outrank off-peak pools', () => {
   assert.ok(pools[0].priority < pools[1].priority)
 })
 
-test('full car on a surge hop is about $10–$15 vs a $30–$40 solo', () => {
+test('each carpool seat is half of that rider Standard fare', () => {
   const depart = PEAK_SAT_NIGHT
   const riders = [0, 1, 2, 3].map((i) => rider(
     `r${i}`,
@@ -177,49 +177,46 @@ test('full car on a surge hop is about $10–$15 vs a $30–$40 solo', () => {
   ))
   const quote = quoteCarpool({ riders, at: depart })
   assert.equal(quote.riderCount, 4)
-  assert.equal(quote.shareOfSolo, 0.35)
+  assert.equal(quote.shareOfSolo, CARPOOL_SEAT_FRACTION_BPS / 10000)
   for (const share of quote.shares) {
-    assert.ok(share.soloCents >= 3000 && share.soloCents <= 4000, `solo ${share.soloCents}`)
-    assert.ok(share.shareCents >= 1000 && share.shareCents <= 1500, `share ${share.shareCents}`)
+    assert.equal(share.shareCents, scaleCents(share.soloCents, CARPOOL_SEAT_FRACTION_BPS))
     assert.ok(share.shareCents < share.soloCents)
     assert.equal(share.firstName, 'Jordan')
   }
   assert.equal(quote.driver.beatsSolo, true)
   assert.ok(quote.driver.payoutCents >= quote.driver.soloPayoutCents + quote.driver.namedBonusCents)
-  assert.equal(quote.subsidyCents, 0)
-  assert.equal(quote.platformFeeCents, Math.round(quote.grossCents * PLATFORM_FEE_RATE))
-  assert.equal(quote.driver.payoutCents + quote.platformFeeCents, quote.grossCents)
+  const plan = chargePlan(quote)
+  assert.equal(plan.chargedCents, quote.grossCents)
   assert.equal(quote.driver.incentiveId, 'driver_carpool_bonus')
 })
 
-test('two riders still leave the driver ahead of a solo trip', () => {
+test('two riders pay the same half-fare seat and still leave the driver ahead', () => {
   const depart = GAME_SAT
   const riders = [0, 1].map((i) => rider(`r${i}`, near(GRAND, i * 20), COLLEGE, depart))
   const quote = quoteCarpool({ riders, at: depart, gameDay: true })
-  assert.equal(quote.shareOfSolo, 0.55)
+  assert.equal(quote.shareOfSolo, 0.5)
   assert.equal(quote.driver.beatsSolo, true)
   assert.ok(quote.driver.carpoolBonusCents >= quote.driver.namedBonusCents)
-  assert.ok(quote.shares.every((share) => share.shareCents <= share.soloCents))
+  assert.ok(quote.shares.every((share) => share.shareCents === scaleCents(share.soloCents, CARPOOL_SEAT_FRACTION_BPS)))
   const plan = chargePlan(quote)
   assert.equal(plan.chargedCents, quote.grossCents)
   assert.equal(plan.lines.length, 2)
 })
 
-test('pre-confirm delta stays in the surge band even off-peak', () => {
+test('pre-confirm delta is half of Standard even off-peak', () => {
   const delta = surgeDelta({
     pickup: GRAND,
     dropoff: { ...COLLEGE, label: 'College Avenue' },
     at: OFF_PEAK,
   })
-  assert.ok(delta.soloSurgeCents >= 3000 && delta.soloSurgeCents <= 4000)
-  assert.ok(delta.fullCarShareCents >= 1000 && delta.fullCarShareCents <= 1500)
-  assert.ok(delta.savingsCents > 1500)
+  assert.equal(delta.fullCarShareCents, scaleCents(delta.soloSurgeCents, CARPOOL_SEAT_FRACTION_BPS))
+  assert.equal(delta.savingsCents, delta.soloSurgeCents - delta.fullCarShareCents)
+  assert.ok(delta.savingsCents > 0)
   assert.equal(delta.driverBeatsSolo, true)
-  assert.ok(delta.driverBonusCents > 0)
-  assert.ok(delta.driverPayoutCents > delta.driverSoloPayoutCents)
+  assert.ok(delta.driverPayoutCents >= delta.driverSoloPayoutCents)
 })
 
-test('a 2-rider confirm still shows the 4-way delta beside the live charge', () => {
+test('a 2-rider confirm charges the same half-fare seat as a full car', () => {
   const depart = PEAK_SAT_NIGHT
   const riders = [0, 1].map((i) => rider(`r${i}`, near(GRAND, i * 20), { ...COLLEGE, label: 'College Avenue' }, depart))
   const quote = quoteCarpool({ riders, at: depart })
@@ -231,21 +228,20 @@ test('a 2-rider confirm still shows the 4-way delta beside the live charge', () 
     selfId: 'r0',
   })
   assert.equal(delta.currentRiderCount, 2)
-  assert.ok(delta.currentShareCents > delta.fullCarShareCents)
-  assert.ok(delta.fullCarShareCents >= 1000 && delta.fullCarShareCents <= 1500)
-  assert.ok(delta.soloSurgeCents >= 3000 && delta.soloSurgeCents <= 4000)
+  assert.equal(delta.currentShareCents, scaleCents(quote.shares[0].soloCents, CARPOOL_SEAT_FRACTION_BPS))
+  assert.equal(delta.fullCarShareCents, scaleCents(delta.soloSurgeCents, CARPOOL_SEAT_FRACTION_BPS))
 })
 
-test('pitch quote shows solo surge versus a full-car seat', () => {
+test('pitch quote shows Standard versus a half-fare Carpool seat', () => {
   const pitch = pitchQuote({
     pickup: GRAND,
     dropoff: { ...COLLEGE, label: 'College Avenue' },
     at: PEAK_SAT_NIGHT,
     displayName: 'Sam',
   })
-  assert.ok(pitch.soloCents >= 3000 && pitch.soloCents <= 4000)
-  assert.ok(pitch.fullShareCents >= 1000 && pitch.fullShareCents <= 1500)
-  assert.ok(pitch.savingsCents > 1000)
+  assert.equal(pitch.fullShareCents, scaleCents(pitch.soloCents, CARPOOL_SEAT_FRACTION_BPS))
+  assert.equal(pitch.savingsCents, pitch.soloCents - pitch.fullShareCents)
+  assert.ok(pitch.savingsCents > 0)
   assert.equal(pitch.window, 'peak_night')
 })
 
@@ -329,6 +325,7 @@ test('first ride eligibility never promises a comp outside the window', () => {
   assert.equal(confirmChargeLabel({ firstRideFree: true, shareCents: 0 }), 'Confirm · First ride free')
   assert.equal(confirmChargeLabel({ shareCents: 1200 }), 'Confirm · charge $12.00 each')
   assert.equal(confirmChargeNote({ firstRideFree: true, shareCents: 0 }), 'First ride free. This confirm charges $0 for your seat.')
+  assert.match(confirmChargeNote({ shareCents: 925, riderCount: 3, fullCarShareCents: 925 }), /50% of the Standard fare per seat/)
   assert.deepEqual(
     otherFirstRideLabels({ shares: [{ id: 'a', firstRideFree: true, firstName: 'Ava' }, { id: 'b', firstRideFree: true, firstName: 'Bea' }] }, 'a'),
     ['Bea'],

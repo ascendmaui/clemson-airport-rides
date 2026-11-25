@@ -42,7 +42,7 @@ function openHold(auth) {
   return Boolean(auth && auth.status === 'requires_capture' && auth.paymentIntentId)
 }
 
-export function quoteRiderSwitch(trip, { action = 'preview', nextFareCents = null } = {}) {
+export function quoteRiderSwitch(trip, { action = 'preview', nextFareCents = null, carpool = false } = {}) {
   const status = String(trip?.status || '')
   if (status === 'arrived' || status === 'cancelled_wait') {
     return blocked('at_pickup', arrivedBlockedLine())
@@ -61,7 +61,7 @@ export function quoteRiderSwitch(trip, { action = 'preview', nextFareCents = nul
   const auth = authOf(trip)
   const credits = trip?.metadata?.billing_choice === 'credits'
   const currentAuthorizationCents = Math.max(0, Math.round(Number(auth?.authorizationCents) || 0))
-  const next = fareAuthorizationCents(fare)
+  const next = fareAuthorizationCents(fare, { bufferBps: carpool ? 0 : undefined })
   let hold = 'none'
   if (!credits && openHold(auth) && ending) hold = 'release'
   else if (!credits && openHold(auth) && next.authorizationCents > currentAuthorizationCents) hold = 'grow'
@@ -76,6 +76,7 @@ export function quoteRiderSwitch(trip, { action = 'preview', nextFareCents = nul
     action: action === 'preview' ? null : action,
     currentAuthorizationCents,
     nextAuthorizationCents: ending ? 0 : next.authorizationCents,
+    carpool: Boolean(carpool) && !ending,
     feeLine: switchFeeLine(),
     holdLine: holdLine(hold),
     carpoolLine: carpoolSwitchLine(),
@@ -150,7 +151,11 @@ export function commitRiderSwitch({
   const fare = ending
     ? Math.max(0, Math.round(Number(trip?.fare_cents) || 0))
     : Math.max(0, Math.round(Number(nextFareCents ?? trip?.fare_cents) || 0))
-  const quote = quoteRiderSwitch(trip, { action, nextFareCents: fare })
+  const quote = quoteRiderSwitch(trip, {
+    action,
+    nextFareCents: fare,
+    carpool: !ending && String(nextTier || '').trim().toLowerCase() === 'carpool',
+  })
   if (!quote.allowed) {
     return { ok: false, status: 409, error: quote.message || quote.feeLine, code: quote.code, quote }
   }

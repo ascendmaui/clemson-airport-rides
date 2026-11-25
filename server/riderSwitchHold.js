@@ -65,7 +65,9 @@ export async function settleSwitchHold({
     }
   }
 
-  const target = fareAuthorizationCents(fareCents ?? trip?.fare_cents)
+  const target = fareAuthorizationCents(fareCents ?? trip?.fare_cents, {
+    bufferBps: quote?.carpool ? 0 : undefined,
+  })
   const needed = target.authorizationCents
   if (needed <= 0) return { ok: true, patch: null }
 
@@ -127,7 +129,7 @@ export async function settleSwitchHold({
       payment_method_options: {
         card: { request_incremental_authorization: 'if_available' },
       },
-      description: 'Clemson RIDES fare hold',
+      description: 'Clemson Rides fare hold',
       metadata: {
         kind: 'fare_authorization',
         tripId: String(trip.id || ''),

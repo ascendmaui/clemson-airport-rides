@@ -105,7 +105,7 @@ async function charge(res, sb, user, body) {
       payment_method: profile.stripe_default_pm_id,
       off_session: true,
       confirm: true,
-      description: `Clemson RIDES tip · trip ${trip.id}`,
+      description: `Clemson Rides tip · trip ${trip.id}`,
       metadata,
     })
     if (pi.status === 'succeeded') {
@@ -126,7 +126,7 @@ async function charge(res, sb, user, body) {
     currency: 'usd',
     customer: customerId || undefined,
     automatic_payment_methods: { enabled: true },
-    description: `Clemson RIDES tip · trip ${trip.id}`,
+    description: `Clemson Rides tip · trip ${trip.id}`,
     metadata,
   })
   return json(res, 200, {

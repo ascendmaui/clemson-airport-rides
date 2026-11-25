@@ -4,6 +4,7 @@ import { canDriverEnd } from '../../shared/driverEndTrip.js'
 import { trackingIssue, staleEtaLine, withTrackingTimeout, onTrackingResume } from '../../packages/rides-native/tracking.js'
 import { useEffect, useRef, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
+import { SiteIcon } from '../components/SiteIcon.jsx'
 import { AccessibleAlert } from '../components/AccessibleAlert'
 import { CampusMap, CLEMSON, STADIUM } from '../components/CampusMap'
 import { navigate, shareUrl } from '../lib/navigation'
@@ -27,6 +28,7 @@ function missingHeartbeatColumn(message) {
 import { isActiveRideStatus } from '../lib/sosAlert'
 import { MidrideCancelSheet } from '../components/MidrideCancelSheet'
 import { RiderSwitchSheet } from '../components/RiderSwitchSheet'
+import { loadMidrideStarted, riderMayCancelMidride } from '../../shared/riderMidrideCancel.js'
 import { CounterpartChip } from '../components/CounterpartChip'
 import {
   liveTripMapChip,
@@ -75,6 +77,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const [rateNudge, setRateNudge] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [midrideStarted, setMidrideStarted] = useState(false)
   const [switchOpen, setSwitchOpen] = useState(false)
   const [stillSearching, setStillSearching] = useState(false)
   const searchStartedAt = useRef(null)
@@ -246,7 +249,7 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
       const url = s.url || shareUrl(s.token)
       if (navigator.share) {
         try {
-          await navigator.share({ title: 'My Clemson RIDES location', url, text: 'Follow my live ride location' })
+          await navigator.share({ title: 'My Clemson Rides location', url, text: 'Follow my live ride location' })
         } catch { /* user cancel */ }
       } else if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(url)
@@ -268,6 +271,14 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
     setCancelNotice({ ...notice, tripId: trip })
   }, [trip, tripRow])
   const status = tripRow?.status || ''
+  useEffect(() => {
+    let alive = true
+    loadMidrideStarted(supabase, { id: trip, status }).then((started) => {
+      if (alive) setMidrideStarted(started)
+    })
+    return () => { alive = false }
+  }, [trip, status])
+  const canCancelMidride = riderMayCancelMidride(status, midrideStarted)
   const chatMode = rideChatMode(tripRow, Date.now(), lostReport)
   const showMessages = Boolean(user?.id && tripRow?.driver_id && tripRow?.rider_id && chatMode !== 'closed')
   const rideLive = isActiveRideStatus(status)
@@ -375,13 +386,14 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
   const mapChip = liveTripMapChip(status)
   const mapHeight = liveTripMapHeight({ preview, driverOnMap: Boolean(driverPos), status })
   const routePrefix = liveTripRoutePrefix(driver, driverOnCard)
+  // Cancel is the button below, gated by the server mid-ride rule.
   const secondaryActions = liveTripSecondaryActions({
     status,
     tripId: trip,
     tripMissing,
     showMessages,
     rateNudge,
-  })
+  }).filter((action) => action.id !== 'cancel')
 
   return (
     <div className="fade-in live-trip">
@@ -556,7 +568,11 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
                   return (
                     <div key={action.id} className="glass-panel live-trip-rate">
                       <div className="live-trip-rate__title">Trip complete — rate your driver?</div>
-                      <PrimaryButton onClick={() => navigate('rate', { trip })}>Rate now ★</PrimaryButton>
+                      <PrimaryButton onClick={() => navigate('rate', { trip })}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                          Rate now <SiteIcon name="star" size={16} />
+                        </span>
+                      </PrimaryButton>
                       <button type="button" className="pressable live-trip-text-btn live-trip-text-btn--quiet" onClick={() => setRateNudge(false)}>
                         Soft remind later
                       </button>
@@ -589,6 +605,15 @@ export function Requested({ dest = 'GSP Airport', trip = '', driver = 'your driv
               onClick={() => setSwitchOpen(true)}
             >
               Change driver
+            </button>
+          )}
+          {canCancelMidride && trip && (
+            <button
+              type="button"
+              className="pressable live-trip-text-btn live-trip-text-btn--danger"
+              onClick={() => setCancelOpen(true)}
+            >
+              Cancel this ride
             </button>
           )}
           <PrimaryButton onClick={() => navigate('home')}>Back home</PrimaryButton>

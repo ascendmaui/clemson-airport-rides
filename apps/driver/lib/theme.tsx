@@ -1,13 +1,16 @@
 import * as Location from 'expo-location'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useColorScheme } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated'
 import { useReduceMotion } from 'rides-native/shared/reduceMotion.js'
+import { migrateAppearance, resolveScheme, type DisplayMode } from '@/lib/appearance'
 import { authStorage } from '@/lib/storage'
+import { raceWithTimeout, STARTUP_TIMEOUT_MS } from '@/lib/startupGate'
 import { paletteFor, type Palette, type Scheme } from '@/lib/palette'
-import { CLEMSON_LAT, CLEMSON_LNG, isDaylight } from '@/lib/solar'
 import { isNavApp as isKnownNavApp, type NavApp as SharedNavApp } from 'rides-native/mapsLink'
+import { quiet } from '@/lib/softFail'
 
-export type DisplayMode = 'auto' | 'light' | 'dark'
+export type { DisplayMode }
 export type NavApp = SharedNavApp
 export type RideAlertTier = 'standard' | 'wait' | 'comfort' | 'carpool'
 export type RideAlertMode = 'chime_vibrate' | 'chime' | 'vibrate' | 'silent'
@@ -27,6 +30,7 @@ type RideAlerts = Record<RideAlertTier, RideAlertMode>
 
 type Prefs = {
   displayMode: DisplayMode
+  appearanceMigrated: true
   earningsPrivate: boolean
   sounds: boolean
   navApp: NavApp
@@ -66,7 +70,8 @@ const DEFAULT_AUTO: AutoAcceptPrefs = {
   favoriteRiders: [],
 }
 const DEFAULT_PREFS: Prefs = {
-  displayMode: 'light',
+  displayMode: 'auto',
+  appearanceMigrated: true,
   earningsPrivate: false,
   sounds: true,
   navApp: 'apple',
@@ -113,10 +118,6 @@ function readAuto(raw: unknown): AutoAcceptPrefs {
 
 const ThemeContext = createContext<ThemeValue | null>(null)
 
-function isDisplayMode(value: unknown): value is DisplayMode {
-  return value === 'auto' || value === 'light' || value === 'dark'
-}
-
 function isNavApp(value: unknown): value is NavApp {
   return isKnownNavApp(value)
 }
@@ -125,8 +126,10 @@ function readPrefs(raw: string | null): Prefs {
   if (!raw) return DEFAULT_PREFS
   try {
     const parsed = JSON.parse(raw) as Partial<Prefs>
+    const appearance = migrateAppearance(parsed)
     return {
-      displayMode: isDisplayMode(parsed.displayMode) && parsed.displayMode === 'dark' ? 'dark' : 'light',
+      displayMode: appearance.displayMode,
+      appearanceMigrated: appearance.appearanceMigrated,
       earningsPrivate: Boolean(parsed.earningsPrivate),
       sounds: parsed.sounds === false ? false : true,
       navApp: isNavApp(parsed.navApp) ? parsed.navApp : DEFAULT_PREFS.navApp,
@@ -139,44 +142,42 @@ function readPrefs(raw: string | null): Prefs {
   }
 }
 
-function resolveScheme(mode: DisplayMode, _daylight: boolean): Scheme {
-  switch (mode) {
-    case 'light':
-      return 'light'
-    case 'dark':
-      return 'dark'
-    case 'auto':
-      // Night mode is opt-in. Older builds saved 'auto'; it now opens light.
-      return 'light'
-    default: {
-      const unknown: never = mode
-      return unknown
-    }
-  }
-}
-
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const systemScheme = useColorScheme()
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS)
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
-  const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
-    authStorage.getItem(PREFS_KEY).then((raw) => {
-      setPrefs(readPrefs(raw))
-    }).catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60_000)
-    return () => clearInterval(timer)
+    let alive = true
+    raceWithTimeout(authStorage.getItem(PREFS_KEY), STARTUP_TIMEOUT_MS).then((result) => {
+      if (!alive || !result.ok) return
+      const raw = result.value
+      const next = readPrefs(raw)
+      setPrefs(next)
+      let already = false
+      if (raw) {
+        try {
+          already = (JSON.parse(raw) as { appearanceMigrated?: unknown }).appearanceMigrated === true
+        } catch {
+          already = false
+        }
+      }
+      if (!already) {
+        authStorage.setItem(PREFS_KEY, JSON.stringify(next)).catch(quiet('theme prefs save'))
+      }
+    }).catch(quiet('theme prefs read'))
+    return () => {
+      alive = false
+    }
   }, [])
 
   useEffect(() => {
     let alive = true
-    Location.getLastKnownPositionAsync().then((pos: { coords: { latitude: number; longitude: number } } | null) => {
+    raceWithTimeout(Location.getLastKnownPositionAsync(), STARTUP_TIMEOUT_MS).then((result) => {
+      const pos = result.ok ? result.value : null
       if (!alive || !pos) return
       setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-    }).catch(() => {})
+    }).catch(quiet('theme location'))
     return () => {
       alive = false
     }
@@ -185,13 +186,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   function update(patch: Partial<Prefs>) {
     setPrefs((current: Prefs) => {
       const next = { ...current, ...patch }
-      authStorage.setItem(PREFS_KEY, JSON.stringify(next)).catch(() => {})
+      authStorage.setItem(PREFS_KEY, JSON.stringify(next)).catch(quiet('theme prefs save'))
       return next
     })
   }
 
-  const daylight = isDaylight(now, coords?.lat ?? CLEMSON_LAT, coords?.lng ?? CLEMSON_LNG)
-  const scheme = resolveScheme(prefs.displayMode, daylight)
+  const scheme = resolveScheme(prefs.displayMode, systemScheme)
   const colors = paletteFor(scheme)
 
   const value: ThemeValue = {
@@ -223,6 +223,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       <SchemeFade scheme={scheme}>{children}</SchemeFade>
     </ThemeContext.Provider>
   )
+}
+
+/** Theme when a ThemeProvider is mounted, else null (crash recovery above the provider). */
+export function useOptionalTheme(): ThemeValue | null {
+  return useContext(ThemeContext)
 }
 
 export function useTheme(): ThemeValue {

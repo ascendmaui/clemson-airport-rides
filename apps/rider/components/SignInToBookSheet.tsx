@@ -1,4 +1,5 @@
 import { Modal, Pressable, Text, View } from 'react-native'
+import { Glyph } from 'rides-native/icons'
 import { GlassSheet } from 'rides-native/glass'
 import { PrimaryButton, SheetHandle } from '@/components/Button'
 import type { Palette } from '@/lib/palette'
@@ -31,7 +32,7 @@ export function SignInToBookSheet({
         <GlassSheet app="rider" scheme={scheme} style={styles.sheet}>
           <SheetHandle />
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>🐯</Text>
+            <Glyph name="shield" size={22} color={colors.purple} />
           </View>
           <Text style={styles.title}>Sign in to book your ride</Text>
           <Text style={styles.body}>
@@ -86,7 +87,6 @@ function makeStyles(colors: Palette) {
       backgroundColor: colors.purpleSoft,
       marginBottom: 14,
     },
-    badgeText: { fontSize: 22 },
     title: { fontSize: 22, fontWeight: '700' as const, color: colors.title, letterSpacing: -0.4 },
     body: { marginTop: 8, marginBottom: 18, color: colors.inkSecondary, fontSize: 14, lineHeight: 20 },
     link: { paddingVertical: 12, alignItems: 'center' as const },

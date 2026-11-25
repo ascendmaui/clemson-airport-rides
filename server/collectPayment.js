@@ -440,7 +440,7 @@ export async function collectPayment(input) {
         payment_method: pmId,
         off_session: true,
         confirm: true,
-        description: metadata.description || `Clemson RIDES ${kind}`,
+        description: metadata.description || `Clemson Rides ${kind}`,
         metadata: {
           ...stringifyMeta(metadata),
           kind,

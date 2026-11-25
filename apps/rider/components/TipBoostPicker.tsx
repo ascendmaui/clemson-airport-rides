@@ -29,7 +29,7 @@ export function TipBoostPicker({ cents, onChange }: Props) {
         backgroundColor: active ? colors.purple : colors.purpleSoft, borderWidth: 1, borderColor: colors.purple,
       }}
     >
-      <Text style={{ color: active ? '#FFFFFF' : colors.purple, fontWeight: '800' }}>{label}</Text>
+      <Text style={{ color: active ? colors.onAccent : colors.link, fontWeight: '800' }}>{label}</Text>
     </Pressable>
   )
 

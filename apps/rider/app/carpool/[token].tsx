@@ -8,6 +8,7 @@ import { NeighborhoodPicker } from '@/components/carpool/NeighborhoodPicker'
 import { BackButton, Card, EmptyState, ErrorText, Field, SkeletonBlock, SplitModePicker } from '@/components/carpool/ui'
 import { MainTabs } from '@/components/MainTabs'
 import { loadAmbassadorCode } from '@/lib/ambassadorCode'
+import { logCaught } from '@/lib/caught'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { supabase } from '@/lib/supabase'
@@ -161,7 +162,9 @@ export default function CarpoolLobbyScreen() {
       .then((data) => {
         if (alive) setFirstRide(data)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        logCaught('carpool-first-ride', err)
+      })
       .finally(() => {
         if (alive) setFirstRideLoaded(true)
       })
@@ -539,12 +542,12 @@ function makeStyles(colors: Palette) {
     stat: { flex: 1 },
     hint: { marginTop: 10, color: colors.orange, fontSize: 13, lineHeight: 18 },
     cardTitle: { color: colors.title, fontWeight: '800' as const, fontSize: 16, marginBottom: 8 },
-    kicker: { color: colors.orange, fontSize: 11, fontWeight: '800' as const, letterSpacing: 0.8, marginBottom: 8 },
+    kicker: { color: colors.orange, fontSize: 12, fontWeight: '800' as const, letterSpacing: 0.8, marginBottom: 8 },
     compareRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 8 },
     soloBox: { flex: 1, borderRadius: 14, padding: 12, backgroundColor: colors.input },
     shareBox: { flex: 1, borderRadius: 14, padding: 12, borderWidth: 1.5, borderColor: colors.orange, backgroundColor: colors.card },
     struck: { marginTop: 4, color: colors.inkSecondary, fontSize: 22, fontWeight: '800' as const, textDecorationLine: 'line-through' as const },
-    shareLabel: { color: colors.orange, fontSize: 11, fontWeight: '800' as const },
+    shareLabel: { color: colors.orange, fontSize: 12, fontWeight: '800' as const },
     shareBig: { marginTop: 4, color: colors.orange, fontSize: 22, fontWeight: '800' as const },
     arrow: { color: colors.orange, fontSize: 22, fontWeight: '800' as const },
     saveBanner: {
@@ -572,12 +575,12 @@ function makeStyles(colors: Palette) {
     solo: { color: colors.inkSecondary, fontSize: 12, textDecorationLine: 'line-through' as const, marginTop: 2 },
     splitMoney: { alignItems: 'flex-end' as const },
     share: { color: colors.orange, fontWeight: '800' as const, fontSize: 16 },
-    save: { color: colors.orange, fontSize: 11, fontWeight: '700' as const },
+    save: { color: colors.orange, fontSize: 12, fontWeight: '700' as const },
     meta: { color: colors.inkSecondary, fontSize: 12, lineHeight: 18, marginTop: 4 },
     personBlock: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
     personRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, alignItems: 'center' as const, gap: 6 },
     badge: {
-      fontSize: 10,
+      fontSize: 12,
       fontWeight: '800' as const,
       color: colors.link,
       backgroundColor: colors.purpleSoft,

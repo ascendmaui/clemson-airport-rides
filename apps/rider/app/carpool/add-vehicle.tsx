@@ -64,7 +64,7 @@ export default function AddVehicleScreen() {
           Seats on this car cap a carpool. The same vehicle record is what an offer uses.
         </Text>
         {!user ? (
-          <EmptyState title="Sign in to add a vehicle" body="Your car is saved on the Clemson RIDES account you use to offer seats." />
+          <EmptyState title="Sign in to add a vehicle" body="Your car is saved on the Clemson Rides account you use to offer seats." />
         ) : (
           <Card>
             <Field label="Make" value={make} onChangeText={setMake} placeholder="Honda" />

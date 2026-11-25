@@ -102,6 +102,11 @@ function tripMoney(trip) {
   return rawMoney(trip)
 }
 
+/**
+ * @param {object} [input]
+ * @param {number} [input.netEarningsCents]
+ * @param {number | null} [input.mileageDeductionCents]
+ */
 export function estimateDriverTaxes({ netEarningsCents = 0, mileageDeductionCents = null } = {}) {
   const known = mileageDeductionCents != null && Number.isFinite(Number(mileageDeductionCents))
   const deduction = known ? cents(mileageDeductionCents) : 0

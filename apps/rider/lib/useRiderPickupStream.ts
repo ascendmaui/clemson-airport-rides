@@ -6,6 +6,7 @@ import {
   shouldPublishRiderFix,
   shouldStreamRiderPickup,
 } from 'rides-native/riderLivePickup'
+import { logCaught } from '@/lib/caught'
 import { supabase } from '@/lib/supabase'
 
 /**
@@ -43,7 +44,8 @@ export function useRiderPickupStream(userId: string | null) {
           method: 'POST',
           body: { tripId, ...next },
         })
-      } catch {
+      } catch (err) {
+        logCaught('rider-pickup-stream', err)
         last.current = null
       }
     }

@@ -42,7 +42,8 @@ export function isUserFacing(msg) {
     /node_modules/i.test(text) ||
     /econnrefused|etimedout|enotfound/i.test(text) ||
     /\[object\s+object\]/i.test(text) ||
-    /unhandled(?:promise)?rejection/i.test(text)
+    /unhandled(?:promise)?rejection/i.test(text) ||
+    /fetchrequestcanceledexception|request\s+has\s+been\s+cancel+ed/i.test(text)
   ) {
     return false
   }

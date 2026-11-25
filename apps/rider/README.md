@@ -52,7 +52,7 @@ Tabs are Rides, Schedule, Friends, and Account. The Rides header avatar opens Ac
 
 Schedule quotes `/api/stripe-payment-methods?action=quote` whenever the airport, date, time, or student status changes. Booking does not charge a card. Pay calls `action=airport-checkout` when that route is present, otherwise `/api/create-checkout-session`. Both book the trip and leave the full fare for trip end. Requesting a ride places a card hold for the estimate plus a buffer. An amount already paid on an older trip is shown only after a succeeded `payments` row exists.
 
-Account → Student writes `profiles.student_verified_at` for `@clemson.edu` / `@g.clemson.edu`. Account → Promo codes calls `claim_rider_social_promo` and `ensure_rider_social_code`. Account → Billing reads the saved card, deposit rows, and ride fares. Account → Notifications reads and writes `profiles.notification_prefs`.
+Account → Student writes `profiles.student_verified_at` for `@clemson.edu` / `@g.clemson.edu`. Account → Promo codes calls `claim_rider_social_promo` and `ensure_rider_social_code`. Account → Billing reads the saved card, payment rows, and ride fares. Account → Notifications reads and writes `profiles.notification_prefs`.
 
 Live location sharing, the trip link, SOS, and emergency contacts stay on Safety and the ride-requested screen. Game-day carpool (neighborhood match, fare split, offer-a-car, and vehicle seats) calls the same `/api/carpool` and `/api/friend-rides` routes as the web flagship. Campus ride requests already insert a `trips` row the same way the web app does.
 
@@ -65,11 +65,11 @@ cd apps/rider && npx tsc --noEmit
 
 On a device or simulator (`npx expo start` from `apps/rider`):
 
-1. Schedule: switch GSP and CLT, and edit the date or time. The deposit line leaves the previous fare, then shows 25% of the new quote. Pay stays disabled while that quote is in flight.
-2. Sign in and pay. Stripe Checkout opens. Closing it does not say the deposit was received unless `payments.status` is succeeded.
+1. Schedule: switch GSP and CLT, and edit the date or time. The fare line leaves the previous fare, then shows the new quote. Booking stays disabled while that quote is in flight. Nothing is charged at booking: a hold is placed on the card, the full fare is captured at trip end, and the hold is released if the ride is canceled within policy.
+2. Sign in and book. The app confirms a card hold for the estimated fare. It never shows a payment as received unless `payments.status` is succeeded.
 3. Account → Student: a Clemson email shows verified and can save `student_verified_at`. Return to Schedule and confirm the student line is on the new quote.
 4. Account → Promo codes: apply a code and share the account code. Rewards stay pending until the first completed ride.
-5. Account → Billing: card last4 (when one is saved), deposit rows, and ride history with fare and deposit.
+5. Account → Billing: card last4 (when one is saved), payment rows, and ride history with fare and amount charged.
 6. Account → Notifications: toggle ride, billing, and promotions. The note says the prefs were saved. Relaunch and confirm the switches stick.
 
 ## Safety smoke

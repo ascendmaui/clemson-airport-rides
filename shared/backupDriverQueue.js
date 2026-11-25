@@ -298,7 +298,7 @@ export function preauthBaseCents(fareCents, bonusCents) {
   return fare + bonus
 }
 
-/** Amount captured at trip end. No 25% deposit. Bonus is included only when booked. */
+/** Amount captured at trip end. Bonus is included only when booked. */
 export function riderCaptureFareCents(trip) {
   const fare = Math.max(0, Math.round(Number(trip?.fare_cents) || 0))
   const queue = readBackupQueue(trip)

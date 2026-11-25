@@ -7,6 +7,7 @@
  * The model never rejects.
  */
 import { cors, json, parseBody, userFromAuth, admin } from '../friendRideLib.js'
+import { clientErrorMessage } from '../clientError.js'
 import { reviewUploadedDriverDocument } from '../documentAiReview.js'
 import { AI_DOCUMENT_TYPES } from '../../shared/documentAiReview.js'
 
@@ -65,7 +66,7 @@ export async function listDocumentReviewQueue(sb) {
     if (/schema cache|does not exist|ai_verdict|ai_reason/i.test(pending.error.message || '')) {
       return { status: 200, documents: [], migrationRequired: true }
     }
-    return { status: 500, error: pending.error.message }
+    return { status: 500, error: clientErrorMessage(pending.error, 'Could not load documents') }
   }
   const rows = pending.data || []
   const ids = [...new Set(rows.map((row) => row.profile_id).filter(Boolean))]
@@ -117,7 +118,7 @@ export async function reviewDocumentDecision({ sb, adminUser, documentId, decisi
     reviewed_at: new Date().toISOString(),
     reviewed_by: adminUser.id,
   }).eq('id', id).select('id, profile_id, doc_type, review_status, ai_verdict, ai_reason, review_note').maybeSingle()
-  if (updated?.error) return { status: 500, error: updated.error.message }
+  if (updated?.error) return { status: 500, error: clientErrorMessage(updated.error, 'Could not review the document') }
   if (!updated?.data) return { status: 404, error: 'Document not found' }
   return {
     status: 200,

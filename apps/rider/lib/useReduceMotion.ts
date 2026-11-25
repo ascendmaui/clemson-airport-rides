@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { logCaught } from '@/lib/caught'
 import { AccessibilityInfo } from 'react-native'
 
 /** True when the system asks for fewer automatic transitions. */
@@ -10,7 +11,9 @@ export function useReduceMotion(): boolean {
       .then((value) => {
         if (alive) setReduce(value)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        logCaught('reduce-motion', err)
+      })
     const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce)
     return () => {
       alive = false

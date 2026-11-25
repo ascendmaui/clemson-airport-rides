@@ -335,7 +335,7 @@ test('share tokens are 32 hex chars and fall back when Web Crypto is unavailable
 })
 
 test('trip share text fills missing ends and skips blank status and url', () => {
-  assert.equal(tripShareMessage({}), 'Follow my Clemson RIDES trip')
+  assert.equal(tripShareMessage({}), 'Follow my Clemson Rides trip')
   assert.match(tripShareMessage({ pickup: 'Tillman' }), /Tillman → Dropoff/)
   assert.match(tripShareMessage({ dropoff: 'GSP' }), /Pickup → GSP/)
   const statusOnly = tripShareMessage({ status: 'accepted' })
@@ -347,7 +347,7 @@ test('trip share text fills missing ends and skips blank status and url', () => 
 test('SOS text omits the map link when either coordinate is missing', () => {
   const text = buildSosText({ lat: 34.6834, lng: -82.8374, tripId: 'trip-123' })
   assert.equal(text, [
-    'SOS Clemson RIDES',
+    'SOS Clemson Rides',
     'Trip: trip-123',
     'Location: 34.68340, -82.83740',
     'https://maps.google.com/maps?q=34.68340,-82.83740',
@@ -412,7 +412,7 @@ test('SOS and police channels expose href, button, and phrase', () => {
     } else if (channel === 'mailto') {
       const href = sosChannelHref(channel, 'line 1\nline 2')
       assert.equal(href.startsWith(`mailto:${CUPD_EMAIL}?`), true)
-      assert.match(href, /subject=SOS%20Clemson%20RIDES/)
+      assert.match(href, /subject=SOS%20Clemson%20Rides/)
       assert.match(decodeURIComponent(href), /line 1\nline 2/)
     } else {
       assert.equal(sosChannelHref(channel, text), expected[channel].href)

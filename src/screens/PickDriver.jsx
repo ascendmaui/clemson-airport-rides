@@ -1,5 +1,4 @@
-import { useDemoBusyRoster } from '../lib/useDemoBusyRoster.js'
-import { busyRosterFor } from '../../packages/rides-native/busyRoster.js'
+import { SiteIcon } from '../components/SiteIcon.jsx'
 import { useEffect, useState } from 'react'
 import { PrimaryButton } from '../components/PrimaryButton'
 import { SkeletonDriverCard } from '../components/LoadingSkeleton'
@@ -14,7 +13,6 @@ import { STUDENT_DISCOUNT_LABEL } from '../../packages/rides-native/riderMoney.j
 import { pickupPoint } from '../../packages/rides-native/places.js'
 import {
   describeDriver,
-  fetchDriversByIds,
   canFavoriteDriver,
   fetchOnlineDrivers,
   filterDriversForFleet,
@@ -24,7 +22,6 @@ import {
   FAVORITE_PERSIST_ERROR,
   loadFavoriteDriverIds,
   OPEN_POOL_COPY,
-  PREFERRED_OFFLINE_COPY,
   saveFavoriteDriverIds,
   scheduleRedirectForRequestError,
   sortPreferredDrivers,
@@ -33,9 +30,15 @@ import { SignInToBookModal, useRequireAuthForAction } from '../components/SignIn
 import { resolveDriverPortrait } from '../../shared/driverPortrait.js'
 import { setFavoriteDrivers } from '../../packages/rides-native/tigerPassClient.js'
 import { PREPAID_TIP_PRESETS_CENTS, formatTipDollars, parsePrepaidTipDollars } from '../../shared/prepaidTip.js'
+import { describePromo, normalizePromoCode } from '../../shared/promoCodes.js'
+import { checkPromoCode, promoDeviceId } from '../../packages/rides-native/promoCodesClient.js'
 import { paymentMethodRequiredError, riderPaymentMethodReady } from '../../shared/ridePaymentReady.js'
 import { saveRideRequestDraft } from '../lib/rideRequestDraft.js'
 import { webApplePaySetUp } from '../lib/applePayReady.js'
+
+/** Matching never offers riders their own car. Shown when the viewer is the online driver. */
+export const SELF_DRIVER_COPY =
+  'Riders can book you, but this account cannot book itself. To test a booking, sign in here with a different rider account while your driver app stays online.'
 
 const browserStorage = {
   async getItem(key) {
@@ -71,9 +74,10 @@ export function PickDriver({
   const { user } = useAuth()
   const student = useStudentStatus()
   const { runOrPrompt } = useRequireAuthForAction()
-  const demoBusyRoster = useDemoBusyRoster()
-  const busy = busyRosterFor({ enabled: demoBusyRoster })
   const [drivers, setDrivers] = useState([])
+  // True when the signed-in account is itself online as a driver. Matching never
+  // offers a rider their own car, so the list would otherwise look empty for no reason.
+  const [selfOnline, setSelfOnline] = useState(false)
   const [favoriteIds, setFavoriteIds] = useState([])
   const [favNote, setFavNote] = useState(null)
   const [error, setError] = useState(null)
@@ -87,6 +91,12 @@ export function PickDriver({
   })
   const [customTip, setCustomTip] = useState('')
   const [tipError, setTipError] = useState(null)
+  const [promoCode, setPromoCode] = useState('')
+  const [promoDraft, setPromoDraft] = useState('')
+  const [promoOpen, setPromoOpen] = useState(false)
+  const [promoChecking, setPromoChecking] = useState(false)
+  const [promoNote, setPromoNote] = useState(null)
+  const [promoError, setPromoError] = useState(null)
   const [promptOpen, setPromptOpen] = useState(false)
   const stadium = pickupPoint(pickup || 'Memorial Stadium')
   const pinLat = finiteCoordinate(pickupLat)
@@ -104,12 +114,11 @@ export function PickDriver({
         ? loadFavoriteDriverIds(supabase, browserStorage, user.id)
         : Promise.resolve({ ids: [], note: null }),
     ])
-    const extraIds = fav.ids.filter((id) => !online.some((driver) => driver.id === id))
-    const extra = extraIds.length
-      ? await fetchDriversByIds(supabase, extraIds)
-      : { drivers: [], error: null }
+    // Only real, approved, online drivers are listed. Offline saved drivers and
+    // preview/demo cars are never shown as pickable cards.
+    setSelfOnline(Boolean(user?.id) && online.some((row) => row.id === user.id && row.online))
     const merged = sortPreferredDrivers(
-      filterDriversForFleet([...online, ...extra.drivers], tier, user?.id),
+      filterDriversForFleet(online.filter((row) => row.online && !row.isDemo), tier, user?.id),
       fav.ids,
       approachPickup,
     )
@@ -117,7 +126,7 @@ export function PickDriver({
     setSelected((current) => merged.find((row) => row.id === current?.id) || merged.find((row) => row.id === driver) || null)
     setFavoriteIds(fav.ids)
     setFavNote(fav.note)
-    setError(extra.error || err)
+    setError(err)
     setLoading(false)
   }
 
@@ -218,8 +227,8 @@ export function PickDriver({
       setError('No approved drivers are online right now.')
       return
     }
-    if (selected && (tier === 'comfort' || tier === 'comfort') && !selected.comfortClass) {
-      setError('Extra Comfort fleet only. That driver is not listed as Comfort.')
+    if (selected && tier === 'comfort' && !selected.comfortClass) {
+      setError('Extra Comfort only.')
       return
     }
     setRequesting(true)
@@ -230,6 +239,7 @@ export function PickDriver({
         rememberRequest()
         return
       }
+      const deviceId = await promoDeviceId(browserStorage)
       const trip = await requestDriverTrip({
         riderId: user.id,
         ...(selected ? { driverId: selected.id } : { autoAssign: true }),
@@ -245,6 +255,8 @@ export function PickDriver({
         listCents,
         billingChoice: billing || null,
         prepaidTipCents,
+        ...(promoCode ? { promoCode } : {}),
+        ...(deviceId ? { deviceId } : {}),
         ...(gate.source === 'apple_pay' ? { applePay: true } : {}),
       })
       navigate('requested', { dest, trip: trip.id, driver: selected?.name || 'Next driver' })
@@ -308,15 +320,22 @@ export function PickDriver({
         {loading && <SkeletonDriverCard count={3} />}
         {error && <AccessibleAlert error={error} onDismiss={() => setError(null)} style={{ margin: '8px 0' }} />}
         {!loading && !anyOnline && (
-          <div className="sheet" style={{ padding: 24, borderRadius: 20, textAlign: 'center', boxShadow: 'var(--shadow-pill)', marginBottom: 12 }}>
+          <div className="sheet" role="status" style={{ padding: 24, borderRadius: 20, textAlign: 'center', boxShadow: 'var(--shadow-pill)', marginBottom: 12 }}>
             <p style={{ fontWeight: 700, marginBottom: 8 }}>
-              {drivers.length ? 'Preferred drivers are offline' : 'No drivers available'}
+              {!user?.id ? 'Sign in to see drivers' : selfOnline ? 'You are online as a driver on this account' : 'No drivers online right now'}
             </p>
             <p style={{ fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
-              {drivers.length
-                ? PREFERRED_OFFLINE_COPY
-                : 'When a driver goes online in Driver mode, they show up here. A campus request stays in the open pool until someone accepts.'}
+              {!user?.id
+                ? 'Drivers near your pickup show here once you sign in.'
+                : selfOnline
+                  ? SELF_DRIVER_COPY
+                  : 'When a driver goes online, they show up here. You can also schedule a ride ahead.'}
             </p>
+            {user?.id && !selfOnline ? (
+              <button type="button" className="pressable" onClick={() => navigate('schedule')} style={{ marginTop: 10, fontWeight: 800, color: '#F56600', minHeight: 44 }}>
+                Schedule ahead
+              </button>
+            ) : null}
           </div>
         )}
 
@@ -369,11 +388,14 @@ export function PickDriver({
                       <div style={{ fontWeight: 700, fontSize: 16 }}>
                         {d.name}
                         <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--purple)' }}>
-                          ★ {lines.ratingLabel}
+                          <SiteIcon name="star" size={12} /> {lines.ratingLabel}
                         </span>
                       </div>
                       {d.standing === 'watch' && (
                         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--orange)', marginTop: 2 }}>Low rating</div>
+                      )}
+                      {lines.experienceLabel && (
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-secondary)', marginTop: 2 }}>{lines.experienceLabel}</div>
                       )}
                       <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginTop: 4 }}>
                         {d.vehicleLabel}{d.plate ? ` · ${d.plate}` : ''}
@@ -401,7 +423,7 @@ export function PickDriver({
                           }}
                           style={{ fontSize: 12, fontWeight: 800, color: saved ? '#fff' : 'var(--orange)', background: saved ? 'var(--purple)' : 'transparent', borderRadius: 999, padding: '4px 10px', minHeight: 44 }}
                         >
-                          <span aria-hidden="true">{saved ? '★' : '☆'}</span>
+                          <span aria-hidden="true" style={{ display: 'inline-flex', opacity: saved ? 1 : 0.55 }}><SiteIcon name="star" size={12} /></span>
                           {' '}
                           {saved ? 'Saved' : 'Save'}
                         </button>
@@ -420,29 +442,6 @@ export function PickDriver({
             })}
           </div>
         ))}
-        {/* Busy roster: display only; kept outside real driver sections. */}
-        {busy.length > 0 && (
-          <section aria-label="Busy now">
-            <h2 style={{ fontSize: 12, fontWeight: 800, color: 'var(--ink-secondary)', margin: '8px 4px' }}>BUSY NOW</h2>
-            {busy.map((driver) => {
-              const portrait = resolveDriverPortrait(driver)
-              return (
-                <div key={driver.id} aria-disabled="true" style={{ opacity: 0.55, border: '1.5px solid #aaa', borderRadius: 16, padding: 16, marginBottom: 10, background: 'var(--surface)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: '50%', display: 'grid', placeItems: 'center', background: portrait.color, color: '#fff', fontWeight: 800 }}>{portrait.initials}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700 }}>{driver.name}</div>
-                      <div style={{ fontSize: 12, marginTop: 4 }}>★ {driver.rating} · {driver.tripCount.toLocaleString('en-US')} trips</div>
-                      <div style={{ fontSize: 13, marginTop: 4, color: 'var(--ink-secondary)' }}>{driver.vehicleLabel}</div>
-                    </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '5px 8px', background: driver.status === 'on_trip' ? '#f4dfcc' : '#e5e5e5', color: driver.status === 'on_trip' ? '#855023' : '#555' }}>{driver.statusLabel}</span>
-                  </div>
-                </div>
-              )
-            })}
-          </section>
-        )}
-        {/* End busy roster. */}
       </div>
 
       <div style={{ padding: '12px 20px calc(20px + var(--safe-bottom))' }}>
@@ -490,6 +489,75 @@ export function PickDriver({
           </div>
           {tipError ? <p role="alert" style={{ color: 'var(--orange)', fontSize: 12 }}>{tipError}</p> : null}
         </fieldset>
+        <div style={{ marginBottom: 10 }}>
+          {!promoOpen ? (
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => setPromoOpen(true)}
+              style={{ fontSize: 13, fontWeight: 800, color: 'var(--purple)', minHeight: 36, padding: 0, background: 'transparent', border: 0 }}
+            >
+              Have a promo code?
+            </button>
+          ) : (
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--purple)', marginBottom: 4 }}>Promo code</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  aria-label="Promo code"
+                  placeholder="ILOVECLEMSONRIDES"
+                  maxLength={24}
+                  value={promoDraft}
+                  onChange={(e) => {
+                    setPromoDraft(e.target.value.toUpperCase())
+                    setPromoError(null)
+                    if (promoCode) setPromoCode('')
+                  }}
+                  style={{ flex: 1, minHeight: 44, borderRadius: 12, border: '1px solid var(--purple)', padding: '0 12px', fontWeight: 700, letterSpacing: 0.8 }}
+                />
+                <button
+                  type="button"
+                  className="pressable"
+                  disabled={promoChecking}
+                  onClick={async () => {
+                    if (promoCode) {
+                      setPromoDraft('')
+                      setPromoCode('')
+                      setPromoNote(null)
+                      setPromoError(null)
+                      return
+                    }
+                    const norm = normalizePromoCode(promoDraft)
+                    if (!norm) { setPromoError('Enter a promo code.'); return }
+                    setPromoChecking(true)
+                    setPromoError(null)
+                    setPromoNote(null)
+                    try {
+                      const res = await checkPromoCode(supabase, { code: norm, side: 'rider' })
+                      if (res?.ok) {
+                        setPromoCode(norm)
+                        setPromoNote(`${describePromo(res)} applies when you request.`)
+                      } else {
+                        setPromoCode('')
+                        setPromoError(res?.message || 'That code could not be applied.')
+                      }
+                    } catch (err) {
+                      setPromoCode('')
+                      setPromoError(err instanceof Error ? err.message : 'Could not check that code.')
+                    } finally {
+                      setPromoChecking(false)
+                    }
+                  }}
+                  style={{ minHeight: 44, minWidth: 76, padding: '0 14px', borderRadius: 999, fontWeight: 800, border: '1px solid var(--purple)', background: 'var(--purple)', color: '#fff', opacity: promoChecking ? 0.6 : 1 }}
+                >
+                  {promoChecking ? 'Checking…' : promoCode ? 'Remove' : 'Apply'}
+                </button>
+              </div>
+              {promoNote && promoCode ? <p style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 4 }}>{promoNote}</p> : null}
+              {promoError ? <p role="alert" style={{ fontSize: 12, color: 'var(--orange)', marginTop: 4 }}>{promoError}</p> : null}
+            </div>
+          )}
+        </div>
         <PrimaryButton
           disabled={requesting || (selected ? !selected.online : !anyOnline)}
           loading={requesting}

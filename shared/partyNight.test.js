@@ -109,8 +109,9 @@ test('pickup reminder uses the day, hour, and 15-minute windows', () => {
 test('explainer states the hold, the link, the reminder, and the return queue', () => {
   const copy = partyNightExplainer()
   const text = `${copy.title} ${copy.lede} ${copy.sections.map((section) => `${section.title} ${section.body}`).join(' ')}`
-  assert.match(copy.lede, /not a deposit/)
-  assert.match(HOLD_NOTE, /not a deposit/)
+  assert.match(copy.lede, /captured only when the trip ends/)
+  assert.match(HOLD_NOTE, /hold is released/)
+  assert.equal(/deposit/i.test(copy.lede + HOLD_NOTE), false)
   assert.match(HOLD_NOTE, /pre-authorization/)
   assert.equal(text.includes('25%'), false)
   assert.match(text, /Invite friends with a link/)

@@ -214,7 +214,7 @@ export function fridayDropEmail({ coupon, firstName } = {}) {
     ? `${coupon.percentOffBps / 100}% off`
     : `$${(Number(coupon?.amountOffCents) / 100).toFixed(2)} off`
   return {
-    subject: `This week’s Clemson RIDES coupon: ${coupon?.title || 'Friday drop'}`,
+    subject: `This week’s Clemson Rides coupon: ${coupon?.title || 'Friday drop'}`,
     text: [
       `Hi ${name},`,
       '',

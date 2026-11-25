@@ -4,6 +4,8 @@
  */
 import { readDriverPushToken } from './driverPushToken.js'
 import { sendExpoPush } from './expoPush.js'
+import { insertDriverNotification } from './driverNotifications.js'
+import { noteExpoPushResult } from './expoPushReceipts.js'
 import { sendApplicantNotice } from './applicantMail.js'
 import { lostItemNoticeBody } from '../shared/copy/messaging.js'
 import { sanitizeRiderNotice } from '../shared/riderDriverPrivacy.js'
@@ -26,7 +28,7 @@ export function messageNoticeCopy(body) {
   const preview = clean(body, 140)
   return {
     title: 'New ride message',
-    body: preview || 'Open Clemson RIDES to read it.',
+    body: preview || 'Open Clemson Rides to read it.',
     email: false,
   }
 }
@@ -37,7 +39,7 @@ export function lostItemNoticeCopy(description, reporterRole) {
     title: 'Lost item on your ride',
     body: lostItemNoticeBody({ description: item, reporterRole, days: WINDOW_DAYS }),
     email: true,
-    subject: 'A lost item was reported on your Clemson RIDES trip',
+    subject: 'A lost item was reported on your Clemson Rides trip',
   }
 }
 
@@ -120,13 +122,27 @@ export async function notifyTripCounterpart(input, deps = {}) {
   const sendPush = deps.sendPush || sendExpoPush
   const sendEmail = deps.sendEmail || ((payload) => sendApplicantNotice(payload))
   const token = await pushTokenForUser(sb, recipientId)
+  const recipientRole = recipientId === trip.driver_id ? 'driver' : 'rider'
+  const noticeKind = kind === 'lost-item' ? 'trip_lost_item' : 'trip_message'
+  const noticeData = { tripId, kind: noticeKind }
+  if (recipientRole === 'driver') {
+    const recorded = await insertDriverNotification(sb, {
+      userId: recipientId,
+      type: noticeKind,
+      title: copy.title,
+      body: copy.body,
+      data: noticeData,
+    })
+    if (recorded.id) noticeData.notificationId = recorded.id
+  }
   const push = await sendPush(sanitizeRiderNotice({
     to: token,
     title: copy.title,
     body: copy.body,
-    data: { tripId, kind: kind === 'lost-item' ? 'trip_lost_item' : 'trip_message' },
+    data: noticeData,
     channelId: 'ride-requests',
   }))
+  await noteExpoPushResult(sb, { push, token, ownerId: recipientId, ownerRole: recipientRole })
 
   let email = { emailed: false, reason: 'not_requested' }
   if (copy.email) {

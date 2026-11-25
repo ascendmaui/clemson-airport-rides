@@ -58,7 +58,7 @@ export function ReferFriendsPanel({ userId }) {
     setNote(null)
     try {
       if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-        await navigator.share({ title: 'Clemson RIDES', text, url })
+        await navigator.share({ title: 'Clemson Rides', text, url })
         setNote('Share sheet opened')
       } else {
         await navigator.clipboard.writeText(`${text} ${url}`)

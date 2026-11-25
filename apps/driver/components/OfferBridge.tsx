@@ -27,6 +27,7 @@ import { offerHourly, pickupMiles, EXCLUSIVE_SECONDS } from 'rides-native/offerL
 import { homeIsShowingOffer, offerAcceptSeconds } from 'rides-native/offerStack.js'
 import { WorthItLegend } from 'rides-native/WorthItLegend'
 import { shouldAutoAccept } from 'rides-native/autoAccept.js'
+import { quiet } from '@/lib/softFail'
 
 type Banner = {
   id: string
@@ -118,11 +119,11 @@ export function OfferBridge() {
           const posted = freshBoard[0]
           if (posted) {
             AccessibilityInfo.announceForAccessibility(`Scheduled ride on the board. ${posted.pickupLabel} to ${posted.dropoffLabel}`)
-            if (alertOk) notifyScheduledBoard(posted).catch(() => {})
+            if (alertOk) notifyScheduledBoard(posted).catch(quiet('scheduled board alert'))
           }
         }
         const offers = (desk.offers || []).filter((card: DriverCard) => !isSyntheticOffer(card))
-        if (desk.online) markSearchingOffers(supabase, offers).catch(() => {})
+        if (desk.online) markSearchingOffers(supabase, offers).catch(quiet('mark searching offers'))
         if (!primed.current) {
           offers.forEach((card: DriverCard) => seen.current.add(card.id))
           primed.current = true
@@ -158,7 +159,7 @@ export function OfferBridge() {
         }
         if (!alertOk) return
         pulse('request', { tier: next.tier })
-        notifyNewRequest(next).catch(() => {})
+        notifyNewRequest(next).catch(quiet('new request alert'))
       } catch {
         /* desk reads can fail while signed out or offline */
       }
@@ -224,7 +225,7 @@ export function OfferBridge() {
         <GlassCard app="driver" scheme={scheme} pointerEvents="none" selected style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <GlassBadge name={rideTypeIconName(banner.tier || 'standard')} size={32} tone="orange" scheme={scheme} active />
-          <Text style={[styles.kicker, { color: colors.purple }]}>RIDE REQUEST</Text>
+          <Text style={[styles.kicker, { color: colors.link }]}>RIDE REQUEST</Text>
         </View>
         <Text style={[styles.title, { color: colors.title }]}>{banner.title}</Text>
         <Text style={{ color: colors.ink }}>{banner.body}</Text>

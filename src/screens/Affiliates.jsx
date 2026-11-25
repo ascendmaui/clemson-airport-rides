@@ -132,7 +132,7 @@ export function AffiliateSignup({ user, onDone, loadError }) {
     <div style={page}>
       <div style={wrap}>
         <div className="rider-card rider-card--invert" style={{ ...card, background: `linear-gradient(160deg, ${PURPLE} 0%, #6b3fa0 70%, #8a4fbf 100%)`, color: '#fff' }}>
-          <div style={{ ...eyebrow, color: '#ffd2b0' }}>CLEMSON RIDES PARTNERS</div>
+          <div style={{ ...eyebrow, color: '#ffd2b0' }}>Clemson Rides partners</div>
           <h1 style={{ fontSize: 32, fontWeight: 800, margin: '6px 0', letterSpacing: -0.6 }}>Share rides. Earn rewards.</h1>
           <p style={{ opacity: 0.92, lineHeight: 1.5, margin: 0 }}>
             Students, campus groups, local businesses, and creators get a personal link. Rewards follow {plan.plan_label}.
@@ -433,7 +433,7 @@ export function AffiliateLanding() {
     <div style={page}>
       <div style={wrap}>
         <div className="rider-card" style={card}>
-          <div style={eyebrow}>INVITED TO CLEMSON RIDES</div>
+          <div style={eyebrow}>Invited to Clemson Rides</div>
           <h1 style={{ color: PURPLE, fontSize: 28, margin: '6px 0' }}>
             {partner ? `${partner.display_name} sent you` : partner === null ? 'Welcome to Clemson Rides' : 'Loading…'}
           </h1>

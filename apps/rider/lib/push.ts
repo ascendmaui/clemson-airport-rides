@@ -2,6 +2,7 @@ import Constants from 'expo-constants'
 import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { logCaught } from '@/lib/caught'
 
 /** Must match RIDER_PUSH_CHANNEL in server/tripStatusNotices.js. */
 export const TRIP_STATUS_CHANNEL_ID = 'trip-status'
@@ -27,7 +28,9 @@ async function ensureChannel() {
       vibrationPattern: [0, 200, 100, 200],
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     })
-  } catch { /* channel creation is best-effort */ }
+  } catch (err) {
+    logCaught('push-channel', err)
+  }
 }
 
 /**

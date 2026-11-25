@@ -29,14 +29,14 @@ test('legalCopy exports match shared legal copy module exactly', () => {
 test('LEGAL_UPDATED date string is well-formed and parseable', () => {
   // BUG?: LEGAL_UPDATED is formatted as human-readable text rather than ISO-8601 (YYYY-MM-DD)
   assert.equal(typeof LEGAL_UPDATED, 'string')
-  assert.equal(LEGAL_UPDATED, 'October 13, 2026')
+  assert.equal(LEGAL_UPDATED, 'October 16, 2026')
 
   const parsed = Date.parse(LEGAL_UPDATED)
   assert.ok(!Number.isNaN(parsed), 'LEGAL_UPDATED must parse as a valid timestamp')
   const dateObj = new Date(parsed)
   assert.equal(dateObj.getFullYear(), 2026)
   assert.equal(dateObj.getMonth(), 9) // 0-indexed October
-  assert.equal(dateObj.getDate(), 13)
+  assert.equal(dateObj.getDate(), 16)
 })
 
 test('PRIVACY_SECTIONS and TERMS_SECTIONS are frozen against accidental edits', () => {
@@ -59,12 +59,12 @@ test('PRIVACY_SECTIONS and TERMS_SECTIONS are frozen against accidental edits', 
     PRIVACY_SECTIONS[0].heading = 'Changed'
   }, TypeError)
   assert.equal(PRIVACY_SECTIONS[0].heading, privacyHeading)
-  assert.equal(PRIVACY_SECTIONS.length, 12)
+  assert.equal(PRIVACY_SECTIONS.length, 13)
 })
 
 test('PRIVACY_SECTIONS conforms to required structure and unique headings', () => {
   assert.ok(Array.isArray(PRIVACY_SECTIONS))
-  assert.equal(PRIVACY_SECTIONS.length, 12)
+  assert.equal(PRIVACY_SECTIONS.length, 13)
 
   const expectedHeadings = [
     'Article 1. Who We Are',
@@ -79,6 +79,7 @@ test('PRIVACY_SECTIONS conforms to required structure and unique headings', () =
     'Article 10. Children',
     'Article 11. No Duty from This Policy',
     'Article 12. Contact',
+    'Article 13. Device Location, Notifications, and Cards',
   ]
 
   const headings = PRIVACY_SECTIONS.map((s) => s.heading)
@@ -127,7 +128,7 @@ test('PRIVACY_SECTIONS conforms to required structure and unique headings', () =
 test('PRIVACY_SECTIONS contains critical compliance and campus policy statements', () => {
   const whoWeAre = PRIVACY_SECTIONS.find((s) => s.heading === 'Article 1. Who We Are')
   assert.ok(whoWeAre)
-  assert.match(whoWeAre.paragraphs[0], /Clemson RIDES/)
+  assert.match(whoWeAre.paragraphs[0], /Clemson Rides/)
   assert.match(whoWeAre.paragraphs[0], /GSP\/CLT/)
 
   const infoCollect = PRIVACY_SECTIONS.find((s) => s.heading === 'Article 3. Information We Collect')
@@ -154,7 +155,7 @@ test('PRIVACY_SECTIONS contains critical compliance and campus policy statements
 
 test('TERMS_SECTIONS conforms to required structure and unique headings', () => {
   assert.ok(Array.isArray(TERMS_SECTIONS))
-  assert.equal(TERMS_SECTIONS.length, 23)
+  assert.equal(TERMS_SECTIONS.length, 30)
 
   const expectedHeadings = [
     'Article 1. Agreement',
@@ -180,6 +181,13 @@ test('TERMS_SECTIONS conforms to required structure and unique headings', () => 
     'Article 21. Termination',
     'Article 22. Changes',
     'Article 23. Notices and Contact',
+    'Article 24. Supplemental Protective Terms: Scope and Precedence',
+    'Article 25. Dispatch Platform and Independent Drivers',
+    'Article 26. Supplemental Assumption of Risk',
+    'Article 27. Supplemental Release, Unknown Claims, and Covenant Not to Sue',
+    'Article 28. Supplemental Indemnity and Damages Limits',
+    'Article 29. Supplemental Dispute Resolution Terms',
+    'Article 30. Supplemental Acknowledgment, Changes, Severability, and Survival',
   ]
 
   const headings = TERMS_SECTIONS.map((s) => s.heading)
@@ -396,7 +404,7 @@ test('simulated app rendering matches rider and web consumer logic', () => {
     const title = doc === 'terms' ? 'Terms of Service' : 'Privacy Policy'
     const rendered = {
       title,
-      meta: `Clemson RIDES · Last updated ${LEGAL_UPDATED}`,
+      meta: `Clemson Rides · Last updated ${LEGAL_UPDATED}`,
       renderedSections: sections.map((section) => ({
         heading: section.heading,
         paragraphCount: section.paragraphs?.length ?? 0,
@@ -408,11 +416,11 @@ test('simulated app rendering matches rider and web consumer logic', () => {
 
   const nativePrivacy = renderNativeScreen('privacy')
   assert.equal(nativePrivacy.title, 'Privacy Policy')
-  assert.equal(nativePrivacy.renderedSections.length, 12)
+  assert.equal(nativePrivacy.renderedSections.length, 13)
 
   const nativeTerms = renderNativeScreen('terms')
   assert.equal(nativeTerms.title, 'Terms of Service')
-  assert.equal(nativeTerms.renderedSections.length, 23)
+  assert.equal(nativeTerms.renderedSections.length, 30)
 
   // Emulate rendering logic from src/screens/LegalPages.jsx
   const renderWebBody = (sections) => {
@@ -424,7 +432,7 @@ test('simulated app rendering matches rider and web consumer logic', () => {
   }
 
   const webPrivacy = renderWebBody(PRIVACY_SECTIONS)
-  assert.equal(webPrivacy.length, 12)
+  assert.equal(webPrivacy.length, 13)
   const webTerms = renderWebBody(TERMS_SECTIONS)
-  assert.equal(webTerms.length, 23)
+  assert.equal(webTerms.length, 30)
 })

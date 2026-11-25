@@ -12,7 +12,7 @@ export default function AboutScreen() {
   return (
     <StackPage title="About" onBack={() => router.back()}>
       <Card>
-        <Text style={{ color: colors.title, fontSize: 28, fontWeight: '800' }}>Clemson RIDES</Text>
+        <Text style={{ color: colors.title, fontSize: 28, fontWeight: '800' }}>Clemson Rides</Text>
         <Text style={{ color: colors.inkSecondary }}>Driver {version}</Text>
         <Text style={{ color: colors.ink, lineHeight: 20 }}>
           Campus and airport rides for Clemson. This driver app is a separate install from the rider app.

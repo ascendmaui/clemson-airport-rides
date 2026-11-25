@@ -7,6 +7,8 @@ import { supabase } from '../lib/supabase'
 import { AdminAccessDenied } from '../components/AdminAccessDenied'
 import { AdminEventsPanel } from '../components/AdminEventsPanel'
 import { AdminInboxPanel } from '../components/AdminInboxPanel'
+import { AdminPayoutApprovals } from '../components/AdminPayoutApprovals'
+import { AdsAdminPanel } from '../components/AdsAdminPanel'
 import { rideOptionLabel } from '../../shared/rideOptions.js'
 import {
   fetchAdminInbox,
@@ -26,9 +28,11 @@ const TABS = [
   ['applications', 'Applicants'],
   ['people', 'People'],
   ['trips', 'Trips'],
+  ['payouts', 'Payout approvals'],
   ['support', 'Support'],
   ['events', 'Events'],
   ['rentals', 'Rental partners'],
+  ['ads', 'Tablet ads'],
 ]
 
 const TICKET_FILTERS = [
@@ -109,7 +113,7 @@ export function AdminDesk() {
   return (
     <div className="fade-in" style={{ minHeight: '100%', background: 'var(--surface-muted)', padding: '20px 20px 48px' }}>
       <button type="button" className="pressable" onClick={() => navigate('account')} style={{ fontSize: 20 }}>←</button>
-      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.1, color: '#F56600', marginTop: 12 }}>CLEMSON RIDES</div>
+      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.1, color: '#F56600', marginTop: 12 }}>Clemson Rides</div>
       <h1 style={{ fontSize: 28, fontWeight: 800, color: '#522D80', margin: '4px 0 0', letterSpacing: -0.4 }}>Admin</h1>
       <p style={{ color: 'var(--ink-secondary)', fontSize: 14, lineHeight: 1.45 }}>
         Riders, drivers, applications, trips, and support. Approving a driver unlocks ride accept.
@@ -154,9 +158,11 @@ export function AdminDesk() {
       {tab === 'applications' && <AdminDrivers embedded />}
       {tab === 'people' && <PeoplePanel />}
       {tab === 'trips' && <TripsPanel />}
+      {tab === 'payouts' && <AdminPayoutApprovals />}
       {tab === 'support' && <SupportPanel />}
       {tab === 'events' && <AdminEventsPanel />}
       {tab === 'rentals' && <AdminRentalPartners />}
+      {tab === 'ads' && <AdsAdminPanel />}
     </div>
   )
 }

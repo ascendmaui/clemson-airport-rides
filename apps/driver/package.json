@@ -1,7 +1,7 @@
 {
   "name": "clemson-rides-driver",
   "main": "expo-router/entry",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",

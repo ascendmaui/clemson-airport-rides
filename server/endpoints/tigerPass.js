@@ -59,6 +59,7 @@ export default async function handler(req, res, deps = {}) {
       const session = await startTigerPassCheckout(sb, user, body, {
         stripe,
         ensureStripeCustomer: deps.ensureStripeCustomer || ensureStripeCustomer,
+        now,
       })
       return json(res, 200, session)
     }

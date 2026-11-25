@@ -5,7 +5,7 @@ import Colors from '@/constants/Colors';
 export default function ModalScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Clemson RIDES</Text>
+      <Text style={styles.title}>Clemson Rides</Text>
       <Text style={styles.body}>
         Mobile scaffold for airport rides. Auth via Supabase Auth, data via Supabase. Built with Expo + EAS.
       </Text>

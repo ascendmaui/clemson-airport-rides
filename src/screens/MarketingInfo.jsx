@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { bookRideHref } from '../lib/bookRideLink'
 import { getHashRoute, navigate } from '../lib/navigation'
 import { MarketingChrome } from '../components/MarketingChrome'
 import { MarketingPhoto } from '../components/MarketingPhoto'
@@ -6,7 +7,8 @@ import { QrMark } from '../components/QrMark'
 import { FeatureBlock } from '../components/FeatureBlock'
 import { messagingGuide } from '../../shared/copy/messaging.js'
 import { HERO_COLLAGE, NIGHT_VENUES } from '../content/images.js'
-import { APP_DOWNLOADS, SUPPORT_EMAIL } from '../../shared/productLinks.js'
+import { CLEMSON_ORANGE, CLEMSON_PURPLE, installOffer } from '../../shared/installLinks.js'
+import { APP_DOWNLOADS, supportEmail } from '../../shared/productLinks.js'
 import { RIDE_TYPE_NOTES, RIDE_TYPE_STUDENT_NOTE } from '../../shared/copy/rideTypes.js'
 import { RIDE_OPTION_CATALOG, SCHEDULE_AHEAD_DISCOUNT_PCT } from '../../shared/rideOptions.js'
 import { CARPOOL_SEAT_FRACTION_BPS, STUDENT_DISCOUNT_BPS } from '../lib/fareRates.js'
@@ -29,7 +31,7 @@ const FAQ = [
   },
   {
     q: 'How does carpool pricing work?',
-    a: `Carpool is ${CARPOOL_SEAT_FRACTION_BPS / 100}% of the Standard fare per seat when 3 or 4 riders split the trip. Pickup and drop-off each need to be nearby, and the times need to fall in the same window. Each rider is pre-authorized for their own seat. There is no deposit.`,
+    a: `Carpool is ${CARPOOL_SEAT_FRACTION_BPS / 100}% of the Standard fare per seat when 3 or 4 riders split the trip. Pickup and drop-off each need to be nearby, and the times need to fall in the same window. Each rider gets a hold on their card for their own seat, and the full seat fare is charged when the trip ends.`,
   },
   {
     q: 'Who gets the student discount?',
@@ -55,7 +57,7 @@ const FAQ = [
 
 function PageHead({ kicker, title, lede }) {
   return (
-    <div className="mkt-section-head">
+    <div className="mkt-section-head mkt-page-hero">
       <p className="mkt-kicker">{kicker}</p>
       <h1>{title}</h1>
       {lede ? <p>{lede}</p> : null}
@@ -255,7 +257,7 @@ export function PromosPage() {
 export function FaqPage() {
   return (
     <MarketingChrome current="faq">
-      <PageHead kicker="FAQ" title="Common questions" />
+      <PageHead kicker="FAQ" title="Common questions" lede={`Contact ${supportEmail()} if a question is not listed here.`} />
       {FAQ.map((item) => (
         <article key={item.q} className="mkt-card mkt-feature">
           <h2>{item.q}</h2>
@@ -269,7 +271,7 @@ export function FaqPage() {
 export function SupportPage() {
   return (
     <MarketingChrome current="support">
-      <PageHead kicker="Help" title="Support" />
+      <PageHead kicker="Help" title="Support" lede="Contact the support mailbox." />
       <article className="mkt-card mkt-feature">
         <h2>Get help in the apps</h2>
         <p>Rider app: Account → Help for how-to questions, or Account → Support to describe a problem. The in-app assistant can draft a support ticket for you to confirm.</p>
@@ -277,7 +279,7 @@ export function SupportPage() {
       </article>
       <article className="mkt-card mkt-feature">
         <h2>Email</h2>
-        <p>Contact <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.</p>
+        <p>Contact <a href={`mailto:${supportEmail()}`}>{supportEmail()}</a>.</p>
       </article>
       <article className="mkt-card mkt-feature">
         <h2>Safety</h2>
@@ -285,11 +287,11 @@ export function SupportPage() {
       </article>
       <article className="mkt-card mkt-feature">
         <h2>Delete your account</h2>
-        <p>Rider app: Account → Delete account → File deletion request. Driver app: Menu → Delete account → File deletion request. Each files a support request; the account remains until the request is processed.</p>
+        <p>Rider app: Account → Delete account, then type DELETE and confirm. Driver app: Menu → Delete account, then type DELETE and confirm. Deletion is immediate. A driver with a trip in progress cannot delete until that trip ends.</p>
       </article>
       <article className="mkt-card mkt-feature">
         <h2>Payments</h2>
-        <p>When you book, your card is pre-authorized for the estimated fare. This is a hold, not a deposit. The fare is charged when the trip ends.</p>
+        <p>When you book, we place a hold on your card for the estimated fare. The full fare is charged when the trip ends. If you cancel within policy, the hold is released.</p>
       </article>
       <article className="mkt-card mkt-feature">
         <h2>More information</h2>
@@ -304,33 +306,62 @@ export function SupportPage() {
 export function GetTheAppPage() {
   return (
     <MarketingChrome current="get-the-app">
-      <PageHead kicker="Get the App" title="Rider and driver" lede={APP_STORE_NOTE} />
-      {APP_DOWNLOADS.map((app) => (
-        <article key={app.id} className="mkt-card mkt-feature" id={app.id === 'rider' ? 'get-the-app' : undefined}>
-          <img
-            className="mkt-app-icon"
-            src={app.id === 'driver' ? '/brand/driver-icon.svg' : '/brand/rider-icon.svg'}
-            alt=""
-            width="72"
-            height="72"
-          />
-          <h2>{app.product}</h2>
-          <p>{app.blurb}</p>
-          <p>{app.iosNote}</p>
-          <p>{app.androidNote}</p>
-          <a className="mkt-text pressable" href={app.testflightHref} target="_blank" rel="noopener">
-            Join the iPhone beta (TestFlight)
-          </a>
-          <QrMark value={app.testflightHref} label={`QR code for ${app.product} TestFlight beta`} />
-          <button
-            type="button"
-            className="mkt-text pressable"
-            onClick={() => navigate(app.id === 'driver' ? 'driver' : 'home')}
-          >
-            {app.id === 'driver' ? 'Open the driver desk' : 'Book a ride'}
-          </button>
-        </article>
-      ))}
+      <PageHead kicker="Get the App" title="Clemson RIDES on the App Store" lede={APP_STORE_NOTE} />
+      <div className="dl-grid">
+        {APP_DOWNLOADS.map((app) => {
+          const offer = installOffer(app.id)
+          const isDriver = app.id === 'driver'
+          const accent = isDriver ? CLEMSON_PURPLE : CLEMSON_ORANGE
+          return (
+            <article
+              key={app.id}
+              className="mkt-card mkt-feature dl-card dl-card--page"
+              id={app.id === 'rider' ? 'get-the-app' : 'get-the-driver-app'}
+              style={{ borderTop: `4px solid ${accent}` }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <img
+                  className="mkt-app-icon"
+                  src={isDriver ? '/brand/driver-icon.svg' : '/brand/rider-icon.svg'}
+                  alt=""
+                  width="64"
+                  height="64"
+                />
+                <div>
+                  <p className="mkt-kicker" style={{ background: accent, marginBottom: 6 }}>
+                    {isDriver ? 'Drivers' : 'Riders'}
+                  </p>
+                  <h2 style={{ margin: 0 }}>{app.product}</h2>
+                </div>
+              </div>
+              <p>{app.blurb}</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                <a
+                  className="dl-go pressable"
+                  href={app.iosHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ background: accent }}
+                >
+                  Download on the App Store
+                </a>
+                {isDriver ? (
+                  <button
+                    type="button"
+                    className="mkt-text pressable"
+                    onClick={() => navigate('driver')}
+                  >
+                    Open the driver desk
+                  </button>
+                ) : (
+                  <a className="mkt-text pressable" href={bookRideHref()}>Book a ride</a>
+                )}
+              </div>
+              <QrMark value={offer.pageUrl} label={`QR code for the ${app.product} install page`} color={accent} />
+            </article>
+          )
+        })}
+      </div>
     </MarketingChrome>
   )
 }

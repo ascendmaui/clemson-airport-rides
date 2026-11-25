@@ -13,6 +13,7 @@ import { loadComfortPreference, saveComfortPreference } from 'rides-native/comfo
 import { radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { useTheme } from '@/lib/theme'
 import type { Palette } from '@/lib/palette'
+import { quiet } from '@/lib/softFail'
 
 export default function AccountScreen() {
   const router = useRouter()
@@ -34,7 +35,7 @@ export default function AccountScreen() {
       setGenderIdentity(comfort.genderIdentity)
       setWomenOnly(comfort.womenOnlyMatching)
       setComfortAvailable(comfort.available)
-    }).catch(() => {})
+    }).catch(quiet('account load'))
     registerDriverPush(supabase, user.id).then(setPush).catch((err) => {
       setPush({
         granted: false,

@@ -155,7 +155,7 @@ export async function toggleDriverTripShare({ enabled, trip, share, createShare,
     url: next.url,
   })
   try {
-    const outcome = await presentShare({ title: 'My Clemson RIDES trip', message, url: next.url })
+    const outcome = await presentShare({ title: 'My Clemson Rides trip', message, url: next.url })
     if (outcome?.action === 'dismissedAction') {
       return { ok: true, enabled: true, share: next, note: 'Live link is on. Share it when you are ready.' }
     }

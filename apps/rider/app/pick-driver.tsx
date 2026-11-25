@@ -3,11 +3,16 @@ import { useDemoBusyRoster } from '@/lib/useDemoBusyRoster'
 import { busyRosterFor } from 'rides-native/busyRoster.js'
 import { resolveDriverPortrait } from '../../../shared/driverPortrait.js'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
+import { DenseText } from '@/components/DenseText'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { RetryAction } from '@/components/RetryAction'
+import { FlowErrorBoundary } from '@/components/FlowErrorBoundary'
 import { TipBoostPicker } from '@/components/TipBoostPicker'
+import { PromoCodeField } from '@/components/PromoCodeField'
+import { promoDeviceId } from 'rides-native/promoCodesClient.js'
 import { pressStyle, useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
 import { ClemsonLoader } from '@/components/ClemsonLoader'
@@ -23,7 +28,6 @@ import { supabase } from '@/lib/supabase'
 import { STUDENT_DISCOUNT_LABEL } from 'rides-native/riderMoney.js'
 import { useStudentStatus } from '@/lib/useStudentStatus'
 import {
-  describeDriver,
   EMPTY_FAVORITES_COPY,
   FAVORITE_ACCOUNT_SAVE_ERROR,
   FAVORITE_PERSIST_ERROR,
@@ -42,7 +46,11 @@ import {
   type OnlineDriver,
 } from 'rides-native/drivers'
 import { destPoint, pickupPoint } from 'rides-native/places.js'
+import { logCaught } from '@/lib/caught'
+import { useReconnectRetry } from '@/lib/useReconnectRetry'
+import { pickerDriverCard, readablePickerDrivers, rosterCard, sanitizeOnlineDrivers, textField } from '@/lib/driverFields'
 import { lift } from '@/lib/elevation'
+import { RIDER_LIST_WINDOW, pickerListRows } from '@/lib/virtualRows'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
@@ -55,6 +63,185 @@ import { applePaySetUp } from '@/lib/applePayReady'
 const MAP_KINDS: MapKind[] = ['standard', 'satellite', 'hybrid']
 const NOTIFY_KEY = 'rider.notify.driver'
 
+type DriverGroups = {
+  passPreferred?: OnlineDriver[]
+  preferred: OnlineDriver[]
+  online: OnlineDriver[]
+}
+
+/** Sort and section the roster. A row that throws while sorting stays in an unsorted section. */
+function groupedPickerDrivers(
+  drivers: OnlineDriver[],
+  favoriteIds: string[],
+  approachPickup: { lat: number; lng: number },
+  passPreferredIds: string[],
+): DriverGroups {
+  const pass = passPreferredIds.length ? passPreferredIds : undefined
+  try {
+    return groupDriversForPicker(sortPreferredDrivers(drivers, favoriteIds, approachPickup), favoriteIds, pass)
+  } catch (err) {
+    logCaught('pick-driver-group', err)
+  }
+  try {
+    return groupDriversForPicker(drivers, favoriteIds, pass)
+  } catch (err) {
+    logCaught('pick-driver-group', err)
+    return { preferred: [], online: drivers }
+  }
+}
+
+/**
+ * Driver cards live in their own child so a bad row is caught here.
+ * The map and the request footer stay on screen. Try again remounts the list.
+ */
+function DriverRoster({
+  phase,
+  drivers,
+  passPreferredIds,
+  error,
+  notified,
+  favNote,
+  favoriteIds,
+  selected,
+  approachPickup,
+  extra,
+  onSelect,
+  onToggleFavorite,
+  onNotify,
+  onRetry,
+}: {
+  phase: 'loading' | 'results'
+  drivers: OnlineDriver[]
+  passPreferredIds: string[]
+  error: string | null
+  notified: boolean
+  favNote: string | null
+  favoriteIds: string[]
+  selected: string | null
+  approachPickup: { lat: number; lng: number }
+  extra: ReactNode
+  onSelect: (id: string) => void
+  onToggleFavorite: (id: string) => void
+  onNotify: () => void
+  onRetry: () => void
+}) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(makeStyles)
+  const listMotion = useEnterMotion(14)
+  const groups = groupedPickerDrivers(drivers, favoriteIds, approachPickup, passPreferredIds)
+
+  function renderDriver(driver: OnlineDriver) {
+    const card = pickerDriverCard(driver, approachPickup, favoriteIds.includes(textField(driver?.id, '')))
+    if (!card) return null
+    const on = selected === card.id
+    return (
+      <View key={card.id} style={[styles.card, lift(colors, 'rest'), on && styles.cardOn, !card.online && styles.cardOff]}>
+        <Pressable
+          onPress={() => onSelect(card.id)}
+          style={({ pressed }) => pressStyle(pressed)}
+          accessibilityRole="button"
+          accessibilityLabel={`${card.name}, ${card.vehicleLabel}${card.plate ? `, ${card.plate}` : ''}. ${card.eta}`}
+          accessibilityHint={card.online ? 'Selects this driver' : 'This driver is offline'}
+          accessibilityState={{ selected: on }}
+        >
+          <View style={styles.cardTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name}>{card.name}</Text>
+              <Text style={styles.sub}>{card.vehicleLabel}{card.plate ? ` · ${card.plate}` : ''}</Text>
+            </View>
+            <View style={styles.etaCol}>
+              <Text style={[styles.eta, !card.online && styles.etaOff]}>{card.etaShort}</Text>
+              <Text style={styles.meta}>{card.availability}</Text>
+            </View>
+          </View>
+          <Text style={styles.meta}>
+            {card.ratingLabel}
+            {card.lowRating ? ' · Low rating' : ''}
+            {` · ${card.eta}`}
+          </Text>
+        </Pressable>
+        <View style={styles.badges}>
+          {card.saved ? <DenseText style={styles.badgePurple}>Preferred</DenseText> : null}
+          {card.comfort ? <DenseText style={styles.badgeOrange}>Comfort</DenseText> : null}
+          {card.priority ? <DenseText style={styles.badgePurple}>Priority</DenseText> : null}
+          <Pressable
+            onPress={() => onToggleFavorite(card.id)}
+            hitSlop={16}
+            accessibilityRole="button"
+            accessibilityLabel={card.saved ? `Remove ${card.name} from saved drivers` : `Save ${card.name}`}
+            accessibilityHint={card.saved ? 'Removes this driver from your preferred list' : 'Saves this driver as preferred'}
+            accessibilityState={{ selected: card.saved }}
+          >
+            <View style={card.saved ? styles.saveOn : styles.saveOff}>
+              <Glyph name="star" size={12} active={card.saved} color={card.saved ? colors.onAccent : colors.orange} />
+              <Text style={card.saved ? styles.saveOnText : styles.saveOffText}>{card.saved ? 'Saved' : 'Save'}</Text>
+            </View>
+          </Pressable>
+        </View>
+      </View>
+    )
+  }
+
+  const passFirst = (groups.passPreferred || []).length > 0
+  const rosterBlocks = [
+    passFirst ? { title: 'Preferred', rows: groups.passPreferred || [] } : null,
+    groups.preferred.length ? { title: passFirst ? 'Favorites' : 'Preferred', rows: groups.preferred } : null,
+    groups.online.length ? { title: 'Online now', rows: groups.online } : null,
+  ].filter((block): block is { title: string; rows: OnlineDriver[] } => Boolean(block))
+  const rosterRows = phase === 'results' ? pickerListRows(rosterBlocks) : []
+
+  return (
+    <Animated.FlatList
+      style={[styles.listScroll, listMotion]}
+      contentContainerStyle={styles.list}
+      showsVerticalScrollIndicator={false}
+      data={rosterRows}
+      keyExtractor={(row) => row.key}
+      {...RIDER_LIST_WINDOW}
+      ListHeaderComponent={(
+        <>
+          {phase === 'results' && !drivers.some((driver: OnlineDriver) => driver.online) ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>{drivers.length ? 'Preferred drivers are offline' : 'Still searching'}</Text>
+              <Text style={styles.sub}>
+                {error || (drivers.length
+                  ? PREFERRED_OFFLINE_COPY
+                  : 'No approved driver is online. The orange and purple cars are a preview, not people you can request.')}
+              </Text>
+              <PrimaryButton
+                label={notified ? 'Notify me · saved' : 'Notify me'}
+                disabled={notified}
+                onPress={onNotify}
+              />
+              <PrimaryButton label="Retry" tone="ghost" onPress={onRetry} />
+            </View>
+          ) : null}
+          {(groups.passPreferred || []).length > 0 ? (
+            <Text style={styles.meta}>{TIGER_PASS_NAME} offers preferred drivers first, then your other saved drivers.</Text>
+          ) : null}
+          {favNote ? <Text style={styles.meta}>{favNote}</Text> : null}
+          {phase === 'results' && favoriteIds.length === 0 ? (
+            <Text style={styles.sub}>{EMPTY_FAVORITES_COPY}</Text>
+          ) : null}
+        </>
+      )}
+      renderItem={({ item }) => {
+        switch (item.kind) {
+          case 'section':
+            return <Text style={styles.sectionTitle}>{item.title}</Text>
+          case 'driver':
+            return renderDriver(item.driver)
+          default: {
+            const _exhaustive: never = item
+            return _exhaustive
+          }
+        }
+      }}
+      ListFooterComponent={extra ? <View>{extra}</View> : null}
+    />
+  )
+}
+
 function finiteParam(value: string | string[] | undefined) {
   const raw = oneParam(value).trim()
   if (!raw) return null
@@ -62,7 +249,7 @@ function finiteParam(value: string | string[] | undefined) {
   return Number.isFinite(n) ? n : null
 }
 
-export default function PickDriver() {
+function PickDriver() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const params = useLocalSearchParams<{
@@ -110,13 +297,15 @@ export default function PickDriver() {
   const student = useStudentStatus()
   const demoBusyRoster = useDemoBusyRoster()
   const busy = busyRosterFor({ enabled: demoBusyRoster })
-  const [drivers, setDrivers] = useState<OnlineDriver[]>([])
+  const [loadedDrivers, setDrivers] = useState<OnlineDriver[]>([])
+  const drivers = readablePickerDrivers<OnlineDriver>(loadedDrivers)
   const [error, setError] = useState<string | null>(null)
   const [phase, setPhase] = useState<'loading' | 'results'>('loading')
   const [attempt, setAttempt] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
   const [requesting, setRequesting] = useState(false)
   const [prepaidTipCents, setPrepaidTipCents] = useState(0)
+  const [promoCode, setPromoCode] = useState('')
   const [promptOpen, setPromptOpen] = useState(false)
   const [mapType, setMapType] = useState<MapKind>('standard')
   const [notified, setNotified] = useState(false)
@@ -125,7 +314,6 @@ export default function PickDriver() {
   const [favNote, setFavNote] = useState<string | null>(null)
   const { colors } = useTheme()
   const styles = useThemedStyles(makeStyles)
-  const listMotion = useEnterMotion(14)
 
   useEffect(() => {
     let alive = true
@@ -135,30 +323,56 @@ export default function PickDriver() {
       ? loadFavoriteDriverIds(supabase, authStorage, user.id)
       : Promise.resolve({ ids: [] as string[], note: null })
     const pass = user?.id
-      ? loadTigerPass(supabase).catch(() => null)
+      ? loadTigerPass(supabase).catch((err: unknown) => {
+        logCaught('pick-driver-pass', err)
+        return null
+      })
       : Promise.resolve(null)
     Promise.all([fetchOnlineDrivers(supabase), favorites, wait, pass]).then(async ([result, fav, , loadedPass]) => {
       if (!alive) return
-      const extraIds = fav.ids.filter((id) => !result.drivers.some((driver) => driver.id === id))
-      const extra = extraIds.length
-        ? await fetchDriversByIds(supabase, extraIds)
-        : { drivers: [] as OnlineDriver[], error: null }
-      if (!alive) return
-      const merged = sortPreferredDrivers(filterDriversForFleet([...result.drivers, ...extra.drivers], tier, user?.id), fav.ids, approachPickup)
-      setDrivers(merged)
-      setFavoriteIds(fav.ids)
-      setPassPreferredIds(loadedPass?.active ? loadedPass.preferredDriverIds || [] : [])
-      setFavNote(fav.note)
-      setError(extra.error || result.error)
-      setSelected((current) => {
-        if (current && merged.some((driver) => driver.id === current)) return current
-        if (driverParam && merged.some((driver) => driver.id === driverParam)) return driverParam
-        return current && !merged.some((driver) => driver.id === current) ? null : current
-      })
-      setPhase('results')
-      if (merged.some((driver) => driver.online)) {
-        await playDriverBrowseCue()
+      try {
+        const online = sanitizeOnlineDrivers<OnlineDriver>(result?.drivers)
+        const extraIds = (fav?.ids || []).filter((id) => !online.some((driver) => driver.id === id))
+        const extra = extraIds.length
+          ? await fetchDriversByIds(supabase, extraIds)
+          : { drivers: [] as OnlineDriver[], error: null as string | null }
+        if (!alive) return
+        const merged = sortPreferredDrivers(
+          filterDriversForFleet(
+            sanitizeOnlineDrivers<OnlineDriver>([...online, ...(extra?.drivers || [])]),
+            tier,
+            user?.id,
+          ),
+          fav?.ids,
+          approachPickup,
+        )
+        setDrivers(merged)
+        setFavoriteIds(fav?.ids || [])
+        setPassPreferredIds(loadedPass?.active ? loadedPass.preferredDriverIds || [] : [])
+        setFavNote(fav?.note || null)
+        setError(extra?.error || result?.error || null)
+        setSelected((current) => {
+          if (current && merged.some((driver) => driver.id === current)) return current
+          if (driverParam && merged.some((driver) => driver.id === driverParam)) return driverParam
+          return current && !merged.some((driver) => driver.id === current) ? null : current
+        })
+        setPhase('results')
+        if (merged.some((driver) => driver.online)) {
+          await playDriverBrowseCue()
+        }
+      } catch (err) {
+        logCaught('pick-driver-load', err)
+        if (!alive) return
+        setDrivers([])
+        setError('Could not load drivers. Try again.')
+        setPhase('results')
       }
+    }).catch((err: unknown) => {
+      logCaught('pick-driver-load', err)
+      if (!alive) return
+      setDrivers([])
+      setError('Could not load drivers. Try again.')
+      setPhase('results')
     })
     return () => {
       alive = false
@@ -171,13 +385,10 @@ export default function PickDriver() {
     setPrepaidTipCents(Math.round(cents))
   }, [tipParam])
 
+  useReconnectRetry('pick-driver', () => setAttempt((value: number) => value + 1), Boolean(error))
+
   const selectedDriver = drivers.find((row: OnlineDriver) => row.id === selected) || null
-  const comfortNotice = comfortFleetNotice(tier === 'comfort' || tier === 'comfort' || Boolean(selectedDriver?.comfortClass))
-  const groups = groupDriversForPicker(
-    sortPreferredDrivers(drivers, favoriteIds, approachPickup),
-    favoriteIds,
-    passPreferredIds.length ? passPreferredIds : undefined,
-  )
+  const comfortNotice = comfortFleetNotice(tier === 'comfort' || Boolean(selectedDriver?.comfortClass))
 
   async function toggleFavorite(driverId: string) {
     if (!user) {
@@ -212,8 +423,8 @@ export default function PickDriver() {
               setError((current) => (current === FAVORITE_ACCOUNT_SAVE_ERROR ? null : current))
             }
           }
-        } catch {
-          /* the profile row is already the matching source when the API is down */
+        } catch (err) {
+          logCaught('pick-driver-favorite', err)
         }
       }
     } catch (err) {
@@ -223,79 +434,13 @@ export default function PickDriver() {
     await tapHaptic()
   }
 
-  function renderDriver(driver: OnlineDriver) {
-    const on = selected === driver.id
-    const saved = favoriteIds.includes(driver.id)
-    const lines = describeDriver(driver, approachPickup)
-    const eta = driver.online
-      ? [lines.etaLabel, lines.distanceLabel ? `${lines.distanceLabel} from pickup` : null].filter(Boolean).join(' · ') || 'ETA unavailable'
-      : 'Not available now'
-    return (
-      <Pressable
-        key={driver.id}
-        onPress={() => { void tapHaptic(); setSelected(driver.id) }}
-        style={({ pressed }) => [styles.card, lift(colors, 'rest'), on && styles.cardOn, !driver.online && styles.cardOff, pressStyle(pressed)]}
-        accessibilityRole="button"
-        accessibilityLabel={`${driver.name}, ${driver.vehicleLabel}${driver.plate ? `, ${driver.plate}` : ''}. ${eta}`}
-        accessibilityHint={driver.online ? 'Selects this driver' : 'This driver is offline'}
-        accessibilityState={{ selected: on }}
-      >
-        <View style={styles.cardTop}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{driver.name}</Text>
-            <Text style={styles.sub}>{driver.vehicleLabel}{driver.plate ? ` · ${driver.plate}` : ''}</Text>
-          </View>
-          <View style={styles.etaCol}>
-            <Text style={[styles.eta, !driver.online && styles.etaOff]}>{driver.online ? (lines.etaLabel || 'No ETA') : 'Offline'}</Text>
-            <Text style={styles.meta}>{lines.availability}</Text>
-          </View>
-        </View>
-        <Text style={styles.meta}>
-          {lines.ratingLabel}
-          {driver.standing === 'watch' ? ' · Low rating' : ''}
-          {` · ${eta}`}
-        </Text>
-        <View style={styles.badges}>
-          {saved ? <Text style={styles.badgePurple}>Preferred</Text> : null}
-          {driver.comfortClass ? <Text style={styles.badgeOrange}>Comfort</Text> : null}
-          {driver.priorityMode && driver.online ? <Text style={styles.badgePurple}>Priority</Text> : null}
-          <Pressable
-            onPress={() => { void toggleFavorite(driver.id) }}
-            hitSlop={16}
-            accessibilityRole="button"
-            accessibilityLabel={saved ? `Remove ${driver.name || 'this driver'} from saved drivers` : `Save ${driver.name || 'this driver'}`}
-            accessibilityHint={saved ? 'Removes this driver from your preferred list' : 'Saves this driver as preferred'}
-            accessibilityState={{ selected: saved }}
-          >
-            <Text style={saved ? styles.saveOn : styles.saveOff}>{saved ? '★ Saved' : '☆ Save'}</Text>
-          </Pressable>
-        </View>
-      </Pressable>
-    )
-  }
-
-  function renderGroups() {
-    const passFirst = (groups.passPreferred || []).length > 0
-    const blocks = [
-      passFirst ? { title: 'Preferred', rows: groups.passPreferred || [] } : null,
-      groups.preferred.length ? { title: passFirst ? 'Favorites' : 'Preferred', rows: groups.preferred } : null,
-      groups.online.length ? { title: 'Online now', rows: groups.online } : null,
-    ].filter((block): block is { title: string; rows: OnlineDriver[] } => Boolean(block))
-    return blocks.map((block) => (
-      <View key={block.title} style={styles.section}>
-        {blocks.length > 1 ? <Text style={styles.sectionTitle}>{block.title}</Text> : null}
-        {block.rows.map((driver: OnlineDriver) => renderDriver(driver))}
-      </View>
-    ))
-  }
-
   const pins = drivers
-    .filter((driver: OnlineDriver) => driver.lat != null && driver.lng != null)
+    .filter((driver: OnlineDriver) => Number.isFinite(Number(driver?.lat)) && Number.isFinite(Number(driver?.lng)))
     .map((driver: OnlineDriver) => ({
       id: driver.id,
       latitude: Number(driver.lat),
       longitude: Number(driver.lng),
-      title: driver.name,
+      title: textField(driver.name, 'Driver'),
       color: colors.orange,
     }))
 
@@ -338,7 +483,7 @@ export default function PickDriver() {
       return
     }
     if (chosen && tier === 'comfort' && !chosen.comfortClass) {
-      setError('Extra Comfort fleet only. That driver is not listed as Comfort.')
+      setError('Extra Comfort only.')
       return
     }
     if (!user) {
@@ -367,11 +512,18 @@ export default function PickDriver() {
         note,
         prepaidTipCents,
         ...(gate.source === 'apple_pay' ? { applePay: true } : {}),
+        ...(promoCode ? { promoCode } : {}),
+        deviceId: await promoDeviceId(authStorage),
       })
       await playDriverFoundCue()
       router.replace({
         pathname: '/requested',
-        params: { dest, trip: trip.id, driver: chosen?.name || 'Next driver' },
+        params: {
+          dest,
+          trip: trip.id,
+          driver: chosen?.name || 'Next driver',
+          ...(trip.promo?.message ? { promoNote: trip.promo.message } : {}),
+        },
       })
     } catch (err) {
       if (paymentMethodRequiredError(err)) {
@@ -413,7 +565,7 @@ export default function PickDriver() {
         </View>
       </View>
       <View style={styles.mapWrap}>
-        <CampusMap spots={[]} showHeat={false} mapType={mapType} theater gameDay={false} surge={false} pins={pins} />
+        <CampusMap spots={[]} showHeat={false} mapType={mapType} theater={false} gameDay={false} surge={false} pins={pins} />
         {phase === 'loading' ? (
           <View style={styles.loader} pointerEvents="none">
             <View style={[styles.loaderCard, lift(colors, 'float')]}>
@@ -441,61 +593,72 @@ export default function PickDriver() {
           })}
         </View>
       </View>
-      <Animated.ScrollView style={[styles.listScroll, listMotion]} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-        {phase === 'results' && !drivers.some((driver: OnlineDriver) => driver.online) ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>{drivers.length ? 'Preferred drivers are offline' : 'Still searching'}</Text>
-            <Text style={styles.sub}>
-              {error || (drivers.length
-                ? PREFERRED_OFFLINE_COPY
-                : 'No approved driver is online. The orange and purple cars are a preview, not people you can request.')}
-            </Text>
-            <PrimaryButton
-              label={notified ? 'Notify me · saved' : 'Notify me'}
-              disabled={notified}
-              onPress={async () => {
-                await authStorage.setItem(NOTIFY_KEY, new Date().toISOString())
-                setNotified(true)
-                await tapHaptic()
-              }}
-            />
-            <PrimaryButton label="Retry" tone="ghost" onPress={() => setAttempt((value: number) => value + 1)} />
-          </View>
-        ) : null}
-        {(groups.passPreferred || []).length > 0 ? (
-          <Text style={styles.meta}>{TIGER_PASS_NAME} offers preferred drivers first, then your other saved drivers.</Text>
-        ) : null}
-        {favNote ? <Text style={styles.meta}>{favNote}</Text> : null}
-        {phase === 'results' && favoriteIds.length === 0 ? (
-          <Text style={styles.sub}>{EMPTY_FAVORITES_COPY}</Text>
-        ) : null}
-        {phase === 'results' ? renderGroups() : null}
-        {/* Busy roster: display only; kept outside real driver sections. */}
-        {busy.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>BUSY NOW</Text>
-            {busy.map((driver) => {
-              const portrait = resolveDriverPortrait(driver)
-              return (
-                <View key={driver.id} aria-disabled={true} accessibilityState={{ disabled: true }} style={[styles.card, { opacity: 0.55, borderColor: '#aaa' }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: portrait.color || '#522D80' }}>
-                      <Text style={{ color: '#fff', fontWeight: '800' }}>{portrait.initials}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.name}>{driver.name}</Text>
-                      <Text style={styles.meta}>★ {driver.rating} · {driver.tripCount.toLocaleString('en-US')} trips</Text>
-                      <Text style={styles.sub}>{driver.vehicleLabel}</Text>
-                    </View>
-                    <Text style={{ fontSize: 11, fontWeight: '700', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: driver.status === 'on_trip' ? '#f4dfcc' : '#e5e5e5', color: driver.status === 'on_trip' ? '#855023' : '#555' }}>{driver.statusLabel}</Text>
-                  </View>
+      <FlowErrorBoundary title="Clemson Rides" fill>
+        <DriverRoster
+          phase={phase}
+          drivers={drivers}
+          passPreferredIds={passPreferredIds}
+          error={error}
+          notified={notified}
+          favNote={favNote}
+          favoriteIds={favoriteIds}
+          selected={selected}
+          approachPickup={approachPickup}
+          extra={(
+            <>
+              {/* Busy roster: display only; kept outside real driver sections. */}
+              {busy.length > 0 ? (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>BUSY NOW</Text>
+                  {busy.map((driver) => {
+                    const card = rosterCard(driver)
+                    if (!card) return null
+                    let portrait = { initials: '?', color: colors.purple }
+                    try {
+                      const resolved = resolveDriverPortrait(driver)
+                      portrait = { initials: resolved?.initials || '?', color: resolved?.color || colors.purple }
+                    } catch (err) {
+                      logCaught('pick-driver-roster', err)
+                      portrait = { initials: '?', color: colors.purple }
+                    }
+                    return (
+                      <View key={card.id} aria-disabled={true} accessibilityState={{ disabled: true }} style={[styles.card, { opacity: 0.55 }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                          <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: portrait.color || colors.purple }}>
+                            <Text style={{ color: colors.onAccent, fontWeight: '800' }}>{portrait.initials}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.name}>{card.name}</Text>
+                            <View style={styles.ratingRow}>
+                              <Glyph name="star" size={12} active color={colors.orange} />
+                              <Text style={styles.meta}>{card.rating} · {card.tripCountLabel} trips</Text>
+                            </View>
+                            <Text style={styles.sub}>{card.vehicleLabel}</Text>
+                          </View>
+                          <DenseText style={{ fontSize: 12, fontWeight: '700', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 5, overflow: 'hidden', backgroundColor: card.status === 'on_trip' ? colors.orangeSoft : colors.track, color: card.status === 'on_trip' ? colors.orange : colors.inkSecondary }}>{card.statusLabel}</DenseText>
+                        </View>
+                      </View>
+                    )
+                  })}
                 </View>
-              )
-            })}
-          </View>
-        ) : null}
-        {/* End busy roster. */}
-      </Animated.ScrollView>
+              ) : null}
+              {/* End busy roster. */}
+            </>
+          )}
+          onSelect={(id) => { void tapHaptic(); setSelected(id) }}
+          onToggleFavorite={(id) => { void toggleFavorite(id) }}
+          onNotify={() => {
+            void (async () => {
+              await authStorage.setItem(NOTIFY_KEY, new Date().toISOString()).catch((err: unknown) => {
+                logCaught('pick-driver-notify', err)
+              })
+              setNotified(true)
+              await tapHaptic()
+            })()
+          }}
+          onRetry={() => setAttempt((value: number) => value + 1)}
+        />
+      </FlowErrorBoundary>
       <View style={[styles.footer, lift(colors, 'bar'), { paddingBottom: Math.max(insets.bottom, 16) }]}>
         {comfortNotice ? <Text style={styles.comfortNotice}>{comfortNotice}</Text> : null}
         {student.verified && tier === 'standard' ? (
@@ -505,8 +668,12 @@ export default function PickDriver() {
           <Text style={styles.student}>Student pricing is 10% off Standard. This tier stays full price.</Text>
         ) : null}
         <TipBoostPicker cents={prepaidTipCents} onChange={setPrepaidTipCents} />
+        <PromoCodeField code={promoCode} onChange={setPromoCode} />
         {error && drivers.some((driver: OnlineDriver) => driver.online) ? (
-          <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="assertive">{error}</Text>
+          <View accessibilityLiveRegion="assertive">
+            <Text style={styles.error} accessibilityRole="alert">{error}</Text>
+            <RetryAction label="Retry request" hint="Sends the ride request again" onPress={() => { void onRequest() }} />
+          </View>
         ) : null}
         <PrimaryButton
           label={requesting ? 'Requesting…' : selectedDriver ? `Request ${selectedDriver.name}` : (anyOnline ? 'Request next driver' : 'Select a driver')}
@@ -527,6 +694,14 @@ export default function PickDriver() {
         }}
       />
     </View>
+  )
+}
+
+export default function PickDriverScreen() {
+  return (
+    <FlowErrorBoundary title="Pick a driver" fill>
+      <PickDriver />
+    </FlowErrorBoundary>
   )
 }
 
@@ -569,7 +744,7 @@ function makeStyles(colors: Palette) {
       borderColor: colors.border,
     },
     kindOn: { backgroundColor: colors.purple, borderColor: colors.purple },
-    kindText: { color: colors.link, fontSize: 11, fontWeight: '800' as const },
+    kindText: { color: colors.link, fontSize: 12, fontWeight: '800' as const },
     kindTextOn: { color: colors.onAccent },
     listScroll: { flex: 1, marginTop: 12 },
     list: { paddingHorizontal: 20, paddingBottom: 16, gap: 10 },
@@ -588,10 +763,13 @@ function makeStyles(colors: Palette) {
     name: { fontSize: 17, fontWeight: '700' as const, letterSpacing: -0.2, color: colors.ink },
     meta: { color: colors.link, fontSize: 12, fontWeight: '600' as const },
     badges: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, alignItems: 'center' as const, marginTop: 4 },
-    badgeOrange: { color: colors.orange, backgroundColor: colors.orangeSoft, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, fontWeight: '800' as const },
-    badgePurple: { color: colors.link, backgroundColor: colors.purpleSoft, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, fontWeight: '800' as const },
-    saveOn: { color: colors.onAccent, backgroundColor: colors.purple, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, fontSize: 12, fontWeight: '800' as const },
-    saveOff: { color: colors.orange, fontSize: 12, fontWeight: '800' as const },
+    badgeOrange: { color: colors.orange, backgroundColor: colors.orangeSoft, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, fontSize: 12, fontWeight: '800' as const },
+    badgePurple: { color: colors.link, backgroundColor: colors.purpleSoft, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, fontSize: 12, fontWeight: '800' as const },
+    ratingRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
+    saveOn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: colors.purple, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+    saveOff: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
+    saveOnText: { color: colors.onAccent, fontSize: 12, fontWeight: '800' as const },
+    saveOffText: { color: colors.orange, fontSize: 12, fontWeight: '800' as const },
     footer: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 },
     student: { color: colors.orange, fontWeight: '800' as const, fontSize: 13 },
     comfortNotice: { color: colors.link, fontSize: 13, lineHeight: 18, fontWeight: '600' as const },

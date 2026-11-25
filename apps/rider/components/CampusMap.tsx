@@ -4,38 +4,19 @@ import { DOWNTOWN, STADIUM } from 'rides-native/places.js'
 import { SIMULATED_FLEET_BADGE, refuseSimulatedDriverTap, simulatedFleetPercent } from 'rides-native/simulatedDrivers.js'
 import { demoCarPaint, SEARCH_MAP_DELTA_END, SEARCH_MAP_DELTA_START, SEARCH_MAP_ZOOM_MS } from 'rides-native/searchPreview.js'
 import { useSimulatedFleet } from 'rides-native/useSimulatedFleet.js'
-import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
-import type { TigerHeatZone } from 'rides-native/tigerHeat.js'
-import { DemandHeatLayer } from '@/components/DemandHeatLayer'
 import { mapKindLabel, type CampusMapHandle, type CampusMapProps, type MapPin } from '@/components/mapTypes'
-import type { Palette } from '@/lib/palette'
+import { searchTheaterColors, type Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
 export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function CampusMap(
-  { spots, showHeat, heatWindow = 'now', mapType = 'standard', theater = false, searchMotion = false, gameDay = false, gameDayLabel = null, surge = false, userCoordinate = null, pins = [], showSimulatedFleet = false },
+  { spots, showHeat, heatWindow = 'now', mapType = 'standard', theater = false, searchMotion = false, gameDay = false, gameDayLabel = null, surge = false, userCoordinate = null, pins = [], showSimulatedFleet = false, showFleetBadge = true },
   ref: any,
 ) {
   const { colors, scheme } = useTheme()
   const styles = useThemedStyles(makeStyles)
   const simulatedFleet = useSimulatedFleet(showSimulatedFleet || searchMotion)
   const zoom = useRef(new Animated.Value(1)).current
-  const [tigerZones, setTigerZones] = useState<TigerHeatZone[]>([])
-  useEffect(() => {
-    if (!showHeat) {
-      setTigerZones([])
-      return undefined
-    }
-    let alive = true
-    fetchTigerHeatMap(heatWindow).then((result) => {
-      if (alive) setTigerZones(result.zones || [])
-    }).catch(() => {
-      if (alive) setTigerZones([])
-    })
-    return () => {
-      alive = false
-    }
-  }, [showHeat, heatWindow])
   useImperativeHandle(ref, () => ({
     animateTo() {},
   }))
@@ -101,26 +82,15 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
       {searchMotion ? null : (
       <>
       <View style={styles.wash} />
-      <DemandHeatLayer spots={spots} zones={tigerZones} scheme={scheme} enabled={showHeat} />
       <Text style={styles.kind}>{mapKindLabel(mapType)}</Text>
       {theater ? (
         <View style={styles.theaterRow}>
           <View style={[styles.car, { backgroundColor: colors.orange }]} />
           <View style={[styles.car, { backgroundColor: colors.purple }]} />
-          <Text style={styles.preview}>Preview cars</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1} style={styles.preview}>Preview cars</Text>
         </View>
       ) : null}
       <View style={styles.badges}>
-        {showHeat
-          ? tigerZones.map((zone: TigerHeatZone) => (
-              <Text
-                key={zone.id}
-                style={[styles.badge, zone.preview ? styles.tigerPreview : styles.tigerLive]}
-              >
-                {zone.bonusLabel}
-              </Text>
-            ))
-          : null}
         {gameDay ? <Text style={styles.badge}>{gameDayLabel || 'Game day'}</Text> : null}
         {surge ? <Text style={[styles.badge, styles.surge]}>Surge</Text> : null}
         {userCoordinate ? <Text style={styles.badge}>You</Text> : null}
@@ -155,8 +125,8 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
             )
           })
         : null}
-      {showSimulatedFleet ? (
-        <Text style={styles.busyNote}>{SIMULATED_FLEET_BADGE}</Text>
+      {showSimulatedFleet && showFleetBadge ? (
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1} style={styles.busyNote}>{SIMULATED_FLEET_BADGE}</Text>
       ) : null}
       <Text style={styles.caption}>
         {DOWNTOWN.latitude.toFixed(3)}, {STADIUM.longitude.toFixed(3)}
@@ -170,8 +140,8 @@ export const CampusMap = forwardRef<CampusMapHandle, CampusMapProps>(function Ca
 function makeStyles(colors: Palette) {
   return {
     map: { flex: 1, position: 'relative' as const, overflow: 'hidden' as const, backgroundColor: colors.mapFallback, alignItems: 'center' as const, justifyContent: 'center' as const },
-    searchStage: { ...StyleSheet.absoluteFill, backgroundColor: '#1B2836' },
-    searchField: { ...StyleSheet.absoluteFill, backgroundColor: '#243447' },
+    searchStage: { ...StyleSheet.absoluteFill, backgroundColor: searchTheaterColors.stage },
+    searchField: { ...StyleSheet.absoluteFill, backgroundColor: searchTheaterColors.field },
     searchCar: {
       position: 'absolute' as const,
       marginLeft: -7,
@@ -186,23 +156,23 @@ function makeStyles(colors: Palette) {
       marginTop: -6,
       borderRadius: 6,
       borderWidth: 2,
-      borderColor: '#FFFFFF',
+      borderColor: colors.onAccent,
     },
     wash: { ...StyleSheet.absoluteFill, backgroundColor: colors.orangeSoft },
-    kind: { position: 'absolute' as const, top: 12, left: 12, color: colors.link, fontWeight: '800' as const, fontSize: 11 },
+    kind: { position: 'absolute' as const, top: 12, left: 12, color: colors.link, fontWeight: '800' as const, fontSize: 12 },
     theaterRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 8 },
     car: { width: 18, height: 12, borderRadius: 4 },
-    preview: { color: colors.link, fontSize: 11, fontWeight: '700' as const },
+    preview: { color: colors.link, fontSize: 12, fontWeight: '700' as const },
     badges: { flexDirection: 'row' as const, gap: 6, marginBottom: 8 },
-    badge: { backgroundColor: colors.purple, color: colors.onAccent, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, fontSize: 11, fontWeight: '800' as const },
+    badge: { backgroundColor: colors.purple, color: colors.onAccent, overflow: 'hidden' as const, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, fontSize: 12, fontWeight: '800' as const },
     surge: { backgroundColor: colors.orange },
-    tigerLive: { backgroundColor: '#F56600', borderWidth: 2, borderColor: '#522D80' },
-    tigerPreview: { backgroundColor: '#522D80', borderWidth: 2, borderColor: '#F56600' },
+    tigerLive: { backgroundColor: colors.orange, borderWidth: 2, borderColor: colors.purple },
+    tigerPreview: { backgroundColor: colors.purple, borderWidth: 2, borderColor: colors.orange },
     row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
     pin: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
     pinText: { color: colors.onAccent, fontWeight: '800' as const, fontSize: 12 },
     line: { width: 64, height: 3, borderRadius: 2, backgroundColor: colors.border },
-    pinLabel: { marginTop: 4, color: colors.link, fontSize: 11, fontWeight: '700' as const },
+    pinLabel: { marginTop: 4, color: colors.link, fontSize: 12, fontWeight: '700' as const },
     busyCar: {
       position: 'absolute' as const,
       minWidth: 44,
@@ -210,20 +180,20 @@ function makeStyles(colors: Palette) {
       marginLeft: -22,
       marginTop: -22,
       borderRadius: 22,
-      backgroundColor: '#522D80',
+      backgroundColor: colors.purple,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
       paddingHorizontal: 8,
     },
-    busyCarDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#FFFFFF' },
+    busyCarDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.onAccent },
     busyNote: {
       position: 'absolute' as const,
       right: 12,
       bottom: 12,
       overflow: 'hidden' as const,
       borderRadius: 999,
-      backgroundColor: '#522D80',
-      color: '#FFFFFF',
+      backgroundColor: colors.purple,
+      color: colors.onAccent,
       fontSize: 12,
       fontWeight: '800' as const,
       paddingHorizontal: 10,

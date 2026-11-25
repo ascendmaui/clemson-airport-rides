@@ -3,6 +3,7 @@
  * Rider auth. Cancel a matched driver before pickup, or ask for another ride.
  */
 import { admin, cors, json, parseBody, userFromAuth } from '../server/friendRideLib.js'
+import { clientErrorMessage } from '../server/clientError.js'
 import { handleRiderSwitch } from '../server/endpoints/riderSwitch.js'
 
 export default async function handler(req, res) {
@@ -21,7 +22,8 @@ export default async function handler(req, res) {
     const result = await handleRiderSwitch(sb, user, parsed.body)
     return json(res, result.status, result.body)
   } catch (err) {
-    console.error('[rider-switch]', err)
-    return json(res, err.status || 500, { error: err.message || 'Could not update this ride' })
+    console.error('[rider-switch]', err?.message || err)
+    const status = Number(err?.status) >= 400 && Number(err?.status) < 600 ? err.status : 500
+    return json(res, status, { error: clientErrorMessage(err, 'Could not update this ride') })
   }
 }

@@ -174,7 +174,7 @@ test('pickup reminder and late-night return queue', async () => {
 test('http explain and quote do not require a database, and holds are not deposits', async () => {
   const explained = await call({ method: 'GET', url: '/api/party-night?action=explain' })
   assert.equal(explained.status, 200)
-  assert.match(explained.json.explainer.lede, /not a deposit/)
+  assert.match(explained.json.explainer.lede, /captured only when the trip ends/)
   assert.equal(explained.json.explainer.sections.some((section) => section.id === 'return'), true)
 
   const quoted = await call({

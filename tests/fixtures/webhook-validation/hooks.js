@@ -1,5 +1,5 @@
 /**
- * Resolve hook for api/stripeWebhookValidation.test.js.
+ * Resolve hook for tests/stripeWebhookValidation.test.js.
  * A cache-busted stripe-webhook instance (URL query instance=routing) receives
  * the fake Supabase client. Every other importer keeps the real package.
  */

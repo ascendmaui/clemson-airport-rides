@@ -17,6 +17,7 @@ import {
 } from '../lib/lostFound'
 import { resolutionLabel, statusLabel } from '../lib/lostFoundFlow'
 import { getHashRoute, navigate } from '../lib/navigation'
+import { SiteIcon } from '../components/SiteIcon'
 
 function formatWhen(iso) {
   if (!iso) return '—'
@@ -74,7 +75,7 @@ function Shell({ children, onBack }) {
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <div style={{ flex: 1, overflow: 'auto', padding: '20px 20px 96px' }}>
-        <button type="button" className="pressable" onClick={onBack} style={backBtn} aria-label="Back">←</button>
+        <button type="button" className="pressable" onClick={onBack} style={backBtn} aria-label="Back"><SiteIcon name="arrow-left" size={20} /></button>
         {children}
       </div>
       <BottomTabs active="account" onChange={(id) => navigate(id === 'home' ? 'home' : id)} />

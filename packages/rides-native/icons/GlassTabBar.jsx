@@ -53,14 +53,14 @@ export function GlassTabBar({ tabs, activeIndex, onSelect, scheme = 'light', bot
           <Animated.View style={[styles.pill, { width: slot, backgroundColor: rider ? 'rgba(245,102,0,0.16)' : 'rgba(245,102,0,0.2)' }, pill]} />
         ) : null}
         {tabs.map((tab, i) => (
-          <TabButton key={tab.id} tab={tab} on={i === activeIndex} tint={tint} muted={t.muted} scheme={scheme} onPress={() => onSelect(tab, i)} />
+          <TabButton key={tab.id} tab={tab} on={i === activeIndex} tint={tint} muted={t.muted} scheme={scheme} rider={rider} onPress={() => onSelect(tab, i)} />
         ))}
       </View>
     </View>
   )
 }
 
-function TabButton({ tab, on, tint, muted, scheme, onPress }) {
+function TabButton({ tab, on, tint, muted, scheme, onPress, rider }) {
   const reduce = useReduceMotion()
   const press = useSharedValue(0)
   const style = useAnimatedStyle(() => ({ transform: [{ scale: 1 - press.value * 0.08 }], opacity: 1 - press.value * 0.12 }))
@@ -77,7 +77,13 @@ function TabButton({ tab, on, tint, muted, scheme, onPress }) {
     >
       <Animated.View style={[styles.itemInner, style]}>
         <Icon name={tab.icon} size={24} active={on} color={color} scheme={scheme} knockout={scheme === 'dark' ? '#2A2233' : '#FDEFE6'} />
-        <Text numberOfLines={1} style={[styles.label, { color, fontWeight: on ? '700' : '600' }]}>{tab.label}</Text>
+        <Text
+          numberOfLines={1}
+          maxFontSizeMultiplier={rider ? 1.4 : undefined}
+          style={[styles.label, rider ? styles.labelReadable : null, { color, fontWeight: on ? '700' : '600' }]}
+        >
+          {tab.label}
+        </Text>
       </Animated.View>
     </Pressable>
   )
@@ -99,4 +105,5 @@ const styles = StyleSheet.create({
   item: { flex: 1 },
   itemInner: { alignItems: 'center', justifyContent: 'center', gap: 2, paddingVertical: 6 },
   label: { fontSize: 11, letterSpacing: 0.1 },
+  labelReadable: { fontSize: 12 },
 })

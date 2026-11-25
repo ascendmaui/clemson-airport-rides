@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics'
 import pingSource from '../assets/sounds/ping.wav'
 import matchChimeSource from '../assets/sounds/match-chime.m4a'
 import completeSource from '../assets/sounds/complete.wav'
+import { logCaught } from '@/lib/caught'
 import { authStorage } from '@/lib/storage'
 
 const SOUNDS_KEY = 'rider.sounds.enabled'
@@ -41,8 +42,8 @@ export async function tapHaptic() {
   if (!(await hapticsEnabled())) return
   try {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-  } catch {
-    /* web and simulators can omit the motor */
+  } catch (err) {
+    logCaught('haptic-tap', err)
   }
 }
 
@@ -50,8 +51,8 @@ export async function successHaptic() {
   if (!(await hapticsEnabled())) return
   try {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-  } catch {
-    /* web and simulators can omit the motor */
+  } catch (err) {
+    logCaught('haptic-success', err)
   }
 }
 
@@ -59,8 +60,8 @@ export async function warningHaptic() {
   if (!(await hapticsEnabled())) return
   try {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
-  } catch {
-    /* web and simulators can omit the motor */
+  } catch (err) {
+    logCaught('haptic-warning', err)
   }
 }
 
@@ -85,8 +86,8 @@ export async function approachHaptic(level: ApproachHapticLevel) {
         return neverLevel
       }
     }
-  } catch {
-    /* web and simulators can omit the motor */
+  } catch (err) {
+    logCaught('haptic-approach', err)
   }
 }
 
@@ -99,9 +100,13 @@ export async function arrivalCue() {
   if (await hapticsEnabled()) {
     try {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      setTimeout(() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}) }, 140)
-    } catch {
-      /* web and simulators can omit the motor */
+      setTimeout(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch((err: unknown) => {
+          logCaught('haptic-arrival', err)
+        })
+      }, 140)
+    } catch (err) {
+      logCaught('haptic-arrival', err)
     }
   }
   await playApproachPing()
@@ -124,8 +129,8 @@ export async function playApproachPing() {
     if (!pingPlayer) pingPlayer = createAudioPlayer(pingSource)
     await pingPlayer.seekTo(0)
     pingPlayer.play()
-  } catch {
-    /* asset or platform audio can fail closed */
+  } catch (err) {
+    logCaught('sound-ping', err)
   }
 }
 
@@ -149,8 +154,8 @@ export async function playMatchChime() {
     if (!matchPlayer) matchPlayer = createAudioPlayer(matchChimeSource)
     await matchPlayer.seekTo(0)
     matchPlayer.play()
-  } catch {
-    /* asset or platform audio can fail closed */
+  } catch (err) {
+    logCaught('sound-match', err)
   }
 }
 
@@ -186,7 +191,7 @@ export async function playCompleteCue() {
     }
     await completePlayer.seekTo(0)
     completePlayer.play()
-  } catch {
-    /* asset or platform audio can fail closed */
+  } catch (err) {
+    logCaught('sound-complete', err)
   }
 }

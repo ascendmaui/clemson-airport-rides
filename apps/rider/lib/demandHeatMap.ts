@@ -2,7 +2,7 @@
  * Rider-map demand heat.
  *
  * Busy spots and Tiger Heat zones become weighted points on a Clemson ramp:
- * transparent, soft orange #F56600, purple #522D80 at the hottest demand.
+ * transparent, soft brand orange, purple at the hottest demand.
  * Demo, simulated, and theater cars are dropped before any weight is read.
  *
  * Nearby points collapse into hot areas. Quiet areas keep a label and paint
@@ -12,7 +12,10 @@
  * so it is not mounted.
  */
 
-export const DEMAND_HEAT_COLORS = ['rgba(245,102,0,0)', '#F56600', '#522D80'] as const
+import { ORANGE, PURPLE } from '../../../packages/rides-native/places.js'
+import { heatInk } from './palette.ts'
+
+export const DEMAND_HEAT_COLORS = ['rgba(245,102,0,0)', ORANGE, PURPLE] as const
 export const DEMAND_HEAT_STARTS = [0, 0.42, 1] as const
 export const DEMAND_HEAT_RADIUS = 46
 
@@ -280,9 +283,9 @@ export function busynessColor(label: BusynessLabel): string | null {
     case 'Quiet':
       return null
     case 'Busy':
-      return '#F56600'
+      return ORANGE
     case 'Very busy':
-      return '#522D80'
+      return PURPLE
     default: {
       const unexpected: never = label
       return unexpected
@@ -295,7 +298,7 @@ export function busynessInk(label: BusynessLabel): string {
     case 'Quiet':
     case 'Busy':
     case 'Very busy':
-      return '#1F1208'
+      return heatInk
     default: {
       const unexpected: never = label
       return unexpected

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton } from '@/components/Button'
+import { RetryAction } from '@/components/RetryAction'
 import { pressStyle, useEnterMotion } from '@/components/enter'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
@@ -22,6 +23,8 @@ import { lift } from '@/lib/elevation'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
+import { toastCaught } from '@/lib/caught'
+import { useReconnectRetry } from '@/lib/useReconnectRetry'
 
 export default function RideTiers() {
   const router = useRouter()
@@ -52,6 +55,8 @@ export default function RideTiers() {
   const tiers = bookableRideTiers()
   const [pass, setPass] = useState<TigerPassStatus | null>(null)
   const [quote, setQuote] = useState<AirportQuote | null>(null)
+  const [quoteError, setQuoteError] = useState<string | null>(null)
+  const [quoteAttempt, setQuoteAttempt] = useState(0)
   const [selected, setSelected] = useState(tiers.some((tier) => tier.id === presetTier) ? presetTier : tiers[0].id)
   const [seats, setSeats] = useState(presetSeats)
   const [promptOpen, setPromptOpen] = useState(false)
@@ -60,14 +65,20 @@ export default function RideTiers() {
   const listMotion = useEnterMotion(14)
 
   useEffect(() => {
-    if (!user || !supabase) return undefined
+    if (!supabase) return undefined
     let alive = true
-    loadTigerPass(supabase).then((next) => {
-      if (!alive) return
-      setPass(next)
-      const preferred = (next.preferredCarTypes || []).find((id) => tiers.some((tier) => tier.id === id))
-      if (preferred && !tiers.some((tier) => tier.id === presetTier)) setSelected(preferred)
-    }).catch(() => {})
+    if (user) {
+      loadTigerPass(supabase).then((next) => {
+        if (!alive) return
+        setPass(next)
+        const preferred = (next.preferredCarTypes || []).find((id) => tiers.some((tier) => tier.id === id))
+        if (preferred && !tiers.some((tier) => tier.id === presetTier)) setSelected(preferred)
+      }).catch((err: unknown) => {
+        toastCaught('tiers-pass', err, 'Could not load Tiger Pass')
+      })
+    } else {
+      setPass(null)
+    }
     const pickupLatN = Number(pickupLat)
     const pickupLngN = Number(pickupLng)
     const destLatN = Number(destLat)
@@ -82,13 +93,19 @@ export default function RideTiers() {
     }).then((next) => {
       if (!alive) return
       setQuote(next)
+      setQuoteError(null)
       const preferred = (next.preferredCarTypes || []).find((id) => tiers.some((tier) => tier.id === id))
       if (preferred && !tiers.some((tier) => tier.id === presetTier)) setSelected(preferred)
-    }).catch(() => {})
+    }).catch((err: unknown) => {
+      if (alive) setQuoteError('Could not load this fare')
+      toastCaught('tiers-quote', err, 'Could not load this fare')
+    })
     return () => {
       alive = false
     }
-  }, [user, pickup, pickupLat, pickupLng, dest, destLat, destLng, presetTier])
+  }, [user, pickup, pickupLat, pickupLng, dest, destLat, destLng, presetTier, quoteAttempt])
+
+  useReconnectRetry('booking-tiers', () => setQuoteAttempt((value) => value + 1), quoteError != null)
 
   const next = {
     pathname: '/pick-driver' as const,
@@ -113,6 +130,18 @@ export default function RideTiers() {
     setAuthNext(next)
     setPromptOpen(true)
   }
+
+  const carpoolCatalog = tiers.find((tier) => tier.id === 'carpool') || null
+  const carpoolServer = (quote?.tiers || []).find((row) => row.id === 'carpool') || null
+  const carpoolQuoted = carpoolCatalog
+    ? tierQuote(carpoolCatalog, {
+      isStudent: student.verified,
+      serverTier: carpoolServer,
+      pass,
+      passName: quote?.tigerPassName || pass?.name || TIGER_PASS_NAME,
+    })
+    : null
+  const carpoolCharge = carpoolQuoted ? carpoolQuoted.price * seats : null
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
@@ -160,6 +189,30 @@ export default function RideTiers() {
           </Text>
         </Pressable>
       ) : null}
+      {quote?.gameDayPricing ? (
+        <View
+          accessibilityRole="text"
+          accessibilityLabel={`${quote.gameDayPricing.label}. ${quote.gameDayPricing.explainer || ''}`}
+          style={styles.passLine}
+        >
+          <Text style={styles.promoDetail}>
+            {quote.gameDayPricing.label}
+            {quote.gameDayPricing.multiplier ? ` · ${quote.gameDayPricing.multiplier}×` : ''}
+            {quote.gameDayPricing.explainer ? ` — ${quote.gameDayPricing.explainer}` : ''}
+          </Text>
+        </View>
+      ) : null}
+      {quote?.peak?.riderLine ? (
+        <View accessibilityRole="text" accessibilityLabel={quote.peak.riderLine} style={styles.passLine}>
+          <Text style={styles.promoDetail}>{quote.peak.riderLine}</Text>
+        </View>
+      ) : null}
+      {quoteError ? (
+        <View accessibilityLiveRegion="polite">
+          <Text style={styles.promoDetail}>{quoteError}</Text>
+          <RetryAction hint="Loads this fare again" onPress={() => setQuoteAttempt((value) => value + 1)} />
+        </View>
+      ) : null}
       <Animated.ScrollView style={[{ flex: 1 }, listMotion]} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
         {tiers.map((tier) => {
           const on = tier.id === selected
@@ -188,14 +241,14 @@ export default function RideTiers() {
                 pressStyle(pressed),
               ]}
               accessibilityRole="button"
-              accessibilityLabel={timing ? `${tier.name}, ${formatUsd(quoted.price)}, ${timing}` : `${tier.name}, ${formatUsd(quoted.price)}, ${tier.eta}, ${tier.meta}`}
+              accessibilityLabel={timing ? `${tier.name}, ${formatUsd(tier.id === 'carpool' && on && carpoolCharge != null ? carpoolCharge : quoted.price)}, ${timing}` : `${tier.name}, ${formatUsd(tier.id === 'carpool' && on && carpoolCharge != null ? carpoolCharge : quoted.price)}, ${tier.eta}, ${tier.meta}`}
               accessibilityHint="Selects this fare"
               accessibilityState={{ selected: on }}
             >
               <GlassCard app="rider" scheme={scheme} pointerEvents="none" selected={on} style={styles.cardGlass} />
               <View style={styles.rowMain}>
-                <View style={[styles.iconWell, on && styles.iconWellOn]}>
-                  <Glyph name={rideTypeIconName(tier.id)} size={22} color={on ? colors.orange : colors.purple} />
+                <View style={[styles.iconWell, { borderColor: on ? colors.orange : colors.purple }, on && styles.iconWellOn]}>
+                  <Glyph name={rideTypeIconName(tier.id)} size={26} color={on ? colors.orange : colors.purple} />
                 </View>
                 <View style={styles.tierCopy}>
                   <Text style={styles.name}>{tier.name}</Text>
@@ -203,7 +256,7 @@ export default function RideTiers() {
                   {quoted.label ? <Text style={styles.discount}>{quoted.label}</Text> : null}
                 </View>
                 <View style={styles.priceCol}>
-                  <Text style={styles.price}>{formatUsd(quoted.price)}</Text>
+                  <Text style={styles.price}>{formatUsd(tier.id === 'carpool' && on ? (carpoolCharge ?? quoted.price) : quoted.price)}</Text>
                   {quoted.discount > 0 ? <Text style={styles.was}>{formatUsd(quoted.was)}</Text> : null}
                 </View>
               </View>
@@ -229,13 +282,18 @@ export default function RideTiers() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   borderWidth: seats === count ? 2 : 1,
-                  borderColor: seats === count ? '#F56600' : 'rgba(82,45,128,0.25)',
+                  borderColor: seats === count ? colors.orange : colors.border,
                 }}
               >
                 <Text style={styles.name}>{count === 1 ? '1 seat' : '2 seats'}</Text>
               </Pressable>
             ))}
           </View>
+        ) : null}
+        {selected === 'carpool' && carpoolCharge != null ? (
+          <Text style={{ fontSize: 13, fontWeight: '700', marginBottom: 8, color: colors.ink }}>
+            {seats === 1 ? '1 seat' : '2 seats'} · {formatUsd(carpoolCharge)}
+          </Text>
         ) : null}
         <PrimaryButton label={selected === 'comfort' ? 'Request Extra Comfort' : selected === 'carpool' ? 'Request Carpool' : 'Choose a driver'} onPress={onConfirm} tone={selected === 'comfort' ? 'purple' : 'orange'} />
       </GlassSheet>
@@ -339,10 +397,11 @@ function makeStyles(colors: Palette) {
     rowOn: { borderColor: colors.orange, backgroundColor: colors.orangeSoft },
     rowFleet: { borderColor: colors.purple, backgroundColor: colors.purpleSoft },
     iconWell: {
-      width: 44,
-      height: 44,
-      borderRadius: 14,
+      width: 48,
+      height: 48,
+      borderRadius: 16,
       backgroundColor: colors.purpleSoft,
+      borderWidth: 1.5,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
     },
@@ -352,8 +411,8 @@ function makeStyles(colors: Palette) {
     name: { fontWeight: '700' as const, fontSize: 16, color: colors.ink },
     meta: { color: colors.inkSecondary, fontSize: 12, marginTop: 2 },
     price: { fontWeight: '800' as const, color: colors.ink, fontSize: 16 },
-    was: { color: colors.inkSecondary, fontSize: 11, textDecorationLine: 'line-through' as const },
-    discount: { color: colors.orange, fontSize: 11, fontWeight: '700' as const, marginTop: 2 },
+    was: { color: colors.inkSecondary, fontSize: 12, textDecorationLine: 'line-through' as const },
+    discount: { color: colors.orange, fontSize: 12, fontWeight: '700' as const, marginTop: 2 },
     footer: { paddingHorizontal: 20, paddingTop: 12, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
   }
 }

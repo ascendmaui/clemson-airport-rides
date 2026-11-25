@@ -3,12 +3,19 @@
  * Rewrites are read from vercel.json so the self-hosted routes stay aligned with it.
  */
 import { createReadStream, readFileSync } from 'node:fs'
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { assetLinksDocument, assetLinksEnabled, ASSETLINKS_PATH } from '../shared/appLinks.js'
+import { lstat, readdir, readFile, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
+import { brotliCompress, constants as zlibConstants, gzip } from 'node:zlib'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const BODY_LIMIT = 1_000_000
+
+const EXACT_CONTENT_TYPES = {
+  '/.well-known/apple-app-site-association': 'application/json',
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -28,6 +35,35 @@ const MIME = {
   '.map': 'application/json; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
   '.webmanifest': 'application/manifest+json',
+}
+
+const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.css', '.json', '.svg', '.map', '.txt', '.webmanifest'])
+const COMPRESS_MIN_BYTES = 1024
+const COMPRESS_CACHE_MAX = 64
+const brotliAsync = promisify(brotliCompress)
+const gzipAsync = promisify(gzip)
+const compressedCache = new Map()
+
+/** Pick br or gzip from Accept-Encoding; null when the client takes neither. */
+function pickEncoding(req) {
+  const accept = headerValue(req, 'accept-encoding').toLowerCase()
+  if (/\bbr\b/.test(accept)) return 'br'
+  if (/\bgzip\b/.test(accept)) return 'gzip'
+  return null
+}
+
+/** Compressed bytes for a static file, cached per file, mtime and encoding. */
+async function compressedBody(file, info, encoding) {
+  const key = `${encoding}:${file}`
+  const hit = compressedCache.get(key)
+  if (hit && hit.mtimeMs === info.mtimeMs && hit.size === info.size) return hit.body
+  const raw = await readFile(file)
+  const body = encoding === 'br'
+    ? await brotliAsync(raw, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 9, [zlibConstants.BROTLI_PARAM_SIZE_HINT]: raw.length } })
+    : await gzipAsync(raw, { level: 9 })
+  if (compressedCache.size >= COMPRESS_CACHE_MAX) compressedCache.delete(compressedCache.keys().next().value)
+  compressedCache.set(key, { mtimeMs: info.mtimeMs, size: info.size, body })
+  return body
 }
 
 function headerValue(req, name) {
@@ -217,6 +253,11 @@ function isApiPath(pathname) {
   return pathname === '/api' || pathname.startsWith('/api/')
 }
 
+/** Short tracking links (/q/<token>) are rewritten to an API handler, unlike other page paths. */
+export function isShortLinkPath(pathname) {
+  return /^\/q\/[A-Za-z0-9_-]{8,40}$/.test(pathname)
+}
+
 function normalizePath(pathname) {
   if (pathname.length > 1 && pathname.endsWith('/')) return pathname.slice(0, -1)
   return pathname
@@ -280,12 +321,53 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body))
 }
 
+async function serveAssetLinks(req, res) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.setHeader('Allow', 'GET, HEAD')
+    sendJson(res, 405, { error: 'Method not allowed' })
+    return
+  }
+  const document = assetLinksEnabled() ? assetLinksDocument() : null
+  if (!document) {
+    sendJson(res, 404, { error: 'Android asset links are not configured' })
+    return
+  }
+  sendJson(res, 200, document)
+}
+
 function healthPayload() {
   return {
     ok: true,
     sha: process.env.GIT_SHA || process.env.SOURCE_COMMIT || 'unknown',
     uptime: Math.round(process.uptime()),
   }
+}
+
+const DOWNLOAD_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.(apk|aab)$/i
+
+export function resolveDownloadFile(downloadsDir, pathname) {
+  if (typeof downloadsDir !== 'string' || !downloadsDir.trim()) return null
+  if (typeof pathname !== 'string') return null
+  const pathOnly = pathname.split('?')[0]
+  if (!pathOnly.startsWith('/downloads/')) return null
+  const rest = pathOnly.slice('/downloads/'.length)
+  if (!rest || rest.includes('/')) return null
+  let name
+  try {
+    name = decodeURIComponent(rest)
+  } catch {
+    return null
+  }
+  if (name.includes('/') || name.includes('\\') || name.includes('\0') || name.includes('..')) return null
+  if (!DOWNLOAD_FILE.test(name)) return null
+  const root = path.resolve(downloadsDir)
+  const file = path.resolve(root, name)
+  if (!file.startsWith(`${root}${path.sep}`)) return null
+  return file
+}
+
+function isDownloadsPath(pathname) {
+  return pathname === '/downloads' || pathname.startsWith('/downloads/')
 }
 
 function cacheControlFor(pathname) {
@@ -314,8 +396,17 @@ async function serveFile(req, res, file, pathname) {
   if (!info.isFile()) return false
   const ext = path.extname(file).toLowerCase()
   res.statusCode = 200
-  res.setHeader('Content-Type', MIME[ext] || 'application/octet-stream')
+  res.setHeader('Content-Type', EXACT_CONTENT_TYPES[pathname] || MIME[ext] || 'application/octet-stream')
   res.setHeader('Cache-Control', cacheControlFor(pathname))
+  const encoding = COMPRESSIBLE.has(ext) && info.size >= COMPRESS_MIN_BYTES ? pickEncoding(req) : null
+  if (COMPRESSIBLE.has(ext)) res.setHeader('Vary', 'Accept-Encoding')
+  if (encoding) {
+    const body = await compressedBody(file, info, encoding)
+    res.setHeader('Content-Encoding', encoding)
+    res.setHeader('Content-Length', String(body.length))
+    res.end(req.method === 'HEAD' ? undefined : body)
+    return true
+  }
   res.setHeader('Content-Length', String(info.size))
   if (req.method === 'HEAD') {
     res.end()
@@ -328,6 +419,58 @@ async function serveFile(req, res, file, pathname) {
     stream.pipe(res)
   })
   return true
+}
+
+async function serveDownload(req, res, downloadsDir, pathname) {
+  const file = resolveDownloadFile(downloadsDir, pathname)
+  if (!file) {
+    sendJson(res, 404, { error: 'Not found' })
+    return
+  }
+  let info
+  try {
+    info = await lstat(file)
+  } catch {
+    sendJson(res, 404, { error: 'Not found' })
+    return
+  }
+  if (info.isSymbolicLink() || !info.isFile()) {
+    sendJson(res, 404, { error: 'Not found' })
+    return
+  }
+  let rootReal
+  let fileReal
+  try {
+    rootReal = await realpath(downloadsDir)
+    fileReal = await realpath(file)
+  } catch {
+    sendJson(res, 404, { error: 'Not found' })
+    return
+  }
+  if (fileReal !== rootReal && !fileReal.startsWith(`${rootReal}${path.sep}`)) {
+    sendJson(res, 404, { error: 'Not found' })
+    return
+  }
+  const filename = path.basename(file)
+  const ext = path.extname(filename).toLowerCase()
+  res.statusCode = 200
+  res.setHeader('Content-Type', ext === '.apk'
+    ? 'application/vnd.android.package-archive'
+    : 'application/octet-stream')
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('Cache-Control', 'public, max-age=300')
+  res.setHeader('Content-Length', String(info.size))
+  if (req.method === 'HEAD') {
+    res.end()
+    return
+  }
+  await new Promise((resolve, reject) => {
+    const stream = createReadStream(fileReal)
+    stream.on('error', reject)
+    res.on('finish', resolve)
+    stream.pipe(res)
+  })
 }
 
 async function serveSpa(req, res, distDir) {
@@ -359,6 +502,7 @@ export async function createApp(options = {}) {
   const root = options.root || REPO_ROOT
   const apiDir = options.apiDir || path.join(root, 'api')
   const distDir = options.distDir || path.join(root, 'dist')
+  const downloadsDir = options.downloadsDir || process.env.DOWNLOADS_DIR || '/downloads'
   const vercelPath = options.vercelPath || path.join(root, 'vercel.json')
   const routes = options.routes || await discoverApiRoutes(apiDir)
   const rewrites = options.rewrites || loadRewrites(vercelPath)
@@ -384,7 +528,7 @@ export async function createApp(options = {}) {
     }
     res.on('finish', finishLog)
     try {
-      await dispatch(req, res, { routes, rewrites, distDir })
+      await dispatch(req, res, { routes, rewrites, distDir, downloadsDir })
     } catch (error) {
       log({
         time: new Date().toISOString(),
@@ -403,7 +547,7 @@ export async function createApp(options = {}) {
   }
 }
 
-async function dispatch(req, res, { routes, rewrites, distDir }) {
+async function dispatch(req, res, { routes, rewrites, distDir, downloadsDir }) {
   trustProxy(req)
   const original = new URL(req.url || '/', 'http://localhost')
   req.originalUrl = req.url || '/'
@@ -420,9 +564,27 @@ async function dispatch(req, res, { routes, rewrites, distDir }) {
     return
   }
 
+  if (isDownloadsPath(originalPath)) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.setHeader('Allow', 'GET, HEAD')
+      sendJson(res, 405, { error: 'Method not allowed' })
+      return
+    }
+    await serveDownload(req, res, downloadsDir, originalPath)
+    return
+  }
+
   if (!isApiPath(originalPath) && (req.method === 'GET' || req.method === 'HEAD')) {
     const file = safeStaticPath(distDir, originalPath)
     if (file && await serveFile(req, res, file, originalPath)) return
+    if (originalPath.startsWith('/.well-known/')) {
+      if (normalizePath(originalPath) === ASSETLINKS_PATH) {
+        await serveAssetLinks(req, res)
+        return
+      }
+      sendJson(res, 404, { error: 'Not found' })
+      return
+    }
   }
 
   let pathname = originalPath
@@ -433,7 +595,7 @@ async function dispatch(req, res, { routes, rewrites, distDir }) {
     search = rewritten.search
   } else {
     const rewritten = applyRewrites(pathname, search, rewrites)
-    if (!isApiPath(rewritten.pathname)) {
+    if (!isApiPath(rewritten.pathname) || isShortLinkPath(originalPath)) {
       pathname = rewritten.pathname
       search = rewritten.search
     }

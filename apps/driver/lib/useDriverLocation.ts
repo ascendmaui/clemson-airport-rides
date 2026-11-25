@@ -27,8 +27,14 @@ export function useDriverLocation(enabled: boolean, onFix: (fix: DriverFix) => v
         }
         stop = startLocationPublisher({
           locate: async (): Promise<DriverFix> => {
-            const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
-            return { lat: pos.coords.latitude, lng: pos.coords.longitude, heading: pos.coords.heading }
+            try {
+              const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
+              return { lat: pos.coords.latitude, lng: pos.coords.longitude, heading: pos.coords.heading }
+            } catch {
+              const fallback = (await Location.getLastKnownPositionAsync({ maxAge: 60000 }))
+                || (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }))
+              return { lat: fallback.coords.latitude, lng: fallback.coords.longitude, heading: fallback.coords.heading }
+            }
           },
           publish: async (fix) => { if (alive) await onFixRef.current(fix) },
           onFix: () => {},

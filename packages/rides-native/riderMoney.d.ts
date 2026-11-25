@@ -2,6 +2,20 @@ export { authedJson } from './apiClient.js'
 
 export const AIRPORT_CHOICES: { code: 'GSP' | 'CLT'; name: string }[]
 
+export type PeakQuote = {
+  surchargeBps: number
+  surchargePct: number
+  surchargeCents: number
+  reasonLabel: string | null
+  riderLine: string | null
+}
+
+export function parsePeakQuote(raw: unknown): PeakQuote | null
+
+export type GameDayPricing = { label: string; explainer: string | null; multiplier: number | null }
+
+export function parseGameDayPricing(raw: unknown): GameDayPricing | null
+
 export type AirportQuote = {
   fareCents: number
   cashCents: number
@@ -9,6 +23,8 @@ export type AirportQuote = {
   studentDiscountCents: number
   surgeMultiplier: number
   surgeLabel: string | null
+  peak?: PeakQuote | null
+  gameDayPricing?: GameDayPricing | null
   routeSource: string | null
   source?: string
   tigerPassApplied?: boolean

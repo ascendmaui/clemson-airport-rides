@@ -1,6 +1,20 @@
 import { useState } from 'react'
 import { navigate } from '../lib/navigation'
 import { LEGAL_UPDATED, PRIVACY_SECTIONS, TERMS_SECTIONS } from '../../shared/legalCopy.js'
+import { supportEmail } from '../../shared/productLinks.js'
+
+function withSupportLink(paragraph) {
+  const email = supportEmail()
+  const index = paragraph.indexOf(email)
+  if (index < 0) return paragraph
+  return (
+    <>
+      {paragraph.slice(0, index)}
+      <a href={`mailto:${email}`}>{email}</a>
+      {paragraph.slice(index + email.length)}
+    </>
+  )
+}
 
 const AGREED_KEY = 'clemson.legal.agreed'
 
@@ -22,7 +36,7 @@ function LegalShell({ title, children }) {
         >
           Back
         </button>
-        <p className="lux-kicker">Clemson RIDES</p>
+        <p className="lux-kicker">Clemson Rides</p>
         <h1>{title}</h1>
         <p className="lux-legal-meta">Last updated {LEGAL_UPDATED}</p>
         <div className="lux-legal-body">{children}</div>
@@ -49,7 +63,7 @@ function LegalBody({ sections }) {
   return sections.map((section) => (
     <Section key={section.heading} heading={section.heading}>
       {section.paragraphs?.map((paragraph) => (
-        <p key={paragraph.slice(0, 48)}>{paragraph}</p>
+        <p key={paragraph.slice(0, 48)}>{withSupportLink(paragraph)}</p>
       ))}
       {section.bullets ? (
         <ul>

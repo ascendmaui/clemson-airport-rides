@@ -2,6 +2,7 @@ import { Glyph } from 'rides-native/icons'
 import { useEffect, useRef, useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
 import { PrimaryButton } from '@/components/Button'
+import { RetryAction } from '@/components/RetryAction'
 import { authedJson } from 'rides-native/apiClient'
 import {
   fetchTripForRating,
@@ -18,6 +19,7 @@ import {
 import { formatCents } from 'rides-native/tripTags'
 import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
+import { useReconnectRetry } from '@/lib/useReconnectRetry'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
 type TipPreset = {
@@ -63,6 +65,7 @@ export function RiderTripEnd({
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [offerAttempt, setOfferAttempt] = useState(0)
   const pickedTip = useRef(false)
 
   useEffect(() => {
@@ -104,7 +107,9 @@ export function RiderTripEnd({
     return () => {
       alive = false
     }
-  }, [supabase, tripId, userId])
+  }, [supabase, tripId, userId, offerAttempt])
+
+  useReconnectRetry('trip-end', () => setOfferAttempt((value) => value + 1), Boolean(offerError))
 
   const needsTip = Boolean(offer) && !offer?.choice && !(Number(offer?.chargedTipCents) > 0)
   const presets = Array.isArray(offer?.presets) ? offer.presets : []
@@ -218,7 +223,12 @@ export function RiderTripEnd({
         accessibilityLabel="Optional review"
       />
       <Text style={styles.label}>Tip</Text>
-      {offerError ? <Text style={styles.error}>{offerError}</Text> : null}
+      {offerError ? (
+        <View accessibilityLiveRegion="polite">
+          <Text style={styles.error}>{offerError}</Text>
+          <RetryAction hint="Loads tip choices again" onPress={() => setOfferAttempt((value) => value + 1)} />
+        </View>
+      ) : null}
       {needsTip ? (
         <>
           <Text style={styles.copy}>
@@ -286,7 +296,12 @@ export function RiderTripEnd({
                 : 'Tip choices load with this trip.'}
         </Text>
       )}
-      {error ? <Text style={styles.error} accessibilityRole="alert">{error}</Text> : null}
+      {error ? (
+        <View accessibilityLiveRegion="assertive">
+          <Text style={styles.error} accessibilityRole="alert">{error}</Text>
+          <RetryAction hint="Saves the rating and tip again" onPress={() => { void onComplete() }} />
+        </View>
+      ) : null}
       <PrimaryButton
         label={busy ? 'Saving…' : 'Complete trip'}
         onPress={() => { void onComplete() }}
@@ -308,7 +323,7 @@ function makeStyles(colors: Palette) {
     },
     kicker: {
       color: colors.orange,
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: '800' as const,
       letterSpacing: 1.1,
     },

@@ -228,7 +228,7 @@ test('an eligible account keeps the original incremental hold request', async ()
       amount: 6000, currency: 'usd', customer: 'cus_1', payment_method: 'pm_default',
       capture_method: 'manual', confirm: true, off_session: true,
       payment_method_options: { card: { request_incremental_authorization: 'if_available' } },
-      description: 'Clemson RIDES fare hold',
+      description: 'Clemson Rides fare hold',
       metadata: {
         kind: 'fare_authorization', tripId: 'trip_eligible', riderId: 'rider_1',
         estimatedFareCents: '5000', bufferCents: '1000', boostCents: '0',

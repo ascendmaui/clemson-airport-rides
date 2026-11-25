@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { Modal, Pressable, Text, View } from 'react-native'
 import { riderModalClosed, riderModalOpened } from '@/lib/afterModal'
+import { logCaught } from '@/lib/caught'
 import { PrimaryButton } from '@/components/Button'
 import { useAuth } from '@/lib/auth'
 import { fetchMatchNotice } from '@/lib/scheduleApi'
@@ -10,6 +11,7 @@ import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 import { buildRiderMatchNotice } from '../../../shared/nearTermSlots.js'
+import { failedHoldPrompt } from 'rides-native/rideMoments'
 
 const MATCHED = ['accepted', 'arriving', 'arrived', 'in_progress']
 
@@ -21,7 +23,7 @@ type Notice = {
   distanceLabel: string | null
   etaLabel: string | null
   pickupLabel: string | null
-  holdFailed: boolean
+  holdTitle: string | null
 }
 
 type RideHref = { pathname: '/requested'; params: { trip: string } } | { pathname: '/billing' }
@@ -41,8 +43,14 @@ export function RiderMatchPopup() {
   const modalOpen = useRef(false)
   const fallback = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  function holdFailed(row: { metadata?: { fare_authorization?: { status?: string } } | null }) {
-    return row?.metadata?.fare_authorization?.status === 'failed'
+  function holdTitleFor(row: { metadata?: object | null }) {
+    try {
+      const prompt = failedHoldPrompt({ metadata: row?.metadata ?? null })
+      return typeof prompt?.title === 'string' ? prompt.title : null
+    } catch (err) {
+      logCaught('match-hold', err)
+      return null
+    }
   }
 
   function closeGate() {
@@ -91,12 +99,13 @@ export function RiderMatchPopup() {
       let next: Notice
       try {
         const fetched = await fetchMatchNotice(row.id)
-        next = { ...fetched, tripId: row.id, holdFailed: holdFailed(row) }
-      } catch {
+        next = { ...fetched, tripId: row.id, holdTitle: holdTitleFor(row) }
+      } catch (err) {
+        logCaught('match-notice', err)
         const fallbackNotice = buildRiderMatchNotice({
           pickupAt: row.pickup_at || row.scheduled_for || row.metadata?.scheduled_pickup_at,
         })
-        next = { ...fallbackNotice, tripId: row.id, holdFailed: holdFailed(row) }
+        next = { ...fallbackNotice, tripId: row.id, holdTitle: holdTitleFor(row) }
       }
       if (alive) {
         if (!modalOpen.current) {
@@ -156,15 +165,15 @@ export function RiderMatchPopup() {
         <View style={styles.card} accessibilityRole="alert" accessibilityLabel={notice?.body || 'Driver matched'}>
           <Text style={styles.kicker}>MATCHED</Text>
           <Text style={styles.title}>{notice?.title || 'Driver matched'}</Text>
-          <Text style={styles.name}>{notice?.driverName || 'Your driver'}</Text>
+          <Text style={styles.name}>{typeof notice?.driverName === 'string' && notice.driverName.trim() ? notice.driverName : 'Your driver'}</Text>
           <Text style={styles.copy}>
             {notice?.distanceLabel ? `${notice.distanceLabel} from pickup` : 'Distance shows when your driver shares a location.'}
           </Text>
           {notice?.etaLabel ? <Text style={styles.copy}>About {notice.etaLabel} out</Text> : null}
           <Text style={styles.pickup}>{notice?.pickupLabel ? `Pickup ${notice.pickupLabel}` : 'Pickup time follows their ETA.'}</Text>
-          {notice?.holdFailed ? (
+          {notice?.holdTitle ? (
             <PrimaryButton
-              label="Add a payment method"
+              label={notice.holdTitle}
               onPress={() => dismissThen({ pathname: '/billing' })}
             />
           ) : null}

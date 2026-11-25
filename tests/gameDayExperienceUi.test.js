@@ -27,8 +27,8 @@ test('game-day surfaces use the orange and purple palette and avoid retired mark
   const banned = new RegExp(['te' + 'sla', 'death valley', 'tigers', 'memorial stadium', 'iptay'].join('|'), 'i')
   for (const rel of COLOR_FILES) {
     const text = read(rel)
-    assert.match(text, /#F56600/, rel)
-    assert.match(text, /#522D80/, rel)
+    assert.match(text, /#F56600|colors\.orange\b/, rel)
+    assert.match(text, /#522D80|colors\.purple\b/, rel)
   }
   for (const rel of COPY_FILES) {
     assert.doesNotMatch(read(rel), banned, rel)

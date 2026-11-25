@@ -1,5 +1,5 @@
 /**
- * Clemson RIDES icon set — orange #F56600 + purple #522D80, rounded Lyft-style.
+ * Clemson Rides icon set — orange #F56600 + purple #522D80, rounded Lyft-style.
  */
 const ORANGE = '#F56600'
 const PURPLE = '#522D80'

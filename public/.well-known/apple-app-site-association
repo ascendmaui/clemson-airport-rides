@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "L85AF3V872.com.ascendmaui.clemsonrides.rider",
+        "paths": ["/book", "/ride", "/drive", "/trip", "/trip/*", "/auth/callback"]
+      },
+      {
+        "appID": "L85AF3V872.com.ascendmaui.clemsonrides.driver",
+        "paths": ["/driver", "/driver/*"]
+      }
+    ]
+  }
+}

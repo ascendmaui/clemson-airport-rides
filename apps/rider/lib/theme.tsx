@@ -1,14 +1,17 @@
 import * as Location from 'expo-location'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Appearance, useColorScheme } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated'
+import { migrateAppearance, nativeColorScheme, resolveScheme, type DisplayMode } from '@/lib/appearance'
+import { logCaught } from '@/lib/caught'
 import { authStorage } from '@/lib/storage'
 import { paletteFor, type Palette, type Scheme } from '@/lib/palette'
-import { CLEMSON_LAT, CLEMSON_LNG, isDaylight } from '@/lib/solar'
 
-export type DisplayMode = 'auto' | 'light' | 'dark'
+export type { DisplayMode }
 
 type Prefs = {
   displayMode: DisplayMode
+  appearanceMigrated: true
 }
 
 type ThemeValue = {
@@ -21,57 +24,48 @@ type ThemeValue = {
 
 const PREFS_KEY = 'rider.ui.prefs'
 const DEFAULT_PREFS: Prefs = {
-  displayMode: 'light',
+  displayMode: 'auto',
+  appearanceMigrated: true,
 }
 
 const ThemeContext = createContext<ThemeValue | null>(null)
-
-function isDisplayMode(value: unknown): value is DisplayMode {
-  return value === 'auto' || value === 'light' || value === 'dark'
-}
 
 function readPrefs(raw: string | null): Prefs {
   if (!raw) return DEFAULT_PREFS
   try {
     const parsed = JSON.parse(raw) as Partial<Prefs>
-    return {
-      displayMode: isDisplayMode(parsed.displayMode) && parsed.displayMode === 'dark' ? 'dark' : 'light',
-    }
-  } catch {
+    return migrateAppearance(parsed)
+  } catch (err) {
+    logCaught('theme-prefs-parse', err)
     return DEFAULT_PREFS
   }
 }
 
-function resolveScheme(mode: DisplayMode, _daylight: boolean): Scheme {
-  switch (mode) {
-    case 'light':
-      return 'light'
-    case 'dark':
-      return 'dark'
-    case 'auto':
-      // Night mode is opt-in. Older builds saved 'auto'; it now opens light.
-      return 'light'
-    default: {
-      const unknown: never = mode
-      return unknown
-    }
-  }
-}
-
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const systemScheme = useColorScheme()
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS)
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
-  const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
     authStorage.getItem(PREFS_KEY).then((raw) => {
-      setPrefs(readPrefs(raw))
-    }).catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60_000)
-    return () => clearInterval(timer)
+      const next = readPrefs(raw)
+      setPrefs(next)
+      let already = false
+      if (raw) {
+        try {
+          already = (JSON.parse(raw) as { appearanceMigrated?: unknown }).appearanceMigrated === true
+        } catch (err) {
+          logCaught('theme-prefs-parse', err)
+        }
+      }
+      if (!already) {
+        authStorage.setItem(PREFS_KEY, JSON.stringify(next)).catch((err: unknown) => {
+          logCaught('theme-prefs-save', err)
+        })
+      }
+    }).catch((err: unknown) => {
+      logCaught('theme-prefs', err)
+    })
   }, [])
 
   useEffect(() => {
@@ -79,7 +73,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     Location.getLastKnownPositionAsync().then((pos: { coords: { latitude: number; longitude: number } } | null) => {
       if (!alive || !pos) return
       setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-    }).catch(() => {})
+    }).catch((err: unknown) => {
+      logCaught('theme-location', err)
+    })
     return () => {
       alive = false
     }
@@ -88,13 +84,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   function update(patch: Partial<Prefs>) {
     setPrefs((current: Prefs) => {
       const next = { ...current, ...patch }
-      authStorage.setItem(PREFS_KEY, JSON.stringify(next)).catch(() => {})
+      authStorage.setItem(PREFS_KEY, JSON.stringify(next)).catch((err: unknown) => {
+        logCaught('theme-prefs-save', err)
+      })
       return next
     })
   }
 
-  const daylight = isDaylight(now, coords?.lat ?? CLEMSON_LAT, coords?.lng ?? CLEMSON_LNG)
-  const scheme = resolveScheme(prefs.displayMode, daylight)
+  useEffect(() => {
+    Appearance.setColorScheme(nativeColorScheme(prefs.displayMode))
+  }, [prefs.displayMode])
+
+  const scheme = resolveScheme(prefs.displayMode, systemScheme)
   const colors = paletteFor(scheme)
 
   const value: ThemeValue = {

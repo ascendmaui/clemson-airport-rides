@@ -72,7 +72,15 @@ export async function fetchRideDemand({ mode = 'busy', windowId = 'now' } = {}) 
       p_hour_start: hourStart,
       p_hour_end: hourEnd,
     }
-    let { data, error: rpcErr } = await supabase.rpc('get_ride_demand', args)
+    // Signed-out visitors go straight to the coarse public aggregate, so no 401 is logged.
+    let signedIn = true
+    try {
+      const { data: auth } = await supabase.auth.getSession()
+      signedIn = Boolean(auth?.session)
+    } catch { signedIn = true }
+    let { data, error: rpcErr } = signedIn
+      ? await supabase.rpc('get_ride_demand', args)
+      : await supabase.rpc('public_ride_demand_coarse', args)
     // Signed-out visitors cannot read fine-grained demand; use the coarse public aggregate.
     if (rpcErr && isPermissionDenied(rpcErr)) {
       ({ data, error: rpcErr } = await supabase.rpc('public_ride_demand_coarse', args))

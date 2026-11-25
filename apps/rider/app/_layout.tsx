@@ -8,6 +8,7 @@ import { ApproachAlert } from '@/components/ApproachAlert'
 import { PickupBeaconHost } from '@/components/PickupBeaconHost'
 import { LostItemBanner } from 'rides-native/LostItemBanner.jsx'
 import { ToastHost } from 'rides-native/ToastHost.jsx'
+import { FlowErrorBoundary } from '@/components/FlowErrorBoundary'
 import { RiderMatchPopup } from '@/components/RiderMatchPopup'
 import { RiderMoments } from '@/components/RiderMoments'
 import { AuthProvider, useAuth } from '@/lib/auth'
@@ -16,6 +17,7 @@ import { ThemeProvider, useTheme } from '@/lib/theme'
 import { useApproachingTrip } from '@/lib/useRiderTrip'
 import { useRiderPickupStream } from '@/lib/useRiderPickupStream'
 import { BootScreen } from '@/components/BootScreen'
+import { NetworkWatch, OfflineBanner } from '@/components/OfflineBanner'
 import { clearAmbassadorCode, loadAmbassadorCode, saveAmbassadorCode } from '@/lib/ambassadorCode'
 import { supabase } from '@/lib/supabase'
 import { ambassadorCodeFromLocation } from 'rides-native/shared/ambassadorAttribution.js'
@@ -26,6 +28,7 @@ import { ProfileRequiredGate } from 'rides-native/PartyScreens'
 import { resolveApiBase } from 'rides-native/apiOrigin.js'
 import { setCarpoolApiBase } from 'rides-native/shared/carpoolApi.js'
 import * as Notifications from 'expo-notifications'
+import { logCaught } from '@/lib/caught'
 import { registerRiderPush, tripIdFromPush } from '@/lib/push'
 
 setCarpoolApiBase(resolveApiBase())
@@ -106,7 +109,9 @@ function AmbassadorDeepLink() {
       const code = ambassadorCodeFromLocation({ href: url || '' })
       if (code) router.push(`/a/${code}`)
     }
-    Linking.getInitialURL().then(open).catch(() => {})
+    Linking.getInitialURL().then(open).catch((err: unknown) => {
+      logCaught('ambassador-link', err)
+    })
     const sub = Linking.addEventListener('url', (event: { url: string }) => open(event.url))
     return () => sub.remove()
   }, [router])
@@ -121,7 +126,9 @@ function RiderPushBridge() {
   const router = useRouter()
   useEffect(() => {
     if (!user?.id) return undefined
-    registerRiderPush(supabase, user.id).catch(() => {})
+    registerRiderPush(supabase, user.id).catch((err: unknown) => {
+      logCaught('rider-push', err)
+    })
     const open = (response: Notifications.NotificationResponse | null) => {
       const id = response?.notification.request.identifier
       if (!response || (id && handledPushes.has(id))) return
@@ -129,7 +136,9 @@ function RiderPushBridge() {
       const tripId = tripIdFromPush(response.notification.request.content.data)
       if (tripId) router.push({ pathname: '/requested', params: { trip: tripId } })
     }
-    Notifications.getLastNotificationResponseAsync().then(open).catch(() => {})
+    Notifications.getLastNotificationResponseAsync().then(open).catch((err: unknown) => {
+      logCaught('rider-push-open', err)
+    })
     const sub = Notifications.addNotificationResponseReceivedListener(open)
     return () => sub.remove()
   }, [router, user?.id])
@@ -154,7 +163,9 @@ function AmbassadorClaim() {
           }
         }
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        logCaught('ambassador-claim', err)
+      })
     return () => {
       alive = false
     }
@@ -192,7 +203,9 @@ function CheckoutDeepLink() {
         }
       }
     }
-    Linking.getInitialURL().then(handleUrl).catch(() => {})
+    Linking.getInitialURL().then(handleUrl).catch((err: unknown) => {
+      logCaught('checkout-link', err)
+    })
     const sub = Linking.addEventListener('url', (event: { url: string }) => handleUrl(event.url))
     return () => sub.remove()
   }, [router])
@@ -203,6 +216,8 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
+        <NetworkWatch />
+        <OfflineBanner />
         <AuthProvider>
           <PasswordRecoveryListener />
           <AmbassadorDeepLink />
@@ -213,9 +228,13 @@ export default function RootLayout() {
             <ThemedStack />
             <ApproachHost />
             <PickupBeaconHost />
-            <RiderMatchPopup />
+            <FlowErrorBoundary title="Driver matched">
+              <RiderMatchPopup />
+            </FlowErrorBoundary>
             <ToastMount />
-            <RiderMoments />
+            <FlowErrorBoundary title="Ride updates">
+              <RiderMoments />
+            </FlowErrorBoundary>
           </Gate>
         </AuthProvider>
       </ThemeProvider>

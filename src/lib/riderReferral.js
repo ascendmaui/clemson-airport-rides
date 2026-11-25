@@ -5,8 +5,30 @@
  */
 import { supabase } from './supabase'
 import { normalizePromoCode } from './riderPromo'
+import { authedJson } from './apiClient.js'
+import { promoReasonMessage } from '../../shared/promoCodes.js'
 
 const CLAIM_STATE_KEY = 'clemson_promo_claim_state'
+
+/**
+ * Clemson Rides campaign code (admin-issued) first, then the friend program.
+ * The server validates; the web sign-up is rider-side only.
+ */
+export async function claimSignupPromo(code) {
+  const norm = normalizePromoCode(code)
+  if (!norm) return { ok: true, claimed: false, reason: 'no_code' }
+  let campaign = null
+  try {
+    campaign = await authedJson(supabase, '/api/promo/claim', { method: 'POST', body: { code: norm, side: 'rider' } })
+  } catch (e) {
+    console.warn('[promo claim]', e?.message)
+  }
+  if (campaign?.ok) return { ok: true, claimed: true, campaign: true, code: campaign.code }
+  if (campaign?.reason && campaign.reason !== 'not_found' && campaign.reason !== 'promo_unavailable') {
+    return { ok: false, campaign: true, reason: campaign.reason, error: promoReasonMessage(campaign.reason) }
+  }
+  return claimRiderSocialPromo(norm)
+}
 
 export async function claimRiderSocialPromo(code) {
   if (!supabase) throw new Error('Supabase is not configured')
@@ -38,7 +60,7 @@ export async function maybeClaimStoredPromo(user, promoCode) {
   if (prev === `${user.id}:ok` || prev === `${user.id}:bad`) return null
 
   try {
-    const res = await claimRiderSocialPromo(code)
+    const res = await claimSignupPromo(code)
     const bad = Boolean(res?.error)
     const done = res?.claimed || res?.reason === 'already_referred' || bad
     if (done) {

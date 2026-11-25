@@ -203,6 +203,16 @@ export function riderLiveCopy(status, { preferred = false } = {}) {
   }
 }
 
+/** Short rider-facing status for lists. Database values stay off the screen. */
+export function riderStatusPhrase(status) {
+  if (status === 'canceled_midride') return 'Ended during the trip'
+  if (status === 'expired') return 'Expired'
+  if (!status) return 'Requested'
+  const title = riderLiveCopy(status).title
+  if (title === 'Ride requested' && status !== 'requested') return String(status).replaceAll('_', ' ')
+  return title
+}
+
 export function riderLiveView(status, options) {
   const preferred = Boolean(options?.preferred)
   const waitingMs = Number(options?.waitingMs) || 0

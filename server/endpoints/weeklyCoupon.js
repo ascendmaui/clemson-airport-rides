@@ -1,6 +1,7 @@
 /**
  * GET  /api/weekly-coupon — this week's coupon and the standing offers.
  * GET or POST from cron — Friday 12:00 America/New_York email + Expo push.
+ * ?action=promo-check|promo-claim|promo-campaigns — campaign codes, see ./promoCodes.js.
  *
  * Cron auth matches driver payouts: Bearer CRON_SECRET. On Vercel the
  * x-vercel-cron header selects the cron path and the bearer is still required.
@@ -17,6 +18,8 @@ import { cronAuthorized, isVercelCron, runningOnVercel } from './driverPayouts.j
 import { STANDING_OFFERS, selectRideDiscount } from '../../shared/standingPromos.js'
 import { currentWeeklyCoupon, FRIDAY_DROP_HOUR_ET, FRIDAY_DROP_TIME_ZONE } from '../../shared/weeklyCoupon.js'
 import { runFridayDrop } from '../weeklyCouponDrop.js'
+import { resolveRouteAction } from '../routeAction.js'
+import handlePromoCodes, { PROMO_ACTIONS } from './promoCodes.js'
 
 function flagOn(value) {
   const v = String(value ?? '').trim().toLowerCase()
@@ -128,6 +131,9 @@ async function riderContext(sb, userId) {
 
 export default async function handler(req, res, deps = {}) {
   if (cors(req, res)) return
+  // Campaign promo codes share this function (see vercel.json /api/promo/*).
+  const promoAction = resolveRouteAction(req, { allowed: PROMO_ACTIONS })
+  if (promoAction) return handlePromoCodes(req, res, promoAction, deps)
   if (req.method !== 'GET' && req.method !== 'POST') {
     res.setHeader?.('Allow', 'GET, POST, OPTIONS')
     return json(res, 405, { error: 'Method not allowed' })

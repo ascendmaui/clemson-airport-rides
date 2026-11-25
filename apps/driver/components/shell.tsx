@@ -2,9 +2,9 @@ import { GlassButton, GlassSurface, glassTextColor } from 'rides-native/glass'
 import { Glyph } from 'rides-native/icons'
 import type { ReactNode } from 'react'
 import { useEffect, useRef } from 'react'
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Animated, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { motion, radius, type as typeScale } from 'rides-native/shared/theme.js'
+import { color, glowStyle, motion, radius, type as typeScale } from 'rides-native/shared/theme.js'
 import { Enter } from '@/lib/enterMotion'
 import { useTheme } from '@/lib/theme'
 import { useLift } from '@/components/chrome'
@@ -194,7 +194,7 @@ export function ListRow({
       ]}
     >
       <View style={[styles.rowIcon, { backgroundColor: colors.track }]}>
-        <Glyph name={icon} size={18} color={colors.purple} />
+        <Glyph name={icon} size={18} color={colors.link} />
       </View>
       <View style={styles.rowBody}>
         <Text style={[styles.rowTitle, { color: colors.ink }]}>{title}</Text>
@@ -216,12 +216,15 @@ export function StackPage({
   children,
   footer,
   right,
+  scroll = true,
 }: {
   title: string
   onBack: () => void
   children: ReactNode
   footer?: ReactNode
   right?: ReactNode
+  /** false: the page body is a virtualized list that scrolls itself (no outer ScrollView). */
+  scroll?: boolean
 }) {
   const insets = useSafeAreaInsets()
   const { colors, scheme } = useTheme()
@@ -233,9 +236,13 @@ export function StackPage({
         <Text style={[styles.pageTitle, { color: colors.title }]}>{title}</Text>
         <View style={styles.pageRight}>{right || <View style={styles.circle} />}</View>
       </View>
-      <ScrollView contentContainerStyle={styles.pageGrow} showsVerticalScrollIndicator={false}>
-        <Enter style={styles.pageBody}>{children}</Enter>
-      </ScrollView>
+      {scroll ? (
+        <ScrollView contentContainerStyle={styles.pageGrow} showsVerticalScrollIndicator={false}>
+          <Enter style={styles.pageBody}>{children}</Enter>
+        </ScrollView>
+      ) : (
+        <Enter style={styles.pageList}>{children}</Enter>
+      )}
       {footer ? (
         <GlassSurface app="driver" scheme={scheme} variant="header" style={[styles.footer, barShadow, { paddingBottom: insets.bottom + 12 }]}>
           {footer}
@@ -261,11 +268,8 @@ const styles = StyleSheet.create({
     padding: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#F56600',
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    // Orange glow; on Android also a soft orange ring, since elevation shadows draw grey there.
+    ...glowStyle(color.orange, Platform.OS),
   },
   goText: {
     fontSize: 26,
@@ -299,6 +303,7 @@ const styles = StyleSheet.create({
   pageRight: { width: 48, alignItems: 'flex-end' },
   pageGrow: { flexGrow: 1 },
   pageBody: { padding: 16, paddingBottom: 40, gap: 12 },
+  pageList: { flex: 1 },
   footer: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 16,

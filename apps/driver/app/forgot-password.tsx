@@ -9,7 +9,7 @@ export default function ForgotPasswordRoute() {
     <ForgotPasswordScreen
       resetPassword={resetPassword}
       mark="CD"
-      sentDetail="The link opens Clemson RIDES Driver with clemsonrides-driver://set-password."
+      sentDetail="The link opens Clemson Rides Driver with clemsonrides-driver://set-password."
       onSignIn={() => router.replace('/sign-in')}
       onBack={() => {
         if (router.canGoBack()) router.back()

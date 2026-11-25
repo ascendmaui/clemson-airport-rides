@@ -16,7 +16,7 @@ export const STUDY_NOTES = [
   {
     id: 'fare',
     title: 'Your 80%',
-    body: 'You net 80% of the fare. Clemson RIDES keeps 20%. The rider’s card is authorized for the estimate when they request the ride, and the final fare is charged when you complete the trip.',
+    body: 'You net 80% of the fare. Clemson Rides keeps 20%. The rider’s card is authorized for the estimate when they request the ride, and the final fare is charged when you complete the trip.',
   },
   {
     id: 'gameday',
@@ -69,7 +69,7 @@ export const KNOWLEDGE_QUIZ = [
       },
       {
         id: 'split',
-        label: 'You net 80% of the fare. Clemson RIDES keeps 20%. The final fare is charged when you complete the trip.',
+        label: 'You net 80% of the fare. Clemson Rides keeps 20%. The final fare is charged when you complete the trip.',
       },
       {
         id: 'reversed',

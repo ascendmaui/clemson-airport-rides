@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { fetchNotificationPrefs, normalizePrefs, saveNotificationPrefs, type NotificationPrefs } from 'rides-native/notificationPrefs.js'
 import { authStorage } from '@/lib/storage'
 import { supabase } from '@/lib/supabase'
+import { quiet } from '@/lib/softFail'
 
 /**
  * Driver quiet hours live in profiles.notification_prefs.quiet (the same
@@ -32,7 +33,7 @@ export function useDriverAlertPrefs(userId: string | null | undefined) {
   useEffect(() => {
     if (!userId) return undefined
     let alive = true
-    driverAlertPrefs(userId, 0).then((p) => { if (alive) setPrefs(p) }).catch(() => {})
+    driverAlertPrefs(userId, 0).then((p) => { if (alive) setPrefs(p) }).catch(quiet('quiet hours prefs'))
     listeners.add(setPrefs)
     return () => {
       alive = false

@@ -7,6 +7,6 @@ export const ACCOUNT_DELETION_TICKET = Object.freeze({
   confirmed: true,
   category: 'account',
   roleVariant: 'rider',
-  subject: 'Delete my Clemson RIDES account',
-  body: 'Please delete my Clemson RIDES account and the trip history tied to it. I confirm this request from the product.',
+  subject: 'Delete my Clemson Rides account',
+  body: 'Please delete my Clemson Rides account and the trip history tied to it. I confirm this request from the product.',
 })

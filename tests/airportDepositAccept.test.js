@@ -8,7 +8,12 @@ const MIGRATION_PATH = new URL(
   '../supabase/migrations/20260924233000_block_unpaid_airport_deposit_accept.sql',
   import.meta.url,
 )
+const COPY_PATH = new URL(
+  '../supabase/migrations/20261016180000_airport_card_hold_accept_copy.sql',
+  import.meta.url,
+)
 const migrationSql = readFileSync(MIGRATION_PATH, 'utf8')
+const copySql = readFileSync(COPY_PATH, 'utf8')
 
 const DRIVER = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 const RIDER = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
@@ -123,14 +128,21 @@ before(async () => {
     INSERT INTO public.profiles (id, role) VALUES ('${DRIVER}', 'driver');
   `)
   await db.exec(migrationSql)
+  await db.exec(`
+    CREATE OR REPLACE FUNCTION public.assert_driver_may_accept(actor uuid)
+    RETURNS void
+    LANGUAGE plpgsql
+    AS $$ BEGIN RETURN; END; $$;
+  `)
+  await db.exec(copySql)
   await db.query(`SELECT set_config('request.jwt.claim.sub', $1, false)`, [DRIVER])
 })
 
-test('migration raises the same unpaid-deposit sentence as the driver desk', () => {
-  assert.match(migrationSql, new RegExp(UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR.replace(/[.]/g, '\\.')))
+test('migration raises the same unpaid card-hold sentence as the driver desk', () => {
+  assert.match(copySql, new RegExp(UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR.replace(/[.]/g, '\\.')))
   assert.equal(
     UNPAID_AIRPORT_DEPOSIT_ACCEPT_ERROR,
-    'Airport deposit still unpaid. This ride is not claimable until the rider pays the deposit.',
+    'This airport ride still has an unpaid card hold. It is not claimable until the rider pays.',
   )
 })
 
@@ -162,25 +174,25 @@ test('predicate matches paid stamps, fare coverage, zero deposit, and non-airpor
 
 test('forged trips.update cannot accept or claim an unpaid airport deposit', async () => {
   const id = await seed()
-  await rejectsWith(() => claim(id), /Airport deposit still unpaid/)
+  await rejectsWith(() => claim(id), /unpaid card hold/)
   const row = await tripOf(id)
   assert.equal(row.status, 'searching')
   assert.equal(row.driver_id, null)
 
-  await rejectsWith(() => claim(id, 'offered'), /Airport deposit still unpaid/)
+  await rejectsWith(() => claim(id, 'offered'), /unpaid card hold/)
   assert.equal((await tripOf(id)).status, 'searching')
 
   const pinned = await seed()
   await rejectsWith(
     () => db.query('UPDATE public.trips SET driver_id = $2::uuid WHERE id = $1::uuid', [pinned, DRIVER]),
-    /Airport deposit still unpaid/,
+    /unpaid card hold/,
   )
   assert.equal((await tripOf(pinned)).driver_id, null)
 
   const requested = await seed({ status: 'requested', driver_id: DRIVER })
   await rejectsWith(
     () => db.query(`UPDATE public.trips SET status = 'accepted' WHERE id = $1::uuid`, [requested]),
-    /Airport deposit still unpaid/,
+    /unpaid card hold/,
   )
   assert.equal((await tripOf(requested)).status, 'requested')
 })
@@ -196,7 +208,7 @@ test('a forged checkout_deposit or zeroed deposit on the same update does not co
        WHERE id = $1::uuid`,
       [stamped, DRIVER],
     ),
-    /Airport deposit still unpaid/,
+    /unpaid card hold/,
   )
   assert.equal((await tripOf(stamped)).status, 'searching')
   assert.equal((await tripOf(stamped)).metadata.checkout_deposit, undefined)
@@ -209,7 +221,7 @@ test('a forged checkout_deposit or zeroed deposit on the same update does not co
        WHERE id = $1::uuid`,
       [zeroed, DRIVER],
     ),
-    /Airport deposit still unpaid/,
+    /unpaid card hold/,
   )
   assert.equal((await tripOf(zeroed)).deposit_cents, 2500)
 })
@@ -263,7 +275,7 @@ test('cancel, payment stamp, and restore stay allowed, then a paid accept works'
     () => db.query(`SELECT public.accept_scheduled_trip($1::uuid)`, [id]),
     /no longer available/,
   )
-  await rejectsWith(() => claim(id), /Airport deposit still unpaid/)
+  await rejectsWith(() => claim(id), /unpaid card hold/)
   assert.equal((await tripOf(id)).status, 'canceled')
 
   await db.query(
@@ -295,7 +307,7 @@ test('accept_scheduled_trip rejects an unpaid airport deposit and keeps the row'
   })
   await rejectsWith(
     () => db.query(`SELECT public.accept_scheduled_trip($1::uuid)`, [id]),
-    /Airport deposit still unpaid/,
+    /unpaid card hold/,
   )
   const row = await tripOf(id)
   assert.equal(row.status, 'scheduled')

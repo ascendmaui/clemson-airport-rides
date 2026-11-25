@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { EXPO_PUSH_URL, PUSH_CREDENTIAL_GAP, pushCredentialStatus, sendExpoPush } from './expoPush.js'
+import {
+  EXPO_PUSH_URL,
+  EXPO_RECEIPTS_URL,
+  PUSH_CREDENTIAL_GAP,
+  expoReceiptError,
+  fetchExpoPushReceipts,
+  pollExpoPushReceipts,
+  pushCredentialStatus,
+  receiptDropsToken,
+  sendExpoPush,
+} from './expoPush.js'
 
 test('push credential status names the APNs and FCM gap without blocking on a missing access token', () => {
   const status = pushCredentialStatus({})
@@ -62,6 +72,7 @@ test('a configured access token posts a high-priority ride alert', async () => {
   })
   assert.equal(result.sent, true)
   assert.equal(result.reason, 'sent')
+  assert.equal(result.ticketId, 'ticket')
   assert.equal(seen.url, EXPO_PUSH_URL)
   assert.match(seen.init.headers.Authorization, /^Bearer expo-secret$/)
   const body = JSON.parse(seen.init.body)
@@ -103,4 +114,52 @@ test('credential detection and device rejection have distinct reasons', async ()
 test('shared sender rejects raw tokens before fetching', async () => {
   const result = await sendExpoPush({ to: 'a'.repeat(64) }, { fetch: async () => assert.fail('raw token sent') })
   assert.equal(result.reason, 'raw_device_token_unsupported')
+})
+
+test('receipt fetch posts ticket ids and classifies DeviceNotRegistered', async () => {
+  let seen = null
+  const result = await fetchExpoPushReceipts([' ticket-1 ', 'ticket-1', ''], {
+    env: { EXPO_ACCESS_TOKEN: 'expo-secret' },
+    fetch: async (url, init) => {
+      seen = { url, init }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: {
+            'ticket-1': { status: 'error', details: { error: 'DeviceNotRegistered' } },
+            'ticket-2': { status: 'ok' },
+          },
+        }),
+      }
+    },
+  })
+  assert.equal(result.ok, true)
+  assert.equal(seen.url, EXPO_RECEIPTS_URL)
+  assert.match(seen.init.headers.Authorization, /^Bearer expo-secret$/)
+  assert.deepEqual(JSON.parse(seen.init.body).ids, ['ticket-1'])
+  assert.equal(expoReceiptError(result.receipts['ticket-1']), 'DeviceNotRegistered')
+  assert.equal(receiptDropsToken(result.receipts['ticket-1']), true)
+  assert.equal(expoReceiptError(result.receipts['ticket-2']), null)
+  assert.equal(receiptDropsToken(result.receipts['ticket-2']), false)
+  assert.equal(expoReceiptError(undefined), null)
+})
+
+test('receipt polling stops when every ticket is present and does not wait after the last try', async () => {
+  const waits = []
+  let calls = 0
+  const result = await pollExpoPushReceipts(['a', 'b'], {
+    attempts: 3,
+    waitMs: 20,
+    sleep: async (ms) => { waits.push(ms) },
+    fetch: async () => {
+      calls += 1
+      const data = calls === 1 ? { a: { status: 'ok' } } : { a: { status: 'ok' }, b: { status: 'ok' } }
+      return { ok: true, status: 200, json: async () => ({ data }) }
+    },
+  })
+  assert.equal(calls, 2)
+  assert.deepEqual(waits, [20])
+  assert.equal(result.attempt, 2)
+  assert.deepEqual(result.pending, [])
 })

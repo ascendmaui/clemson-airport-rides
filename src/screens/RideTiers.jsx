@@ -17,6 +17,7 @@ import { studentSurfaceCopy } from '../../packages/rides-native/riderMoney.js'
 import { bookableRideTiers } from '../../packages/rides-native/places.js'
 import { useRideOptions } from '../lib/useRideOptions'
 import { isOfferedRideTier, NO_DRIVERS_AVAILABLE_COPY, SCHEDULE_AHEAD_LABEL } from '../../shared/rideOptions.js'
+import { SiteIcon } from '../components/SiteIcon'
 
 export function RideTiers({
   dest = '1900 GSP Dr',
@@ -53,6 +54,10 @@ export function RideTiers({
     let alive = true
     setQuote(null)
     setQuoteError(null)
+    if (!String(pickup || '').trim() && !(Number.isFinite(Number(pickupLat)) && String(pickupLat).trim() && Number.isFinite(Number(pickupLng)) && String(pickupLng).trim())) {
+      setQuoteError('Choose a pickup spot first to load live fares.')
+      return () => { alive = false }
+    }
     fetchRideQuote({
       pickupLabel: pickup,
       pickupLat,
@@ -127,9 +132,11 @@ export function RideTiers({
   }
 
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'transparent' }}>
+    // One scroll for the whole page: the app shell scrolls; nothing in here has its own
+    // overflow or a fixed height, so the map, notices and ride cards move together.
+    <div className="fade-in ride-tiers" style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: 'transparent', maxWidth: 640, margin: '0 auto', width: '100%' }}>
       <div style={{ padding: '12px 16px 0' }}>
-        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to pickup confirmation" onClick={() => navigate('confirm', { dest, destLat, destLng, pickup, pickupLat, pickupLng, ...(billing ? { billing } : {}) })} style={{ marginBottom: 8 }}>←</button>
+        <button type="button" className="pressable glass-pill nav-back-btn" aria-label="Back to pickup confirmation" onClick={() => navigate('confirm', { dest, destLat, destLng, pickup, pickupLat, pickupLng, ...(billing ? { billing } : {}) })} style={{ marginBottom: 8 }}><SiteIcon name="arrow-left" size={20} /></button>
         <div className="glass-panel" style={{ borderRadius: 16, overflow: 'hidden', padding: 4 }}>
           <CampusMap
             height={140}
@@ -178,28 +185,34 @@ export function RideTiers({
         </p>
       </div>
 
-      <div
-        className="sheet"
+      <section
+        aria-label="Choose a ride"
         style={{
           flex: 1,
-          marginTop: 12,
-          padding: '8px 12px 20px',
-          overflowY: 'auto',
+          marginTop: 14,
+          padding: '4px 16px 0',
           display: 'flex',
           flexDirection: 'column',
         }}
       >
-        <div className="sheet-handle" />
-        <div style={{ flex: 1 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.01em', margin: '0 2px 10px', color: 'var(--ink)' }}>Choose a ride</h2>
+        <div className="tier-list" style={{ flex: 1 }}>
           {quoteError && (
-            <p role="alert" style={{ color: 'var(--danger, #b00020)', fontSize: 13, fontWeight: 700, margin: '8px 8px 0' }}>
+            <p role="alert" style={{ color: 'var(--danger, #b00020)', fontSize: 13, fontWeight: 700, margin: '0 2px' }}>
               {quoteError}
             </p>
           )}
           {rideOptions && tiers.length === 0 ? (
-            <div style={{ padding: '12px 8px' }}>
-              <p style={{ fontWeight: 800, color: '#522D80' }}>{rideOptions.emptyMessage || NO_DRIVERS_AVAILABLE_COPY}</p>
-              <button type="button" className="pressable" onClick={() => navigate('schedule')} style={{ marginTop: 8, fontWeight: 800, color: '#F56600' }}>
+            <div style={{ padding: '18px 16px', borderRadius: 18, background: '#fff', border: '1.5px solid rgba(17,17,26,0.08)', boxShadow: '0 4px 14px rgba(17,17,26,0.05)' }}>
+              <p style={{ fontWeight: 800, color: '#522D80' }}>
+                {rideOptions.viewerOnlineDriver ? 'You are the only driver online' : (rideOptions.emptyMessage || NO_DRIVERS_AVAILABLE_COPY)}
+              </p>
+              {rideOptions.viewerOnlineDriver ? (
+                <p style={{ marginTop: 6, fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.45 }}>
+                  This account is online in the driver app, and a rider cannot book their own car. Sign in here with a different rider account to test a booking.
+                </p>
+              ) : null}
+              <button type="button" className="pressable" onClick={() => navigate('schedule')} style={{ marginTop: 8, fontWeight: 800, color: '#F56600', minHeight: 44 }}>
                 {SCHEDULE_AHEAD_LABEL}
               </button>
             </div>
@@ -213,7 +226,7 @@ export function RideTiers({
             const studentNote = row?.discountCents > 0 ? 'Clemson student · 10% off Standard' : ''
             const meta = [
               t.id === 'carpool'
-                ? (savedPercent > 0 ? `Save ${savedPercent}% per seat` : 'Per seat')
+                ? '50% of Standard per seat'
                 : sameAsStandard ? '4 seats' : savedPercent > 0 ? `Save ${savedPercent}%` : t.meta,
               studentNote,
             ].filter(Boolean).join(' · ')
@@ -222,7 +235,9 @@ export function RideTiers({
                 key={t.id}
                 tier={{
                   ...t,
-                  price: row ? row.fareCents / 100 : null,
+                  price: row
+                    ? (t.id === 'carpool' && selected?.id === 'carpool' ? (row.fareCents * seats) / 100 : row.fareCents / 100)
+                    : null,
                   meta,
                 }}
                 selected={selected?.id === t.id}
@@ -231,7 +246,7 @@ export function RideTiers({
             )
           })}
         </div>
-        <div style={{ padding: '12px 8px 0' }}>
+        <div className="ride-tiers__cta">
           {selected?.id === 'carpool' ? (
             <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
               {[1, 2].map((count) => (
@@ -269,7 +284,7 @@ export function RideTiers({
             {!selected ? 'Choose a ride' : !quote ? 'Loading fare…' : `Select ${selected.name}`}
           </PrimaryButton>
         </div>
-      </div>
+      </section>
 
       <UpsellModal
         open={upsell === 'comfort'}

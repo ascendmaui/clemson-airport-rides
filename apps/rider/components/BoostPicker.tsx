@@ -94,12 +94,12 @@ export function BoostPicker({ cents, onChange, minimumCents = 0, heading = 'Driv
                 paddingHorizontal: 12,
                 paddingVertical: 8,
                 borderRadius: 999,
-                backgroundColor: on ? '#F56600' : colors.purpleSoft,
+                backgroundColor: on ? colors.orange : colors.purpleSoft,
                 borderWidth: 1,
-                borderColor: on ? '#F56600' : colors.border,
+                borderColor: on ? colors.orange : colors.border,
               }}
             >
-              <Text style={{ color: on ? '#fff' : colors.purple, fontWeight: '700' }}>{label}</Text>
+              <Text style={{ color: on ? colors.onAccent : colors.link, fontWeight: '700' }}>{label}</Text>
             </Pressable>
           )
         })}
@@ -129,11 +129,11 @@ export function BoostPicker({ cents, onChange, minimumCents = 0, heading = 'Driv
           accessibilityLabel="Set custom boost"
           style={{ backgroundColor: colors.purple, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 }}
         >
-          <Text style={{ color: '#fff', fontWeight: '800' }}>Set</Text>
+          <Text style={{ color: colors.onAccent, fontWeight: '800' }}>Set</Text>
         </Pressable>
       </View>
       {cents > 0 ? (
-        <Text style={{ color: '#F56600', fontWeight: '800' }}>
+        <Text style={{ color: colors.orangeInk, fontWeight: '800' }}>
           {riderBoostChosenLine(cents)}
         </Text>
       ) : null}
@@ -160,7 +160,7 @@ export function BoostPicker({ cents, onChange, minimumCents = 0, heading = 'Driv
               accessibilityLabel="Got it"
               style={{ marginTop: 8, minHeight: 44, borderRadius: 12, backgroundColor: colors.purple, alignItems: 'center', justifyContent: 'center' }}
             >
-              <Text style={{ color: '#fff', fontWeight: '800' }}>Got it</Text>
+              <Text style={{ color: colors.onAccent, fontWeight: '800' }}>Got it</Text>
             </Pressable>
           </View>
         </View>

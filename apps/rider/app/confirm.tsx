@@ -6,11 +6,15 @@ import { useEffect, useRef, useState } from 'react'
 import { Animated, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PrimaryButton, SheetHandle } from '@/components/Button'
+import { RetryAction } from '@/components/RetryAction'
 import { useEnterMotion } from '@/components/enter'
 import { CampusMap } from '@/components/CampusMap'
 import type { CampusMapHandle } from '@/components/mapTypes'
 import { SignInToBookSheet } from '@/components/SignInToBookSheet'
 import { setAuthNext } from '@/lib/authNext'
+import { logCaught } from '@/lib/caught'
+import { retryableFailure } from '@/lib/offlineBanner'
+import { useReconnectRetry } from '@/lib/useReconnectRetry'
 import { useAuth } from '@/lib/auth'
 import { oneParam } from '@/lib/oneParam'
 import { lookupCatalogPlace, placeFromStop, type Place } from 'rides-native/shared/carpool.js'
@@ -29,6 +33,13 @@ import type { Palette } from '@/lib/palette'
 import { useTheme } from '@/lib/theme'
 import { useThemedStyles } from '@/lib/useThemedStyles'
 
+function samePlace(a: Place, b: Place) {
+  const left = a.label.trim().toLowerCase()
+  const right = b.label.trim().toLowerCase()
+  if (left && left === right) return true
+  return Math.abs(a.lat - b.lat) < 0.0004 && Math.abs(a.lng - b.lng) < 0.0004
+}
+
 export default function ConfirmPickup() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -43,7 +54,8 @@ export default function ConfirmPickup() {
   const depositCopy = airportQuote
     ? depositSurfaceCopy(airportQuote, 'confirm', { studentDiscountCents: airportQuote.studentDiscountCents })
     : null
-  const initialPickup = placeFromStop(lookupCatalogPlace('Memorial Stadium')) || { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
+  const stadium = placeFromStop(lookupCatalogPlace('Memorial Stadium')) || { label: 'Memorial Stadium', lat: 34.6788, lng: -82.843 }
+  const initialPickup: Place = { label: '', lat: stadium.lat, lng: stadium.lng }
   const initialDrop = placeFromStop(lookupCatalogPlace(dest)) || {
     label: dest,
     lat: destPoint(dest).latitude,
@@ -94,7 +106,12 @@ export default function ConfirmPickup() {
     }
   }, [])
 
+  const pickupReady = Boolean(pickup.label.trim())
+  const sameSpot = pickupReady && samePlace(pickup, dropoff)
+  const canConfirm = pickupReady && !sameSpot
+
   const onConfirm = () => {
+    if (!canConfirm) return
     if (user) {
       goTiers()
       return
@@ -115,7 +132,8 @@ export default function ConfirmPickup() {
       let position
       try {
         position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation })
-      } catch {
+      } catch (err) {
+        logCaught('confirm-locate', err)
         position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
       }
       const lat = position.coords.latitude
@@ -124,7 +142,8 @@ export default function ConfirmPickup() {
       try {
         const reversed = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng })
         label = addressFromGeocode(reversed[0]) || label
-      } catch {
+      } catch (err) {
+        logCaught('confirm-address', err)
         label = 'Current location'
       }
       const place = { label, lat, lng }
@@ -141,6 +160,8 @@ export default function ConfirmPickup() {
     }
   }
 
+  useReconnectRetry('confirm-pickup', () => onLocate('pickup'), retryableFailure(locateNote))
+
   return (
     <View style={styles.screen}>
       <View style={styles.map}>
@@ -152,7 +173,7 @@ export default function ConfirmPickup() {
             id: 'pickup',
             latitude: pickup.lat,
             longitude: pickup.lng,
-            title: pickup.label,
+            title: pickup.label || 'Pickup',
             color: colors.orange,
           }, {
             id: 'dropoff',
@@ -198,6 +219,9 @@ export default function ConfirmPickup() {
         <Text style={styles.title}>Confirm pickup spot</Text>
         <Text style={styles.hint}>Pickup uses your current location. Edit it if you need a different spot.</Text>
         {locateNote ? <Text style={styles.locateNote}>{locateNote}</Text> : null}
+        {retryableFailure(locateNote) ? (
+          <RetryAction hint="Tries to read your pickup location again" onPress={() => { void onLocate('pickup') }} />
+        ) : null}
         <NeighborhoodPicker
           liveSuggest
           label="Pickup address"
@@ -208,6 +232,11 @@ export default function ConfirmPickup() {
             mapRef.current?.animateTo({ latitude: place.lat, longitude: place.lng }, 0.01)
           }}
         />
+        {sameSpot ? (
+          <Text accessibilityRole="alert" style={styles.locateNote}>
+            Pickup and drop-off are the same place. Choose a different pickup.
+          </Text>
+        ) : null}
         <NeighborhoodPicker
           liveSuggest
           label="Drop-off address"
@@ -239,7 +268,14 @@ export default function ConfirmPickup() {
           multiline
           accessibilityLabel="Note for driver"
         />
-        <PrimaryButton label="Confirm pickup" onPress={onConfirm} />
+        {!pickupReady && !locateNote ? (
+          <Text style={styles.hint}>Choose or locate a pickup address to continue.</Text>
+        ) : null}
+        <PrimaryButton
+          label="Confirm pickup"
+          disabled={!canConfirm}
+          onPress={onConfirm}
+        />
       </ScrollView>
       </View>
       </Animated.View>
@@ -267,7 +303,8 @@ async function placeFromGps(): Promise<Place> {
   let position
   try {
     position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation })
-  } catch {
+  } catch (err) {
+    logCaught('confirm-locate', err)
     position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
   }
   const lat = position.coords.latitude
@@ -279,7 +316,8 @@ async function placeFromGps(): Promise<Place> {
   try {
     const reversed = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng })
     label = addressFromGeocode(reversed[0]) || label
-  } catch {
+  } catch (err) {
+    logCaught('confirm-address', err)
     label = 'Current location'
   }
   return { label, lat, lng }

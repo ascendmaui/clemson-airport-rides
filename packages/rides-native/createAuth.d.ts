@@ -54,6 +54,13 @@ export function createAuth(opts: {
   passwordResetRedirectTo?: string
   onSignOut?: () => Promise<void> | void
   onPasswordRecovery?: () => void
+  /** Which campaign codes the sign-up promo box accepts. Default rider. */
+  promoSide?: 'rider' | 'driver'
+  /**
+   * When set, stop blocking first paint if getSession has not settled.
+   * A session that arrives later is still applied. Omitted means wait, which is the rider app.
+   */
+  sessionTimeoutMs?: number
 }): {
   AuthProvider: (props: { children: ReactNode }) => ReactNode
   useAuth: () => AuthApi

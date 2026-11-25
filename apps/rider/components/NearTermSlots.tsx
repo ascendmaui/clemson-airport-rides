@@ -183,7 +183,7 @@ function makeStyles(colors: Palette) {
     title: { color: colors.purple, fontWeight: '800' as const, fontSize: 18, marginTop: 4 },
     copy: { color: colors.inkSecondary, fontSize: 13, lineHeight: 18, marginTop: 6 },
     label: { color: colors.inkSecondary, fontWeight: '700' as const, marginTop: 10, marginBottom: 6 },
-    pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
+    pills: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, alignItems: 'flex-start' as const, flexGrow: 0 },
     wait: { color: colors.purple, fontWeight: '800' as const, marginTop: 10 },
     slot: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.purpleSoft },
     slotOn: { backgroundColor: colors.purple },

@@ -99,7 +99,28 @@ test('hung upload reports failure and never acknowledges a late write', async (t
   stop()
 })
 
-import { createTrackingRefresh } from './tracking.js'
+import { createTrackingRefresh, isTransientTrackingError } from './tracking.js'
+test('createTrackingRefresh retries once on FetchRequestCanceledException and classifies transient errors', async () => {
+  let calls = 0
+  const data = [], errors = []
+  const reader = createTrackingRefresh({
+    load: async () => {
+      calls += 1
+      if (calls === 1) throw new Error('FetchRequestCanceledException: Fetch request has been canceled')
+      return { id: 't1', status: 'arrived' }
+    },
+    onData: (v) => data.push(v),
+    onError: (e) => errors.push(e),
+  })
+  await reader.refresh()
+  assert.equal(calls, 2)
+  assert.deepEqual(data, [{ id: 't1', status: 'arrived' }])
+  assert.deepEqual(errors, [null])
+  assert.equal(isTransientTrackingError(new Error('Tracking refresh timed out. Retrying automatically.')), true)
+  assert.equal(isTransientTrackingError(new Error('FetchRequestCanceledException: Fetch request has been canceled')), true)
+  assert.equal(isTransientTrackingError(new Error('Trip not found')), false)
+  reader.stop()
+})
 test('resume supersedes a hung read and ignores its late result', async () => {
   const reads = [], data = [], errors = []
   const reader = createTrackingRefresh({

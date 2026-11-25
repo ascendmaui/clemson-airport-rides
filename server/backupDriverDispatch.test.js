@@ -199,7 +199,7 @@ test('no backup reopens the live pool and notifies rider and admin', async () =>
     generation: 2,
   }
   const sb = queueTrip(queue)
-  sb._tables.profiles[0].expo_push_token = 'ExponentPushToken[rider]'
+  sb._tables.rider_push_tokens = [{ rider_id: 'rider-1', token: 'ExponentPushToken[rider]' }]
   const summary = await runScheduledDispatchTick(sb, { now: NOW })
   assert.equal(summary.pooled, 1)
   assert.equal(tripOf(sb).status, 'searching')

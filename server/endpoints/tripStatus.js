@@ -11,6 +11,7 @@ import { endDriverTrip, recordTripHeartbeat } from '../driverEndTrip.js'
 import { insertTripEvent } from '../tripEvents.js'
 import { withActionReceipts } from '../actionReceipts.js'
 import { ensureTripPickupCode, viewerMayReadPickupCode } from '../pickupBeacon.js'
+import { driverApprovalStatus } from '../driverApproval.js'
 
 async function matchedPickupCode(sb, user, trip) {
   if (!viewerMayReadPickupCode(trip, user?.id)) return null
@@ -66,9 +67,9 @@ async function runTripStatus(req, res, deps = {}) {
       return fail(403, 'forbidden', 'Not allowed on this trip')
     }
     if (op === 'accept') {
-      const gate = await sb.from('driver_applications').select('onboarding_status').eq('profile_id', user.id).maybeSingle()
-      if (gate.error) throw gate.error
-      if (gate.data?.onboarding_status !== 'approved') {
+      const gate = await driverApprovalStatus(sb, user.id)
+      if (gate.error) throw new Error(gate.error)
+      if (!gate.approved) {
         return fail(403, 'driver_not_approved', 'Finish approval to go online. Your account is still under review.')
       }
       const presence = await sb.from('driver_status').select('online').eq('driver_id', user.id).maybeSingle()

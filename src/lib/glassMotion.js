@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 
 /** Cards and notes that rise in as they enter the scrollport. Hero shots stay on CSS. */
-export const REVEAL_SELECTOR = '.mkt-card, .lux-legal-section, .mkt-note, .mkt-section-head, .mkt-reach, .mkt-close, .dp-card, .dp-offer, .dp-legend, .dp-compare, .dp-rental'
+export const REVEAL_SELECTOR = '.site-reveal, .mkt-card, .lux-legal-section, .mkt-note, .mkt-section-head, .mkt-reach, .mkt-close, .dp-card, .dp-offer, .dp-legend, .dp-compare, .dp-rental'
 
 const STAGGER_MS = 70
 const STAGGER_CAP = 4

@@ -267,7 +267,7 @@ export default function VehiclesScreen() {
             {ownership === 'rent' ? (
               <View style={{ gap: 8 }}>
                 <Text style={{ color: colors.inkSecondary, lineHeight: 20 }}>
-                  Browse weekly rentals from Clemson RIDES partners.
+                  Browse weekly rentals from Clemson Rides partners.
                 </Text>
                 <Primary label="Browse partner rentals" onPress={() => { void openRentals() }} accessibilityRole="link" />
               </View>

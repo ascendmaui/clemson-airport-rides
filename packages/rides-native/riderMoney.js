@@ -209,7 +209,7 @@ const STUDENT_SURFACES = {
     detail: 'Standard quotes on Confirm include this 10% off.',
   },
   tiers: {
-    title: `🐯 ${STUDENT_DISCOUNT_LABEL}`,
+    title: STUDENT_DISCOUNT_LABEL,
     detail: 'Your confirmed Clemson email applies this price.',
   },
   confirm: {
@@ -236,7 +236,7 @@ export function studentSurfaceCopy(status, surface) {
     return { title: reason, detail: null, granted: false }
   }
   return {
-    title: surface === 'tiers' ? '🐯 Student pricing is off' : 'Student pricing is off',
+    title: 'Student pricing is off',
     detail: reason,
     granted: false,
   }
@@ -247,6 +247,31 @@ function num(value) {
   return Number.isFinite(n) ? n : 0
 }
 
+/** Peak-pricing block from /api/quote-fare. Null when no surcharge applies. */
+export function parsePeakQuote(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const bps = Math.max(0, Math.round(Number(raw.surchargeBps) || 0))
+  if (!bps) return null
+  return {
+    surchargeBps: bps,
+    surchargePct: bps / 100,
+    surchargeCents: Math.max(0, Math.round(Number(raw.surchargeCents) || 0)),
+    reasonLabel: typeof raw.reasonLabel === 'string' ? raw.reasonLabel : null,
+    riderLine: typeof raw.riderLine === 'string' ? raw.riderLine : null,
+  }
+}
+
+/** Game-day block from /api/quote-fare: label + explainer shown with the upfront total. */
+export function parseGameDayPricing(raw) {
+  if (!raw || typeof raw !== 'object' || raw.active !== true) return null
+  const multiplier = Number(raw.multiplier)
+  return {
+    label: typeof raw.label === 'string' && raw.label ? raw.label : 'Game-day pricing',
+    explainer: typeof raw.explainer === 'string' ? raw.explainer : null,
+    multiplier: Number.isFinite(multiplier) && multiplier > 1 ? multiplier : null,
+  }
+}
+
 export function parseQuoteResponse(data) {
   const quote = data?.quote && typeof data.quote === 'object' ? data.quote : {}
   const breakdown = quote.breakdown && typeof quote.breakdown === 'object' ? quote.breakdown : {}
@@ -255,11 +280,15 @@ export function parseQuoteResponse(data) {
   const surge = data?.surge && typeof data.surge === 'object' ? data.surge : null
   const rule = surge?.rule && typeof surge.rule === 'object' ? surge.rule : null
   const tiers = Array.isArray(data?.tiers) ? data.tiers : []
+  const peak = parsePeakQuote(data?.peak)
+  const gameDayPricing = parseGameDayPricing(data?.gameDayPricing)
   return {
     ...recomputeDeposit({ fareCents, cashCents }),
     studentDiscountCents: num(breakdown.student_discount_cents),
     surgeMultiplier: num(surge?.multiplier) || 1,
     surgeLabel: rule?.label || null,
+    ...(peak ? { peak } : {}),
+    ...(gameDayPricing ? { gameDayPricing } : {}),
     routeSource: data?.routeSource || null,
     tigerPassApplied: Boolean(data?.tigerPassApplied),
     tigerPassName: data?.tigerPassName || null,
@@ -536,7 +565,7 @@ export function riderPromoShareUrl(code) {
 }
 
 export function riderPromoShareText(code) {
-  return `Join me on Clemson RIDES. Use code ${normalizePromoCode(code)} when you sign up.`
+  return `Join me on Clemson Rides. Use code ${normalizePromoCode(code)} when you sign up.`
 }
 
 export async function claimPromoCode(supabase, code) {

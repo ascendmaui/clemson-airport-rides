@@ -2,9 +2,12 @@
  * GET /api/tiger-heat?window=now|weekday_am|friday_night|last_7d
  * Live window: payable zones from recent pickup density, after solvency.
  * Other windows: preview heat maps. Preview does not reserve driver pay.
+ * `peak` carries the peak-pricing status (server/peakPricing.js) for the
+ * Busy areas strip and the "Before you go online" line.
  */
 import { admin, cors, json } from '../server/friendRideLib.js'
 import { buildTigerHeatMap } from '../server/tigerHeatService.js'
+import { peakStatus } from '../server/peakPricing.js'
 
 function windowIdFrom(req) {
   const fromQuery = req.query?.window
@@ -31,5 +34,6 @@ export default async function handler(req, res) {
     res.end()
     return
   }
-  return json(res, 200, body)
+  // Peak pricing status for the driver home (always { enabled: false } while the flag is off).
+  return json(res, 200, { ...body, peak: peakStatus() })
 }

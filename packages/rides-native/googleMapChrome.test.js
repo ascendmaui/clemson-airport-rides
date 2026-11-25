@@ -22,8 +22,9 @@ test('Android map tiles stay off until a real key is configured', () => {
   assert.equal(nativeMapTilesReady('android', { env: { EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: 'your_google_maps_key' } }), false)
   assert.equal(usableGoogleMapsKey({ manifestKey: 'AIza-example' }), 'AIza-example')
   assert.equal(nativeMapTilesReady('android', { manifestKey: 'AIza-example' }), true)
-  assert.match(ANDROID_MAP_UNAVAILABLE, /EXPO_PUBLIC_GOOGLE_MAPS_API_KEY/)
+  assert.match(ANDROID_MAP_UNAVAILABLE, /Campus tiles cannot load on this iPhone/)
   assert.match(ANDROID_MAP_UNAVAILABLE, /Pickup and drop-off still work/)
+  assert.doesNotMatch(ANDROID_MAP_UNAVAILABLE, /Android|Expo|EXPO_PUBLIC|key/)
 })
 
 test('Android app config injects the maps key and does not request background location', () => {

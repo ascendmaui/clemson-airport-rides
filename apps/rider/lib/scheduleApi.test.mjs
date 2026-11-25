@@ -19,6 +19,12 @@ const supabaseUrl = dataUrl(`
   export function __setSupabase(next) { supabase = next }
 `)
 
+const caughtUrl = dataUrl(`
+  export function logCaught() {}
+  export function caughtMessage(_err, fallback) { return fallback }
+  export function toastCaught() {}
+`)
+
 const apiClientUrl = dataUrl(`
   const key = ${JSON.stringify(KEY)}
   export function apiBase() { return 'https://api.test' }
@@ -37,6 +43,7 @@ registerHooks({
     const parent = context.parentURL || ''
     if (!parent.includes(PARENT)) return nextResolve(specifier, context)
     if (specifier === '@/lib/supabase') return { url: supabaseUrl, shortCircuit: true }
+    if (specifier === '@/lib/caught') return { url: caughtUrl, shortCircuit: true }
     if (specifier === 'rides-native/apiClient' || specifier === 'rides-native/apiClient.js') {
       return { url: apiClientUrl, shortCircuit: true }
     }
@@ -182,6 +189,25 @@ test('quoteRide calculates distance-based estimates for local campus trips with 
   assert.equal(studentQuote.depositCents, 0)
   assert.ok(studentQuote.fareCents < campusQuote.fareCents, 'student discount reduces distance fare')
   assert.ok(studentQuote.discountCents > 0)
+})
+
+test('quoteRide prices a Carpool seat at 50% of the same Standard quote', async () => {
+  const api = await import('./scheduleApi.ts')
+  const pickup = { label: 'Douthit Hills Community', lat: 34.6805, lng: -82.8315 }
+  const dropoff = { label: 'Clemson Memorial Stadium (Death Valley)', lat: 34.6788, lng: -82.8432 }
+  const standard = api.quoteRide(pickup, dropoff, false, 'standard')
+  const one = api.quoteRide(pickup, dropoff, false, 'carpool')
+  const studentSeat = api.quoteRide(pickup, dropoff, true, 'carpool')
+  assert.equal(one.fareCents, Math.round(standard.fareCents / 2))
+  assert.equal(studentSeat.fareCents, one.fareCents)
+  assert.match(one.label, /50% of Standard per seat/)
+  assert.doesNotMatch(one.label, /15%/)
+
+  const gsp = { label: 'Greenville-Spartanburg International Airport (GSP)', lat: 34.895, lng: -82.218 }
+  const airportStandard = api.quoteRide(pickup, gsp, false, 'standard')
+  const airportSeat = api.quoteRide(pickup, gsp, true, 'carpool')
+  assert.equal(airportSeat.fareCents, Math.round(airportStandard.fareCents / 2))
+  assert.match(airportSeat.label, /50% of Standard per seat/)
 })
 
 test('riderIsStudent enforces authoritative confirmed Clemson student domains', async () => {

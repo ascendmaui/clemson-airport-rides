@@ -13,6 +13,7 @@ import { SafetyHub } from '../components/SafetyHub'
 import { loadComfortPreference, saveComfortPreference } from '../../packages/rides-native/comfortPreference.js'
 import { useAuth } from '../lib/auth'
 import { getHashRoute, navigate } from '../lib/navigation'
+import { supportMailto } from '../../shared/productLinks.js'
 import { fetchProfile, updateMyProfile, findPendingRatingTrip } from '../lib/ratings'
 import {
   CAMPUS_SPOTS, RIDE_STYLES, PRIVACY_OPTIONS, GALLERY_KINDS,
@@ -822,7 +823,7 @@ export function AccountScreen() {
         {tab === 'help' && (
           <Section title="Also in Help" subtitle="Email, lost and found, and policies" icon={IconHelp}>
             <a
-              href="mailto:rides@clemsonrides.com?subject=Clemson%20RIDES%20help"
+              href={supportMailto('Clemson Rides help')}
               className="pressable"
               style={{
                 display: 'block', padding: 14, borderRadius: 14, fontWeight: 700, color: 'var(--purple)',
@@ -897,7 +898,7 @@ export function AccountScreen() {
             {deleteBusy ? 'Filing deletion request…' : 'Request account deletion'}
           </button>
           {deleteNote ? <div style={{ fontSize: 13, color: 'var(--ink-secondary)', marginBottom: 12 }}>{deleteNote}</div> : null}
-          <p className="lux-version">Clemson RIDES · 1.2.0</p>
+          <p className="lux-version">Clemson Rides · 1.2.0</p>
           <button type="button" className="pressable lux-signout" onClick={onSignOut}>
             <IconSignOut size={18} color="#f4f1ea" />
             Sign Out

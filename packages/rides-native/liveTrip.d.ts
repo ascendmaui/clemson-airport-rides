@@ -108,3 +108,4 @@ export function orderedLiveStops(
 
 export const DRIVER_CANCELED_RIDER_COPY: string
 export function driverCancelNotice(trip: { status?: string | null; metadata?: Record<string, unknown> | null } | null, lastSeenAt?: string | null): { at: string; message: string } | null
+export function riderStatusPhrase(status: string | null | undefined): string

@@ -39,15 +39,15 @@ export function AffiliateAdmin() {
             ))}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}>
-            {[['student', 'Student bps (10000 = 1x)'], ['campus_org', 'Campus group bps — John to confirm'], ['local_business', 'Business bps — John to confirm'], ['influencer', 'Creator bps — John to confirm']].map(([k, l]) => (
+            {[['student', 'Student bps (10000 = 1x)'], ['campus_org', 'Campus group bps (12500 = 1.25x)'], ['local_business', 'Business bps (12500 = 1.25x)'], ['influencer', 'Creator bps (15000 = 1.5x)']].map(([k, l]) => (
               <label key={k} style={{ display: 'grid', gap: 4, fontSize: 13, fontWeight: 700 }}>{l}
                 <input type="number" min="0" value={rates.partner_type_bps?.[k] ?? ''} onChange={(e) => setRates((r) => ({ ...r, partner_type_bps: { ...r.partner_type_bps, [k]: e.target.value } }))} style={{ padding: 8, borderRadius: 10, border: '1px solid #ddd', width: 220 }} />
               </label>
             ))}
           </div>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, fontSize: 14, fontWeight: 700 }}>
-            <input type="checkbox" checked={rates.multipliers_pending_confirmation !== false} onChange={(e) => setRates((r) => ({ ...r, multipliers_pending_confirmation: e.target.checked }))} />
-            Bonuses still awaiting John's confirmation
+            <input type="checkbox" checked={rates.multipliers_pending_confirmation === true} onChange={(e) => setRates((r) => ({ ...r, multipliers_pending_confirmation: e.target.checked }))} />
+            Bonuses still awaiting confirmation
           </label>
           <button type="button" className="pressable" style={{ ...btn(PURPLE), marginTop: 12 }} onClick={() => run('rates', { rates })}>Save rates</button>
         </section>

@@ -7,7 +7,9 @@ const CALL_SITES = [
   'apps/rider/app/sign-in.tsx',
   'apps/rider/app/sign-up.tsx',
   'apps/rider/lib/socialSignIn.ts',
+  'apps/driver/app/sign-in.tsx',
   'apps/driver/app/sign-up.tsx',
+  'apps/driver/lib/socialSignIn.ts',
 ]
 
 test('supabase google sign-in stays enabled with an empty client-id env', () => {

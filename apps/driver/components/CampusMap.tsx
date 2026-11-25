@@ -5,6 +5,7 @@ import { useTheme } from '@/lib/theme'
 import type { BusySpot } from '@/lib/busySpots'
 import { fetchTigerHeatMap } from 'rides-native/tigerHeatClient.js'
 import type { TigerHeatZone } from 'rides-native/tigerHeat.js'
+import { color as brand } from 'rides-native/shared/theme.js'
 
 export type MapPin = {
   id: string
@@ -66,7 +67,7 @@ export function CampusMap({
     }
   }, [showHeat, heatWindow])
   return (
-    <View style={[styles.map, { backgroundColor: mode === 'dark' ? colors.mapFallback : '#E4D7F2' }]}>
+    <View style={[styles.map, { backgroundColor: colors.mapFallback }]}>
       {showHeat
         ? spots.slice(0, 8).map((spot: BusySpot, index: number) => (
             <View
@@ -137,9 +138,9 @@ const styles = StyleSheet.create({
   pin: { marginTop: 4, fontSize: 11, fontWeight: '700', zIndex: 1 },
   requestPin: { fontSize: 13 },
   tigerRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, zIndex: 2, marginBottom: 8 },
-  tigerChip: { overflow: 'hidden', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, fontWeight: '800', color: '#fff' },
-  tigerLive: { backgroundColor: '#F56600', borderWidth: 2, borderColor: '#522D80' },
-  tigerPreview: { backgroundColor: '#522D80', borderWidth: 2, borderColor: '#F56600' },
+  tigerChip: { overflow: 'hidden', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, fontWeight: '800', color: brand.white },
+  tigerLive: { backgroundColor: brand.orange, borderWidth: 2, borderColor: brand.purple },
+  tigerPreview: { backgroundColor: brand.purple, borderWidth: 2, borderColor: brand.orange },
   zone: {
     position: 'absolute',
     top: 16,

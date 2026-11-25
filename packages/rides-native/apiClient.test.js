@@ -480,6 +480,21 @@ test('authedJson wraps fetch rejection into network error with message', async (
   )
 })
 
+test('authedJson retries once when fetch throws FetchRequestCanceledException', async () => {
+  let calls = 0
+  globalThis.fetch = async () => {
+    calls += 1
+    if (calls === 1) {
+      throw new Error('FetchRequestCanceledException: Fetch request has been canceled')
+    }
+    return mockResponse({ json: { ok: true, retried: true } })
+  }
+
+  const res = await authedJson(null, '/api/driver?action=trip-status', { method: 'POST', body: { op: 'arrive' } })
+  assert.equal(calls, 2)
+  assert.deepEqual(res, { ok: true, retried: true })
+})
+
 test('authedJson uses fallback "Network error" message when caught error has no message', async () => {
   globalThis.fetch = async () => {
     throw new Error('')

@@ -66,6 +66,7 @@ test('GA97: webhook handler accepts restricted API keys (rk_test_... / rk_live_.
   await handler(req, res, {
     stripeSecret: 'rk_test_restricted_key_sample',
     webhookSecret: '',
+    allowUnsigned: true,
   })
   assert.equal(res.statusCode, 200)
   const body = JSON.parse(res.body)
@@ -96,6 +97,7 @@ test('GA97: webhook handler returns 500 when applyPaidCheckoutSession returns no
   await handler(req, res, {
     stripeSecret: 'sk_test_mock',
     webhookSecret: '',
+    allowUnsigned: true,
     applyPaidCheckoutSession: async () => ({
       ok: false,
       skipped: false,

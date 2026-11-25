@@ -335,6 +335,23 @@ export function AuthProvider({ children }) {
       }
       return data
     },
+    /** Web Sign in with Apple (Supabase OAuth). Hidden unless VITE_APPLE_WEB_SIGNIN is on. */
+    async signInWithApple({ nextParams } = {}) {
+      if (!supabase) throw new Error('Apple sign-in is unavailable right now.')
+      const storage = authStorage()
+      stashAuthNext(storage, nextParams)
+      const redirectTo = googleOAuthRedirectTo(typeof window !== 'undefined' ? window.location.origin : '')
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: { redirectTo, scopes: 'name email' },
+      })
+      if (error || !data?.url) {
+        takeAuthNext(storage)
+        if (error) throw mapAuthError(error)
+        throw new Error('Apple sign-in is unavailable right now.')
+      }
+      return data
+    },
   }), [session, user, loading])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

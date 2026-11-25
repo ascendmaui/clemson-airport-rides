@@ -61,13 +61,13 @@ function OfferPreview() {
 export function DrivePerks() {
   return (
     <>
-      <section className="dp-hero" aria-labelledby="dp-hero-heading">
+      <section className="dp-hero mkt-page-hero" aria-labelledby="dp-hero-heading">
         <div className="dp-hero-copy">
-          <p className="mkt-kicker">Drive with Clemson RIDES</p>
+          <p className="mkt-kicker">Drive with Clemson Rides</p>
           <h1 id="dp-hero-heading">Know the pay. Keep the tips. Cash out today.</h1>
-          <p className="dp-lede">Every offer shows per-hour pay, the rider’s photo and rating, and a color-coded worth-it gauge. Tips are 100% yours.</p>
+          <p className="dp-lede">Keep 80% of the fare and 100% of tips. Drive alongside Uber and Lyft on your own flexible schedule — catch GSP &amp; CLT airport rides, peak hours, and Clemson game days. Every offer shows per-hour pay, the rider’s photo and rating, and a color-coded worth-it gauge.</p>
           <div className="dp-hero-actions">
-            <button type="button" className="dp-btn dp-btn-primary pressable" onClick={() => navigate('driver-signup')}>Apply to drive</button>
+            <button type="button" className="dp-btn dp-btn-primary pressable" onClick={() => { navigate('driver-signup'); navigate('driver-onboarding') }}>Apply to drive</button>
             <a className="dp-btn dp-btn-ghost" href="#dp-rental">No car? Rent one</a>
           </div>
         </div>
@@ -100,10 +100,10 @@ export function DrivePerks() {
 
       <section className="dp-group" aria-labelledby="dp-compare">
         <h2 id="dp-compare">Us vs. Uber &amp; Lyft</h2>
-        <p className="dp-sub">What you get with Clemson RIDES.</p>
-        <div className="mkt-card dp-compare" role="table" aria-label="What you get with Clemson RIDES">
+        <p className="dp-sub">What you get with Clemson Rides.</p>
+        <div className="mkt-card dp-compare" role="table" aria-label="What you get with Clemson Rides">
           <div className="dp-compare-row dp-compare-head" role="row">
-            <span role="columnheader">Feature</span><span role="columnheader">Clemson RIDES</span>
+            <span role="columnheader">Feature</span><span role="columnheader">Clemson Rides</span>
           </div>
           {COMPARISON_ROWS.map((row) => (
             <div key={row} className="dp-compare-row" role="row">

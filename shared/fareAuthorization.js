@@ -11,18 +11,36 @@ export const FARE_AUTH_BUFFER_BPS = 2000
 /** Short trips still get a $2 buffer so small fare movement fits in the hold. */
 export const FARE_AUTH_BUFFER_MIN_CENTS = 200
 
-export function fareAuthorizationCents(estimatedFareCents) {
+/**
+ * Card hold for an estimated fare.
+ * Other ride types add the authorization buffer.
+ * A Carpool hold passes bufferBps 0 so the hold equals the quoted seat fare.
+ */
+export function fareAuthorizationCents(estimatedFareCents, options = {}) {
   const estimated = Math.max(0, Math.round(Number(estimatedFareCents) || 0))
   if (estimated <= 0) {
     return { estimatedFareCents: 0, bufferCents: 0, authorizationCents: 0 }
   }
-  const percent = Math.round((estimated * FARE_AUTH_BUFFER_BPS) / 10000)
+  const requested = options?.bufferBps
+  const bufferBps = requested == null || requested === ''
+    ? FARE_AUTH_BUFFER_BPS
+    : Math.max(0, Math.round(Number(requested) || 0))
+  if (bufferBps <= 0) {
+    return { estimatedFareCents: estimated, bufferCents: 0, authorizationCents: estimated }
+  }
+  const percent = Math.round((estimated * bufferBps) / 10000)
   const bufferCents = Math.max(FARE_AUTH_BUFFER_MIN_CENTS, percent)
   return {
     estimatedFareCents: estimated,
     bufferCents,
     authorizationCents: estimated + bufferCents,
   }
+}
+
+/** True when this trip's card hold should equal the quoted Carpool fare. */
+export function isCarpoolFareHold(trip) {
+  const tier = String(trip?.tier || trip?.metadata?.ride_option || '').trim().toLowerCase()
+  return tier === 'carpool'
 }
 
 /**

@@ -1,0 +1,279 @@
+name: Release
+
+# Runs only when a v* tag is pushed. This file does not create tags.
+# EAS builds run on Expo's builders. The VPS step only copies finished APKs.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: EAS ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.profile }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: rider
+            dir: apps/rider
+            platform: ios
+            profile: production
+            extension: ipa
+          - app: rider
+            dir: apps/rider
+            platform: android
+            profile: preview
+            extension: apk
+          - app: rider
+            dir: apps/rider
+            platform: android
+            profile: production
+            extension: aab
+          - app: driver
+            dir: apps/driver
+            platform: ios
+            profile: production
+            extension: ipa
+          - app: driver
+            dir: apps/driver
+            platform: android
+            profile: preview
+            extension: apk
+          - app: driver
+            dir: apps/driver
+            platform: android
+            profile: production
+            extension: aab
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.dir }}/package-lock.json
+
+      - name: Install app dependencies
+        working-directory: ${{ matrix.dir }}
+        run: npm ci
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build on EAS
+        working-directory: ${{ matrix.dir }}
+        run: |
+          set -euo pipefail
+          eas build \
+            --platform ${{ matrix.platform }} \
+            --profile ${{ matrix.profile }} \
+            --non-interactive \
+            --wait \
+            --json > "$RUNNER_TEMP/eas-build.json"
+
+      - name: Download the EAS artifact
+        run: |
+          set -euo pipefail
+          node scripts/eas-artifact.mjs \
+            "$RUNNER_TEMP/eas-build.json" \
+            "$RUNNER_TEMP/release-out" \
+            "${{ matrix.app }}" \
+            "${{ matrix.extension }}" \
+            "${{ matrix.platform }}" \
+            "${{ matrix.profile }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobile-${{ matrix.app }}-${{ matrix.platform }}-${{ matrix.profile }}
+          path: ${{ runner.temp }}/release-out/${{ matrix.app }}.${{ matrix.extension }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meta-${{ matrix.app }}-${{ matrix.platform }}-${{ matrix.profile }}
+          path: ${{ runner.temp }}/release-out/build-meta.json
+          if-no-files-found: error
+          retention-days: 14
+
+  github-release:
+    name: Upload Android APK and AAB
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: mobile-*-android-*
+          path: binaries
+
+      - name: Attach Android binaries to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          mapfile -t files < <(find binaries -type f \( -name '*.apk' -o -name '*.aab' \) | sort)
+          if [ "${#files[@]}" -ne 4 ]; then
+            echo "expected rider/driver apk and aab, found ${#files[@]}" >&2
+            exit 1
+          fi
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" \
+              --title "$tag" \
+              --notes "Android APK and AAB for ${tag}. iOS production builds from this tag are submitted to internal TestFlight. External TestFlight and App Store review wait on the store-release environment."
+          fi
+          gh release upload "$tag" "${files[@]}" --clobber
+
+  testflight-internal:
+    name: TestFlight internal
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: meta-*-ios-production
+          path: meta
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Prepare App Store Connect API key
+        id: asc
+        env:
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          set +x
+          if [ -z "${ASC_API_KEY_P8}" ] || [ -z "${ASC_API_KEY_ID}" ] || [ -z "${ASC_API_ISSUER_ID}" ]; then
+            echo "ASC API key secrets are incomplete. eas submit will use the key stored on the Expo project when one is assigned."
+            exit 0
+          fi
+          umask 077
+          node scripts/write-asc-key.mjs "$RUNNER_TEMP/AuthKey.p8"
+          {
+            echo "EXPO_ASC_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8"
+            echo "EXPO_ASC_KEY_ID=${ASC_API_KEY_ID}"
+            echo "EXPO_ASC_ISSUER_ID=${ASC_API_ISSUER_ID}"
+          } >> "$GITHUB_ENV"
+
+      - name: Submit iOS to internal TestFlight
+        run: |
+          set -euo pipefail
+          set +x
+          # eas submit uploads the production iOS build to App Store Connect.
+          # Internal TestFlight testers receive it. This step does not submit
+          # external beta review or App Store review.
+          submit_one() {
+            local app="$1"
+            local meta id
+            meta="$(find "$GITHUB_WORKSPACE/meta" -type f -path "*${app}-ios-production*/build-meta.json" -print -quit)"
+            if [ -z "$meta" ]; then
+              echo "missing iOS build metadata for ${app}" >&2
+              exit 1
+            fi
+            id="$(node -e 'const fs=require("node:fs"); const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(!m.easBuildId) process.exit(1); process.stdout.write(String(m.easBuildId))' "$meta")"
+            (
+              cd "$GITHUB_WORKSPACE/apps/${app}"
+              eas submit --platform ios --profile production --id "$id" --non-interactive
+            )
+          }
+          submit_one rider
+          submit_one driver
+
+  store-release:
+    name: External TestFlight and App Store
+    needs: testflight-internal
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: store-release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: meta-*-ios-production
+          path: meta
+
+      - name: Submit external TestFlight and App Store review
+        env:
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          set +x
+          rider="$(find meta -type f -path '*rider-ios-production*/build-meta.json' -print -quit)"
+          driver="$(find meta -type f -path '*driver-ios-production*/build-meta.json' -print -quit)"
+          if [ -z "$rider" ] || [ -z "$driver" ]; then
+            echo "missing iOS build metadata" >&2
+            exit 1
+          fi
+          node scripts/store-release-submit.mjs "$rider" "$driver"
+
+  publish-downloads:
+    name: Copy APKs to VPS downloads
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: mobile-*-android-preview
+          path: apks
+
+      - name: Check SSH deploy key
+        id: ssh
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          set +x
+          if [ -z "${VPS_SSH_KEY}" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=APK copy skipped::VPS_SSH_KEY is not set. Android APKs remain on the GitHub release."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Copy APKs over the deploy SSH key
+        if: steps.ssh.outputs.ready == 'true'
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          APK_DIR: apks
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: bash scripts/copy-downloads.sh

@@ -58,10 +58,11 @@ test('suggestion dataset covers downtown bars, hot spots, and landmarks', () => 
 })
 
 test('suggestSpots merges geocoder or places hits and keeps the catalog copy', () => {
-  const extra = [{ id: 'geo-pendleton', label: 'Pendleton Road', lat: 34.65, lng: -82.78 }]
-  const hits = suggestSpots('Pendleton', extra)
-  assert.equal(hits[0]?.id, 'geo-pendleton')
-  assert.equal(hits[0]?.label, 'Pendleton Road')
+  // Not a catalog stop (Pendleton is one now), so the geocoder hit ranks first.
+  const extra = [{ id: 'geo-old-stone', label: 'Old Stone Church Road', lat: 34.66, lng: -82.80 }]
+  const hits = suggestSpots('Old Stone Church', extra)
+  assert.equal(hits[0]?.id, 'geo-old-stone')
+  assert.equal(hits[0]?.label, 'Old Stone Church Road')
 
   const once = suggestSpots('College Avenue', [{ id: 'geo-college', label: 'College Avenue', lat: 1, lng: 2 }])
   assert.equal(once.filter((row) => row.label === 'College Avenue').length, 1)
