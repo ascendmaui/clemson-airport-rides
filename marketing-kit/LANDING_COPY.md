@@ -60,7 +60,7 @@ The Promos page also rotates a Friday code. This kit does not freeze a code, bec
 
 Primary: Book a ride. Destination: https://clemsonrides.com/#/home (`WEB_BOOK_URL`).
 
-Secondary: Download the app. iPhone installs are the public TestFlight betas in `shared/productLinks.js`. Android opens the website while the Play Store listing is not live. Do not link an App Store or Play Store URL. Those constants are null.
+Secondary: Download the app. iPhone buttons open the Rider and Driver App Store listings in `shared/productLinks.js`. Clemson Rides is iOS and web only.
 
 Driver desk: https://clemsonrides.com/#/driver
 

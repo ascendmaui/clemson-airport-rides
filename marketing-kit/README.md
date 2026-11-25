@@ -1,6 +1,6 @@
 # Marketing kit
 
-Source files for Clemson RIDES. Nothing in this folder is a live post, a store listing, or a deploy. App Store and Play Store listings are not live.
+Source files for Clemson Rides. Nothing in this folder is a live post, a store listing, or a deploy. Clemson Rides is iOS and web only. The Rider and Driver iPhone apps are on the App Store (`shared/productLinks.js`).
 
 Copy is taken from the product. It does not add ratings, download counts, testimonials, or quotes. Ride types are Standard, Wait & Save, Extra Comfort, and Carpool. Colors are Clemson orange `#F56600` and purple `#522D80`. The mark is the rider pin from `public/brand/rider-icon.svg`. It is not the Clemson paw. Any paw or other university trademark usage needs licensing review (`STYLE_GUIDE.md`).
 

@@ -55,7 +55,7 @@ From `packages/rides-native/shared/theme.js`: card radius 20, sheet radius 28, p
 ## Logo
 
 - `logo/mark.svg` is the square mark. The pin path is the rider glyph from `public/brand/rider-icon.svg`. The tile is `#F56600` with a `#522D80` pool in the lower corner.
-- `logo/lockup.svg` is the mark plus the wordmark “Clemson RIDES” in `#522D80`, which is the marketing name color in `src/styles/liquidGlass.css`.
+- `logo/lockup.svg` is the mark plus the wordmark “Clemson Rides” in `#522D80`, which is the marketing name color in `src/styles/liquidGlass.css`.
 - Do not redraw the pin as a paw, a tiger, or a stripe pattern.
 - Do not stretch the mark. Scale it evenly.
 - The driver app icon (`public/brand/driver-icon.svg`) is a separate steering-wheel mark. It is not the wordmark.
@@ -68,7 +68,7 @@ The only ride types in this kit are Standard, Wait & Save, Extra Comfort, and Ca
 
 Do not use the Clemson paw. Do not use other Clemson University trademarks: the athletic tiger, official university logos, university wordmarks, or university seal.
 
-The product name in the repo is “Clemson RIDES”. Using that product name is not a license to use university marks.
+The product name in the repo is “Clemson Rides”. Using that product name is not a license to use university marks.
 
 “Tiger Pass” and “Tiger Heat” are feature names in the product code (`shared/tigerPass.js`, `packages/rides-native/tigerHeat.js`). Those names are not permission to draw a tiger or to use university athletic art.
 
@@ -80,7 +80,7 @@ Do not name any ride product outside Standard, Wait & Save, Extra Comfort, and C
 
 Do not add ratings, download counts, rider counts, revenue, testimonials, or quotes from people. None of those are in this kit because the repo does not publish them as marketing claims.
 
-Do not draw an App Store or Google Play badge. `shared/productLinks.js` sets the public store URLs to null. `docs/store-metadata.md` says the listings are not submitted.
+Use only Apple's official App Store badge, linked to the listings in `shared/productLinks.js`. Clemson Rides is iOS and web only, so do not add any other store badge.
 
 ## Voice
 

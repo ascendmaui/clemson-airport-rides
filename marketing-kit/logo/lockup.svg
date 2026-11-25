@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Horizontal Clemson RIDES lockup.
+  Horizontal Clemson Rides lockup.
   Mark derived from public/brand/rider-icon.svg.
   Wordmark color #522D80 matches the marketing name in src/styles/liquidGlass.css.
 -->
@@ -21,6 +21,6 @@
       </g>
     </g>
   </svg>
-  <text x="320" y="158" fill="#522D80" font-family="Inter, sans-serif" font-size="72" font-weight="700" letter-spacing="-0.6">Clemson RIDES</text>
+  <text x="320" y="158" fill="#522D80" font-family="Inter, sans-serif" font-size="72" font-weight="700" letter-spacing="-0.6">Clemson Rides</text>
   <text x="324" y="214" fill="#5C6570" font-family="Inter, sans-serif" font-size="28" font-weight="500">clemsonrides.com</text>
 </svg>

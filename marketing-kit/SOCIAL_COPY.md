@@ -2,11 +2,11 @@
 
 Lines below are product facts. Do not add counts, ratings, testimonials, or quotes. Ride types stay Standard, Wait & Save, Extra Comfort, and Carpool. Do not use the Clemson paw or other university trademarks. See `STYLE_GUIDE.md`.
 
-Pair each post with the banner in `social/`. App Store and Play Store listings are not live (`shared/productLinks.js`, `docs/store-metadata.md`). Send people to the website.
+Pair each post with the banner in `social/`. Send people to the website or the App Store listings in `shared/productLinks.js`. iOS and web only.
 
 ## Profile
 
-- Name: Clemson RIDES
+- Name: Clemson Rides
 - Site: https://clemsonrides.com
 - Support: rides@clemsonrides.com (`shared/productLinks.js`)
 
@@ -38,7 +38,7 @@ Peace of mind, every ride. Drivers confirm before they come. A backup is ready i
 
 **Where to book**
 
-Book in the browser at clemsonrides.com. The App Store and Play Store listings are not live. iPhone rider and driver apps have public TestFlight betas.
+Book in the browser at clemsonrides.com. Or get the Rider and Driver iPhone apps on the App Store.
 
 ## Image pair
 
@@ -52,6 +52,6 @@ Book in the browser at clemsonrides.com. The App Store and Play Store listings a
 
 - A star rating, a review, or a quote.
 - A user count, trip count, or city-ranking claim.
-- A store badge, or a line that says the apps are on the App Store or Google Play.
+- Any Android or non-Apple store badge or mention. Clemson Rides is iOS and web only.
 - The Clemson paw, a tiger illustration, or university athletic art.
 - Any ride type other than Standard, Wait & Save, Extra Comfort, and Carpool.
